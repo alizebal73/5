@@ -18,7 +18,7 @@ function Get-ConnectionValue([System.Data.Common.DbConnectionStringBuilder]$buil
 function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
     $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
     $builder.ConnectionString = $connection
-    $host = Get-ConnectionValue $builder @("Host","Server","Address")
+    $pgHost = Get-ConnectionValue $builder @("Host","Server","Address")
     $port = Get-ConnectionValue $builder @("Port")
     $username = Get-ConnectionValue $builder @("Username","User Id","User")
     $password = Get-ConnectionValue $builder @("Password","Pwd")
@@ -26,9 +26,9 @@ function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
     $sslMode = Get-ConnectionValue $builder @("SSL Mode","SslMode")
     if ([string]::IsNullOrWhiteSpace($username)) { throw "PostgreSQL Username/User Id is required." }
     if ([string]::IsNullOrWhiteSpace($db)) { $db = $username }
-    if ([string]::IsNullOrWhiteSpace($host)) { $host = "localhost" }
+    if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
     if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
-    $args = @("--host=$host","--port=$port","--username=$username")
+    $args = @("--host=$pgHost","--port=$port","--username=$username")
     if (-not [string]::IsNullOrWhiteSpace($sslMode)) { $args += "--sslmode=$($sslMode.ToLowerInvariant())" }
     $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
     if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }

@@ -37,7 +37,7 @@ $psql = Resolve-Tool "psql"
 $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
 $builder.ConnectionString = $connection
 
-$host = Get-ConnectionValue $builder @("Host","Server","Address")
+$pgHost = Get-ConnectionValue $builder @("Host","Server","Address")
 $port = Get-ConnectionValue $builder @("Port")
 $username = Get-ConnectionValue $builder @("Username","User Id","User")
 $password = Get-ConnectionValue $builder @("Password","Pwd")
@@ -50,10 +50,10 @@ if ([string]::IsNullOrWhiteSpace($username)) {
 if ([string]::IsNullOrWhiteSpace($database)) {
     $database = $username
 }
-if ([string]::IsNullOrWhiteSpace($host)) { $host = "localhost" }
+if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
 if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
 
-$cliBase = @("--host=$host","--port=$port","--username=$username")
+$cliBase = @("--host=$pgHost","--port=$port","--username=$username")
 if (-not [string]::IsNullOrWhiteSpace($sslMode)) {
     $cliBase += "--sslmode=$($sslMode.ToLowerInvariant())"
 }
