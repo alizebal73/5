@@ -1,4 +1,5 @@
 using GameNet.Server.Infrastructure.Persistence;
+using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Modules.Identity.Domain;
 using GameNet.Server.Modules.Stations.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +8,7 @@ namespace GameNet.Server.Persistence;
 
 public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options) : DbContext(options)
 {
+    public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<OperatorUser> OperatorUsers => Set<OperatorUser>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();

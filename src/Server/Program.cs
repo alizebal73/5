@@ -2,6 +2,7 @@ using GameNet.Server.Composition;
 using GameNet.Server.Infrastructure;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Server.Modules.Customers.Api;
 using GameNet.Server.Modules.Identity.Api;
 using GameNet.Server.Modules.Stations.Api;
 using GameNet.Shared.Contracts.V1.Api;
@@ -33,6 +34,7 @@ app.MapGet("/health", (StartupState state, HttpContext context) =>
 
 app.MapIdentityEndpoints();
 app.MapStationEndpoints();
+app.MapCustomerEndpoints();
 
 app.Run();
 

@@ -72,6 +72,22 @@ partial class GameNetDbContextModelSnapshot : ModelSnapshot
             b.ToTable("stations");
         });
 
+        modelBuilder.Entity<GameNet.Server.Modules.Customers.Domain.Customer>(b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+            b.Property<string>("Code").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("code");
+            b.Property<string>("DisplayName").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("display_name");
+            b.Property<string>("Phone").HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("phone");
+            b.Property<string>("PinHash").HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("pin_hash");
+            b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
+            b.Property<DateTimeOffset>("CreatedAtUtc").IsRequired().HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+            b.Property<DateTimeOffset?>("UpdatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("updated_at_utc");
+            b.Property<int>("Version").IsRequired().IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
+            b.HasKey("Id");
+            b.HasIndex("Code").IsUnique();
+            b.ToTable("customers");
+        });
+
         modelBuilder.Entity<GameNet.Server.Modules.Identity.Domain.OperatorUser>(b =>
         {
             b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
