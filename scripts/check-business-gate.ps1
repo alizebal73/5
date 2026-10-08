@@ -11,7 +11,9 @@ $businessFiles = @()
 
 foreach ($root in @(
     "src/Server/Modules",
-    "src/Desktop/Features"
+    "src/Desktop/Features",
+    "src/Server/Application",
+    "src/Server/Domain"
 )) {
     if (-not (Test-Path $root -PathType Container)) { continue }
 
