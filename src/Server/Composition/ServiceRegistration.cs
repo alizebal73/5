@@ -4,6 +4,8 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Infrastructure.Persistence.Stations;
+using GameNet.Server.Modules.Identity.Application;
+using GameNet.Server.Infrastructure.Persistence.Identity;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Stations.Application;
@@ -29,6 +31,10 @@ public static class ServiceRegistration
         services.AddScoped<IIdempotencyStore, PostgresIdempotencyStore>();
         services.AddScoped<IStationRepository, EfStationRepository>();
         services.AddScoped<StationService>();
+        services.AddScoped<IIdentityRepository, EfIdentityRepository>();
+        services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddScoped<IdentityService>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
 
         services.AddGameNetAuthentication();
 

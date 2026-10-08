@@ -71,5 +71,62 @@ partial class GameNetDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("Code").IsUnique();
             b.ToTable("stations");
         });
+
+        modelBuilder.Entity<GameNet.Server.Modules.Identity.Domain.OperatorUser>(b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+            b.Property<string>("Username").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("username");
+            b.Property<string>("DisplayName").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("display_name");
+            b.Property<string>("PasswordHash").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("password_hash");
+            b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
+            b.Property<int>("FailedLoginCount").HasColumnType("integer").HasColumnName("failed_login_count");
+            b.Property<DateTimeOffset?>("LockoutUntilUtc").HasColumnType("timestamp with time zone").HasColumnName("lockout_until_utc");
+            b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+            b.Property<DateTimeOffset?>("LastLoginAtUtc").HasColumnType("timestamp with time zone").HasColumnName("last_login_at_utc");
+            b.HasKey("Id");
+            b.HasIndex("Username").IsUnique();
+            b.ToTable("operator_users");
+        });
+
+        modelBuilder.Entity<GameNet.Server.Modules.Identity.Domain.Role>(b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+            b.Property<string>("Code").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("code");
+            b.Property<string>("Name").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("name");
+            b.HasKey("Id");
+            b.HasIndex("Code").IsUnique();
+            b.ToTable("roles");
+        });
+
+        modelBuilder.Entity<GameNet.Server.Modules.Identity.Domain.UserRole>(b =>
+        {
+            b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
+            b.Property<Guid>("RoleId").HasColumnType("uuid").HasColumnName("role_id");
+            b.HasKey("UserId", "RoleId");
+            b.HasIndex("RoleId");
+            b.ToTable("user_roles");
+        });
+
+        modelBuilder.Entity<GameNet.Server.Modules.Identity.Domain.RolePermission>(b =>
+        {
+            b.Property<Guid>("RoleId").HasColumnType("uuid").HasColumnName("role_id");
+            b.Property<string>("Permission").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("permission");
+            b.HasKey("RoleId", "Permission");
+            b.HasIndex("Permission");
+            b.ToTable("role_permissions");
+        });
+
+        modelBuilder.Entity<GameNet.Server.Modules.Identity.Domain.AuthSession>(b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+            b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
+            b.Property<string>("Jti").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("jti");
+            b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+            b.Property<DateTimeOffset>("ExpiresAtUtc").HasColumnType("timestamp with time zone").HasColumnName("expires_at_utc");
+            b.Property<DateTimeOffset?>("RevokedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("revoked_at_utc");
+            b.HasKey("Id");
+            b.HasIndex("Jti").IsUnique();
+            b.ToTable("auth_sessions");
+        });
     }
 }
