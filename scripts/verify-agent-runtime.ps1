@@ -38,8 +38,9 @@ function Get-NpgsqlConnectionBuilder([string]$connectionString) {
     }
 }
 
-function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
+function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword, [ref]$oldSslMode) {
     $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+    $oldSslMode.Value = [Environment]::GetEnvironmentVariable("PGSSLMODE","Process")
     $normalized = $connection.Trim().Trim('"')
 
     if ($normalized -match '^(?i)postgres(?:ql)?://') {
@@ -70,6 +71,8 @@ function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
         $username = $npgsql.Username
         $password = $npgsql.Password
         $db = $npgsql.Database
+        $sslMode = $npgsql.SslMode.ToString()
+        if (-not [string]::IsNullOrWhiteSpace($sslMode)) { $env:PGSSLMODE = $sslMode.ToLowerInvariant() }
         if ([string]::IsNullOrWhiteSpace($username)) { throw "Npgsql parser returned an empty PostgreSQL username." }
         if ([string]::IsNullOrWhiteSpace($db)) { $db = $username }
         if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
@@ -129,6 +132,7 @@ $agent = $null
 $agent2 = $null
 $pgDatabase = $null
 $oldPgPassword = $null
+$oldPgSslMode = $null
 $pgBase = $null
 
 try {
@@ -142,7 +146,7 @@ try {
     $env:GameNet__Agent__HeartbeatIntervalSeconds = "5"
     $env:GameNet__Agent__AccessTokenLifetimeSeconds = "300"
 
-    $pgBase = Get-PgCliBase $connection ([ref]$pgDatabase) ([ref]$oldPgPassword)
+    $pgBase = Get-PgCliBase $connection ([ref]$pgDatabase) ([ref]$oldPgPassword) ([ref]$oldPgSslMode)
 
     $server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $serverLog -RedirectStandardError $serverErr -PassThru
 
@@ -236,5 +240,6 @@ finally {
     }
 
     if ($null -eq $oldPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $oldPgPassword }
+    if ($null -eq $oldPgSslMode) { Remove-Item Env:PGSSLMODE -ErrorAction SilentlyContinue } else { $env:PGSSLMODE = $oldPgSslMode }
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
