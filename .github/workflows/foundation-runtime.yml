@@ -7,7 +7,7 @@ on:
       - "foundation/runtime-*"
 
 concurrency:
-  group: foundation-runtime-certification
+  group: foundation-certification-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
