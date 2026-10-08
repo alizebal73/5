@@ -116,10 +116,10 @@ $psql = Resolve-Tool "psql"
 $initdb = Resolve-Tool "initdb"
 $pgCtl = Resolve-Tool "pg_ctl"
 
-$oldPgPassword = $null
-$pgInfo = Get-PgCliInfo $connection ([ref]$oldPgPassword)
-$sourceCli = $pgInfo.Args
-$sourceDatabase = $pgInfo.Database
+$oldPgPassword = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+$oldPgSslMode = [Environment]::GetEnvironmentVariable("PGSSLMODE","Process")
+$sourceCli = @()
+$sourceDatabase = $null
 
 $workRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-backup-" + [Guid]::NewGuid().ToString("N"))
 $clusterRoot = Join-Path $workRoot "restore-cluster"
