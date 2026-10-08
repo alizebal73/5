@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.Extensions.Options;
 
@@ -51,9 +52,11 @@ public static class AgentCredentialRoutes
                     context.Response.Headers.CacheControl = "no-store";
                     return Results.Ok(issued);
                 }
-                catch (InvalidOperationException ex)
+                catch (AgentCredentialException ex)
                 {
-                    return Results.Conflict(new { code = ex.Message });
+                    return Results.Conflict(new ApiFailure(
+                        new ApiError(ex.Code, "The Agent credential operation was rejected."),
+                        CorrelationIdMiddleware.GetCurrent(context)));
                 }
             }).AllowAnonymous();
 
