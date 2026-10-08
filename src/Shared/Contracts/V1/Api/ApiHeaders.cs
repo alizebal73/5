@@ -4,4 +4,6 @@ public static class ApiHeaders
 {
     public const string CorrelationId = "X-Correlation-Id";
     public const string ContractVersion = "X-GameNet-Contract";
+    public const string IdempotencyKey = "X-Idempotency-Key";
+    public const string Source = "X-GameNet-Source";
 }

@@ -1,9 +1,12 @@
 # Module Rules
 
 Domain -> Shared
-Application -> Domain + Shared + explicit contracts
-Infrastructure -> Application + Domain + Persistence + Shared
+Application -> Domain + Shared + Server.Application ports
+Server.Application ports -> Shared
+Infrastructure adapters -> Application + Domain + Persistence + Server.Application + Shared
 Api -> Application + Shared
 Composition -> registration only
 
-Forbidden: EF/DbContext in Domain/Application/Api; Infrastructure from Domain; cross-module internal references; network/file/process side effects in Domain; authoritative calculations in clients.
+EF/DbContext is forbidden inside src/Server/Modules. Persistence adapters live under Server.Infrastructure.Persistence and may implement module repository ports.
+
+Forbidden: Infrastructure from Domain/Application/Api; cross-module internal references; network/file/process side effects in Domain; authoritative calculations in clients.

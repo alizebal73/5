@@ -2,9 +2,10 @@ using GameNet.Server.Composition;
 using GameNet.Server.Infrastructure;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Infrastructure.Configuration;
-using Microsoft.Extensions.Options;
+using GameNet.Server.Modules.Stations.Api;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
@@ -28,6 +29,8 @@ app.MapGet("/health", (StartupState state, HttpContext context) =>
         new(state.Service, StartupState.Version, HealthStatuses.Healthy, HealthStatuses.Ready, id),
         id));
 }).AllowAnonymous();
+
+app.MapStationEndpoints();
 
 app.Run();
 
