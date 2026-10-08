@@ -12,10 +12,10 @@ if (-not (Test-Path $dotnet)) { $dotnet = (Get-Command dotnet -ErrorAction Stop)
 
 $serverUrl = "http://127.0.0.1:5096"
 $serverLog = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-desktop-server-" + [Guid]::NewGuid().ToString("N") + ".log")
-$server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $serverLog -RedirectStandardError $serverLog -PassThru
+$env:ASPNETCORE_URLS = $serverUrl
+$server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $serverLog -RedirectStandardError ($serverLog + ".err") -PassThru
 
 try {
-    $env:ASPNETCORE_URLS = $serverUrl
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 1
         try {
