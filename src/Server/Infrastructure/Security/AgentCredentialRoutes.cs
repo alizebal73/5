@@ -55,9 +55,7 @@ public static class AgentCredentialRoutes
                 }
                 catch (AgentCredentialException ex)
                 {
-                    return Results.Conflict(new ApiFailure(
-                        new ApiError(ex.Code, "The Agent credential operation was rejected."),
-                        CorrelationIdMiddleware.GetCurrent(context)));
+                    return WriteCredentialFailure(context, ex);
                 }
             }).AllowAnonymous();
 
@@ -95,10 +93,22 @@ public static class AgentCredentialRoutes
                 var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
                 if (denied is not null) return denied;
 
-                var revoked = await credentials.RevokeAsync(request, cancellationToken);
-                return Results.Ok(new { revoked });
+                try
+                {
+                    var revoked = await credentials.RevokeAsync(request, cancellationToken);
+                    return Results.Ok(new { revoked });
+                }
+                catch (AgentCredentialException ex)
+                {
+                    return WriteCredentialFailure(context, ex);
+                }
             }).AllowAnonymous();
     }
+
+    private static IResult WriteCredentialFailure(HttpContext context, AgentCredentialException exception) =>
+        Results.Conflict(new ApiFailure(
+            new ApiError(exception.Code, "The Agent credential operation was rejected."),
+            CorrelationIdMiddleware.GetCurrent(context)));
 
     private static IResult? ValidateProvisioningKey(HttpContext context, string? expectedKey)
     {
