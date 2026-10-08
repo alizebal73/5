@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Net.Http.Json;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
