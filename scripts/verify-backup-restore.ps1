@@ -77,8 +77,7 @@ function Get-PgCliInfo([string]$value, [ref]$oldPassword) {
             if ($kv[0] -ieq "sslmode" -and $kv.Count -eq 2) { $ssl = [Uri]::UnescapeDataString($kv[1]) }
         }
         $args = @("--host=$($uri.Host)","--port=$port","--username=$user","--dbname=$db")
-        if (-not [string]::IsNullOrWhiteSpace($ssl)) { $args += "--sslmode=$($ssl.ToLowerInvariant())" }
-        return [pscustomobject]@{ Args = $args; Database = $db; Format = "uri" }
+        return [pscustomobject]@{ Args = $args; Database = $db; Format = "uri"; SslMode = $ssl }
     }
 
     $npgsql = Get-NpgsqlConnectionBuilder $normalized
@@ -94,8 +93,7 @@ function Get-PgCliInfo([string]$value, [ref]$oldPassword) {
         if ([string]::IsNullOrWhiteSpace($hostValue)) { $hostValue = "localhost" }
         if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
         $args = @("--host=$hostValue","--port=$port","--username=$user","--dbname=$db")
-        if (-not [string]::IsNullOrWhiteSpace($ssl)) { $args += "--sslmode=$($ssl.ToLowerInvariant())" }
-        return [pscustomobject]@{ Args = $args; Database = $db; Format = "npgsql" }
+        return [pscustomobject]@{ Args = $args; Database = $db; Format = "npgsql"; SslMode = $ssl }
     }
 
     throw "Could not parse GAMENET_DATABASE_CONNECTION with NpgsqlConnectionStringBuilder."
@@ -138,6 +136,7 @@ try {
     $pgInfo = Get-PgCliInfo $connection ([ref]$oldPgPassword)
     $sourceCli = $pgInfo.Args
     $sourceDatabase = $pgInfo.Database
+    if (-not [string]::IsNullOrWhiteSpace($pgInfo.SslMode)) { $env:PGSSLMODE = $pgInfo.SslMode.ToLowerInvariant() }
     Write-Host "Backup source format: $($pgInfo.Format)"
     Write-Host "Backup source database: $sourceDatabase"
 
@@ -251,6 +250,8 @@ finally {
 
     if ($null -eq $oldPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
     else { $env:PGPASSWORD = $oldPgPassword }
+    if ($null -eq $oldPgSslMode) { Remove-Item Env:PGSSLMODE -ErrorAction SilentlyContinue }
+    else { $env:PGSSLMODE = $oldPgSslMode }
 
     Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
