@@ -1,5 +1,48 @@
+using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Outbox;
+using GameNet.Server.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameNet.Server.Persistence;
 
-public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options) : DbContext(options);
+public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options) : DbContext(options)
+{
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        RejectAuditMutation();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override int SaveChanges() => SaveChanges(true);
+
+    public override async Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        RejectAuditMutation();
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => SaveChangesAsync(true, cancellationToken);
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfiguration(new AuditEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new IdempotencyRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
+    }
+
+    private void RejectAuditMutation()
+    {
+        if (ChangeTracker.Entries<AuditEntry>()
+            .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException("AUDIT_IS_APPEND_ONLY");
+        }
+    }
+}
