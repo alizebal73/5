@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $desktop = Get-ChildItem "src/Desktop/bin/Release" -Recurse -File -Filter "*.exe" |
@@ -12,8 +12,10 @@ if (-not (Test-Path $dotnet)) { $dotnet = (Get-Command dotnet -ErrorAction Stop)
 
 $serverUrl = "http://127.0.0.1:5096"
 $serverLog = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-desktop-server-" + [Guid]::NewGuid().ToString("N") + ".log")
+$serverErr = $serverLog + ".err"
+$previousUrls = [Environment]::GetEnvironmentVariable("ASPNETCORE_URLS","Process")
 $env:ASPNETCORE_URLS = $serverUrl
-$server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $serverLog -RedirectStandardError ($serverLog + ".err") -PassThru
+$server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $serverLog -RedirectStandardError $serverErr -PassThru
 
 try {
     for ($i = 0; $i -lt 45; $i++) {
@@ -51,5 +53,6 @@ try {
 finally {
     Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $serverLog -Force -ErrorAction SilentlyContinue
-    Remove-Item Env:ASPNETCORE_URLS -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $serverErr -Force -ErrorAction SilentlyContinue
+    if ($null -eq $previousUrls) { Remove-Item Env:ASPNETCORE_URLS -ErrorAction SilentlyContinue } else { $env:ASPNETCORE_URLS = $previousUrls }
 }

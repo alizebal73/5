@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
@@ -41,8 +41,11 @@ $old = @{}
 foreach ($name in $envNames) { $old[$name] = [Environment]::GetEnvironmentVariable($name, "Process") }
 
 $serverLog = Join-Path $root "server.log"
+$serverErr = $serverLog + ".err"
 $agentLog = Join-Path $root "agent.log"
+$agentErr = $agentLog + ".err"
 $agent2Log = Join-Path $root "agent2.log"
+$agent2Err = $agent2Log + ".err"
 $server = $null
 $agent = $null
 $agent2 = $null
@@ -58,7 +61,7 @@ try {
     $env:GameNet__Agent__HeartbeatIntervalSeconds = "5"
     $env:GameNet__Agent__AccessTokenLifetimeSeconds = "300"
 
-    $server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--no-build","--no-restore") -RedirectStandardOutput $serverLog -RedirectStandardError ($serverLog + ".err") -PassThru
+    $server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $serverLog -RedirectStandardError $serverErr -PassThru
 
     $ready = $false
     for ($i = 0; $i -lt 60; $i++) {
@@ -82,7 +85,7 @@ try {
     $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
     $env:GAMENET_AGENT_BOOTSTRAP_SECRET = $secret
 
-    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError ($agentLog + ".err") -PassThru
+    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentErr -PassThru
 
     $leaseConnectionId = $null
     for ($i = 0; $i -lt 60; $i++) {
@@ -97,7 +100,7 @@ try {
     if ([string]::IsNullOrWhiteSpace($leaseConnectionId)) { throw "Agent did not acquire an authoritative lease. See $agentLog." }
 
     $env:GameNet__AgentIdentity__RootPath = $identityRoot2
-    $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError ($agent2Log + ".err") -PassThru
+    $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Err -PassThru
     Start-Sleep -Seconds 8
 
     $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
@@ -119,7 +122,7 @@ try {
     }
 
     $env:GameNet__AgentIdentity__RootPath = $identityRoot
-    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentLog -PassThru
+    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentErr -PassThru
 
     $reconnected = $false
     for ($i = 0; $i -lt 40; $i++) {

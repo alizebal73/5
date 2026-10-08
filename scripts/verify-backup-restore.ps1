@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
@@ -36,9 +36,6 @@ if ($sourceDatabase -eq "postgres") {
     throw "Backup/restore certification must target the dedicated GameNet database, not the postgres maintenance database."
 }
 
-$sourceBuilder = [System.Data.Common.DbConnectionStringBuilder]::new()
-$sourceBuilder.ConnectionString = $connection
-
 $restoreDatabase = "gamenet5_restore_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
 
 $maintenance = [System.Data.Common.DbConnectionStringBuilder]::new()
@@ -72,20 +69,23 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "pg_restore failed." }
 
     $check = @"
-SELECT
-    to_regclass('public.audit_entries'),
-    to_regclass('public.idempotency_records'),
-    to_regclass('public.outbox_messages'),
-    to_regclass('public.agent_credentials'),
-    to_regclass('public.agent_connection_leases');
+SELECT CASE WHEN bool_and(ok) THEN 'PASS' ELSE 'FAIL' END
+FROM (
+    VALUES
+        (to_regclass('public.audit_entries') IS NOT NULL),
+        (to_regclass('public.idempotency_records') IS NOT NULL),
+        (to_regclass('public.outbox_messages') IS NOT NULL),
+        (to_regclass('public.agent_credentials') IS NOT NULL),
+        (to_regclass('public.agent_connection_leases') IS NOT NULL)
+) AS required(ok);
 "@
 
-    $result = & $psql $restore.ConnectionString "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1
+    $result = ((& $psql $restore.ConnectionString "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
     if ($LASTEXITCODE -ne 0) {
-        throw "Restored database validation query failed: $($result -join [Environment]::NewLine)"
+        throw "Restored database validation query failed: $result"
     }
 
-    if (($result -join " ") -match "<null>") {
+    if ($result -ne "PASS") {
         throw "Restored database is missing one or more Foundation tables."
     }
 
