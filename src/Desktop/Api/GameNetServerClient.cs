@@ -2,13 +2,11 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
-using Microsoft.Extensions.Options;
 
 namespace GameNet.Desktop.Api;
 
 public sealed class GameNetServerClient(
-    HttpClient httpClient,
-    IOptions<ServerConnectionOptions> options) : IGameNetServerClient
+    HttpClient httpClient): IGameNetServerClient
 {
     public async Task<ApiEnvelope<HealthResponse>> GetHealthAsync(CancellationToken cancellationToken = default)
     {
