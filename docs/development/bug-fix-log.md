@@ -114,3 +114,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix applied: preserve server/Agent logs and a commit-stamped diagnostic summary on Agent certification failure, redact likely credential/JWT material before writing the artifact, and include Agent-runtime diagnostics in the existing failure artifact. Successful runs continue to delete temporary diagnostics.
 - Root cause and regression evidence: pending the next single-SHA Foundation certification; do not mark Foundation certified until Agent lease/fencing/reconnect checks pass.
 - Rollback: revert this diagnostic-only commit if preservation causes a runner problem; do not weaken Agent authentication, lease fencing, or the certification assertions.
+
+
+## 2026-10-09 — Foundation Agent runtime / JWT bearer scheme configuration
+
+- Symptom: Agent credentials were provisioned successfully and the token endpoint returned HTTP 200, but SignalR negotiation repeatedly returned HTTP 401 and no authoritative Agent lease was created.
+- Root cause confirmed from preserved server logs: JWT validation raised 'IDX10500: Signature validation failed. No security keys were provided to validate the signature.' The registration used 'AddOptions<JwtBearerOptions>()', which configures the unnamed options instance, while the registered JWT bearer handler reads the named 'Bearer' scheme options. Consequently, the signing key, issuer/audience validation settings, and SignalR query-token event were not applied to the handler actually validating the Agent token.
+- Fix: register the options under 'JwtBearerDefaults.AuthenticationScheme' and add a regression test asserting the named Bearer options contain the configured issuer, audience, and signing key. No authentication guard or lease authorization is weakened.
+- Related diagnostic hardening: redact token query parameters and fix the failure-summary path join expression; Agent logs remain failure-only artifacts.
+- Verification: pending the next full Foundation certification. Certification marker remains pending until Agent heartbeat, fencing and reconnect tests pass on one SHA.
+- Rollback: revert this commit as a unit if the regression test or runtime certification fails; do not restore the unnamed options registration.

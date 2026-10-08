@@ -14,7 +14,7 @@ public static class AuthenticationRegistration
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer();
 
-        services.AddOptions<JwtBearerOptions>()
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IOptions<GameNetOptions>>((options, appOptions) =>
             {
                 var settings = appOptions.Value.Authentication;

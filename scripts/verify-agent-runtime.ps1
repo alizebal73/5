@@ -265,8 +265,8 @@ finally {
         foreach ($entry in $logFiles) {
             if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) { continue }
             $content = Get-Content -LiteralPath $entry.Path -Raw
-            $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
-            $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
+            $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+            $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|refresh_token|client_secret|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
             $content = [Regex]::Replace($content, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
             $content = [Regex]::Replace($content, '\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b', '<redacted-jwt>')
             $destination = Join-Path $diagnosticRoot ("agent-runtime-" + $runToken + "-" + $entry.Name)
@@ -274,15 +274,20 @@ finally {
         }
 
         $safeFailure = [string]$failureMessage
-        $safeFailure = [Regex]::Replace($safeFailure, '(?i)(password|pwd|signingkey|provisioningkey|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+        $safeFailure = [Regex]::Replace($safeFailure, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
         $safeFailure = [Regex]::Replace($safeFailure, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
+        $diagnosticLogPaths = @(
+            $logFiles |
+                ForEach-Object { Join-Path $diagnosticRoot ('agent-runtime-' + $runToken + '-' + $_.Name) } |
+                Where-Object { Test-Path -LiteralPath $_ }
+        )
         $diagnosticPath = Join-Path $diagnosticRoot ("agent-runtime-diagnostic-" + $runToken + ".txt")
         @(
             "commit=$((git rev-parse HEAD 2>$null))"
             "branch=$((git branch --show-current 2>$null))"
             "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
             "failure=$safeFailure"
-            "diagnosticLogs=$($logFiles | ForEach-Object { Join-Path $diagnosticRoot ('agent-runtime-' + $runToken + '-' + $_.Name) } | Where-Object { Test-Path -LiteralPath $_ } -join ';')"
+            "diagnosticLogs=$($diagnosticLogPaths -join ';')"
         ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
 
         Write-Host "Agent runtime diagnostics preserved under $diagnosticRoot."
