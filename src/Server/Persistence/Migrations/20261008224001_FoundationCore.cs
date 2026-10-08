@@ -136,7 +136,7 @@ namespace GameNet.Server.Persistence.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_audit_entries_OccurredAtUtc_Operation",
                 table: "audit_entries",
-                columns: new[] { "OccurredAtUtc", "operation" });
+                columns: new[] { "occurred_at_utc", "operation" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_audit_entries_ReferenceType_ReferenceId",
