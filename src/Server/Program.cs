@@ -1,8 +1,9 @@
 using GameNet.Server.Composition;
 using GameNet.Server.Infrastructure;
+using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Server.Infrastructure.Health;
 using GameNet.Server.Infrastructure.Observability;
-using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Server.Infrastructure.Realtime;
 using Microsoft.Extensions.Options;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
@@ -29,6 +30,9 @@ app.UseAuthorization();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<GameNetOptions>>().Value;
 if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
     throw new InvalidOperationException("Production authentication must be enabled.");
+
+app.MapAgentCredentialRoutes();
+app.MapHub<AgentHub>("/hubs/agent");
 
 app.MapGet("/health", async (
     StartupState state,
