@@ -48,7 +48,7 @@ public sealed class AgentCredentialStore(
 
         var root = Path.GetFullPath(identityOptions.Value.RootPath);
         Directory.CreateDirectory(root);
-        var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(secret), null, DataProtectionScope.LocalMachine);
+        var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(secret), null, DataProtectionScope.CurrentUser);
         var path = Path.Combine(root, "credential.bin");
         var temp = path + ".tmp";
         await File.WriteAllBytesAsync(temp, protectedBytes, cancellationToken);
