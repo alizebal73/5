@@ -91,7 +91,7 @@ try {
     for ($i = 0; $i -lt 60; $i++) {
         Start-Sleep -Seconds 1
         $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
-        $value = & (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") $connection "-Atc" $query 2>$null
+        $value = & (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") "--dbname=$connection" "-Atc" $query 2>$null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($value -join ""))) {
             $leaseConnectionId = ($value -join "").Trim()
             break
@@ -104,7 +104,7 @@ try {
     Start-Sleep -Seconds 8
 
     $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
-    $afterSecond = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") $connection "-Atc" $query 2>$null) -join ""
+    $afterSecond = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") "--dbname=$connection" "-Atc" $query 2>$null) -join ""
     if ($afterSecond.Trim() -ne $leaseConnectionId) {
         throw "Agent fencing failed: a second connection replaced the authoritative lease."
     }
@@ -116,7 +116,7 @@ try {
     Start-Sleep -Seconds 4
 
     $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
-    $released = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") $connection "-Atc" $query 2>$null) -join ""
+    $released = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") "--dbname=$connection" "-Atc" $query 2>$null) -join ""
     if (-not [string]::IsNullOrWhiteSpace($released.Trim())) {
         throw "Agent lease was not released by the owning connection."
     }
@@ -127,7 +127,7 @@ try {
     $reconnected = $false
     for ($i = 0; $i -lt 40; $i++) {
         Start-Sleep -Seconds 1
-        $value = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") $connection "-Atc" $query 2>$null) -join ""
+        $value = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") "--dbname=$connection" "-Atc" $query 2>$null) -join ""
         if (-not [string]::IsNullOrWhiteSpace($value.Trim()) -and $value.Trim() -ne $leaseConnectionId) {
             $reconnected = $true
             break

@@ -23,7 +23,7 @@ $pgDump = Resolve-Tool "pg_dump"
 $pgRestore = Resolve-Tool "pg_restore"
 $psql = Resolve-Tool "psql"
 
-$sourceDatabaseResult = & $psql $connection "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=SELECT current_database();" 2>&1
+$sourceDatabaseResult = & $psql "--dbname=$connection" "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=SELECT current_database();" 2>&1
 if ($LASTEXITCODE -ne 0) {
     throw "Could not determine the source PostgreSQL database."
 }
@@ -61,7 +61,7 @@ try {
 
     Write-Host "Creating isolated restore database..."
     $createSql = 'CREATE DATABASE "' + $restoreDatabase + '";'
-    & $psql $maintenance.ConnectionString "--set=ON_ERROR_STOP=1" "--command=$createSql"
+    & $psql "--dbname=$($maintenance.ConnectionString)" "--set=ON_ERROR_STOP=1" "--command=$createSql"
     if ($LASTEXITCODE -ne 0) { throw "Could not create isolated restore database." }
 
     Write-Host "Restoring backup artifact..."
@@ -80,7 +80,7 @@ FROM (
 ) AS required(ok);
 "@
 
-    $result = ((& $psql $restore.ConnectionString "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
+    $result = ((& $psql "--dbname=$($restore.ConnectionString)" "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
     if ($LASTEXITCODE -ne 0) {
         throw "Restored database validation query failed: $result"
     }
@@ -96,7 +96,7 @@ FROM (
 finally {
     try {
         $dropSql = 'DROP DATABASE IF EXISTS "' + $restoreDatabase + '";'
-        & $psql $maintenance.ConnectionString "--set=ON_ERROR_STOP=1" "--command=$dropSql" | Out-Null
+        & $psql "--dbname=$($maintenance.ConnectionString)" "--set=ON_ERROR_STOP=1" "--command=$dropSql" | Out-Null
     }
     catch {
         Write-Warning "Failed to clean up isolated restore database $restoreDatabase."
