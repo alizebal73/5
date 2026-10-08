@@ -13,4 +13,6 @@ public static class Permissions
     public const string ReportsRead = "reports.read";
     public const string SettingsWrite = "settings.write";
     public const string BackupOperate = "backup.operate";
+    public const string IdentityUsersRead = "identity.users.read";
+    public const string IdentityUsersWrite = "identity.users.write";
 }

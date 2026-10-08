@@ -5,6 +5,7 @@ using GameNet.Server.Infrastructure.Health;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Security;
+using GameNet.Server.Modules.Identity.Api;
 using Microsoft.Extensions.Options;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
@@ -16,6 +17,13 @@ if (!string.IsNullOrWhiteSpace(databaseConnection) &&
     string.IsNullOrWhiteSpace(builder.Configuration["GameNet:DatabaseConnectionString"]))
 {
     builder.Configuration["GameNet:DatabaseConnectionString"] = databaseConnection;
+}
+
+var bootstrapSecret = Environment.GetEnvironmentVariable("GAMENET_BOOTSTRAP_SECRET");
+if (!string.IsNullOrWhiteSpace(bootstrapSecret) &&
+    string.IsNullOrWhiteSpace(builder.Configuration["GameNet:Setup:BootstrapSecret"]))
+{
+    builder.Configuration["GameNet:Setup:BootstrapSecret"] = bootstrapSecret;
 }
 
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
@@ -33,6 +41,7 @@ if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
     throw new InvalidOperationException("Production authentication must be enabled.");
 
 app.MapAgentCredentialRoutes();
+app.MapIdentityEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 app.MapGet("/health", async (

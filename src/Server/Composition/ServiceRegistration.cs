@@ -8,6 +8,9 @@ using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
+using GameNet.Server.Modules.Identity.Application;
+using GameNet.Server.Modules.Identity.Infrastructure.Persistence;
+using GameNet.Server.Modules.Identity.Infrastructure.Security;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -34,6 +37,10 @@ public static class ServiceRegistration
         services.AddScoped<IOutboxDispatcher, EfOutboxDispatcher>();
         services.AddScoped<IAgentConnectionLeaseStore, EfAgentConnectionLeaseStore>();
         services.AddScoped<IAgentCredentialService, AgentCredentialService>();
+        services.AddScoped<IIdentityRepository, EfIdentityRepository>();
+        services.AddScoped<IdentityService>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IAgentAccessTokenIssuer, AgentAccessTokenIssuer>();
 
         services.AddSignalR();

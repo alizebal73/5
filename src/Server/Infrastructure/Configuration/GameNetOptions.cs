@@ -9,6 +9,7 @@ public sealed class GameNetOptions
     public string? DatabaseConnectionString { get; init; }
     public AuthenticationOptions Authentication { get; init; } = new();
     public AgentOptions Agent { get; init; } = new();
+    public SetupOptions Setup { get; init; } = new();
 }
 
 public sealed class AuthenticationOptions
@@ -17,6 +18,11 @@ public sealed class AuthenticationOptions
     public string? Issuer { get; init; }
     public string? Audience { get; init; }
     public string? SigningKey { get; init; }
+}
+
+public sealed class SetupOptions
+{
+    public string? BootstrapSecret { get; init; }
 }
 
 public sealed class AgentOptions

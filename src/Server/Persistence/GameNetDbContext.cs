@@ -2,6 +2,7 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Outbox;
 using GameNet.Server.Persistence.Configurations;
 using GameNet.Server.Persistence.Entities;
+using GameNet.Server.Modules.Identity.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameNet.Server.Persistence;
@@ -13,6 +14,11 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<OperatorUser> OperatorUsers => Set<OperatorUser>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -40,6 +46,11 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
         modelBuilder.ApplyConfiguration(new AuditEntryConfiguration());
         modelBuilder.ApplyConfiguration(new IdempotencyRecordConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
+        modelBuilder.ApplyConfiguration(new OperatorUserConfiguration());
+        modelBuilder.ApplyConfiguration(new RoleConfiguration());
+        modelBuilder.ApplyConfiguration(new RolePermissionConfiguration());
+        modelBuilder.ApplyConfiguration(new UserRoleConfiguration());
+        modelBuilder.ApplyConfiguration(new AuthSessionConfiguration());
     }
 
     private void RejectAuditMutation()
