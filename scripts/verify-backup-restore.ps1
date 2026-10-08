@@ -23,13 +23,22 @@ $pgDump = Resolve-Tool "pg_dump"
 $pgRestore = Resolve-Tool "pg_restore"
 $psql = Resolve-Tool "psql"
 
-$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-$builder.ConnectionString = $connection
-if (-not $builder.ContainsKey("Database")) {
-    throw "The PostgreSQL connection string must specify Database."
+$sourceDatabaseResult = & $psql $connection "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=SELECT current_database();" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not determine the source PostgreSQL database."
 }
 
-$sourceDatabase = [string]$builder["Database"]
+$sourceDatabase = ($sourceDatabaseResult | Select-Object -Last 1).ToString().Trim()
+if ([string]::IsNullOrWhiteSpace($sourceDatabase)) {
+    throw "PostgreSQL returned an empty current_database()."
+}
+if ($sourceDatabase -eq "postgres") {
+    throw "Backup/restore certification must target the dedicated GameNet database, not the postgres maintenance database."
+}
+
+$sourceBuilder = [System.Data.Common.DbConnectionStringBuilder]::new()
+$sourceBuilder.ConnectionString = $connection
+
 $restoreDatabase = "gamenet5_restore_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
 
 $maintenance = [System.Data.Common.DbConnectionStringBuilder]::new()
