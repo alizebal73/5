@@ -1,0 +1,7 @@
+<Window x:Class="GameNet.Desktop.Shell.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="GameNet Manager 5" Width="1180" Height="720" MinWidth="1000" MinHeight="650" FlowDirection="RightToLeft">
+  <Grid Margin="24">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <TextBlock Text="GameNet Manager 5" FontSize="28" FontWeight="SemiBold"/>
+    <ContentControl Grid.Row="1" Margin="0,24,0,0"/>
+  </Grid>
+</Window>

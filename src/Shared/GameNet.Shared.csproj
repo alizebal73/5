@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>GameNet.Shared</RootNamespace>
+    <AssemblyName>GameNet.Shared</AssemblyName>
+  </PropertyGroup>
+</Project>
