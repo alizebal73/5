@@ -1,5 +1,6 @@
 using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Outbox;
+using GameNet.Server.Persistence.Configurations;
 using GameNet.Server.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 
