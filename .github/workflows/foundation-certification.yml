@@ -46,6 +46,14 @@ jobs:
         shell: pwsh
         run: .\scripts\verify-backup-restore.ps1
 
+      - name: Desktop runtime certification
+        shell: pwsh
+        run: .\scripts\verify-desktop-runtime.ps1
+
+      - name: Agent runtime certification
+        shell: pwsh
+        run: .\scripts\verify-agent-runtime.ps1
+
       - name: Evidence
         shell: pwsh
         run: |
