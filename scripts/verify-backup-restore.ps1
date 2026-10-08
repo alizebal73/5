@@ -51,8 +51,7 @@ function Get-NpgsqlConnectionBuilder([string]$connectionString) {
     }
 }
 
-function Get-PgCliInfo([string]$value, [ref]$oldPassword) {
-    $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+function Get-PgCliInfo([string]$value) {
     $normalized = $value.Trim().Trim('"')
 
     if ($normalized -match '^(?i)postgres(?:ql)?://') {
@@ -133,7 +132,7 @@ $clusterStarted = $false
 $diagnosticPath = ".\\artifacts\\foundation\\backup-restore-diagnostic.txt"
 
 try {
-    $pgInfo = Get-PgCliInfo $connection ([ref]$oldPgPassword)
+    $pgInfo = Get-PgCliInfo $connection
     $sourceCli = $pgInfo.Args
     $sourceDatabase = $pgInfo.Database
     if (-not [string]::IsNullOrWhiteSpace($pgInfo.SslMode)) { $env:PGSSLMODE = $pgInfo.SslMode.ToLowerInvariant() }
