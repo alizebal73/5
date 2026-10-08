@@ -128,9 +128,15 @@ try {
         Copy-Item -LiteralPath ".\global.json" -Destination (Join-Path $workspace "global.json") -Force
         Copy-Item -LiteralPath ".\.config" -Destination (Join-Path $workspace ".config") -Recurse -Force
 
-        & $dotnetPath "tool" "restore" "--tool-manifest" (Join-Path $workspace ".config\dotnet-tools.json") "--tool-path" (Join-Path $workspace ".tools")
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not restore dotnet-ef tooling in isolated concurrency workspace."
+        Push-Location -LiteralPath $workspace
+        try {
+            & $dotnetPath "tool" "restore" "--tool-manifest" ".config\dotnet-tools.json"
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not restore dotnet-ef tooling in isolated concurrency workspace."
+            }
+        }
+        finally {
+            Pop-Location
         }
     }
 
@@ -142,11 +148,7 @@ try {
 
             Set-Location -LiteralPath $workspacePath
 
-            $ef = Join-Path $workspacePath ".tools\dotnet-ef.exe"
-            if (-not (Test-Path -LiteralPath $ef -PathType Leaf)) {
-                $ef = "dotnet-ef"
-            }
-
+            $ef = "dotnet-ef"
             $args = @(
                 "database", "update",
                 "--configuration", "Release",
