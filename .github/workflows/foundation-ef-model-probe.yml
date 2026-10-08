@@ -1,0 +1,66 @@
+name: foundation-ef-model-probe
+
+on:
+  push:
+    branches:
+      - "foundation/ef-model-probe-*"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate EF alignment migration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+          if (-not (Test-Path $dotnet -PathType Leaf)) {
+              $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+          }
+
+          & $dotnet tool restore
+          if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed." }
+
+          & $dotnet restore GameNet.slnx
+          if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed." }
+
+          & $dotnet build src/Server/GameNet.Server.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Server build failed." }
+
+          $efArgs = @(
+              "ef", "migrations", "add", "FoundationModelAlignment",
+              "--project", "src/Server/GameNet.Server.csproj",
+              "--startup-project", "src/Server/GameNet.Server.csproj",
+              "--context", "GameNet.Server.Persistence.GameNetDbContext",
+              "--output-dir", "Persistence/Migrations",
+              "--configuration", "Release",
+              "--no-build"
+          )
+          & $dotnet @efArgs
+          if ($LASTEXITCODE -ne 0) { throw "EF migration generation failed." }
+
+          $unexpected = Get-ChildItem .\src\Server\src -Recurse -File -ErrorAction SilentlyContinue
+          if ($unexpected) {
+              throw "EF generated files under src/Server/src; output path is incorrect."
+          }
+
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Server/Persistence/Migrations
+
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+              throw "EF migration generation produced no repository changes."
+          }
+
+          git commit -m "build: generated exact EF model alignment migration [generated-ef-migration]"
+          if ($LASTEXITCODE -ne 0) { throw "Commit failed." }
+
+          git push origin HEAD:foundation/ef-model-probe-v2
