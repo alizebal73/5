@@ -74,7 +74,7 @@ if (Test-Path -LiteralPath $migrationsRoot -PathType Container) {
         }
 
         $designerText = Get-Content -LiteralPath $designer -Raw
-        if ($designerText -notmatch '[Migration("([^"]+)")]') {
+        if (-not $designerText.Contains('[Migration("')) {
             throw "EF migration '$($migration.Name)' Designer is missing its Migration attribute."
         }
 
