@@ -1,0 +1,74 @@
+name: foundation-migrations-rebuild
+
+on:
+  push:
+    branches:
+      - "foundation/runtime-migrations-rebuild-v1"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: "!contains(github.event.head_commit.message, '[generated-foundation-migration]')"
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild EF Foundation migration from empty history
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+          if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
+              $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+          }
+
+          & $dotnet tool restore
+          if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed." }
+
+          & $dotnet restore GameNet.slnx
+          if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed." }
+
+          if (Test-Path -LiteralPath ".\src\Server\Persistence\Migrations") {
+              Remove-Item -LiteralPath ".\src\Server\Persistence\Migrations" -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path ".\src\Server\Persistence\Migrations" | Out-Null
+
+          & $dotnet build src/Server/GameNet.Server.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Server build failed." }
+
+          $efArgs = @(
+              "ef",
+              "migrations",
+              "add",
+              "FoundationCore",
+              "--project", "src/Server/GameNet.Server.csproj",
+              "--startup-project", "src/Server/GameNet.Server.csproj",
+              "--context", "GameNet.Server.Persistence.GameNetDbContext",
+              "--output-dir", "Persistence/Migrations",
+              "--configuration", "Release",
+              "--no-build"
+          )
+          & $dotnet @efArgs
+          if ($LASTEXITCODE -ne 0) { throw "EF FoundationCore migration generation failed." }
+
+          $migrationFiles = @(Get-ChildItem ".\src\Server\Persistence\Migrations" -File | Select-Object -ExpandProperty Name)
+          if ($migrationFiles.Count -lt 3) {
+              throw "Expected EF migration, designer, and snapshot artifacts."
+          }
+
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Server/Persistence/Migrations
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+              throw "Generated migration produced no repository changes."
+          }
+
+          git commit -m "build: generated FoundationCore EF migration [generated-foundation-migration]"
+          if ($LASTEXITCODE -ne 0) { throw "Commit failed." }
+
+          git push origin HEAD:foundation/runtime-migrations-rebuild-v1
