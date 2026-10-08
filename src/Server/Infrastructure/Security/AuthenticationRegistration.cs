@@ -2,6 +2,7 @@ using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using GameNet.Server.Modules.Identity.Application;
+using GameNet.Shared.Primitives;
 using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
