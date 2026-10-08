@@ -40,12 +40,13 @@ Permanent Repo 5 controls:
 
 ## 2026-10-08 — Foundation CI / .NET host command
 
-- Symptom: self-hosted Windows Runner reached the canonical verification phase, but `dotnet --version` exited with `-2147450751` after printing the .NET CLI usage text.
-- Root cause: the Runner's installed .NET host does not accept the `--version` invocation used by this verification command in its service environment; this was a verification-command incompatibility, not a Runner routing failure.
-- Fix: Foundation verification now uses `dotnet --info`, which is supported by the host and provides SDK/runtime evidence before restore/build/test.
-- Regression evidence: PowerShell parser, business gate, source-size guard and architecture guard passed on the same self-hosted Runner before the failure.
-- Verification result: pending rerun of the canonical Foundation verification.
-- Rollback: revert the single verification-script change if `dotnet --info` is not supported on the approved environment.
+- Symptom: self-hosted Windows Runner reached canonical verification, but both `dotnet --version` and `dotnet --info` exited with `-2147450751` after printing CLI usage text.
+- Root cause: not yet certified. The runner routing is proven correct; the remaining defect is in the .NET executable/environment resolved by the Runner service.
+- First hypothesis rejected: changing `--version` to `--info` did not resolve the failure.
+- Current diagnostic: verification now records the resolved `dotnet.exe` path, DOTNET_ROOT, PATH and file/product version before invoking `dotnet --info`.
+- Regression evidence: PowerShell parser, business gate, source-size guard and architecture guard passed on the same self-hosted Runner before the .NET host failure.
+- Verification result: pending rerun with executable/environment diagnostics.
+- Rollback: revert the diagnostic verification-script change after the root cause is fixed.
 
 ## Stable rule
 
