@@ -39,6 +39,7 @@ jobs:
               "--startup-project", "src/Server/GameNet.Server.csproj",
               "--context", "GameNet.Server.Persistence.GameNetDbContext",
               "--output-dir", "src/Server/Persistence/Migrations",
+              "--configuration", "Release",
               "--no-build"
           )
           & $dotnet @efArgs
