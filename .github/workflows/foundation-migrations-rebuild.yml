@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: foundation-migrations-rebuild-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   generate:
     if: "!contains(github.event.head_commit.message, '[generated-foundation-migration]')"
