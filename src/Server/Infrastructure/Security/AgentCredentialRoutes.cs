@@ -1,3 +1,4 @@
+using GameNet.Server.Infrastructure.Observability;
 using System.Security.Cryptography;
 using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
