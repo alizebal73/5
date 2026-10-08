@@ -14,6 +14,80 @@ if ([string]::IsNullOrWhiteSpace($connection)) {
     throw "GAMENET_DATABASE_CONNECTION is required for PostgreSQL Foundation certification."
 }
 
+
+function Get-NpgsqlBuilder([string]$connectionString) {
+    $assemblyPath = Join-Path (Get-Location) "src\Server\bin\Release\net10.0\Npgsql.dll"
+    if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) {
+        throw "Npgsql runtime assembly was not found at $assemblyPath."
+    }
+
+    $loaded = [AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -eq "Npgsql" }
+    if (-not $loaded) { Add-Type -Path $assemblyPath }
+    return [Npgsql.NpgsqlConnectionStringBuilder]::new($connectionString)
+}
+
+function Assert-FoundationSchema([string]$connectionString) {
+    $builder = Get-NpgsqlBuilder $connectionString
+    $hostValue = if ([string]::IsNullOrWhiteSpace($builder.Host)) { "localhost" } else { $builder.Host }
+    $port = $builder.Port
+    $username = $builder.Username
+    $password = $builder.Password
+    $database = $builder.Database
+    $sslMode = $builder.SslMode.ToString()
+
+    if ([string]::IsNullOrWhiteSpace($database)) { $database = $username }
+    if ([string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($database)) {
+        throw "Foundation schema verification requires PostgreSQL username and database."
+    }
+
+    $psql = Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe"
+    if (-not (Test-Path -LiteralPath $psql -PathType Leaf)) {
+        $psql = (Get-Command psql -ErrorAction Stop).Source
+    }
+
+    $oldPassword = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+    $oldSslMode = [Environment]::GetEnvironmentVariable("PGSSLMODE","Process")
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
+        if (-not [string]::IsNullOrWhiteSpace($sslMode)) { $env:PGSSLMODE = $sslMode.ToLowerInvariant() }
+
+        $cli = @("--host=$hostValue","--port=$port","--username=$username","--dbname=$database")
+        $probe = @"
+SELECT CASE WHEN
+    to_regclass('public.audit_entries') IS NOT NULL AND
+    to_regclass('public.idempotency_records') IS NOT NULL AND
+    to_regclass('public.outbox_messages') IS NOT NULL AND
+    to_regclass('public.agent_credentials') IS NOT NULL AND
+    to_regclass('public.agent_connection_leases') IS NOT NULL AND
+    EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_entries'
+          AND column_name = 'occurred_at_utc'
+    ) AND
+    NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'audit_entries'
+          AND column_name = 'OccurredAtUtc'
+    )
+    THEN 'PASS' ELSE 'FAIL' END;
+"@
+
+        $result = ((& $psql @cli "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$probe" 2>&1) -join "").Trim()
+        if ($LASTEXITCODE -ne 0) {
+            throw "Foundation schema verification query failed."
+        }
+        if ($result -ne "PASS") {
+            throw "Required Foundation schema is incomplete or has an invalid AuditEntry timestamp column."
+        }
+    }
+    finally {
+        if ($null -eq $oldPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $oldPassword }
+        if ($null -eq $oldSslMode) { Remove-Item Env:PGSSLMODE -ErrorAction SilentlyContinue } else { $env:PGSSLMODE = $oldSslMode }
+    }
+}
+
 $project = "src/Server/GameNet.Server.csproj"
 $context = "GameNet.Server.Persistence.GameNetDbContext"
 
@@ -111,4 +185,6 @@ if ($LASTEXITCODE -ne 0) { throw "Final PostgreSQL migration execution failed." 
 & $dotnetPath @($efBase + @("migrations", "has-pending-model-changes"))
 if ($LASTEXITCODE -ne 0) { throw "Post-migration model verification failed." }
 
-Write-Host "POSTGRESQL FOUNDATION MIGRATION/CONCURRENCY VERIFICATION PASSED."
+Assert-FoundationSchema $connection
+
+Write-Host "POSTGRESQL FOUNDATION MIGRATION/CONCURRENCY/SCHEMA VERIFICATION PASSED."
