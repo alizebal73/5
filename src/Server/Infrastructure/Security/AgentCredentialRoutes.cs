@@ -1,0 +1,116 @@
+using System.Security.Cryptography;
+using System.Text;
+using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Shared.Contracts.V1.Security;
+using Microsoft.Extensions.Options;
+
+namespace GameNet.Server.Infrastructure.Security;
+
+public static class AgentCredentialRoutes
+{
+    private const string ProvisioningHeader = "X-GameNet-Agent-Provisioning-Key";
+
+    public static void MapAgentCredentialRoutes(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/v1/agent");
+
+        group.MapPost("/auth/token",
+            async (
+                AgentTokenRequest request,
+                AgentCredentialService credentials,
+                IAgentAccessTokenIssuer tokenIssuer,
+                IOptions<GameNetOptions> options,
+                HttpResponse response,
+                CancellationToken cancellationToken) =>
+            {
+                if (!options.Value.Authentication.Enabled)
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+                if (!await credentials.AuthenticateAsync(request.DeviceId, request.Secret, cancellationToken))
+                    return Results.Unauthorized();
+
+                var token = tokenIssuer.Issue(request.DeviceId);
+                response.Headers.CacheControl = "no-store";
+                return Results.Ok(token);
+            }).AllowAnonymous();
+
+        group.MapPost("/credentials/provision",
+            async (
+                HttpContext context,
+                AgentCredentialProvisionRequest request,
+                IAgentCredentialService credentials,
+                IOptions<GameNetOptions> options,
+                CancellationToken cancellationToken) =>
+            {
+                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                if (denied is not null) return denied;
+
+                try
+                {
+                    var issued = await credentials.ProvisionAsync(request, cancellationToken);
+                    context.Response.Headers.CacheControl = "no-store";
+                    return Results.Ok(issued);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.Conflict(new { code = ex.Message });
+                }
+            }).AllowAnonymous();
+
+        group.MapPost("/credentials/rotate",
+            async (
+                HttpContext context,
+                AgentCredentialRotateRequest request,
+                IAgentCredentialService credentials,
+                IOptions<GameNetOptions> options,
+                CancellationToken cancellationToken) =>
+            {
+                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                if (denied is not null) return denied;
+
+                try
+                {
+                    var issued = await credentials.RotateAsync(request, cancellationToken);
+                    context.Response.Headers.CacheControl = "no-store";
+                    return Results.Ok(issued);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.Conflict(new { code = ex.Message });
+                }
+            }).AllowAnonymous();
+
+        group.MapPost("/credentials/revoke",
+            async (
+                HttpContext context,
+                AgentCredentialRevokeRequest request,
+                IAgentCredentialService credentials,
+                IOptions<GameNetOptions> options,
+                CancellationToken cancellationToken) =>
+            {
+                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                if (denied is not null) return denied;
+
+                var revoked = await credentials.RevokeAsync(request, cancellationToken);
+                return Results.Ok(new { revoked });
+            }).AllowAnonymous();
+    }
+
+    private static IResult? ValidateProvisioningKey(HttpContext context, string? expectedKey)
+    {
+        if (string.IsNullOrWhiteSpace(expectedKey))
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        var supplied = context.Request.Headers[ProvisioningHeader].ToString();
+        if (string.IsNullOrWhiteSpace(supplied))
+            return Results.Unauthorized();
+
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
+        var suppliedBytes = Encoding.UTF8.GetBytes(supplied);
+
+        return expectedBytes.Length == suppliedBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
+            ? null
+            : Results.Unauthorized();
+    }
+}
