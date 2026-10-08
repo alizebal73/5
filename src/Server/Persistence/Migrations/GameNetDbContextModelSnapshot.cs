@@ -324,6 +324,81 @@ namespace GameNet.Server.Persistence.Migrations
 
                     b.ToTable("idempotency_records", (string)null);
                 });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.OperatorUser", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<string>("Username").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("username");
+                    b.Property<string>("DisplayName").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("display_name");
+                    b.Property<string>("PasswordHash").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("password_hash");
+                    b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
+                    b.Property<int>("FailedLoginCount").HasColumnType("integer").HasColumnName("failed_login_count");
+                    b.Property<DateTimeOffset?>("LockoutUntilUtc").HasColumnType("timestamp with time zone").HasColumnName("lockout_until_utc");
+                    b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+                    b.Property<DateTimeOffset?>("LastLoginAtUtc").HasColumnType("timestamp with time zone").HasColumnName("last_login_at_utc");
+                    b.HasKey("Id").HasName("pk_operator_users");
+                    b.HasIndex("Username").IsUnique().HasDatabaseName("ix_operator_users_username");
+                    b.ToTable("operator_users", (string)null);
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.Role", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<string>("Code").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("code");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("name");
+                    b.HasKey("Id").HasName("pk_roles");
+                    b.HasIndex("Code").IsUnique().HasDatabaseName("ix_roles_code");
+                    b.ToTable("roles", (string)null);
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.AuthSession", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
+                    b.Property<string>("Jti").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("jti");
+                    b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+                    b.Property<DateTimeOffset>("ExpiresAtUtc").HasColumnType("timestamp with time zone").HasColumnName("expires_at_utc");
+                    b.Property<DateTimeOffset?>("RevokedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("revoked_at_utc");
+                    b.HasKey("Id").HasName("pk_auth_sessions");
+                    b.HasIndex("Jti").IsUnique().HasDatabaseName("ix_auth_sessions_jti");
+                    b.ToTable("auth_sessions", (string)null);
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.UserRole", b =>
+                {
+                    b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
+                    b.Property<Guid>("RoleId").HasColumnType("uuid").HasColumnName("role_id");
+                    b.HasKey("UserId", "RoleId").HasName("pk_user_roles");
+                    b.HasIndex("RoleId").HasDatabaseName("ix_user_roles_role_id");
+                    b.ToTable("user_roles", (string)null);
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.RolePermission", b =>
+                {
+                    b.Property<Guid>("RoleId").HasColumnType("uuid").HasColumnName("role_id");
+                    b.Property<string>("Permission").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("permission");
+                    b.HasKey("RoleId", "Permission").HasName("pk_role_permissions");
+                    b.HasIndex("Permission").HasDatabaseName("ix_role_permissions_permission");
+                    b.ToTable("role_permissions", (string)null);
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.AuthSession", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Identity.Domain.OperatorUser", null).WithMany()
+                        .HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade).IsRequired()
+                        .HasConstraintName("fk_auth_sessions_operator_users_user_id");
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.UserRole", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Identity.Domain.OperatorUser", null).WithMany()
+                        .HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade).IsRequired()
+                        .HasConstraintName("fk_user_roles_operator_users_user_id");
+                    b.HasOne("GameNet.Server.Modules.Identity.Domain.Role", null).WithMany()
+                        .HasForeignKey("RoleId").OnDelete(DeleteBehavior.Cascade).IsRequired()
+                        .HasConstraintName("fk_user_roles_roles_role_id");
+                });
+            modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.RolePermission", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Identity.Domain.Role", null).WithMany()
+                        .HasForeignKey("RoleId").OnDelete(DeleteBehavior.Cascade).IsRequired()
+                        .HasConstraintName("fk_role_permissions_roles_role_id");
+                });
+
 #pragma warning restore 612, 618
         }
     }
