@@ -1,4 +1,4 @@
- $ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
@@ -19,40 +19,71 @@ function Resolve-Tool([string]$name) {
     throw "$name.exe was not found."
 }
 
+function Get-ConnectionValue([System.Data.Common.DbConnectionStringBuilder]$builder, [string[]]$names) {
+    foreach ($name in $names) {
+        foreach ($key in $builder.Keys) {
+            if ([string]::Equals([string]$key, $name, [StringComparison]::OrdinalIgnoreCase)) {
+                return [string]$builder[$key]
+            }
+        }
+    }
+    return $null
+}
+
 $pgDump = Resolve-Tool "pg_dump"
 $pgRestore = Resolve-Tool "pg_restore"
 $psql = Resolve-Tool "psql"
 
-$sourceDatabaseResult = & $psql "--dbname=$connection" "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=SELECT current_database();" 2>&1
-if ($LASTEXITCODE -ne 0) {
-    throw "Could not determine the source PostgreSQL database."
+$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+$builder.ConnectionString = $connection
+
+$host = Get-ConnectionValue $builder @("Host","Server","Address")
+$port = Get-ConnectionValue $builder @("Port")
+$username = Get-ConnectionValue $builder @("Username","User Id","User")
+$password = Get-ConnectionValue $builder @("Password","Pwd")
+$database = Get-ConnectionValue $builder @("Database","Initial Catalog")
+$sslMode = Get-ConnectionValue $builder @("SSL Mode","SslMode")
+
+if ([string]::IsNullOrWhiteSpace($username)) {
+    throw "The PostgreSQL connection string must specify Username/User Id for CLI certification."
+}
+if ([string]::IsNullOrWhiteSpace($database)) {
+    $database = $username
+}
+if ([string]::IsNullOrWhiteSpace($host)) { $host = "localhost" }
+if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
+
+$cliBase = @("--host=$host","--port=$port","--username=$username")
+if (-not [string]::IsNullOrWhiteSpace($sslMode)) {
+    $cliBase += "--sslmode=$($sslMode.ToLowerInvariant())"
 }
 
-$sourceDatabase = ($sourceDatabaseResult | Select-Object -Last 1).ToString().Trim()
-if ([string]::IsNullOrWhiteSpace($sourceDatabase)) {
-    throw "PostgreSQL returned an empty current_database()."
-}
-if ($sourceDatabase -eq "postgres") {
-    throw "Backup/restore certification must target the dedicated GameNet database, not the postgres maintenance database."
+$oldPgPassword = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+if (-not [string]::IsNullOrWhiteSpace($password)) {
+    $env:PGPASSWORD = $password
 }
 
 $restoreDatabase = "gamenet5_restore_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
-
-$maintenance = [System.Data.Common.DbConnectionStringBuilder]::new()
-$maintenance.ConnectionString = $connection
-$maintenance["Database"] = "postgres"
-
-$restore = [System.Data.Common.DbConnectionStringBuilder]::new()
-$restore.ConnectionString = $connection
-$restore["Database"] = $restoreDatabase
-
 $workRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-backup-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 $dumpFile = Join-Path $workRoot "foundation.dump"
 
 try {
+    $sourceQuery = (& $psql @cliBase "--dbname=$database" "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=SELECT current_database();" 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not determine the source PostgreSQL database."
+    }
+
+    $sourceDatabase = ($sourceQuery | Select-Object -Last 1).ToString().Trim()
+    if ([string]::IsNullOrWhiteSpace($sourceDatabase)) {
+        throw "PostgreSQL returned an empty current_database()."
+    }
+    if ($sourceDatabase -eq "postgres") {
+        throw "Backup/restore certification must target the dedicated GameNet database, not the postgres maintenance database."
+    }
+
     Write-Host "Creating isolated backup artifact..."
-    & $pgDump $connection "--format=custom" "--file=$dumpFile" "--no-owner" "--no-acl"
+    & $pgDump @cliBase "--dbname=$sourceDatabase" "--format=custom" "--file=$dumpFile" "--no-owner" "--no-acl"
     if ($LASTEXITCODE -ne 0) { throw "pg_dump failed." }
 
     if (-not (Test-Path -LiteralPath $dumpFile -PathType Leaf)) {
@@ -60,12 +91,14 @@ try {
     }
 
     Write-Host "Creating isolated restore database..."
+    $maintenanceArgs = $cliBase + @("--dbname=postgres")
     $createSql = 'CREATE DATABASE "' + $restoreDatabase + '";'
-    & $psql "--dbname=$($maintenance.ConnectionString)" "--set=ON_ERROR_STOP=1" "--command=$createSql"
+    & $psql @maintenanceArgs "--set=ON_ERROR_STOP=1" "--command=$createSql"
     if ($LASTEXITCODE -ne 0) { throw "Could not create isolated restore database." }
 
     Write-Host "Restoring backup artifact..."
-    & $pgRestore "--dbname=$($restore.ConnectionString)" "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
+    $restoreArgs = $cliBase + @("--dbname=$restoreDatabase")
+    & $pgRestore @restoreArgs "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
     if ($LASTEXITCODE -ne 0) { throw "pg_restore failed." }
 
     $check = @"
@@ -80,7 +113,7 @@ FROM (
 ) AS required(ok);
 "@
 
-    $result = ((& $psql "--dbname=$($restore.ConnectionString)" "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
+    $result = ((& $psql @restoreArgs "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
     if ($LASTEXITCODE -ne 0) {
         throw "Restored database validation query failed: $result"
     }
@@ -95,11 +128,19 @@ FROM (
 }
 finally {
     try {
+        $maintenanceArgs = $cliBase + @("--dbname=postgres")
         $dropSql = 'DROP DATABASE IF EXISTS "' + $restoreDatabase + '";'
-        & $psql "--dbname=$($maintenance.ConnectionString)" "--set=ON_ERROR_STOP=1" "--command=$dropSql" | Out-Null
+        & $psql @maintenanceArgs "--set=ON_ERROR_STOP=1" "--command=$dropSql" | Out-Null
     }
     catch {
         Write-Warning "Failed to clean up isolated restore database $restoreDatabase."
+    }
+
+    if ($null -eq $oldPgPassword) {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:PGPASSWORD = $oldPgPassword
     }
 
     Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue

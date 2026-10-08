@@ -4,6 +4,38 @@ Set-StrictMode -Version Latest
 $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
 if (-not (Test-Path $dotnet)) { $dotnet = (Get-Command dotnet -ErrorAction Stop).Source }
 
+function Get-ConnectionValue([System.Data.Common.DbConnectionStringBuilder]$builder, [string[]]$names) {
+    foreach ($name in $names) {
+        foreach ($key in $builder.Keys) {
+            if ([string]::Equals([string]$key, $name, [StringComparison]::OrdinalIgnoreCase)) {
+                return [string]$builder[$key]
+            }
+        }
+    }
+    return $null
+}
+
+function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
+    $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+    $builder.ConnectionString = $connection
+    $host = Get-ConnectionValue $builder @("Host","Server","Address")
+    $port = Get-ConnectionValue $builder @("Port")
+    $username = Get-ConnectionValue $builder @("Username","User Id","User")
+    $password = Get-ConnectionValue $builder @("Password","Pwd")
+    $db = Get-ConnectionValue $builder @("Database","Initial Catalog")
+    $sslMode = Get-ConnectionValue $builder @("SSL Mode","SslMode")
+    if ([string]::IsNullOrWhiteSpace($username)) { throw "PostgreSQL Username/User Id is required." }
+    if ([string]::IsNullOrWhiteSpace($db)) { $db = $username }
+    if ([string]::IsNullOrWhiteSpace($host)) { $host = "localhost" }
+    if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
+    $args = @("--host=$host","--port=$port","--username=$username")
+    if (-not [string]::IsNullOrWhiteSpace($sslMode)) { $args += "--sslmode=$($sslMode.ToLowerInvariant())" }
+    $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+    if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
+    $database.Value = $db
+    return $args
+}
+
 $connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
 if ([string]::IsNullOrWhiteSpace($connection)) {
     $connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Machine")
@@ -49,6 +81,9 @@ $agent2Err = $agent2Log + ".err"
 $server = $null
 $agent = $null
 $agent2 = $null
+$pgDatabase = $null
+$oldPgPassword = $null
+$pgBase = $null
 
 try {
     $env:ASPNETCORE_URLS = $serverUrl
@@ -60,6 +95,8 @@ try {
     $env:GameNet__Agent__LeaseDurationSeconds = "15"
     $env:GameNet__Agent__HeartbeatIntervalSeconds = "5"
     $env:GameNet__Agent__AccessTokenLifetimeSeconds = "300"
+
+    $pgBase = Get-PgCliBase $connection ([ref]$pgDatabase) ([ref]$oldPgPassword)
 
     $server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $serverLog -RedirectStandardError $serverErr -PassThru
 
@@ -152,5 +189,6 @@ finally {
         }
     }
 
+    if ($null -eq $oldPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $oldPgPassword }
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
