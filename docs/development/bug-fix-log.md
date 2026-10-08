@@ -69,3 +69,17 @@ Permanent Repo 5 controls:
 ## Stable rule
 
 When a defect reaches production or certification, fix the root boundary, add regression evidence, and record the exact stable checkpoint. Do not stack unrelated changes onto an uncertified checkpoint.
+
+## 2026-10-09 — Foundation audit / migration and credential persistence
+
+- Symptom: the PostgreSQL Foundation lane failed with `42703: column "OccurredAtUtc" does not exist` during the first migration.
+- Root cause: the generated EF migration contained a stale physical index column name while the model/snapshot mapped the property to `occurred_at_utc`.
+- Fix: the migration artifact now uses the actual PostgreSQL column name; Foundation certification also creates an isolated clean PostgreSQL cluster and applies the full migration chain from zero.
+- Regression evidence: clean migration and schema verification are mandatory Foundation gates.
+- Symptom: Agent credential persistence protected data with `LocalMachine` while restore used `CurrentUser`.
+- Root cause: the protection scope was changed on only one side of the persistence boundary.
+- Fix: both Protect and Unprotect use `CurrentUser`, matching the Windows service identity.
+- Regression evidence: the Agent test recreates the credential store and decrypts the persisted secret; the architecture guard rejects `LocalMachine` in this credential store.
+- Symptom: backup certification could overwrite the caller's saved `PGPASSWORD` state.
+- Root cause: the parser helper mutated the saved password through a ref parameter and was called more than once.
+- Fix: environment preservation is owned by the caller and the parser no longer mutates the caller's saved-state reference.
