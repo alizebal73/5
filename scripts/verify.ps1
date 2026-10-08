@@ -11,7 +11,7 @@ function Invoke-Checked {
 & "$PSScriptRoot/check-source-size.ps1"
 & "$PSScriptRoot/check-architecture.ps1"
 & "$PSScriptRoot/check-placeholders.ps1"
-Invoke-Checked "dotnet" @("--version")
+Invoke-Checked "dotnet" @("--info")
 Invoke-Checked "dotnet" @("tool","restore")
 Invoke-Checked "dotnet" @("restore","GameNet.slnx")
 Invoke-Checked "dotnet" @("build","GameNet.slnx","--configuration","Release","--no-restore")
