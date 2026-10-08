@@ -1,4 +1,5 @@
 using GameNet.Shared.Contracts.V1.Protocol;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 
