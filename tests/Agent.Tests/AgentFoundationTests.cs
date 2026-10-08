@@ -1,3 +1,4 @@
+using Xunit;
 using GameNet.Agent;
 namespace GameNet.Agent.Tests;
 public sealed class AgentFoundationTests
