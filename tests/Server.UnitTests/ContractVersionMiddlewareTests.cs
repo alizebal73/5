@@ -1,3 +1,4 @@
+using Xunit;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Shared.Contracts.V1.Api;
 using Microsoft.AspNetCore.Http;
