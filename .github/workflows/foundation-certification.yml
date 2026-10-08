@@ -40,6 +40,14 @@ jobs:
         shell: pwsh
         run: .\scripts\verify.ps1
 
+      - name: One-time dedicated Foundation database repair
+        if: github.ref == 'refs/heads/foundation/runtime-db-repair-v1'
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GAMENET_FOUNDATION_REPAIR: "1"
+        run: .\scripts\repair-foundation-database.ps1
+
       - name: PostgreSQL certification
         timeout-minutes: 15
         shell: pwsh
