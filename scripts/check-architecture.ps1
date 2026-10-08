@@ -69,13 +69,15 @@ Assert-NoMatch "src/Server" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" 
 Assert-NoMatch "src/Desktop" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Desktop mock/fake/demo sources are forbidden."
 Assert-NoMatch "src/Client" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Agent mock/fake/demo sources are forbidden."
 
-# SaveChanges is a transaction boundary concern. Only the coordinator may call it.
-$serverFiles = Get-ChildItem "src/Server" -Recurse -File -Filter *.cs |
-    Where-Object { $_.FullName -notmatch "[\\/]Migrations[\\/]" -and $_.Name -ne "EfTransactionCoordinator.cs" }
-$saveMatches = $serverFiles | Select-String -Pattern "\.SaveChanges(Async)?\s*\("
-if ($saveMatches) {
-    $saveMatches | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
-    throw "Direct SaveChanges/SaveChangesAsync is forbidden outside EfTransactionCoordinator."
+# Business modules never call SaveChanges directly. Platform infrastructure owns its own
+# explicit transaction where needed (for example Outbox leasing).
+if (Test-Path "src/Server/Modules") {
+    $saveMatches = Get-ChildItem "src/Server/Modules" -Recurse -File -Filter *.cs |
+        Select-String -Pattern "\.SaveChanges(Async)?\s*\("
+    if ($saveMatches) {
+        $saveMatches | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+        throw "Business modules may not call SaveChanges/SaveChangesAsync directly."
+    }
 }
 
 # Browser runtime is forbidden.
