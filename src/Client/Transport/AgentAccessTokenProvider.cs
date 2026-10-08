@@ -34,10 +34,13 @@ public sealed class AgentAccessTokenProvider(
             var client = httpClientFactory.CreateClient("GameNetAgentCredentialClient");
             var endpoint = $"{options.Value.ServerBaseUrl.TrimEnd('/')}/api/v1/agent/auth/token";
 
-            using var response = await client.PostAsJsonAsync(
-                endpoint,
-                new AgentTokenRequest(deviceId, secret),
-                cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = JsonContent.Create(new AgentTokenRequest(deviceId, secret))
+            };
+            request.Headers.TryAddWithoutValidation("X-GameNet-Contract", "v1");
+
+            using var response = await client.SendAsync(request, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
