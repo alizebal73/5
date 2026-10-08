@@ -1,6 +1,13 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
-function Invoke-Checked { param([string]$FilePath,[string[]]$Args = @()) & $FilePath @Args; if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code $LASTEXITCODE." } }
+
+function Invoke-Checked {
+    param([string]$FilePath,[string[]]$Args = @())
+    & $FilePath @Args
+    if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code $LASTEXITCODE." }
+}
+
+& "$PSScriptRoot/check-business-gate.ps1"
 & "$PSScriptRoot/check-source-size.ps1"
 & "$PSScriptRoot/check-architecture.ps1"
 & "$PSScriptRoot/check-placeholders.ps1"

@@ -1,5 +1,6 @@
 using GameNet.Server.Composition;
 using GameNet.Server.Infrastructure;
+using GameNet.Server.Infrastructure.Health;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Infrastructure.Configuration;
 using Microsoft.Extensions.Options;
@@ -21,12 +22,22 @@ var runtimeOptions = app.Services.GetRequiredService<IOptions<GameNetOptions>>()
 if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
     throw new InvalidOperationException("Production authentication must be enabled.");
 
-app.MapGet("/health", (StartupState state, HttpContext context) =>
+app.MapGet("/health", async (
+    StartupState state,
+    IServerReadinessProbe readiness,
+    HttpContext context,
+    CancellationToken cancellationToken) =>
 {
     var id = CorrelationIdMiddleware.GetCurrent(context);
-    return Results.Ok(new ApiEnvelope<HealthResponse>(
-        new(state.Service, StartupState.Version, HealthStatuses.Healthy, HealthStatuses.Ready, id),
-        id));
+    var isReady = await readiness.IsReadyAsync(cancellationToken);
+    var response = new HealthResponse(
+        state.Service,
+        StartupState.Version,
+        HealthStatuses.Healthy,
+        isReady ? HealthStatuses.Ready : HealthStatuses.NotReady,
+        id);
+
+    return Results.Ok(new ApiEnvelope<HealthResponse>(response, id));
 }).AllowAnonymous();
 
 app.Run();
