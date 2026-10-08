@@ -4,6 +4,7 @@ using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Server.Infrastructure.Health;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Infrastructure.Realtime;
+using GameNet.Server.Infrastructure.Security;
 using Microsoft.Extensions.Options;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
