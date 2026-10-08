@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   verify:
+    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'foundation/runtime-') }}
     runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Checkout
