@@ -37,32 +37,72 @@ if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
 & $dotnetPath @($efBase + @("migrations", "list"))
 if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
 
-$jobs = 1..2 | ForEach-Object {
-    Start-Job -ScriptBlock {
-        param($dotnet, $proj, $ctx)
-        $args = @(
-            "ef",
-            "database", "update",
-            "--configuration", "Release",
-            "--no-build",
-            "--project", $proj,
-            "--startup-project", $proj,
-            "--context", $ctx
-        )
-        $output = & $dotnet @args 2>&1
-        [pscustomobject]@{
-            ExitCode = $LASTEXITCODE
-            Output = ($output -join [Environment]::NewLine)
-        }
-    } -ArgumentList $dotnetPath, $project, $context
-}
+$concurrencyRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-ef-concurrency-" + [Guid]::NewGuid().ToString("N"))
+$workspaceRoots = @(
+    (Join-Path $concurrencyRoot "worker-1"),
+    (Join-Path $concurrencyRoot "worker-2")
+)
 
-$results = Receive-Job -Job $jobs -Wait -AutoRemoveJob
-foreach ($result in $results) {
-    Write-Host $result.Output
-    if ($result.ExitCode -ne 0) {
-        throw "Concurrent PostgreSQL migration execution failed with exit code $($result.ExitCode)."
+try {
+    New-Item -ItemType Directory -Force -Path $concurrencyRoot | Out-Null
+
+    foreach ($workspace in $workspaceRoots) {
+        New-Item -ItemType Directory -Force -Path $workspace | Out-Null
+        Copy-Item -LiteralPath ".\src" -Destination (Join-Path $workspace "src") -Recurse -Force
+        Copy-Item -LiteralPath ".\Directory.Build.props" -Destination (Join-Path $workspace "Directory.Build.props") -Force
+        Copy-Item -LiteralPath ".\Directory.Packages.props" -Destination (Join-Path $workspace "Directory.Packages.props") -Force
+        Copy-Item -LiteralPath ".\global.json" -Destination (Join-Path $workspace "global.json") -Force
+        Copy-Item -LiteralPath ".\.config" -Destination (Join-Path $workspace ".config") -Recurse -Force
+
+        & $dotnetPath "tool" "restore" "--tool-manifest" (Join-Path $workspace ".config\dotnet-tools.json") "--tool-path" (Join-Path $workspace ".tools")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not restore dotnet-ef tooling in isolated concurrency workspace."
+        }
     }
+
+    $jobs = 1..2 | ForEach-Object {
+        $workspace = $workspaceRoots[$_ - 1]
+
+        Start-Job -ScriptBlock {
+            param($dotnet, $workspacePath)
+
+            Set-Location -LiteralPath $workspacePath
+
+            $ef = Join-Path $workspacePath ".tools\dotnet-ef.exe"
+            if (-not (Test-Path -LiteralPath $ef -PathType Leaf)) {
+                $ef = "dotnet-ef"
+            }
+
+            $args = @(
+                "database", "update",
+                "--configuration", "Release",
+                "--no-build",
+                "--project", "src/Server/GameNet.Server.csproj",
+                "--startup-project", "src/Server/GameNet.Server.csproj",
+                "--context", "GameNet.Server.Persistence.GameNetDbContext"
+            )
+
+            $output = & $ef @args 2>&1
+            [pscustomobject]@{
+                Workspace = $workspacePath
+                ExitCode = $LASTEXITCODE
+                Output = ($output -join [Environment]::NewLine)
+            }
+        } -ArgumentList $dotnetPath, $workspace
+    }
+
+    $results = Receive-Job -Job $jobs -Wait -AutoRemoveJob
+    foreach ($result in $results) {
+        Write-Host "===== EF concurrency workspace: $($result.Workspace) ====="
+        Write-Host $result.Output
+
+        if ($result.ExitCode -ne 0) {
+            throw "Concurrent PostgreSQL migration execution failed with exit code $($result.ExitCode)."
+        }
+    }
+}
+finally {
+    Remove-Item -LiteralPath $concurrencyRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 & $dotnetPath @($efBase + @("database", "update", "--no-build"))
