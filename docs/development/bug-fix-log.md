@@ -48,6 +48,14 @@ Permanent Repo 5 controls:
 - Verification result: pending rerun with executable/environment diagnostics.
 - Rollback: revert the diagnostic verification-script change after the root cause is fixed.
 
+## 2026-10-08 — Foundation CI / dotnet executable resolution
+
+- Current finding: Microsoft documents both `dotnet --info` and `dotnet --version` as valid .NET CLI options for supported SDK installations.
+- The self-hosted Runner reproduced failure for both commands while the job itself and repository checkout succeeded.
+- Working root-cause hypothesis: the Windows service is resolving a non-standard or incompatible `dotnet.exe` through its service environment/PATH.
+- Control applied: verification now prefers the system-wide `C:\Program Files\dotnet\dotnet.exe` (or `ProgramW6432`) and uses that exact executable for environment inspection, tool restore, restore, build and test.
+- Verification result: pending rerun.
+
 ## Stable rule
 
 When a defect reaches production or certification, fix the root boundary, add regression evidence, and record the exact stable checkpoint. Do not stack unrelated changes onto an uncertified checkpoint.
