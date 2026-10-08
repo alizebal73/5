@@ -15,7 +15,11 @@ public sealed class ServerReadinessProbe(
     {
         try
         {
-            return await db.Database.CanConnectAsync(cancellationToken);
+            if (!await db.Database.CanConnectAsync(cancellationToken))
+                return false;
+
+            var pending = await db.Database.GetPendingMigrationsAsync(cancellationToken);
+            return !pending.Any();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
