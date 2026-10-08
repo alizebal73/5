@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><RootNamespace>GameNet.Desktop</RootNamespace><AssemblyName>GameNet.Manager.Desktop</AssemblyName></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\Shared\GameNet.Shared.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\Shared\GameNet.Shared.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" /></ItemGroup>
 </Project>
