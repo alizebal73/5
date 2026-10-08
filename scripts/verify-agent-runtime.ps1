@@ -21,8 +21,8 @@ $identityJson | Set-Content -LiteralPath (Join-Path $identityRoot "identity.json
 $identityJson | Set-Content -LiteralPath (Join-Path $identityRoot2 "identity.json") -Encoding utf8
 
 $serverUrl = "http://127.0.0.1:5095"
-$signingKey = ConvertToBase64String ([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-$provisioningKey = ConvertToBase64String ([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$signingKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $envNames = @(
     "ASPNETCORE_URLS",
     "GameNet__Authentication__Enabled",
@@ -58,7 +58,7 @@ try {
     $env:GameNet__Agent__HeartbeatIntervalSeconds = "5"
     $env:GameNet__Agent__AccessTokenLifetimeSeconds = "300"
 
-    $server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--no-build","--no-restore") -RedirectStandardOutput $serverLog -RedirectStandardError $serverLog -PassThru
+    $server = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Server/GameNet.Server.csproj","--no-build","--no-restore") -RedirectStandardOutput $serverLog -RedirectStandardError ($serverLog + ".err") -PassThru
 
     $ready = $false
     for ($i = 0; $i -lt 60; $i++) {
@@ -79,7 +79,7 @@ try {
     $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
     $env:GAMENET_AGENT_BOOTSTRAP_SECRET = $secret
 
-    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentLog -PassThru
+    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError ($agentLog + ".err") -PassThru
 
     $leaseConnectionId = $null
     for ($i = 0; $i -lt 60; $i++) {
@@ -94,7 +94,7 @@ try {
     if ([string]::IsNullOrWhiteSpace($leaseConnectionId)) { throw "Agent did not acquire an authoritative lease. See $agentLog." }
 
     $env:GameNet__AgentIdentity__RootPath = $identityRoot2
-    $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Log -PassThru
+    $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError ($agent2Log + ".err") -PassThru
     Start-Sleep -Seconds 8
 
     $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
