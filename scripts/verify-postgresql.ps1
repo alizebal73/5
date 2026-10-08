@@ -17,22 +17,39 @@ if ([string]::IsNullOrWhiteSpace($connection)) {
 $project = "src/Server/GameNet.Server.csproj"
 $context = "GameNet.Server.Persistence.GameNetDbContext"
 
-& $dotnetPath @("ef", "migrations", "has-pending-model-changes", "--project", $project, "--startup-project", $project, "--context", $context)
-if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
-
-& $dotnetPath @("ef", "migrations", "list", "--project", $project, "--startup-project", $project, "--context", $context)
-if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
-
 & $dotnetPath @("restore", "GameNet.slnx")
 if ($LASTEXITCODE -ne 0) { throw "Restore failed." }
 
 & $dotnetPath @("build", $project, "--configuration", "Release", "--no-restore")
 if ($LASTEXITCODE -ne 0) { throw "Server build failed." }
 
+$efBase = @(
+    "ef",
+    "--project", $project,
+    "--startup-project", $project,
+    "--context", $context,
+    "--configuration", "Release"
+)
+
+& $dotnetPath @($efBase + @("migrations", "has-pending-model-changes"))
+if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
+
+& $dotnetPath @($efBase + @("migrations", "list"))
+if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
+
 $jobs = 1..2 | ForEach-Object {
     Start-Job -ScriptBlock {
         param($dotnet, $proj, $ctx)
-        $output = & $dotnet @("ef", "database", "update", "--no-build", "--project", $proj, "--startup-project", $proj, "--context", $ctx) 2>&1
+        $args = @(
+            "ef",
+            "database", "update",
+            "--configuration", "Release",
+            "--no-build",
+            "--project", $proj,
+            "--startup-project", $proj,
+            "--context", $ctx
+        )
+        $output = & $dotnet @args 2>&1
         [pscustomobject]@{
             ExitCode = $LASTEXITCODE
             Output = ($output -join [Environment]::NewLine)
@@ -48,10 +65,10 @@ foreach ($result in $results) {
     }
 }
 
-& $dotnetPath @("ef", "database", "update", "--no-build", "--project", $project, "--startup-project", $project, "--context", $context)
+& $dotnetPath @($efBase + @("database", "update", "--no-build"))
 if ($LASTEXITCODE -ne 0) { throw "Final PostgreSQL migration execution failed." }
 
-& $dotnetPath @("ef", "migrations", "has-pending-model-changes", "--project", $project, "--startup-project", $project, "--context", $context)
+& $dotnetPath @($efBase + @("migrations", "has-pending-model-changes"))
 if ($LASTEXITCODE -ne 0) { throw "Post-migration model verification failed." }
 
 Write-Host "POSTGRESQL FOUNDATION MIGRATION/CONCURRENCY VERIFICATION PASSED."
