@@ -15,44 +15,70 @@ function Get-ConnectionValue([System.Data.Common.DbConnectionStringBuilder]$buil
     return $null
 }
 
+function Get-PgNameValueFromText([string]$text, [string[]]$names) {
+    foreach ($name in $names) {
+        $pattern = "(?i)(?:^|[;\s])" + [Regex]::Escape($name) + "\s*=\s*([^;\s]+)"
+        $match = [Regex]::Match($text, $pattern)
+        if ($match.Success) { return $match.Groups[1].Value.Trim().Trim('"') }
+    }
+    return $null
+}
+
 function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
     $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
+    $normalized = $connection.Trim().Trim('"')
 
-    if ($connection -match '^(?i)postgres(?:ql)?://') {
-        $uri = [Uri]$connection
+    if ($normalized -match '^(?i)postgres(?:ql)?://') {
+        $uri = [Uri]$normalized
         if ([string]::IsNullOrWhiteSpace($uri.UserInfo)) { throw "PostgreSQL URI must include credentials." }
         $parts = $uri.UserInfo.Split(':',2)
         $user = [Uri]::UnescapeDataString($parts[0])
-        if ($parts.Count -eq 2) { $env:PGPASSWORD = [Uri]::UnescapeDataString($parts[1]) }
+        $password = if ($parts.Count -eq 2) { [Uri]::UnescapeDataString($parts[1]) } else { $null }
         $db = $uri.AbsolutePath.TrimStart("/")
         if ([string]::IsNullOrWhiteSpace($db)) { $db = $user }
-        $port = if ($uri.Port -gt 0) { $uri.Port } else { 5432 }
-        $ssl = $null
-        foreach ($part in $uri.Query.TrimStart("?").Split("&",[StringSplitOptions]::RemoveEmptyEntries)) {
-            $kv = $part.Split("=",2)
-            if ($kv[0] -ieq "sslmode" -and $kv.Count -eq 2) { $ssl = [Uri]::UnescapeDataString($kv[1]) }
+        if ([string]::IsNullOrWhiteSpace($password)) {
+            foreach ($part in $uri.Query.TrimStart("?").Split("&",[StringSplitOptions]::RemoveEmptyEntries)) {
+                $kv = $part.Split("=",2)
+                if ($kv[0] -ieq "password" -and $kv.Count -eq 2) { $password = [Uri]::UnescapeDataString($kv[1]) }
+            }
         }
+        if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
+        $port = if ($uri.Port -gt 0) { $uri.Port } else { 5432 }
         $args = @("--host=$($uri.Host)","--port=$port","--username=$user","--dbname=$db")
-        if (-not [string]::IsNullOrWhiteSpace($ssl)) { $args += "--sslmode=$($ssl.ToLowerInvariant())" }
         $database.Value = $db
         return $args
     }
 
-    $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-    $builder.ConnectionString = $connection
-    $pgHost = Get-ConnectionValue $builder @("Host","Server","Address")
-    $port = Get-ConnectionValue $builder @("Port")
-    $username = Get-ConnectionValue $builder @("Username","User Id","User")
-    $password = Get-ConnectionValue $builder @("Password","Pwd")
-    $db = Get-ConnectionValue $builder @("Database","Initial Catalog")
-    $sslMode = Get-ConnectionValue $builder @("SSL Mode","SslMode")
-    if ([string]::IsNullOrWhiteSpace($username)) { throw "PostgreSQL Username/User Id is required." }
+    $builder = $null
+    try {
+        $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+        $builder.ConnectionString = $normalized
+    }
+    catch {
+        $builder = $null
+    }
+
+    $pgHost = $null; $port = $null; $username = $null; $password = $null; $db = $null
+    if ($builder) {
+        $pgHost = Get-ConnectionValue $builder @("Host","Server","Address")
+        $port = Get-ConnectionValue $builder @("Port")
+        $username = Get-ConnectionValue $builder @("Username","User Id","User","UserName","UID")
+        $password = Get-ConnectionValue $builder @("Password","Pwd")
+        $db = Get-ConnectionValue $builder @("Database","Initial Catalog","DBName")
+    }
+    if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = Get-PgNameValueFromText $normalized @("host","server","address") }
+    if ([string]::IsNullOrWhiteSpace($port)) { $port = Get-PgNameValueFromText $normalized @("port") }
+    if ([string]::IsNullOrWhiteSpace($username)) { $username = Get-PgNameValueFromText $normalized @("username","user id","user","userName","uid") }
+    if ([string]::IsNullOrWhiteSpace($password)) { $password = Get-PgNameValueFromText $normalized @("password","pwd") }
+    if ([string]::IsNullOrWhiteSpace($db)) { $db = Get-PgNameValueFromText $normalized @("database","initial catalog","dbname") }
+
+    if ([string]::IsNullOrWhiteSpace($username)) { throw "Could not resolve PostgreSQL username from GAMENET_DATABASE_CONNECTION." }
     if ([string]::IsNullOrWhiteSpace($db)) { $db = $username }
     if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
     if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
     if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
+
     $args = @("--host=$pgHost","--port=$port","--username=$username","--dbname=$db")
-    if (-not [string]::IsNullOrWhiteSpace($sslMode)) { $args += "--sslmode=$($sslMode.ToLowerInvariant())" }
     $database.Value = $db
     return $args
 }
