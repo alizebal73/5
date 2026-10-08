@@ -59,7 +59,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Could not create isolated restore database." }
 
     Write-Host "Restoring backup artifact..."
-    & $pgRestore $restore.ConnectionString "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
+    & $pgRestore "--dbname=$($restore.ConnectionString)" "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
     if ($LASTEXITCODE -ne 0) { throw "pg_restore failed." }
 
     $check = @"
