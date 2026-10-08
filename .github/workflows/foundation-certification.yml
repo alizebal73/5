@@ -42,6 +42,10 @@ jobs:
         shell: pwsh
         run: .\scripts\verify-postgresql.ps1
 
+      - name: Backup and isolated restore certification
+        shell: pwsh
+        run: .\scripts\verify-backup-restore.ps1
+
       - name: Evidence
         shell: pwsh
         run: |
