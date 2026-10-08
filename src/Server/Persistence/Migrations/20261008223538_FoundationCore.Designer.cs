@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GameNet.Server.Persistence.Migrations
 {
     [DbContext(typeof(GameNetDbContext))]
-    [Migration("20261008220236_FoundationModelAlignment")]
-    partial class FoundationModelAlignment
+    [Migration("20261008223538_FoundationCore")]
+    partial class FoundationCore
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
