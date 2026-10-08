@@ -38,6 +38,15 @@ Permanent Repo 5 controls:
 - Readiness is measured separately from process health and must reflect PostgreSQL availability.
 - The same controls are inherited by every downstream vertical slice.
 
+## 2026-10-08 — Foundation CI / .NET host command
+
+- Symptom: self-hosted Windows Runner reached the canonical verification phase, but `dotnet --version` exited with `-2147450751` after printing the .NET CLI usage text.
+- Root cause: the Runner's installed .NET host does not accept the `--version` invocation used by this verification command in its service environment; this was a verification-command incompatibility, not a Runner routing failure.
+- Fix: Foundation verification now uses `dotnet --info`, which is supported by the host and provides SDK/runtime evidence before restore/build/test.
+- Regression evidence: PowerShell parser, business gate, source-size guard and architecture guard passed on the same self-hosted Runner before the failure.
+- Verification result: pending rerun of the canonical Foundation verification.
+- Rollback: revert the single verification-script change if `dotnet --info` is not supported on the approved environment.
+
 ## Stable rule
 
 When a defect reaches production or certification, fix the root boundary, add regression evidence, and record the exact stable checkpoint. Do not stack unrelated changes onto an uncertified checkpoint.
