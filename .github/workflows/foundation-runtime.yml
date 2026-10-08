@@ -1,4 +1,4 @@
-name: foundation-runtime-certification
+name: foundation-certification
 
 on:
   workflow_dispatch:
@@ -33,6 +33,29 @@ jobs:
             }
           }
 
+      - name: Canonical Foundation verification
+        shell: pwsh
+        run: .\scripts\verify.ps1
+
       - name: PostgreSQL Foundation lane
         shell: pwsh
         run: .\scripts\verify-postgresql.ps1
+
+      - name: Certification evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path .\artifacts\foundation | Out-Null
+          @(
+            "commit=$(git rev-parse HEAD)"
+            "branch=$(git branch --show-current)"
+            "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
+            "result=BUILD_TEST_AND_POSTGRESQL_LANES_PASSED"
+          ) | Set-Content -LiteralPath .\artifacts\foundation\runtime-evidence.txt -Encoding utf8
+
+      - name: Upload Foundation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-runtime-evidence
+          path: artifacts/foundation/runtime-evidence.txt
+          if-no-files-found: error
