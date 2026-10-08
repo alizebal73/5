@@ -108,6 +108,17 @@ $efBase = @(
 & $dotnetPath @($efBase + @("migrations", "has-pending-model-changes"))
 if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
 
+function Get-EphemeralPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
 & $dotnetPath @($efBase + @("migrations", "list"))
 if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
 
@@ -172,16 +183,6 @@ finally {
 }
 
 
-function Get-EphemeralPort {
-    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-    try {
-        $listener.Start()
-        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
-    }
-    finally {
-        $listener.Stop()
-    }
-}
 
 
 $concurrencyRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-ef-concurrency-" + [Guid]::NewGuid().ToString("N"))
