@@ -127,3 +127,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 
 - First verification after the authentication fix exposed a compile-only defect in the new regression test: the base SecurityKey type exposes no Key byte-array property. The test now casts the configured key to SymmetricSecurityKey before comparing its material; the server fix itself compiled successfully in that attempt.
 - A failed diagnostic capture also revealed that Get-Content -Raw can yield null for empty stderr files, prematurely stopping the log-copy loop. Failure diagnostics now read empty files as empty strings so later Agent logs are preserved too.
+
+
+## 2026-10-09 — Foundation certification / JWT bearer and Agent lease end-to-end
+
+- Regression fix verified: JWT bearer configuration is now attached to the named Bearer scheme. The new server unit test verifies the issuer, audience, signing key, issuer-signing-key validation and SignalR query-token callback on the exact scheme options used at runtime.
+- Runtime result: Foundation Certification completed successfully on commit c3a8ba482548e963479fbdf8538be62c4d15acfe in [workflow run 37860650826](https://github.com/alizebal73/5/actions/runs/37860650826).
+- Gates passed on that SHA: PowerShell parser; canonical guards, Release build and tests; clean PostgreSQL migration/schema/concurrency checks; backup and isolated restore; Desktop -> Server smoke in fa-IR and en-US; Agent auth, credential bootstrap, authoritative lease, heartbeat, connection fencing, lease release and reconnect.
+- Evidence artifact: [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/37860650826/artifacts/11585812517). The in-run evidence file records the certified SHA, branch and UTC timestamp.
+- Status: this exact Foundation checkpoint is certified. The installer/updater/rollback release gates remain required before production release. Business feature branches must be rebuilt/rebased from this checkpoint; no legacy feature branch is implicitly approved for merge.
+- Rollback: if a future regression appears, set the certification marker back to pending and remove the checkpoint's active status; never bypass a failing Foundation gate.

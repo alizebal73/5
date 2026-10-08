@@ -82,7 +82,8 @@ jobs:
             "commit=$(git rev-parse HEAD)"
             "branch=$(git branch --show-current)"
             "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
-            "result=CANONICAL_AND_POSTGRESQL_GATES_PASSED"
+            "result=FULL_FOUNDATION_CERTIFICATION_PASSED"
+            "gates=PowerShellParser,CanonicalBuildAndTests,PostgreSQLCleanMigrationConcurrency,BackupIsolatedRestore,DesktopRuntime,AgentAuthLeaseHeartbeatFencingReconnect"
           ) | Set-Content -LiteralPath .\artifacts\foundation\foundation-evidence.txt -Encoding utf8
 
       - name: Upload evidence
