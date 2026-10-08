@@ -23,19 +23,32 @@ if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
 & $dotnetPath @("ef", "migrations", "list", "--project", $project, "--startup-project", $project, "--context", $context)
 if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
 
+& $dotnetPath @("restore", "GameNet.slnx")
+if ($LASTEXITCODE -ne 0) { throw "Restore failed." }
+
+& $dotnetPath @("build", $project, "--configuration", "Release", "--no-restore")
+if ($LASTEXITCODE -ne 0) { throw "Server build failed." }
+
 $jobs = 1..2 | ForEach-Object {
     Start-Job -ScriptBlock {
         param($dotnet, $proj, $ctx)
-        & $dotnet @("ef", "database", "update", "--project", $proj, "--startup-project", $proj, "--context", $ctx)
-        return $LASTEXITCODE
+        $output = & $dotnet @("ef", "database", "update", "--no-build", "--project", $proj, "--startup-project", $proj, "--context", $ctx) 2>&1
+        [pscustomobject]@{
+            ExitCode = $LASTEXITCODE
+            Output = ($output -join [Environment]::NewLine)
+        }
     } -ArgumentList $dotnetPath, $project, $context
 }
+
 $results = Receive-Job -Job $jobs -Wait -AutoRemoveJob
-if (($results | Where-Object { $_ -ne 0 }).Count -gt 0) {
-    throw "Concurrent PostgreSQL migration execution failed."
+foreach ($result in $results) {
+    Write-Host $result.Output
+    if ($result.ExitCode -ne 0) {
+        throw "Concurrent PostgreSQL migration execution failed with exit code $($result.ExitCode)."
+    }
 }
 
-& $dotnetPath @("ef", "database", "update", "--project", $project, "--startup-project", $project, "--context", $context)
+& $dotnetPath @("ef", "database", "update", "--no-build", "--project", $project, "--startup-project", $project, "--context", $context)
 if ($LASTEXITCODE -ne 0) { throw "Final PostgreSQL migration execution failed." }
 
 & $dotnetPath @("ef", "migrations", "has-pending-model-changes", "--project", $project, "--startup-project", $project, "--context", $context)
