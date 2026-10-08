@@ -111,6 +111,79 @@ if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
 & $dotnetPath @($efBase + @("migrations", "list"))
 if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
 
+$cleanRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-clean-migration-" + [Guid]::NewGuid().ToString("N"))
+$cleanClusterLog = Join-Path $cleanRoot "postgres.log"
+$cleanCluster = Join-Path $cleanRoot "cluster"
+$cleanDatabase = "gamenet5_clean_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+$cleanPort = Get-EphemeralPort
+$cleanClusterStarted = $false
+$previousProcessConnection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
+
+function Resolve-PgTool([string]$name) {
+    $default = Join-Path $env:ProgramFiles "PostgreSQL\17\bin\$name.exe"
+    if (Test-Path -LiteralPath $default -PathType Leaf) { return $default }
+    return (Get-Command $name -ErrorAction Stop).Source
+}
+
+try {
+    New-Item -ItemType Directory -Force -Path $cleanRoot | Out-Null
+    $initdb = Resolve-PgTool "initdb"
+    $pgCtl = Resolve-PgTool "pg_ctl"
+    $psql = Resolve-PgTool "psql"
+
+    Write-Host "===== Clean PostgreSQL migration certification ====="
+    & $initdb "--pgdata=$cleanCluster" "--username=postgres" "--auth=trust" "--no-instructions"
+    if ($LASTEXITCODE -ne 0) { throw "Could not initialize the isolated clean-migration PostgreSQL cluster." }
+
+    & $pgCtl "--pgdata=$cleanCluster" "--log=$cleanClusterLog" "--wait" "--timeout=60" "--options=-p $cleanPort -h 127.0.0.1" "start"
+    if ($LASTEXITCODE -ne 0) { throw "Could not start the isolated clean-migration PostgreSQL cluster." }
+    $cleanClusterStarted = $true
+
+    $adminArgs = @("--host=127.0.0.1","--port=$cleanPort","--username=postgres","--dbname=postgres")
+    $createSql = 'CREATE DATABASE "' + $cleanDatabase + '";'
+    & $psql @adminArgs "--set=ON_ERROR_STOP=1" "--command=$createSql"
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the isolated clean-migration database." }
+
+    $env:GAMENET_DATABASE_CONNECTION = "Host=127.0.0.1;Port=$cleanPort;Database=$cleanDatabase;Username=postgres;Pooling=false"
+    & $dotnetPath @($efBase + @("database", "update", "--no-build"))
+    if ($LASTEXITCODE -ne 0) { throw "Clean PostgreSQL migration execution failed." }
+
+    Assert-FoundationSchema $env:GAMENET_DATABASE_CONNECTION
+    Write-Host "Clean PostgreSQL migration/schema verification passed."
+}
+finally {
+    if ($null -eq $previousProcessConnection) {
+        Remove-Item Env:GAMENET_DATABASE_CONNECTION -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:GAMENET_DATABASE_CONNECTION = $previousProcessConnection
+    }
+
+    if ($cleanClusterStarted) {
+        try {
+            & $pgCtl "--pgdata=$cleanCluster" "--mode=fast" "--wait" "stop" | Out-Null
+        }
+        catch {
+            Write-Warning "Failed to stop isolated clean-migration PostgreSQL cluster."
+        }
+    }
+
+    Remove-Item -LiteralPath $cleanRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+
+function Get-EphemeralPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
+
 $concurrencyRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-ef-concurrency-" + [Guid]::NewGuid().ToString("N"))
 $workspaceRoots = @(
     (Join-Path $concurrencyRoot "worker-1"),
