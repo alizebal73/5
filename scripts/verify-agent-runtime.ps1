@@ -264,7 +264,7 @@ finally {
 
         foreach ($entry in $logFiles) {
             if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) { continue }
-            $content = Get-Content -LiteralPath $entry.Path -Raw
+            $content = [System.IO.File]::ReadAllText($entry.Path)
             $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
             $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|refresh_token|client_secret|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
             $content = [Regex]::Replace($content, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')

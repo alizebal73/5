@@ -4,6 +4,7 @@ using GameNet.Server.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
 namespace GameNet.Server.UnitTests;
@@ -43,7 +44,7 @@ public sealed class AuthenticationRegistrationTests
         Assert.True(bearerOptions.TokenValidationParameters.ValidateIssuerSigningKey);
         Assert.Equal(
             Convert.ToHexString(Encoding.UTF8.GetBytes(signingKey)),
-            Convert.ToHexString(bearerOptions.TokenValidationParameters.IssuerSigningKey!.Key));
+            Convert.ToHexString(((SymmetricSecurityKey)bearerOptions.TokenValidationParameters.IssuerSigningKey!).Key));
         Assert.NotNull(bearerOptions.Events.OnMessageReceived);
     }
 }

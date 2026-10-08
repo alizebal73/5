@@ -124,3 +124,6 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Related diagnostic hardening: redact token query parameters and fix the failure-summary path join expression; Agent logs remain failure-only artifacts.
 - Verification: pending the next full Foundation certification. Certification marker remains pending until Agent heartbeat, fencing and reconnect tests pass on one SHA.
 - Rollback: revert this commit as a unit if the regression test or runtime certification fails; do not restore the unnamed options registration.
+
+- First verification after the authentication fix exposed a compile-only defect in the new regression test: the base SecurityKey type exposes no Key byte-array property. The test now casts the configured key to SymmetricSecurityKey before comparing its material; the server fix itself compiled successfully in that attempt.
+- A failed diagnostic capture also revealed that Get-Content -Raw can yield null for empty stderr files, prematurely stopping the log-copy loop. Failure diagnostics now read empty files as empty strings so later Agent logs are preserved too.
