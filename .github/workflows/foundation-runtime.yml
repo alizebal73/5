@@ -2,6 +2,9 @@ name: foundation-runtime-certification
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "foundation/runtime-*"
 
 concurrency:
   group: foundation-runtime-certification
