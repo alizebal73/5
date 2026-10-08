@@ -3,4 +3,18 @@
                   xmlns:system="clr-namespace:System;assembly=mscorlib">
   <system:String x:Key="App.Title">GameNet Manager 5</system:String>
   <system:String x:Key="App.Welcome">Central GameNet management</system:String>
+  <system:String x:Key="Identity.LoginTitle">Operator sign in</system:String>
+  <system:String x:Key="Identity.Username">Username</system:String>
+  <system:String x:Key="Identity.Password">Password</system:String>
+  <system:String x:Key="Identity.LoginButton">Sign in</system:String>
+  <system:String x:Key="Identity.LoginHint">Sign in with an operator account created by the system owner.</system:String>
+  <system:String x:Key="Identity.SignedIn">Signed in as</system:String>
+  <system:String x:Key="Identity.LogoutButton">Sign out</system:String>
+  <system:String x:Key="Identity.LoginSucceeded">You are signed in</system:String>
+  <system:String x:Key="Identity.UsernameRequired">Enter your username and password.</system:String>
+  <system:String x:Key="Identity.InvalidCredentials">Username or password is incorrect.</system:String>
+  <system:String x:Key="Identity.AccountLocked">This account is temporarily locked. Try again later.</system:String>
+  <system:String x:Key="Identity.AccountDisabled">This account is disabled.</system:String>
+  <system:String x:Key="Identity.ConnectionError">Could not connect to the Server. Check your network.</system:String>
+  <system:String x:Key="Identity.UnexpectedError">Sign in failed. Check the Server status.</system:String>
 </ResourceDictionary>

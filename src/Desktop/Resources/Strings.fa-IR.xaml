@@ -3,4 +3,18 @@
                   xmlns:system="clr-namespace:System;assembly=mscorlib">
   <system:String x:Key="App.Title">مدیریت گیم‌نت ۵</system:String>
   <system:String x:Key="App.Welcome">مدیریت مرکزی گیم‌نت</system:String>
+  <system:String x:Key="Identity.LoginTitle">ورود اپراتور</system:String>
+  <system:String x:Key="Identity.Username">نام کاربری</system:String>
+  <system:String x:Key="Identity.Password">گذرواژه</system:String>
+  <system:String x:Key="Identity.LoginButton">ورود به سامانه</system:String>
+  <system:String x:Key="Identity.LoginHint">ورود با حساب اپراتوری ساخته‌شده توسط مدیر سامانه انجام می‌شود.</system:String>
+  <system:String x:Key="Identity.SignedIn">کاربر واردشده</system:String>
+  <system:String x:Key="Identity.LogoutButton">خروج</system:String>
+  <system:String x:Key="Identity.LoginSucceeded">ورود با موفقیت انجام شد</system:String>
+  <system:String x:Key="Identity.UsernameRequired">نام کاربری و گذرواژه را وارد کنید.</system:String>
+  <system:String x:Key="Identity.InvalidCredentials">نام کاربری یا گذرواژه نادرست است.</system:String>
+  <system:String x:Key="Identity.AccountLocked">حساب موقتاً قفل شده است. کمی بعد دوباره تلاش کنید.</system:String>
+  <system:String x:Key="Identity.AccountDisabled">این حساب غیرفعال است.</system:String>
+  <system:String x:Key="Identity.ConnectionError">ارتباط با سرور برقرار نشد. اتصال شبکه را بررسی کنید.</system:String>
+  <system:String x:Key="Identity.UnexpectedError">ورود انجام نشد. وضعیت سرور را بررسی کنید.</system:String>
 </ResourceDictionary>
