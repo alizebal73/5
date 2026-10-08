@@ -36,9 +36,19 @@ try {
             $env:GameNet__Server__BaseUrl = $serverUrl
             $env:GAMENET_DESKTOP_SMOKE = "1"
             $env:GAMENET_UI_CULTURE = $culture
-            $process = Start-Process -FilePath $desktop.FullName -PassThru -Wait
-            if ($process.ExitCode -ne 0) {
-                throw "Desktop smoke failed for $culture with exit code $($process.ExitCode)."
+            $process = Start-Process -FilePath $desktop.FullName -PassThru
+            try {
+                if (-not $process.WaitForExit(60000)) {
+                    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                    throw "Desktop smoke timed out for $culture after 60 seconds."
+                }
+
+                if ($process.ExitCode -ne 0) {
+                    throw "Desktop smoke failed for $culture with exit code $($process.ExitCode)."
+                }
+            }
+            finally {
+                $process.Dispose()
             }
         }
     }
