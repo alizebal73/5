@@ -1,0 +1,1 @@
+foundation: add typed Agent credential failures
