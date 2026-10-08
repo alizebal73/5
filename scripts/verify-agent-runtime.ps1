@@ -24,6 +24,20 @@ function Get-PgNameValueFromText([string]$text, [string[]]$names) {
     return $null
 }
 
+function Get-NpgsqlConnectionBuilder([string]$connectionString) {
+    $assemblyPath = Join-Path (Get-Location) "src\Server\bin\Release\net10.0\Npgsql.dll"
+    if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { return $null }
+
+    try {
+        $loaded = [AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -eq "Npgsql" }
+        if (-not $loaded) { Add-Type -Path $assemblyPath }
+        return [Npgsql.NpgsqlConnectionStringBuilder]::new($connectionString)
+    }
+    catch {
+        return $null
+    }
+}
+
 function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
     $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
     $normalized = $connection.Trim().Trim('"')
@@ -49,38 +63,23 @@ function Get-PgCliBase([string]$connection, [ref]$database, [ref]$oldPassword) {
         return $args
     }
 
-    $builder = $null
-    try {
-        $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-        $builder.ConnectionString = $normalized
-    }
-    catch {
-        $builder = $null
+    $npgsql = Get-NpgsqlConnectionBuilder $normalized
+    if ($npgsql) {
+        $pgHost = $npgsql.Host
+        $port = $npgsql.Port
+        $username = $npgsql.Username
+        $password = $npgsql.Password
+        $db = $npgsql.Database
+        if ([string]::IsNullOrWhiteSpace($username)) { throw "Npgsql parser returned an empty PostgreSQL username." }
+        if ([string]::IsNullOrWhiteSpace($db)) { $db = $username }
+        if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
+        if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
+        $args = @("--host=$pgHost","--port=$port","--username=$username","--dbname=$db")
+        $database.Value = $db
+        return $args
     }
 
-    $pgHost = $null; $port = $null; $username = $null; $password = $null; $db = $null
-    if ($builder) {
-        $pgHost = Get-ConnectionValue $builder @("Host","Server","Address")
-        $port = Get-ConnectionValue $builder @("Port")
-        $username = Get-ConnectionValue $builder @("Username","User Id","User","UserName","UID")
-        $password = Get-ConnectionValue $builder @("Password","Pwd")
-        $db = Get-ConnectionValue $builder @("Database","Initial Catalog","DBName")
-    }
-    if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = Get-PgNameValueFromText $normalized @("host","server","address") }
-    if ([string]::IsNullOrWhiteSpace($port)) { $port = Get-PgNameValueFromText $normalized @("port") }
-    if ([string]::IsNullOrWhiteSpace($username)) { $username = Get-PgNameValueFromText $normalized @("username","user id","user","userName","uid") }
-    if ([string]::IsNullOrWhiteSpace($password)) { $password = Get-PgNameValueFromText $normalized @("password","pwd") }
-    if ([string]::IsNullOrWhiteSpace($db)) { $db = Get-PgNameValueFromText $normalized @("database","initial catalog","dbname") }
-
-    if ([string]::IsNullOrWhiteSpace($username)) { throw "Could not resolve PostgreSQL username from GAMENET_DATABASE_CONNECTION." }
-    if ([string]::IsNullOrWhiteSpace($db)) { $db = $username }
-    if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
-    if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
-    if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
-
-    $args = @("--host=$pgHost","--port=$port","--username=$username","--dbname=$db")
-    $database.Value = $db
-    return $args
+    throw "Could not parse GAMENET_DATABASE_CONNECTION with NpgsqlConnectionStringBuilder."
 }
 
 $connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
