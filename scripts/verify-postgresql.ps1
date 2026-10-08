@@ -27,7 +27,7 @@ $jobs = 1..2 | ForEach-Object {
     Start-Job -ScriptBlock {
         param($dotnet, $proj, $ctx)
         & $dotnet @("ef", "database", "update", "--project", $proj, "--startup-project", $proj, "--context", $ctx)
-        exit $LASTEXITCODE
+        return $LASTEXITCODE
     } -ArgumentList $dotnetPath, $project, $context
 }
 $results = Receive-Job -Job $jobs -Wait -AutoRemoveJob
