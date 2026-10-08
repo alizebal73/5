@@ -27,7 +27,7 @@ public sealed class AgentCredentialService(
                 x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null, ct);
 
             if (exists)
-                throw new InvalidOperationException("AGENT_CREDENTIAL_ALREADY_EXISTS");
+                throw new AgentCredentialException("agent.credential_exists");
 
             var now = clock.UtcNow;
             var secret = GenerateSecret();
@@ -65,7 +65,7 @@ public sealed class AgentCredentialService(
                 .SingleOrDefaultAsync(ct);
 
             if (current is null)
-                throw new InvalidOperationException("AGENT_CREDENTIAL_NOT_FOUND");
+                throw new AgentCredentialException("agent.credential_not_found");
 
             var now = clock.UtcNow;
             current.Revoke(now);
