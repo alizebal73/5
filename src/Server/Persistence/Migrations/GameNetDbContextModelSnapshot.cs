@@ -17,6 +17,41 @@ partial class GameNetDbContextModelSnapshot : ModelSnapshot
     {
         modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+        modelBuilder.Entity<AgentConnectionLease>(b =>
+        {
+            b.HasKey(x => x.DeviceId);
+            b.HasIndex(x => new { x.LeaseExpiresAtUtc, x.DeviceId }).HasDatabaseName("IX_agent_connection_leases_Expires_Device");
+
+            b.Property(x => x.DeviceId).HasMaxLength(128).HasColumnName("device_id");
+            b.Property(x => x.ConnectionId).HasMaxLength(128).HasColumnName("connection_id");
+            b.Property(x => x.LeaseToken).HasMaxLength(128).HasColumnName("lease_token");
+            b.Property(x => x.LeaseExpiresAtUtc).HasColumnName("lease_expires_at_utc");
+            b.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc");
+            b.Property(x => x.LastHeartbeatAtUtc).HasColumnName("last_heartbeat_at_utc");
+            b.Property(x => x.AgentVersion).HasMaxLength(64).HasColumnName("agent_version");
+            b.Property(x => x.StationState).HasMaxLength(64).HasColumnName("station_state");
+            b.ToTable("agent_connection_leases");
+        });
+
+        modelBuilder.Entity<AgentCredential>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => x.DeviceId)
+                .IsUnique()
+                .HasFilter("revoked_at_utc IS NULL")
+                .HasDatabaseName("IX_agent_credentials_ActiveDevice");
+            b.HasIndex(x => new { x.DeviceId, x.CreatedAtUtc })
+                .HasDatabaseName("IX_agent_credentials_Device_Created");
+
+            b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
+            b.Property(x => x.DeviceId).HasMaxLength(128).HasColumnName("device_id");
+            b.Property(x => x.SecretHash).HasMaxLength(128).HasColumnName("secret_hash");
+            b.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(x => x.RevokedAtUtc).HasColumnName("revoked_at_utc");
+            b.Property(x => x.LastAuthenticatedAtUtc).HasColumnName("last_authenticated_at_utc");
+            b.ToTable("agent_credentials");
+        });
+
         modelBuilder.Entity<AuditEntry>(b =>
         {
             b.HasKey(x => x.Id);
