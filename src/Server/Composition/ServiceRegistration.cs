@@ -29,7 +29,7 @@ public static class ServiceRegistration
         {
             var options = provider.GetRequiredService<IOptions<GameNetOptions>>().Value;
             if (!string.IsNullOrWhiteSpace(options.DatabaseConnectionString))
-                db.UseNpgsql(options.DatabaseConnectionString);
+                db.UseNpgsql(options.DatabaseConnectionString, npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
         });
 
         return services;
