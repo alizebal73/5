@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   postgres:
+    timeout-minutes: 30
     runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Checkout
