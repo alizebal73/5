@@ -51,7 +51,7 @@ namespace GameNet.Server.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OccurredAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    occurred_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     actor_type = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     actor_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     operation = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
@@ -129,17 +129,17 @@ namespace GameNet.Server.Persistence.Migrations
                 columns: new[] { "device_id", "created_at_utc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_audit_entries_idempotency_key",
+                name: "IX_audit_entries_IdempotencyKey",
                 table: "audit_entries",
                 column: "idempotency_key");
 
             migrationBuilder.CreateIndex(
-                name: "IX_audit_entries_OccurredAtUtc_operation",
+                name: "IX_audit_entries_OccurredAtUtc_Operation",
                 table: "audit_entries",
-                columns: new[] { "OccurredAtUtc", "operation" });
+                columns: new[] { "occurred_at_utc", "operation" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_audit_entries_reference_type_reference_id",
+                name: "IX_audit_entries_ReferenceType_ReferenceId",
                 table: "audit_entries",
                 columns: new[] { "reference_type", "reference_id" });
 

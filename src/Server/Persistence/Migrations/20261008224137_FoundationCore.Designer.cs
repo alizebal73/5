@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GameNet.Server.Persistence.Migrations
 {
     [DbContext(typeof(GameNetDbContext))]
-    [Migration("20261008223538_FoundationCore")]
+    [Migration("20261008224137_FoundationCore")]
     partial class FoundationCore
     {
         /// <inheritdoc />
@@ -63,7 +63,8 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasColumnName("idempotency_key");
 
                     b.Property<DateTimeOffset>("OccurredAtUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
 
                     b.Property<string>("Operation")
                         .IsRequired()
@@ -100,11 +101,14 @@ namespace GameNet.Server.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IdempotencyKey");
+                    b.HasIndex("IdempotencyKey")
+                        .HasDatabaseName("IX_audit_entries_IdempotencyKey");
 
-                    b.HasIndex("OccurredAtUtc", "Operation");
+                    b.HasIndex("OccurredAtUtc", "Operation")
+                        .HasDatabaseName("IX_audit_entries_OccurredAtUtc_Operation");
 
-                    b.HasIndex("ReferenceType", "ReferenceId");
+                    b.HasIndex("ReferenceType", "ReferenceId")
+                        .HasDatabaseName("IX_audit_entries_ReferenceType_ReferenceId");
 
                     b.ToTable("audit_entries", (string)null);
                 });
