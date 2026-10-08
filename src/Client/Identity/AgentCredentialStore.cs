@@ -37,6 +37,7 @@ public sealed class AgentCredentialStore(
             throw new InvalidOperationException($"No Agent bootstrap credential is available. Set {variableName} for the Agent service identity.");
 
         await SaveAsync(bootstrap, cancellationToken);
+        Environment.SetEnvironmentVariable(variableName, null, EnvironmentVariableTarget.Process);
         return bootstrap;
     }
 
