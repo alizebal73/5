@@ -49,6 +49,16 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("GAMENET_DESKTOP_SMOKE"),
+                    "1",
+                    StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine(exception);
+                Shutdown(1);
+                return;
+            }
+
             MessageBox.Show(
                 exception.Message,
                 "GameNet 5",
