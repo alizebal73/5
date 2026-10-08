@@ -191,12 +191,49 @@ FROM (
     Write-Host "Isolated restore cluster port: $restorePort"
 }
 catch {
+    try {
+        $sourceInventorySql = "SELECT schemaname || '.' || tablename || '|' || tableowner FROM pg_catalog.pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+        $sourceInventory = @(& $psql @sourceCli "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$sourceInventorySql" 2>&1)
+    } catch {
+        $sourceInventory = @("source-inventory-error=$($_.Exception.Message)")
+    }
+
+    try {
+        if (Test-Path -LiteralPath $dumpFile -PathType Leaf) {
+            $dumpToc = @(& $pgRestore "--list" $dumpFile 2>&1)
+        } else {
+            $dumpToc = @("dump-toc-unavailable")
+        }
+    } catch {
+        $dumpToc = @("dump-toc-error=$($_.Exception.Message)")
+    }
+
+    try {
+        if ($clusterStarted) {
+            $restoreInventorySql = "SELECT schemaname || '.' || tablename || '|' || tableowner FROM pg_catalog.pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+            $restoreInventory = @(& $psql @tempRestoreArgs "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$restoreInventorySql" 2>&1)
+        } else {
+            $restoreInventory = @("restore-inventory-unavailable")
+        }
+    } catch {
+        $restoreInventory = @("restore-inventory-error=$($_.Exception.Message)")
+    }
+
     New-Item -ItemType Directory -Force -Path ".\\artifacts\\foundation" | Out-Null
     @(
         "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
         "sourceDatabase=$sourceDatabase"
         "restorePort=$restorePort"
         "failure=$($_.Exception.Message)"
+        ""
+        "===== source public tables / owners ====="
+        ($sourceInventory -join [Environment]::NewLine)
+        ""
+        "===== restore public tables / owners ====="
+        ($restoreInventory -join [Environment]::NewLine)
+        ""
+        "===== pg_restore TOC ====="
+        ($dumpToc -join [Environment]::NewLine)
     ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
 
     if (Test-Path -LiteralPath $clusterLog -PathType Leaf) {
