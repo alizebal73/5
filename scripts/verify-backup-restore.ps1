@@ -158,6 +158,7 @@ $restorePort = Get-EphemeralPort
 
 New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
 $clusterStarted = $false
+$diagnosticPath = ".\\artifacts\\foundation\\backup-restore-diagnostic.txt"
 
 try {
     if ($sourceDatabase -eq "postgres") {
@@ -209,6 +210,23 @@ FROM (
     Write-Host "Isolated restore database: $restoreDatabase"
     Write-Host "Isolated restore cluster port: $restorePort"
 }
+catch {
+    New-Item -ItemType Directory -Force -Path ".\\artifacts\\foundation" | Out-Null
+    @(
+        "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
+        "sourceDatabase=$sourceDatabase"
+        "restorePort=$restorePort"
+        "failure=$($_.Exception.Message)"
+    ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
+
+    if (Test-Path -LiteralPath $clusterLog -PathType Leaf) {
+        Add-Content -LiteralPath $diagnosticPath -Value ""
+        Add-Content -LiteralPath $diagnosticPath -Value "===== temporary cluster log ====="
+        Get-Content -LiteralPath $clusterLog | Add-Content -LiteralPath $diagnosticPath
+    }
+    throw
+}
+
 finally {
     if ($clusterStarted) {
         try { & $pgCtl "--pgdata=$clusterRoot" "--mode=fast" "--wait" "stop" | Out-Null } catch { Write-Warning "Failed to stop isolated PostgreSQL cluster." }
