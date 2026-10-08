@@ -37,94 +37,68 @@ function Get-NameValueFromText([string]$text, [string[]]$names) {
     return $null
 }
 
+function Get-NpgsqlConnectionBuilder([string]$connectionString) {
+    $assemblyPath = Join-Path (Get-Location) "src\Server\bin\Release\net10.0\Npgsql.dll"
+    if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { return $null }
+
+    try {
+        $loaded = [AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -eq "Npgsql" }
+        if (-not $loaded) { Add-Type -Path $assemblyPath }
+        return [Npgsql.NpgsqlConnectionStringBuilder]::new($connectionString)
+    }
+    catch {
+        return $null
+    }
+}
+
 function Get-PgCliInfo([string]$value, [ref]$oldPassword) {
     $oldPassword.Value = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
     $normalized = $value.Trim().Trim('"')
 
     if ($normalized -match '^(?i)postgres(?:ql)?://') {
         $uri = [Uri]$normalized
-        if ([string]::IsNullOrWhiteSpace($uri.UserInfo)) {
-            throw "PostgreSQL URI must include a username for CLI certification."
-        }
-
+        if ([string]::IsNullOrWhiteSpace($uri.UserInfo)) { throw "PostgreSQL URI must include a username for CLI certification." }
         $parts = $uri.UserInfo.Split(':',2)
         $user = [Uri]::UnescapeDataString($parts[0])
         $password = if ($parts.Count -eq 2) { [Uri]::UnescapeDataString($parts[1]) } else { $null }
-
         if ([string]::IsNullOrWhiteSpace($password)) {
             foreach ($part in $uri.Query.TrimStart("?").Split("&",[StringSplitOptions]::RemoveEmptyEntries)) {
                 $kv = $part.Split("=",2)
-                if ($kv[0] -ieq "password" -and $kv.Count -eq 2) {
-                    $password = [Uri]::UnescapeDataString($kv[1])
-                }
+                if ($kv[0] -ieq "password" -and $kv.Count -eq 2) { $password = [Uri]::UnescapeDataString($kv[1]) }
             }
         }
-
         if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
-
         $db = $uri.AbsolutePath.TrimStart("/")
         if ([string]::IsNullOrWhiteSpace($db)) { $db = $user }
-
         $port = if ($uri.Port -gt 0) { $uri.Port } else { 5432 }
         $ssl = $null
         foreach ($part in $uri.Query.TrimStart("?").Split("&",[StringSplitOptions]::RemoveEmptyEntries)) {
             $kv = $part.Split("=",2)
             if ($kv[0] -ieq "sslmode" -and $kv.Count -eq 2) { $ssl = [Uri]::UnescapeDataString($kv[1]) }
         }
-
         $args = @("--host=$($uri.Host)","--port=$port","--username=$user","--dbname=$db")
         if (-not [string]::IsNullOrWhiteSpace($ssl)) { $args += "--sslmode=$($ssl.ToLowerInvariant())" }
         return [pscustomobject]@{ Args = $args; Database = $db; Format = "uri" }
     }
 
-    $builder = $null
-    try {
-        $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-        $builder.ConnectionString = $normalized
-    }
-    catch {
-        $builder = $null
-    }
-
-    $hostValue = $null
-    $port = $null
-    $user = $null
-    $password = $null
-    $db = $null
-    $ssl = $null
-    $keys = @()
-
-    if ($builder) {
-        $keys = @($builder.Keys | ForEach-Object { [string]$_ })
-        $hostValue = Get-ConnectionValue $builder @("Host","Server","Address")
-        $port = Get-ConnectionValue $builder @("Port")
-        $user = Get-ConnectionValue $builder @("Username","User Id","User","UserName","UID")
-        $password = Get-ConnectionValue $builder @("Password","Pwd","PassFile")
-        $db = Get-ConnectionValue $builder @("Database","Initial Catalog","DBName")
-        $ssl = Get-ConnectionValue $builder @("SSL Mode","SslMode")
+    $npgsql = Get-NpgsqlConnectionBuilder $normalized
+    if ($npgsql) {
+        $hostValue = $npgsql.Host
+        $port = $npgsql.Port
+        $user = $npgsql.Username
+        $password = $npgsql.Password
+        $db = $npgsql.Database
+        $ssl = $npgsql.SslMode.ToString()
+        if ([string]::IsNullOrWhiteSpace($user)) { throw "Npgsql parser returned an empty PostgreSQL username." }
+        if ([string]::IsNullOrWhiteSpace($db)) { $db = $user }
+        if ([string]::IsNullOrWhiteSpace($hostValue)) { $hostValue = "localhost" }
+        if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
+        $args = @("--host=$hostValue","--port=$port","--username=$user","--dbname=$db")
+        if (-not [string]::IsNullOrWhiteSpace($ssl)) { $args += "--sslmode=$($ssl.ToLowerInvariant())" }
+        return [pscustomobject]@{ Args = $args; Database = $db; Format = "npgsql" }
     }
 
-    if ([string]::IsNullOrWhiteSpace($hostValue)) { $hostValue = Get-NameValueFromText $normalized @("host","server","address") }
-    if ([string]::IsNullOrWhiteSpace($port)) { $port = Get-NameValueFromText $normalized @("port") }
-    if ([string]::IsNullOrWhiteSpace($user)) { $user = Get-NameValueFromText $normalized @("username","user id","user","userName","uid") }
-    if ([string]::IsNullOrWhiteSpace($password)) { $password = Get-NameValueFromText $normalized @("password","pwd") }
-    if ([string]::IsNullOrWhiteSpace($db)) { $db = Get-NameValueFromText $normalized @("database","initial catalog","dbname") }
-    if ([string]::IsNullOrWhiteSpace($ssl)) { $ssl = Get-NameValueFromText $normalized @("sslmode","ssl mode") }
-
-    if ([string]::IsNullOrWhiteSpace($user)) {
-        $keyText = if ($keys.Count -gt 0) { $keys -join "," } else { "<unparsed>" }
-        throw "Could not resolve PostgreSQL username from GAMENET_DATABASE_CONNECTION. Parsed keys: $keyText"
-    }
-
-    if ([string]::IsNullOrWhiteSpace($db)) { $db = $user }
-    if ([string]::IsNullOrWhiteSpace($hostValue)) { $hostValue = "localhost" }
-    if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
-    if (-not [string]::IsNullOrWhiteSpace($password)) { $env:PGPASSWORD = $password }
-
-    $args = @("--host=$hostValue","--port=$port","--username=$user","--dbname=$db")
-    if (-not [string]::IsNullOrWhiteSpace($ssl)) { $args += "--sslmode=$($ssl.ToLowerInvariant())" }
-
-    return [pscustomobject]@{ Args = $args; Database = $db; Format = "key-value" }
+    throw "Could not parse GAMENET_DATABASE_CONNECTION with NpgsqlConnectionStringBuilder."
 }
 
 function Get-EphemeralPort {
@@ -161,6 +135,12 @@ $clusterStarted = $false
 $diagnosticPath = ".\\artifacts\\foundation\\backup-restore-diagnostic.txt"
 
 try {
+    $pgInfo = Get-PgCliInfo $connection ([ref]$oldPgPassword)
+    $sourceCli = $pgInfo.Args
+    $sourceDatabase = $pgInfo.Database
+    Write-Host "Backup source format: $($pgInfo.Format)"
+    Write-Host "Backup source database: $sourceDatabase"
+
     if ($sourceDatabase -eq "postgres") {
         throw "Backup/restore certification must target the dedicated GameNet database, not the postgres maintenance database."
     }
