@@ -11,7 +11,19 @@ function Invoke-Checked {
 & "$PSScriptRoot/check-source-size.ps1"
 & "$PSScriptRoot/check-architecture.ps1"
 & "$PSScriptRoot/check-placeholders.ps1"
-Invoke-Checked "dotnet" @("--info")
+$dotnetCommand = Get-Command dotnet -ErrorAction Stop
+$dotnetPath = $dotnetCommand.Source
+Write-Host "DOTNET PATH: $dotnetPath"
+Write-Host "DOTNET ROOT: $env:DOTNET_ROOT"
+Write-Host "PROGRAM FILES: $env:ProgramFiles"
+Write-Host "PATH: $env:PATH"
+if (-not (Test-Path -LiteralPath $dotnetPath -PathType Leaf)) {
+    throw "Resolved dotnet executable does not exist: $dotnetPath"
+}
+$fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($dotnetPath)
+Write-Host "DOTNET FILE VERSION: $($fileVersion.FileVersion)"
+Write-Host "DOTNET PRODUCT VERSION: $($fileVersion.ProductVersion)"
+Invoke-Checked $dotnetPath @("--info")
 Invoke-Checked "dotnet" @("tool","restore")
 Invoke-Checked "dotnet" @("restore","GameNet.slnx")
 Invoke-Checked "dotnet" @("build","GameNet.slnx","--configuration","Release","--no-restore")
