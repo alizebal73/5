@@ -1,32 +1,60 @@
 using System.Globalization;
 using System.Windows;
+using GameNet.Desktop.Api;
 using GameNet.Desktop.Infrastructure;
 using GameNet.Desktop.Shell;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace GameNet.Desktop;
 
 public partial class App : Application
 {
-    private IHost? _host;
+    private IHost? host;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        var culture = DesktopCulture.Resolve(Environment.GetEnvironmentVariable("GAMENET_UI_CULTURE"));
-        DesktopCulture.Apply(culture);
-        ReplaceResourceDictionary(DesktopCulture.GetResourceDictionaryName(culture));
+        try
+        {
+            var culture = DesktopCulture.Resolve(Environment.GetEnvironmentVariable("GAMENET_UI_CULTURE"));
+            DesktopCulture.Apply(culture);
+            ReplaceResourceDictionary(DesktopCulture.GetResourceDictionaryName(culture));
 
-        _host = DesktopHost.Build();
-        await _host.StartAsync();
+            host = DesktopHost.Build();
+            await host.StartAsync();
 
-        MainWindow = _host.Services.GetRequiredService<MainWindow>();
-        MainWindow.FlowDirection = culture.TextInfo.IsRightToLeft
-            ? FlowDirection.RightToLeft
-            : FlowDirection.LeftToRight;
-        MainWindow.Show();
+            MainWindow = host.Services.GetRequiredService<MainWindow>();
+
+            if (string.Equals(
+                    Environment.GetEnvironmentVariable("GAMENET_DESKTOP_SMOKE"),
+                    "1",
+                    StringComparison.Ordinal))
+            {
+                var client = host.Services.GetRequiredService<IGameNetServerClient>();
+                var health = await client.GetHealthAsync();
+                if (!string.Equals(health.Data.Readiness, HealthStatuses.Ready, StringComparison.Ordinal))
+                    throw new InvalidOperationException("DESKTOP_SERVER_NOT_READY");
+
+                Shutdown(0);
+                return;
+            }
+
+            MainWindow.FlowDirection = culture.TextInfo.IsRightToLeft
+                ? FlowDirection.RightToLeft
+                : FlowDirection.LeftToRight;
+
+            MainWindow.Show();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                exception.Message,
+                "GameNet 5",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
     private void ReplaceResourceDictionary(string resourceName)
@@ -41,10 +69,10 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
-        if (_host is not null)
+        if (host is not null)
         {
-            await _host.StopAsync(TimeSpan.FromSeconds(5));
-            _host.Dispose();
+            await host.StopAsync(TimeSpan.FromSeconds(5));
+            host.Dispose();
         }
 
         base.OnExit(e);
