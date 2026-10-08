@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
-  <PropertyGroup><RootNamespace>GameNet.Agent</RootNamespace><AssemblyName>GameNet.Agent</AssemblyName></PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>GameNet.Agent</RootNamespace>
+    <AssemblyName>GameNet.Agent</AssemblyName>
+  </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\Shared\GameNet.Shared.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
