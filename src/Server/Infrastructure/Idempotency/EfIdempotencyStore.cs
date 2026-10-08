@@ -1,4 +1,4 @@
-using GameNet.Server.Infrastructure.Time;
+using GameNet.Shared.Primitives;
 using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
 
