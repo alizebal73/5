@@ -6,7 +6,7 @@ Required evidence before the first business vertical slice:
 - clean Windows restore/build/test;
 - architecture/source-size/placeholder/business guards;
 - native Desktop launch and typed Server boundary;
-- real PostgreSQL migration and concurrency lane;
+- real PostgreSQL clean migration and concurrency lane;
 - durable Audit, Idempotency and Outbox persistence;
 - authenticated Agent identity, credential, connection lease, heartbeat, reconnect and fencing proof;
 - Desktop -> Server real smoke;
