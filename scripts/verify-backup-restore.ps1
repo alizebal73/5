@@ -1,0 +1,97 @@
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
+if ([string]::IsNullOrWhiteSpace($connection)) {
+    $connection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Machine")
+}
+if ([string]::IsNullOrWhiteSpace($connection)) {
+    throw "GAMENET_DATABASE_CONNECTION is required for backup/restore certification."
+}
+
+function Resolve-Tool([string]$name) {
+    $command = Get-Command $name -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+
+    $default = Join-Path $env:ProgramFiles "PostgreSQL\17\bin\$name.exe"
+    if (Test-Path -LiteralPath $default -PathType Leaf) { return $default }
+
+    throw "$name.exe was not found."
+}
+
+$pgDump = Resolve-Tool "pg_dump"
+$pgRestore = Resolve-Tool "pg_restore"
+$psql = Resolve-Tool "psql"
+
+$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+$builder.ConnectionString = $connection
+if (-not $builder.ContainsKey("Database")) {
+    throw "The PostgreSQL connection string must specify Database."
+}
+
+$sourceDatabase = [string]$builder["Database"]
+$restoreDatabase = "gamenet5_restore_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+
+$maintenance = [System.Data.Common.DbConnectionStringBuilder]::new()
+$maintenance.ConnectionString = $connection
+$maintenance["Database"] = "postgres"
+
+$restore = [System.Data.Common.DbConnectionStringBuilder]::new()
+$restore.ConnectionString = $connection
+$restore["Database"] = $restoreDatabase
+
+$workRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-backup-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
+$dumpFile = Join-Path $workRoot "foundation.dump"
+
+try {
+    Write-Host "Creating isolated backup artifact..."
+    & $pgDump $connection "--format=custom" "--file=$dumpFile" "--no-owner" "--no-acl"
+    if ($LASTEXITCODE -ne 0) { throw "pg_dump failed." }
+
+    if (-not (Test-Path -LiteralPath $dumpFile -PathType Leaf)) {
+        throw "Backup artifact was not created."
+    }
+
+    Write-Host "Creating isolated restore database..."
+    $createSql = 'CREATE DATABASE "' + $restoreDatabase + '";'
+    & $psql $maintenance.ConnectionString "--set=ON_ERROR_STOP=1" "--command=$createSql"
+    if ($LASTEXITCODE -ne 0) { throw "Could not create isolated restore database." }
+
+    Write-Host "Restoring backup artifact..."
+    & $pgRestore $restore.ConnectionString "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
+    if ($LASTEXITCODE -ne 0) { throw "pg_restore failed." }
+
+    $check = @"
+SELECT
+    to_regclass('public.audit_entries'),
+    to_regclass('public.idempotency_records'),
+    to_regclass('public.outbox_messages'),
+    to_regclass('public.agent_credentials'),
+    to_regclass('public.agent_connection_leases');
+"@
+
+    $result = & $psql $restore.ConnectionString "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Restored database validation query failed: $($result -join [Environment]::NewLine)"
+    }
+
+    if (($result -join " ") -match "<null>") {
+        throw "Restored database is missing one or more Foundation tables."
+    }
+
+    Write-Host "BACKUP/ISOLATED-RESTORE CERTIFICATION PASSED."
+    Write-Host "Source database: $sourceDatabase"
+    Write-Host "Isolated restore database: $restoreDatabase"
+}
+finally {
+    try {
+        $dropSql = 'DROP DATABASE IF EXISTS "' + $restoreDatabase + '";'
+        & $psql $maintenance.ConnectionString "--set=ON_ERROR_STOP=1" "--command=$dropSql" | Out-Null
+    }
+    catch {
+        Write-Warning "Failed to clean up isolated restore database $restoreDatabase."
+    }
+
+    Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
