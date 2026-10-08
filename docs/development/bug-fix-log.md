@@ -105,3 +105,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression evidence: pending execution of the updated foundation-certification workflow against this branch.
 - Verification result: pending; the Foundation must not be marked certified until the complete workflow succeeds on one SHA.
 - Rollback: revert the single runtime-certification fix commit as a unit; do not remove or weaken the Production authentication guard.
+
+
+## 2026-10-09 — Foundation certification / Agent runtime diagnostics
+
+- Symptom: the Agent runtime certification did not observe an authoritative lease after starting the Agent; Desktop, build/tests, PostgreSQL, and isolated backup/restore passed on the same commit.
+- Diagnostic gap: the Agent certification script unconditionally deleted its temporary root containing server and Agent stdout/stderr, and the workflow artifact did not include Agent-runtime files. The failed attempt therefore identified the boundary (lease acquisition) but did not preserve the underlying transport/authentication error.
+- Fix applied: preserve server/Agent logs and a commit-stamped diagnostic summary on Agent certification failure, redact likely credential/JWT material before writing the artifact, and include Agent-runtime diagnostics in the existing failure artifact. Successful runs continue to delete temporary diagnostics.
+- Root cause and regression evidence: pending the next single-SHA Foundation certification; do not mark Foundation certified until Agent lease/fencing/reconnect checks pass.
+- Rollback: revert this diagnostic-only commit if preservation causes a runner problem; do not weaken Agent authentication, lease fencing, or the certification assertions.

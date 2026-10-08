@@ -69,6 +69,7 @@ jobs:
           path: |
             artifacts/foundation/*-diagnostic.txt
             artifacts/foundation/desktop-runtime-*
+            artifacts/foundation/agent-runtime-*
           if-no-files-found: ignore
 
       - name: Evidence

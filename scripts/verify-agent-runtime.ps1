@@ -130,6 +130,10 @@ $agent2Err = $agent2Log + ".err"
 $server = $null
 $agent = $null
 $agent2 = $null
+$testSucceeded = $false
+$failureMessage = $null
+$diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
+$runToken = [Guid]::NewGuid().ToString("N")
 $pgDatabase = $null
 $oldPgPassword = $null
 $oldPgSslMode = $null
@@ -223,6 +227,11 @@ try {
     if (-not $reconnected) { throw "Agent reconnect did not establish a new authoritative connection." }
 
     Write-Host "AGENT RUNTIME / AUTH / HEARTBEAT / FENCING / RECONNECT CERTIFICATION PASSED."
+    $testSucceeded = $true
+}
+catch {
+    $failureMessage = $_.Exception.ToString()
+    throw
 }
 finally {
     if ($agent) { Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue }
@@ -241,5 +250,43 @@ finally {
 
     if ($null -eq $oldPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $oldPgPassword }
     if ($null -eq $oldPgSslMode) { Remove-Item Env:PGSSLMODE -ErrorAction SilentlyContinue } else { $env:PGSSLMODE = $oldPgSslMode }
+    if (-not $testSucceeded) {
+        New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
+
+        $logFiles = @(
+            @{ Path = $serverLog; Name = "server.log" },
+            @{ Path = $serverErr; Name = "server.err" },
+            @{ Path = $agentLog; Name = "agent.log" },
+            @{ Path = $agentErr; Name = "agent.err" },
+            @{ Path = $agent2Log; Name = "agent-second.log" },
+            @{ Path = $agent2Err; Name = "agent-second.err" }
+        )
+
+        foreach ($entry in $logFiles) {
+            if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) { continue }
+            $content = Get-Content -LiteralPath $entry.Path -Raw
+            $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+            $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
+            $content = [Regex]::Replace($content, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
+            $content = [Regex]::Replace($content, '\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b', '<redacted-jwt>')
+            $destination = Join-Path $diagnosticRoot ("agent-runtime-" + $runToken + "-" + $entry.Name)
+            Set-Content -LiteralPath $destination -Value $content -Encoding utf8
+        }
+
+        $safeFailure = [string]$failureMessage
+        $safeFailure = [Regex]::Replace($safeFailure, '(?i)(password|pwd|signingkey|provisioningkey|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+        $safeFailure = [Regex]::Replace($safeFailure, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
+        $diagnosticPath = Join-Path $diagnosticRoot ("agent-runtime-diagnostic-" + $runToken + ".txt")
+        @(
+            "commit=$((git rev-parse HEAD 2>$null))"
+            "branch=$((git branch --show-current 2>$null))"
+            "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
+            "failure=$safeFailure"
+            "diagnosticLogs=$($logFiles | ForEach-Object { Join-Path $diagnosticRoot ('agent-runtime-' + $runToken + '-' + $_.Name) } | Where-Object { Test-Path -LiteralPath $_ } -join ';')"
+        ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
+
+        Write-Host "Agent runtime diagnostics preserved under $diagnosticRoot."
+    }
+
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
