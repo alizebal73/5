@@ -2,8 +2,8 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 function Invoke-Checked {
-    param([string]$FilePath,[string[]]$Args = @())
-    & $FilePath @Args
+    param([string]$FilePath,[string[]]$CommandArgs = @())
+    & $FilePath @CommandArgs
     if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code $LASTEXITCODE." }
 }
 
