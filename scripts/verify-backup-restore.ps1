@@ -30,75 +30,93 @@ function Get-ConnectionValue([System.Data.Common.DbConnectionStringBuilder]$buil
     return $null
 }
 
+function Get-EphemeralPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
 $pgDump = Resolve-Tool "pg_dump"
 $pgRestore = Resolve-Tool "pg_restore"
 $psql = Resolve-Tool "psql"
+$initdb = Resolve-Tool "initdb"
+$pgCtl = Resolve-Tool "pg_ctl"
 
 $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
 $builder.ConnectionString = $connection
 
 $pgHost = Get-ConnectionValue $builder @("Host","Server","Address")
-$port = Get-ConnectionValue $builder @("Port")
-$username = Get-ConnectionValue $builder @("Username","User Id","User")
-$password = Get-ConnectionValue $builder @("Password","Pwd")
-$database = Get-ConnectionValue $builder @("Database","Initial Catalog")
+$pgPort = Get-ConnectionValue $builder @("Port")
+$pgUsername = Get-ConnectionValue $builder @("Username","User Id","User")
+$pgPassword = Get-ConnectionValue $builder @("Password","Pwd")
+$sourceDatabase = Get-ConnectionValue $builder @("Database","Initial Catalog")
 $sslMode = Get-ConnectionValue $builder @("SSL Mode","SslMode")
 
-if ([string]::IsNullOrWhiteSpace($username)) {
+if ([string]::IsNullOrWhiteSpace($pgUsername)) {
     throw "The PostgreSQL connection string must specify Username/User Id for CLI certification."
 }
-if ([string]::IsNullOrWhiteSpace($database)) {
-    $database = $username
+if ([string]::IsNullOrWhiteSpace($sourceDatabase)) {
+    $sourceDatabase = $pgUsername
 }
 if ([string]::IsNullOrWhiteSpace($pgHost)) { $pgHost = "localhost" }
-if ([string]::IsNullOrWhiteSpace($port)) { $port = "5432" }
+if ([string]::IsNullOrWhiteSpace($pgPort)) { $pgPort = "5432" }
 
-$cliBase = @("--host=$pgHost","--port=$port","--username=$username")
+$sourceCli = @("--host=$pgHost","--port=$pgPort","--username=$pgUsername","--dbname=$sourceDatabase")
 if (-not [string]::IsNullOrWhiteSpace($sslMode)) {
-    $cliBase += "--sslmode=$($sslMode.ToLowerInvariant())"
+    $sourceCli += "--sslmode=$($sslMode.ToLowerInvariant())"
 }
 
 $oldPgPassword = [Environment]::GetEnvironmentVariable("PGPASSWORD","Process")
-if (-not [string]::IsNullOrWhiteSpace($password)) {
-    $env:PGPASSWORD = $password
+if (-not [string]::IsNullOrWhiteSpace($pgPassword)) {
+    $env:PGPASSWORD = $pgPassword
 }
 
-$restoreDatabase = "gamenet5_restore_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
 $workRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-backup-" + [Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
+$clusterRoot = Join-Path $workRoot "restore-cluster"
+$clusterLog = Join-Path $workRoot "restore-cluster.log"
 $dumpFile = Join-Path $workRoot "foundation.dump"
+$restoreDatabase = "gamenet5_restore_probe_" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+$restorePort = Get-EphemeralPort
+
+New-Item -ItemType Directory -Force -Path $workRoot | Out-Null
+
+$clusterStarted = $false
 
 try {
-    $sourceQuery = (& $psql @cliBase "--dbname=$database" "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=SELECT current_database();" 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not determine the source PostgreSQL database."
-    }
-
-    $sourceDatabase = ($sourceQuery | Select-Object -Last 1).ToString().Trim()
-    if ([string]::IsNullOrWhiteSpace($sourceDatabase)) {
-        throw "PostgreSQL returned an empty current_database()."
-    }
     if ($sourceDatabase -eq "postgres") {
         throw "Backup/restore certification must target the dedicated GameNet database, not the postgres maintenance database."
     }
 
     Write-Host "Creating isolated backup artifact..."
-    & $pgDump @cliBase "--dbname=$sourceDatabase" "--format=custom" "--file=$dumpFile" "--no-owner" "--no-acl"
+    & $pgDump @sourceCli "--format=custom" "--file=$dumpFile" "--no-owner" "--no-acl"
     if ($LASTEXITCODE -ne 0) { throw "pg_dump failed." }
 
     if (-not (Test-Path -LiteralPath $dumpFile -PathType Leaf)) {
         throw "Backup artifact was not created."
     }
 
-    Write-Host "Creating isolated restore database..."
-    $maintenanceArgs = $cliBase + @("--dbname=postgres")
-    $createSql = 'CREATE DATABASE "' + $restoreDatabase + '";'
-    & $psql @maintenanceArgs "--set=ON_ERROR_STOP=1" "--command=$createSql"
-    if ($LASTEXITCODE -ne 0) { throw "Could not create isolated restore database." }
+    Write-Host "Initializing isolated PostgreSQL cluster..."
+    & $initdb "--pgdata=$clusterRoot" "--username=postgres" "--auth=trust" "--no-instructions"
+    if ($LASTEXITCODE -ne 0) { throw "initdb failed." }
 
-    Write-Host "Restoring backup artifact..."
-    $restoreArgs = $cliBase + @("--dbname=$restoreDatabase")
-    & $pgRestore @restoreArgs "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
+    Write-Host "Starting isolated PostgreSQL cluster on port $restorePort..."
+    & $pgCtl "--pgdata=$clusterRoot" "--log=$clusterLog" "--wait" "--timeout=60" "--options=-p $restorePort -h 127.0.0.1" "start"
+    if ($LASTEXITCODE -ne 0) { throw "pg_ctl start failed." }
+    $clusterStarted = $true
+
+    $tempAdminArgs = @("--host=127.0.0.1","--port=$restorePort","--username=postgres","--dbname=postgres")
+    $createSql = 'CREATE DATABASE "' + $restoreDatabase + '";'
+    & $psql @tempAdminArgs "--set=ON_ERROR_STOP=1" "--command=$createSql"
+    if ($LASTEXITCODE -ne 0) { throw "Could not create isolated restore database in temporary PostgreSQL cluster." }
+
+    Write-Host "Restoring backup artifact into isolated database..."
+    $tempRestoreArgs = @("--host=127.0.0.1","--port=$restorePort","--username=postgres","--dbname=$restoreDatabase")
+    & $pgRestore @tempRestoreArgs "--exit-on-error" "--no-owner" "--no-acl" $dumpFile
     if ($LASTEXITCODE -ne 0) { throw "pg_restore failed." }
 
     $check = @"
@@ -113,7 +131,7 @@ FROM (
 ) AS required(ok);
 "@
 
-    $result = ((& $psql @restoreArgs "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
+    $result = ((& $psql @tempRestoreArgs "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$check" 2>&1) -join "").Trim()
     if ($LASTEXITCODE -ne 0) {
         throw "Restored database validation query failed: $result"
     }
@@ -125,15 +143,16 @@ FROM (
     Write-Host "BACKUP/ISOLATED-RESTORE CERTIFICATION PASSED."
     Write-Host "Source database: $sourceDatabase"
     Write-Host "Isolated restore database: $restoreDatabase"
+    Write-Host "Isolated restore cluster port: $restorePort"
 }
 finally {
-    try {
-        $maintenanceArgs = $cliBase + @("--dbname=postgres")
-        $dropSql = 'DROP DATABASE IF EXISTS "' + $restoreDatabase + '";'
-        & $psql @maintenanceArgs "--set=ON_ERROR_STOP=1" "--command=$dropSql" | Out-Null
-    }
-    catch {
-        Write-Warning "Failed to clean up isolated restore database $restoreDatabase."
+    if ($clusterStarted) {
+        try {
+            & $pgCtl "--pgdata=$clusterRoot" "--mode=fast" "--wait" "stop" | Out-Null
+        }
+        catch {
+            Write-Warning "Failed to stop isolated PostgreSQL cluster."
+        }
     }
 
     if ($null -eq $oldPgPassword) {
