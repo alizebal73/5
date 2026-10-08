@@ -3,6 +3,7 @@ using System.Windows;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Infrastructure;
 using GameNet.Desktop.Shell;
+using GameNet.Shared.Contracts.V1.System;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GameNet.Desktop;
