@@ -8,6 +8,14 @@ using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var databaseConnection = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+if (!string.IsNullOrWhiteSpace(databaseConnection) &&
+    string.IsNullOrWhiteSpace(builder.Configuration["GameNet:DatabaseConnectionString"]))
+{
+    builder.Configuration["GameNet:DatabaseConnectionString"] = databaseConnection;
+}
+
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
 builder.Services.AddGameNetServer();
 
