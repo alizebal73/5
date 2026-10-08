@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: PowerShell parser gate
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -35,26 +36,32 @@ jobs:
           }
 
       - name: Canonical verification
+        timeout-minutes: 15
         shell: pwsh
         run: .\scripts\verify.ps1
 
       - name: PostgreSQL certification
+        timeout-minutes: 15
         shell: pwsh
         run: .\scripts\verify-postgresql.ps1
 
       - name: Backup and isolated restore certification
+        timeout-minutes: 10
         shell: pwsh
         run: .\scripts\verify-backup-restore.ps1
 
       - name: Desktop runtime certification
+        timeout-minutes: 10
         shell: pwsh
         run: .\scripts\verify-desktop-runtime.ps1
 
       - name: Agent runtime certification
+        timeout-minutes: 15
         shell: pwsh
         run: .\scripts\verify-agent-runtime.ps1
 
       - name: Evidence
+        timeout-minutes: 2
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -67,6 +74,7 @@ jobs:
           ) | Set-Content -LiteralPath .\artifacts\foundation\foundation-evidence.txt -Encoding utf8
 
       - name: Upload evidence
+        timeout-minutes: 5
         uses: actions/upload-artifact@v4
         with:
           name: foundation-certification-evidence
