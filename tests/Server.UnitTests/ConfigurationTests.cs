@@ -1,3 +1,4 @@
+using Xunit;
 using GameNet.Server.Infrastructure.Configuration;
 namespace GameNet.Server.UnitTests;
 public sealed class ConfigurationTests
