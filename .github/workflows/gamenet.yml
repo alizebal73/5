@@ -3,6 +3,8 @@ name: gamenet-verification
 on:
   workflow_dispatch:
   pull_request:
+    branches-ignore:
+      - "foundation/runtime-*"
 
 concurrency:
   group: gamenet-verification-${{ github.event.pull_request.number || github.ref }}
