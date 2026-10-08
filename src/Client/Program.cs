@@ -1,3 +1,4 @@
+using GameNet.Agent;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
 using Microsoft.Extensions.Options;
