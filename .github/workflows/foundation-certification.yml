@@ -50,15 +50,6 @@ jobs:
         shell: pwsh
         run: .\scripts\verify-backup-restore.ps1
 
-      - name: Upload failure diagnostics
-        if: failure()
-        timeout-minutes: 3
-        uses: actions/upload-artifact@v4
-        with:
-          name: foundation-failure-diagnostics
-          path: artifacts/foundation/*-diagnostic.txt
-          if-no-files-found: ignore
-
       - name: Desktop runtime certification
         timeout-minutes: 10
         shell: pwsh
@@ -68,6 +59,17 @@ jobs:
         timeout-minutes: 15
         shell: pwsh
         run: .\scripts\verify-agent-runtime.ps1
+
+      - name: Upload failure diagnostics
+        if: failure()
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-failure-diagnostics
+          path: |
+            artifacts/foundation/*-diagnostic.txt
+            artifacts/foundation/desktop-runtime-*
+          if-no-files-found: ignore
 
       - name: Evidence
         timeout-minutes: 2

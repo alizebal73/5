@@ -94,3 +94,14 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: oversized correlation IDs are rejected with a stable API error before dispatch.
 - Placeholder guard now rejects both explicit TODO/FIXME markers and unfinished runtime exceptions (NotImplementedException / NotSupportedException).
 - Business gate now covers approved business roots beyond the primary Modules/Features paths so future business code cannot silently bypass the pre-certification lock.
+
+
+## 2026-10-09 — Foundation certification / Desktop runtime harness
+
+- Symptom: Desktop runtime certification reached its readiness timeout even though canonical build/tests, PostgreSQL migration/schema certification and isolated backup/restore had passed.
+- Root-cause finding from code: the Desktop harness started the Server with the default Production environment but did not provide the temporary authentication settings required by the explicit Production startup guard in \`src/Server/Program.cs\`. The guard rejects Production startup when authentication is disabled; the harness therefore could wait for readiness from a process that had already exited. The prior run's server log was deleted by unconditional cleanup, so the historical exception itself could not be confirmed from logs.
+- Contributing diagnostic defects: server stdout/stderr were written to the OS temp directory and deleted even on failure; the workflow's diagnostic upload step appeared before Desktop runtime and therefore could not upload diagnostics produced by that later step.
+- Fix applied on an isolated fix branch: runtime certification now forces an explicit Production environment, supplies ephemeral signing/provisioning keys and the required authentication configuration, resolves the database connection for the child process, fails quickly if the server exits, captures Desktop stdout/stderr, and preserves redacted diagnostics on failure. The upload step now runs after the runtime certification steps.
+- Regression evidence: pending execution of the updated foundation-certification workflow against this branch.
+- Verification result: pending; the Foundation must not be marked certified until the complete workflow succeeds on one SHA.
+- Rollback: revert the single runtime-certification fix commit as a unit; do not remove or weaken the Production authentication guard.
