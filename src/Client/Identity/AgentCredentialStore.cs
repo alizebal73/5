@@ -20,7 +20,7 @@ public sealed class AgentCredentialStore(
             var protectedBytes = await File.ReadAllBytesAsync(path, cancellationToken);
             try
             {
-                var clear = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.LocalMachine);
+                var clear = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
                 var stored = Encoding.UTF8.GetString(clear);
                 if (!string.IsNullOrWhiteSpace(stored))
                     return stored;
