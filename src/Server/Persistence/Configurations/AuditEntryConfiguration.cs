@@ -23,8 +23,12 @@ public sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEntr
         builder.Property(x => x.IdempotencyKey).HasMaxLength(200).HasColumnName("idempotency_key");
         builder.Property(x => x.BeforeJson).HasColumnType("jsonb").HasColumnName("before_json");
         builder.Property(x => x.AfterJson).HasColumnType("jsonb").HasColumnName("after_json");
-        builder.HasIndex(x => new { x.OccurredAtUtc, x.Operation });
-        builder.HasIndex(x => new { x.ReferenceType, x.ReferenceId });
-        builder.HasIndex(x => x.IdempotencyKey);
+        builder.Property(x => x.OccurredAtUtc).IsRequired().HasColumnName("occurred_at_utc");
+        builder.HasIndex(x => new { x.OccurredAtUtc, x.Operation })
+            .HasDatabaseName("IX_audit_entries_OccurredAtUtc_Operation");
+        builder.HasIndex(x => new { x.ReferenceType, x.ReferenceId })
+            .HasDatabaseName("IX_audit_entries_ReferenceType_ReferenceId");
+        builder.HasIndex(x => x.IdempotencyKey)
+            .HasDatabaseName("IX_audit_entries_IdempotencyKey");
     }
 }
