@@ -78,9 +78,9 @@ public static class AgentCredentialRoutes
                     context.Response.Headers.CacheControl = "no-store";
                     return Results.Ok(issued);
                 }
-                catch (InvalidOperationException ex)
+                catch (AgentCredentialException ex)
                 {
-                    return Results.Conflict(new { code = ex.Message });
+                    return WriteCredentialFailure(context, ex);
                 }
             }).AllowAnonymous();
 
