@@ -1,4 +1,5 @@
 using GameNet.Server.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace GameNet.Server.Infrastructure.Transactions;
