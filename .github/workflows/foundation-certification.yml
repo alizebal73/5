@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "foundation/runtime-*"
+      - "feature/operator-identity-v1"
 
 concurrency:
   group: foundation-certification-${{ github.ref }}

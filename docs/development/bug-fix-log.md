@@ -137,3 +137,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Evidence artifact: [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/37860650826/artifacts/11585812517). The in-run evidence file records the certified SHA, branch and UTC timestamp.
 - Status: this exact Foundation checkpoint is certified. The installer/updater/rollback release gates remain required before production release. Business feature branches must be rebuilt/rebased from this checkpoint; no legacy feature branch is implicitly approved for merge.
 - Rollback: if a future regression appears, set the certification marker back to pending and remove the checkpoint's active status; never bypass a failing Foundation gate.
+
+
+## 2026-10-09 — First product slice / Operator Identity
+
+- Work starts from the fully certified Foundation checkpoint on the new isolated branch `feature/operator-identity-v1`. Legacy Identity/Stations/Customers branches remain untouched and are not merged.
+- Scope: protected first-owner bootstrap using `GAMENET_BOOTSTRAP_SECRET` and a PostgreSQL advisory transaction lock; PBKDF2-SHA256 password hashing; five-attempt lockout; JWT access token bound to durable, revocable AuthSession; operator claims are refreshed from PostgreSQL on each authenticated request; audit records share the transaction; WPF login/logout holds bearer tokens only in memory and has fa-IR/en-US UI strings.
+- Only Identity-owned tables are added by a new migration after FoundationCore. Existing Foundation schema and audit/idempotency/outbox models are preserved.
+- Verification: pending full Foundation certification on the feature branch. Do not merge into the Foundation branch unless clean PostgreSQL migration, Desktop smoke, Agent runtime and canonical gates pass on the same commit.
+- Production HTTPS provisioning remains a release gate; bootstrap secrets and passwords must not be used over unencrypted LAN connections.
