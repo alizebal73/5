@@ -3,6 +3,7 @@ using System;
 using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GameNet.Server.Persistence.Migrations
 {
     [DbContext(typeof(GameNetDbContext))]
-    partial class GameNetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008220236_FoundationModelAlignment")]
+    partial class FoundationModelAlignment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
