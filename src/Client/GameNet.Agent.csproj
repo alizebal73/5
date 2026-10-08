@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup><RootNamespace>GameNet.Agent</RootNamespace><AssemblyName>GameNet.Agent</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Shared\GameNet.Shared.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" /></ItemGroup>
+</Project>

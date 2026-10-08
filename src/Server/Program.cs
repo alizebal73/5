@@ -1,0 +1,27 @@
+using GameNet.Server.Composition;
+using GameNet.Server.Infrastructure;
+using GameNet.Server.Infrastructure.Observability;
+using GameNet.Server.Infrastructure.Configuration;
+using Microsoft.Extensions.Options;
+using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.System;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
+builder.Services.AddGameNetServer();
+var app = builder.Build();
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
+
+var runtimeOptions = app.Services.GetRequiredService<IOptions<GameNetOptions>>().Value;
+if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
+    throw new InvalidOperationException("Production authentication must be enabled.");
+app.MapGet("/health", (StartupState state, HttpContext context) =>
+{
+    var id = CorrelationIdMiddleware.GetCurrent(context);
+    return Results.Ok(new ApiEnvelope<HealthResponse>(new(state.Service, StartupState.Version, "ok", "ready", id), id));
+}).AllowAnonymous();
+app.Run();
+public partial class Program;
