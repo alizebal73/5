@@ -97,15 +97,14 @@ if ($LASTEXITCODE -ne 0) { throw "Restore failed." }
 & $dotnetPath @("build", $project, "--configuration", "Release", "--no-restore")
 if ($LASTEXITCODE -ne 0) { throw "Server build failed." }
 
-$efBase = @(
-    "ef",
+$efOptions = @(
     "--project", $project,
     "--startup-project", $project,
     "--context", $context,
     "--configuration", "Release"
 )
 
-& $dotnetPath @($efBase + @("migrations", "has-pending-model-changes"))
+& $dotnetPath @(@("ef", "migrations", "has-pending-model-changes") + $efOptions)
 if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
 
 function Get-EphemeralPort {
@@ -119,7 +118,7 @@ function Get-EphemeralPort {
     }
 }
 
-& $dotnetPath @($efBase + @("migrations", "list"))
+& $dotnetPath @(@("ef", "migrations", "list") + $efOptions)
 if ($LASTEXITCODE -ne 0) { throw "EF migration listing failed." }
 
 $cleanRoot = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-clean-migration-" + [Guid]::NewGuid().ToString("N"))
@@ -156,7 +155,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Could not create the isolated clean-migration database." }
 
     $env:GAMENET_DATABASE_CONNECTION = "Host=127.0.0.1;Port=$cleanPort;Database=$cleanDatabase;Username=postgres;Pooling=false"
-    & $dotnetPath @($efBase + @("database", "update", "--no-build"))
+    & $dotnetPath @(@("ef", "database", "update", "--no-build") + $efOptions)
     if ($LASTEXITCODE -ne 0) { throw "Clean PostgreSQL migration execution failed." }
 
     Assert-FoundationSchema $env:GAMENET_DATABASE_CONNECTION
@@ -255,10 +254,10 @@ finally {
     Remove-Item -LiteralPath $concurrencyRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-& $dotnetPath @($efBase + @("database", "update", "--no-build"))
+& $dotnetPath @(@("ef", "database", "update", "--no-build") + $efOptions)
 if ($LASTEXITCODE -ne 0) { throw "Final PostgreSQL migration execution failed." }
 
-& $dotnetPath @($efBase + @("migrations", "has-pending-model-changes"))
+& $dotnetPath @(@("ef", "migrations", "has-pending-model-changes") + $efOptions)
 if ($LASTEXITCODE -ne 0) { throw "Post-migration model verification failed." }
 
 Assert-FoundationSchema $connection
