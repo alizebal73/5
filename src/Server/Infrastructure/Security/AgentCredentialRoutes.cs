@@ -17,7 +17,7 @@ public static class AgentCredentialRoutes
         group.MapPost("/auth/token",
             async (
                 AgentTokenRequest request,
-                AgentCredentialService credentials,
+                IAgentCredentialService credentials,
                 IAgentAccessTokenIssuer tokenIssuer,
                 IOptions<GameNetOptions> options,
                 HttpResponse response,
