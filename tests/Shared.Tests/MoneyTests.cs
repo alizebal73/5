@@ -1,3 +1,4 @@
+using Xunit;
 using GameNet.Shared.Primitives;
 namespace GameNet.Shared.Tests;
 public sealed class MoneyTests
