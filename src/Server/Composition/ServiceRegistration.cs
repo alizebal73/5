@@ -4,6 +4,7 @@ using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Server.Infrastructure.Health;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Outbox;
+using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
@@ -31,7 +32,11 @@ public static class ServiceRegistration
         services.AddScoped<IIdempotencyStore, EfIdempotencyStore>();
         services.AddScoped<IOutboxWriter, EfOutboxWriter>();
         services.AddScoped<IOutboxDispatcher, EfOutboxDispatcher>();
+        services.AddScoped<IAgentConnectionLeaseStore, EfAgentConnectionLeaseStore>();
+        services.AddScoped<IAgentCredentialService, AgentCredentialService>();
+        services.AddSingleton<IAgentAccessTokenIssuer, AgentAccessTokenIssuer>();
 
+        services.AddSignalR();
         services.AddGameNetAuthentication();
 
         services.AddDbContext<GameNetDbContext>((provider, db) =>
