@@ -70,7 +70,10 @@ try {
     }
     if (-not $ready) { throw "Certification Server did not become ready. See $serverLog." }
 
-    $headers = @{ "X-GameNet-Agent-Provisioning-Key" = $provisioningKey }
+    $headers = @{
+        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
+        "X-GameNet-Contract" = "v1"
+    }
     $body = @{ deviceId = $deviceId } | ConvertTo-Json
     $issued = Invoke-RestMethod -Method Post -Uri "$serverUrl/api/v1/agent/credentials/provision" -Headers $headers -ContentType "application/json" -Body $body
     $secret = $issued.secret
@@ -103,8 +106,11 @@ try {
         throw "Agent fencing failed: a second connection replaced the authoritative lease."
     }
 
+    Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
     Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 4
 
     $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
     $released = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") $connection "-Atc" $query 2>$null) -join ""
@@ -112,7 +118,6 @@ try {
         throw "Agent lease was not released by the owning connection."
     }
 
-    Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue
     $env:GameNet__AgentIdentity__RootPath = $identityRoot
     $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentLog -PassThru
 
