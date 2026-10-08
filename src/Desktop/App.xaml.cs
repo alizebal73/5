@@ -5,6 +5,7 @@ using GameNet.Desktop.Infrastructure;
 using GameNet.Desktop.Shell;
 using GameNet.Shared.Contracts.V1.System;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace GameNet.Desktop;
 
