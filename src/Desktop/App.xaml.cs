@@ -14,12 +14,29 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        var culture = DesktopCulture.Resolve(Environment.GetEnvironmentVariable("GAMENET_UI_CULTURE"));
+        DesktopCulture.Apply(culture);
+        ReplaceResourceDictionary(DesktopCulture.GetResourceDictionaryName(culture));
+
         _host = DesktopHost.Build();
         await _host.StartAsync();
-        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fa-IR");
-        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fa-IR");
+
         MainWindow = _host.Services.GetRequiredService<MainWindow>();
+        MainWindow.FlowDirection = culture.TextInfo.IsRightToLeft
+            ? FlowDirection.RightToLeft
+            : FlowDirection.LeftToRight;
         MainWindow.Show();
+    }
+
+    private void ReplaceResourceDictionary(string resourceName)
+    {
+        var dictionaries = Resources.MergedDictionaries;
+        dictionaries.Clear();
+        dictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri($"Resources/{resourceName}", UriKind.Relative)
+        });
     }
 
     protected override async void OnExit(ExitEventArgs e)
@@ -29,6 +46,7 @@ public partial class App : Application
             await _host.StopAsync(TimeSpan.FromSeconds(5));
             _host.Dispose();
         }
+
         base.OnExit(e);
     }
 }
