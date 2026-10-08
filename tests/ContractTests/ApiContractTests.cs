@@ -1,3 +1,4 @@
+using Xunit;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
