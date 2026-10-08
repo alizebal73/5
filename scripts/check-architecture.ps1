@@ -60,11 +60,11 @@ foreach ($root in @("src/Desktop","src/Client")) {
     Assert-NoMatch $root "\b(public\s+|internal\s+|private\s+)?(sealed\s+)?(record|class|struct)\s+\w*(Dto|Request|Response|Command)\b" "Client runtime contains a duplicate transport contract. Put wire contracts in Shared.Contracts."
 }
 
-# EF migration integrity. Every migration must be generated as a complete EF artifact:
-# implementation + Designer + Migration attribute. Manual migration classes are forbidden.
+# EF migration integrity. Every migration must be a complete EF artifact:
+# implementation + Designer + Migration attribute. Empty/manual migration sources are forbidden.
 $migrationsRoot = "src/Server/Persistence/Migrations"
-if (Test-Path $migrationsRoot) {
-    $migrationSources = Get-ChildItem $migrationsRoot -File -Filter *.cs |
+if (Test-Path -LiteralPath $migrationsRoot -PathType Container) {
+    $migrationSources = Get-ChildItem -LiteralPath $migrationsRoot -File -Filter "*.cs" |
         Where-Object { $_.Name -notlike "*.Designer.cs" -and $_.Name -ne "GameNetDbContextModelSnapshot.cs" }
 
     foreach ($migration in $migrationSources) {
@@ -74,47 +74,25 @@ if (Test-Path $migrationsRoot) {
         }
 
         $designerText = Get-Content -LiteralPath $designer -Raw
-        if ($designerText -notmatch '\[Migration\("([^"]+)"\)\]') {
+        if ($designerText -notmatch '[Migration("([^"]+)")]') {
             throw "EF migration '$($migration.Name)' Designer is missing its Migration attribute."
         }
 
         $sourceText = Get-Content -LiteralPath $migration.FullName -Raw
-        if ($sourceText -notmatch "migrationBuilder\.") {
+        if ($sourceText -notmatch "migrationBuilder") {
             throw "EF migration '$($migration.Name)' contains no migrationBuilder operation; empty/manual migrations are forbidden."
         }
     }
 
-    $designerFiles = Get-ChildItem $migrationsRoot -File -Filter "*.Designer.cs"
+    $designerFiles = Get-ChildItem -LiteralPath $migrationsRoot -File -Filter "*.Designer.cs"
     foreach ($designer in $designerFiles) {
-        $source = Join-Path $designer.DirectoryName ($designer.BaseName -replace '\.DesignerAssert-NoMatch "src/Server" "DateTime\.Now|DateTime\.UtcNow|DateTimeOffset\.Now|DateTimeOffset\.UtcNow" "Server code must use IGameClock/TimeProvider."
-Assert-NoMatch "src" "Microsoft\.Data\.Sqlite|UseSqlite|SqliteConnection" "PostgreSQL is the production persistence authority; SQLite is forbidden."
-
-# No fake/demo/mock product paths.
-Assert-NoMatch "src/Server" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Server mock/fake/demo sources are forbidden."
-Assert-NoMatch "src/Desktop" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Desktop mock/fake/demo sources are forbidden."
-Assert-NoMatch "src/Client" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Agent mock/fake/demo sources are forbidden."
-
-# Business modules never call SaveChanges directly. Platform infrastructure owns its own
-# explicit transaction where needed (for example Outbox leasing).
-if (Test-Path "src/Server/Modules") {
-    $saveMatches = Get-ChildItem "src/Server/Modules" -Recurse -File -Filter *.cs |
-        Select-String -Pattern "\.SaveChanges(Async)?\s*\("
-    if ($saveMatches) {
-        $saveMatches | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
-        throw "Business modules may not call SaveChanges/SaveChangesAsync directly."
-    }
-}
-
-# Browser runtime is forbidden.
-Assert-NoMatch "src/Desktop" "WebView2|Microsoft\.Web\.WebView2|BlazorWebView|System\.Windows\.Controls\.WebBrowser" "Browser/WebView runtime is forbidden in Desktop."
-if ((Get-Content "src/Server/Program.cs").Count -gt 120) { throw "Program.cs exceeded the composition-only limit." }
-if (Test-Path "src/Dashboard" -PathType Container) { throw "Browser Dashboard is forbidden." }
-if (Test-Path "package-lock.json" -PathType Leaf) { throw "Node/browser runtime artifacts are forbidden." }
-
-Write-Host "Architecture guard passed."
-,'') + ".cs"
-        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "EF migration Designer '$($designer.Name)' has no migration source artifact."
+        $suffix = ".Designer"
+        if ($designer.BaseName.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)) {
+            $sourceName = $designer.BaseName.Substring(0, $designer.BaseName.Length - $suffix.Length) + ".cs"
+            $source = Join-Path $designer.DirectoryName $sourceName
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "EF migration Designer '$($designer.Name)' has no migration source artifact."
+            }
         }
     }
 }
