@@ -44,20 +44,19 @@ GameNet 5 is a Windows-first, single-site cybercafe management platform for:
 
 ### Gate A — Foundation certification
 
-Before business implementation is merged:
+Before the first business vertical slice is merged:
 
 - clean Windows restore/build/test;
-- architecture, source-size and placeholder guards;
-- PostgreSQL connectivity and real migration execution;
-- transaction/concurrency lane;
-- Desktop native launch in fa-IR and en-US;
-- Agent Windows Service start;
-- Agent identity/pairing/authenticated connection;
-- Agent reconnect and lease/fencing proof;
+- architecture, source-size, placeholder and business gates;
+- durable Audit, Idempotency and Outbox persistence;
+- PostgreSQL connectivity, migration and concurrency evidence;
+- native Desktop runtime smoke in fa-IR and en-US;
+- authenticated Agent identity, heartbeat, reconnect and lease/fencing evidence;
 - Desktop -> Server smoke;
-- backup + isolated restore smoke;
-- update + rollback proof for the platform itself;
+- backup + isolated restore evidence;
 - exact evidence recorded in the stable checkpoint.
+
+Installer, updater and rollback are intentionally not part of Gate A. They are release-boundary work and must be complete before production release, not before business development.
 
 ### Gate B — First usable core
 
