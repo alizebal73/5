@@ -44,4 +44,24 @@ public sealed class ContractVersionMiddlewareTests
 
         Assert.True(nextCalled);
     }
+    [Fact]
+    public async Task Oversized_correlation_id_is_rejected_before_request_dispatch()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/health";
+        context.Request.Headers[ApiHeaders.CorrelationId] = new string('x', 129);
+
+        var nextCalled = false;
+        var middleware = new CorrelationIdMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        Assert.False(nextCalled);
+        Assert.NotEqual(string.Empty, context.Response.Headers[ApiHeaders.CorrelationId].ToString());
+    }
 }
