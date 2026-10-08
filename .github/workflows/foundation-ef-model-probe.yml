@@ -34,16 +34,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Server build failed." }
 
           $efArgs = @(
-              "ef", "migrations", "add", "FoundationModelAlignmentProbe",
+              "ef", "migrations", "add", "FoundationModelAlignment",
               "--project", "src/Server/GameNet.Server.csproj",
               "--startup-project", "src/Server/GameNet.Server.csproj",
               "--context", "GameNet.Server.Persistence.GameNetDbContext",
-              "--output-dir", "src/Server/Persistence/Migrations",
+              "--output-dir", "Persistence/Migrations",
               "--configuration", "Release",
               "--no-build"
           )
           & $dotnet @efArgs
           if ($LASTEXITCODE -ne 0) { throw "EF migration generation failed." }
+
+          $unexpected = Get-ChildItem .\src\Server\src -Recurse -File -ErrorAction SilentlyContinue
+          if ($unexpected) {
+              throw "EF generated files under src/Server/src; output path is incorrect."
+          }
 
           git status --short
           git config user.name "github-actions[bot]"
@@ -55,7 +60,7 @@ jobs:
               throw "EF migration generation produced no repository changes."
           }
 
-          git commit -m "build: generated EF model alignment probe [generated-ef-migration]"
+          git commit -m "build: generated exact EF model alignment migration [generated-ef-migration]"
           if ($LASTEXITCODE -ne 0) { throw "Commit failed." }
 
           git push origin HEAD:foundation/ef-model-probe-v1
