@@ -97,6 +97,21 @@ if (Test-Path -LiteralPath $migrationsRoot -PathType Container) {
     }
 }
 
+# Agent credential encryption scope must be stable across process/service restarts.
+$agentCredentialStorePath = "src/Client/Identity/AgentCredentialStore.cs"
+if (Test-Path -LiteralPath $agentCredentialStorePath -PathType Leaf) {
+    $credentialStoreText = Get-Content -LiteralPath $agentCredentialStorePath -Raw
+    if ($credentialStoreText -match "DataProtectionScope\.LocalMachine") {
+        throw "Agent credential storage may not use LocalMachine protection when the reader is bound to the service identity."
+    }
+    if ($credentialStoreText -notmatch "ProtectedData\.Protect\(.*DataProtectionScope\.CurrentUser") {
+        throw "Agent credential storage must protect credentials with the same CurrentUser scope used for unprotect."
+    }
+    if ($credentialStoreText -notmatch "ProtectedData\.Unprotect\(.*DataProtectionScope\.CurrentUser") {
+        throw "Agent credential storage must unprotect credentials with the CurrentUser scope."
+    }
+}
+
 # Persistence/time/technology rules.
 Assert-NoMatch "src/Server" "DateTime\.Now|DateTime\.UtcNow|DateTimeOffset\.Now|DateTimeOffset\.UtcNow" "Server code must use IGameClock/TimeProvider."
 Assert-NoMatch "src" "Microsoft\.Data\.Sqlite|UseSqlite|SqliteConnection" "PostgreSQL is the production persistence authority; SQLite is forbidden."
