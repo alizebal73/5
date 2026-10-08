@@ -83,3 +83,14 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Symptom: backup certification could overwrite the caller's saved `PGPASSWORD` state.
 - Root cause: the parser helper mutated the saved password through a ref parameter and was called more than once.
 - Fix: environment preservation is owned by the caller and the parser no longer mutates the caller's saved-state reference.
+
+## 2026-10-09 — Foundation audit / second hardening pass
+
+- Agent credential rotate/revoke routes could previously leak exception-message-based response behavior or fall through to generic 500 for typed credential failures.
+- Fix: all provisioning-key credential mutations now return the shared stable credential error envelope.
+- Readiness previously proved only database connectivity.
+- Fix: readiness now also requires zero pending EF migrations so the Server cannot report Ready against an incompatible schema.
+- Correlation IDs previously had no upper bound even though Audit storage allows 128 characters.
+- Fix: oversized correlation IDs are rejected with a stable API error before dispatch.
+- Placeholder guard now rejects both explicit TODO/FIXME markers and unfinished runtime exceptions (NotImplementedException / NotSupportedException).
+- Business gate now covers approved business roots beyond the primary Modules/Features paths so future business code cannot silently bypass the pre-certification lock.
