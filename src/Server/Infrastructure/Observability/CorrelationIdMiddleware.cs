@@ -11,15 +11,15 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next)
         var supplied = context.Request.Headers[ApiHeaders.CorrelationId].ToString().Trim();
         if (supplied.Length > 128)
         {
-            var id = Guid.NewGuid().ToString("N");
+            var invalidId = Guid.NewGuid().ToString("N");
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             context.Response.ContentType = "application/json";
-            context.Response.Headers[ApiHeaders.CorrelationId] = id;
+            context.Response.Headers[ApiHeaders.CorrelationId] = invalidId;
             await context.Response.WriteAsync(
                 JsonSerializer.Serialize(
                     new ApiFailure(
                         new ApiError("api.correlation_id_invalid", "The correlation ID must be at most 128 characters."),
-                        id)));
+                        invalidId)));
             return;
         }
 
