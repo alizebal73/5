@@ -498,3 +498,14 @@ When a defect reaches production or certification, fix the root boundary, add re
 - SHA256SUMS.txt records paths relative to the versioned output root instead of basenames only, so the full manifest and the two package manifests cannot collide under the same filename.
 - Full Foundation #194 on SHA c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7 passed. The previous package artifact (11626939566) remains payload-only and is superseded pending these extra integrity checks.
 - Verification outcome: [Quick Validation + payload build/upload #125](https://github.com/alizebal73/5/actions/runs/37955819051) passed on SHA `b7e232d068fb6c085716980249a83abb205961b3`; artifact `11628326329` was uploaded. This is still a payload-only artifact, not an installer or two-PC install certificate.
+
+
+## 2026-10-09 — Production HTTPS listener / certificate provisioning gate
+
+- Changed on `7ab5108b342c74d88faf87ba6303a1c08ac9de9b`: Production payload now configures Kestrel HTTPS on `0.0.0.0:5081`; the TLS certificate path/password are supplied from the Server's DPAPI-protected configuration. The protected-settings allowlist validates absolute PFX path and password length.
+- Added reusable `scripts/modules/ServerTlsCertificate.psm1` to create and verify an IP-SAN Server Authentication certificate, export the private PFX separately from the public `.cer`, reopen the PFX to verify the private key, expose expiry and SHA-256 fingerprint, reject overwrite, and clean temporary certificate-store state.
+- Added `scripts/verify-server-tls-certificate.ps1` and wired it into canonical verification. PowerShell parser checks include both `.ps1` and `.psm1`; Foundation triggers on these config/script paths.
+- Exact-SHA regression evidence: [Quick Validation #128](https://github.com/alizebal73/5/actions/runs/37961799437) and [Full Foundation #196](https://github.com/alizebal73/5/actions/runs/37961799463) succeeded on `7ab5108b342c74d88faf87ba6303a1c08ac9de9b`. Full Foundation passed PowerShell parser, canonical build/tests (including certificate generation/export/reopen/profile/no-overwrite), PostgreSQL, isolated backup/restore, Desktop runtime and Agent runtime.
+- The same exact SHA produced and uploaded payload artifact [gamenet-deployment-payload-7ab5108b342c74d88faf87ba6303a1c08ac9de9b](https://api.github.com/repos/alizebal73/5/actions/artifacts/11632326010) (157,201,938 bytes; digest `sha256:dfe2f180df6d41d3a0526fb4e315785f40f8b28bf913de212fa0ccb953def79b`; expires 2026-10-16). It is still ZIP payloads, not Setup.exe/MSI.
+- Open risks: client-side fingerprint-verified trust installation; external ProgramData runtime configuration for Desktop/Agent; actual Production HTTPS health/login/Agent handshake over LAN; bootstrap-secret erasure after first owner; service installation and physical two-PC validation. Certificate generation is automated-test-certified, not yet certified in a complete on-machine installation.
+

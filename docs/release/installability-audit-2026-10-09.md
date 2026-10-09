@@ -71,3 +71,11 @@ For the first two-PC installability slice, either document and validate an alrea
 On SHA `b95eab6c68e89b4d8f4500f714f1445ffd9ca4c4`, `AgentTransportOptions.Validate()` was aligned with Desktop and Server policy: remote HTTPS is accepted, remote HTTP is rejected, and loopback HTTP remains available only for local development. Regression tests and [Quick Validation #127](https://github.com/alizebal73/5/actions/runs/37959248404) passed; [Full Foundation #195](https://github.com/alizebal73/5/actions/runs/37959248381) also passed, including PostgreSQL, backup/restore, Desktop Runtime, Agent Runtime and evidence upload.
 
 This closes the insecure-remote-HTTP configuration inconsistency only. It does not close the TLS listener, server certificate/trust, external runtime configuration, unique Agent enrollment, protected bootstrap-secret cleanup, or two-physical-PC installation gates.
+
+## Exact-SHA update — Production HTTPS endpoint
+
+Production configuration and certificate creation are now implemented and automated-tested on `7ab5108b342c74d88faf87ba6303a1c08ac9de9b`. Kestrel listens at `https://0.0.0.0:5081`; the PFX password and absolute certificate path are loaded only from the DPAPI-protected settings file. The interactive settings writer exports a public `server-trust.cer` and reports a SHA-256 fingerprint; it does not place the private PFX in client packages.
+
+Evidence: [Quick Validation #128](https://github.com/alizebal73/5/actions/runs/37961799437), [Full Foundation #196](https://github.com/alizebal73/5/actions/runs/37961799463), payload artifact [#11632326010](https://api.github.com/repos/alizebal73/5/actions/artifacts/11632326010). The canonical test invokes the Windows certificate profile/create/export/reopen/fingerprint/no-overwrite verification. The payload build produced and uploaded successfully.
+
+Still open: distribute/configure client trust only after out-of-band fingerprint confirmation; load shared, non-secret runtime endpoint settings from a protected ProgramData file in Desktop and Agent; test Production HTTPS health/login/Agent enrollment across LAN; remove the one-time bootstrap secret after owner creation; create service installers and perform the real two-PC validation. Do not mark installability complete until those gates pass together.
