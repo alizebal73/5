@@ -17,6 +17,7 @@ public sealed class AuthSessionConfiguration : IEntityTypeConfiguration<AuthSess
         builder.Property(x => x.ExpiresAtUtc).IsRequired().HasColumnName("expires_at_utc");
         builder.Property(x => x.RevokedAtUtc).HasColumnName("revoked_at_utc");
         builder.HasIndex(x => x.Jti).IsUnique().HasDatabaseName("ix_auth_sessions_jti");
+        builder.HasIndex(x => x.UserId);
         builder.HasOne<OperatorUser>().WithMany().HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade).HasConstraintName("fk_auth_sessions_operator_users_user_id");
     }

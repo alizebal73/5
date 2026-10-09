@@ -185,3 +185,11 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The architecture gate and Release build/test suite pass, but `dotnet ef migrations has-pending-model-changes` fails on the current Identity slice. A hand-authored snapshot is not acceptable just because it compiles.
 - Added failure-only diagnostics to the PostgreSQL certification script: when the pending-model gate fails, CI asks EF itself to scaffold the exact model delta in its disposable checkout, writes the generated migration source/designer into `ef-model-drift-diagnostic.txt`, and fails closed before any database certification can be marked successful. The diagnostic migration is not committed to the branch.
 - The resulting EF-generated operations and target model must be reviewed and applied to the real migration/snapshot; do not suppress the pending-model gate or treat this failed run as certified.
+
+
+## 2026-10-09 — EF snapshot drift root cause confirmed and fixed
+
+- Read the EF-generated drift artifact from CI run 37908275648. The only model delta is `CreateIndex("IX_auth_sessions_user_id", "auth_sessions", "user_id")`.
+- Cause: EF convention creates an index for the `AuthSession.UserId` foreign key, but the hand-authored Identity model snapshot/designer omitted that index. The entity configuration also relied on the convention without documenting it.
+- Fix: explicitly configure the UserId index in `AuthSessionConfiguration`, record it in both the migration's target model and the context snapshot, and include the index creation in `20261009010000_OperatorIdentity`. The reverse migration drops the whole `auth_sessions` table, so its index is removed with the table. The pending-model gate remains enabled.
+- Verification required: `dotnet ef migrations has-pending-model-changes` must pass; then clean PostgreSQL migration/concurrency, backup/restore, Desktop runtime and Agent runtime must all pass on the same feature commit.

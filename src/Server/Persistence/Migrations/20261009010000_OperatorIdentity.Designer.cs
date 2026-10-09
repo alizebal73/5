@@ -361,6 +361,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<DateTimeOffset?>("RevokedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("revoked_at_utc");
                     b.HasKey("Id").HasName("pk_auth_sessions");
                     b.HasIndex("Jti").IsUnique().HasDatabaseName("ix_auth_sessions_jti");
+                    b.HasIndex("UserId");
                     b.ToTable("auth_sessions", (string)null);
                 });
             modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.UserRole", b =>

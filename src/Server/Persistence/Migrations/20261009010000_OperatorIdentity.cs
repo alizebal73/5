@@ -88,6 +88,7 @@ public partial class OperatorIdentity : Migration
         migrationBuilder.CreateIndex("ix_auth_sessions_jti", "auth_sessions", "jti", unique: true);
         migrationBuilder.CreateIndex("ix_user_roles_role_id", "user_roles", "role_id");
         migrationBuilder.CreateIndex("ix_role_permissions_permission", "role_permissions", "permission");
+        migrationBuilder.CreateIndex("IX_auth_sessions_user_id", "auth_sessions", "user_id");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
