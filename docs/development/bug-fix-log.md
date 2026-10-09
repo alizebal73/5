@@ -472,3 +472,11 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Follow-up verification stopped in the project placeholder guard before build: it treats PlatformNotSupportedException as a forbidden runtime placeholder even when paired with an explicit Windows check.
 - The Windows-only fail-closed branch now uses InvalidOperationException with an explicit Windows DPAPI message, preserving the runtime platform guard and keeping the repository's placeholder policy unchanged.
 - Verification: pending next exact-SHA CI run.
+
+
+## 2026-10-09 — Migration-only bounded runtime proof and package manifest isolation
+
+- PostgreSQL certification now runs the built Server apphost directly with --migrate-only, requires exit within 90 seconds, checks schema-current confirmation, and rejects listener-start output. A regression cannot hang CI indefinitely or mistake a long-running API host for a completed migration.
+- Payload builder now includes write-protected-server-settings.ps1 in the Server/Database archive and emits per-package manifests: Server/Desktop/Database ZIP does not list Agent binaries; Agent ZIP does not list Server/Desktop files. A combined build manifest remains an external CI artifact.
+- Verification: pending the resulting SHA's Quick Validation, Full Foundation Certification and package-build/upload job.
+- The earlier raw output on SHA c5918d4627955acc46eab1bfeac6501f05be3a00 passed Quick + payload packaging but is superseded by these changes; artifact 11627097942 remains a non-installer, payload-only archive.

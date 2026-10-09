@@ -37,6 +37,7 @@ $requiredFiles = @(
     "src/Server/GameNet.Server.csproj",
     "src/Server/Program.cs",
     "src/Server/Infrastructure/Configuration/ProtectedServerSettings.cs",
+    "scripts/write-protected-server-settings.ps1",
     "src/Server/Persistence/GameNetDbContextFactory.cs",
     "src/Client/GameNet.Agent.csproj",
     "src/Client/Program.cs",
@@ -134,6 +135,10 @@ finally {
     Pop-Location
 }
 
+$settingsWriter = Join-Path $repoRoot "scripts/write-protected-server-settings.ps1"
+Assert-File $settingsWriter
+Copy-Item -LiteralPath $settingsWriter -Destination (Join-Path $databaseOutput "write-protected-server-settings.ps1")
+
 # Non-secret setting enables DPAPI secrets only inside the Production Server payload.
 $productionSettingsPath = Join-Path $serverOutput "appsettings.Production.json"
 $productionSettings = [ordered]@{
@@ -153,7 +158,7 @@ Database deployment for GameNet 5
 ---------------------------------
 Do not run migrations automatically during routine Server service startup.
 
-1. Run scripts/write-protected-server-settings.ps1 from an elevated PowerShell session
+1. Run .\Database\write-protected-server-settings.ps1 from an elevated PowerShell session
    on the Server PC. It prompts for PostgreSQL password and bootstrap secret, generates
    unique authentication/provisioning keys, encrypts settings with DPAPI LocalMachine,
    and restricts the settings directory and file ACLs.
@@ -247,23 +252,72 @@ $manifestPath = Join-Path $payloadRoot "release-manifest.json"
 $manifestJson = ConvertTo-Json -InputObject $manifest -Depth 8
 [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
 
+# Each ZIP receives a manifest that lists only files present in that ZIP. The full manifest
+# remains available as a separate build artifact containing all three component payloads.
+$serverDesktopFiles = @($payloadFiles | Where-Object {
+    $_.path -like "Server/*" -or
+    $_.path -like "Desktop/*" -or
+    $_.path -like "Database/*" -or
+    $_.path -eq "PAYLOAD-NOT-SETUP.txt"
+})
+$agentPayloadFiles = @($payloadFiles | Where-Object {
+    $_.path -like "Agent/*" -or
+    $_.path -eq "PAYLOAD-NOT-SETUP.txt"
+})
+$serverDesktopManifest = [ordered]@{
+    schemaVersion = 1
+    product = $manifest.product
+    productVersion = $manifest.productVersion
+    source = $manifest.source
+    build = $manifest.build
+    components = @(
+        [ordered]@{ name = "Server"; entryPoint = "Server/GameNet.Server.exe" },
+        [ordered]@{ name = "Desktop"; entryPoint = "Desktop/GameNet.Manager.Desktop.exe" },
+        [ordered]@{ name = "DatabaseMigrations"; entryPoint = "Server/GameNet.Server.exe --migrate-only" },
+        [ordered]@{ name = "ProtectedSettingsCreator"; entryPoint = "Database/write-protected-server-settings.ps1" }
+    )
+    installerReady = $false
+    installerStatus = "Payload-only; not an installer and not certified for end-user installation."
+    files = $serverDesktopFiles
+}
+$agentManifest = [ordered]@{
+    schemaVersion = 1
+    product = $manifest.product
+    productVersion = $manifest.productVersion
+    source = $manifest.source
+    build = $manifest.build
+    components = @(
+        [ordered]@{ name = "Agent"; entryPoint = "Agent/GameNet.Agent.exe" }
+    )
+    installerReady = $false
+    installerStatus = "Payload-only; not an installer and not certified for end-user installation."
+    files = $agentPayloadFiles
+}
+$metadataServerDesktop = Join-Path $buildRoot "metadata-server-desktop"
+$metadataAgent = Join-Path $buildRoot "metadata-agent"
+New-Item -ItemType Directory -Force -Path $metadataServerDesktop,$metadataAgent | Out-Null
+$serverDesktopManifestPath = Join-Path $metadataServerDesktop "release-manifest.json"
+$agentManifestPath = Join-Path $metadataAgent "release-manifest.json"
+[System.IO.File]::WriteAllText($serverDesktopManifestPath, (ConvertTo-Json -InputObject $serverDesktopManifest -Depth 8), [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($agentManifestPath, (ConvertTo-Json -InputObject $agentManifest -Depth 8), [System.Text.UTF8Encoding]::new($false))
+
 $serverDesktopZip = Join-Path $buildRoot "GameNet-5-$Version-Server-Desktop-payload-win-x64.zip"
 $agentZip = Join-Path $buildRoot "GameNet-5-$Version-Agent-payload-win-x64.zip"
 Compress-Archive -Path @(
     $serverOutput,
     $desktopOutput,
     $databaseOutput,
-    $manifestPath,
+    $serverDesktopManifestPath,
     $noticePath
 ) -DestinationPath $serverDesktopZip -CompressionLevel Optimal
 Compress-Archive -Path @(
     $agentOutput,
-    $manifestPath,
+    $agentManifestPath,
     $noticePath
 ) -DestinationPath $agentZip -CompressionLevel Optimal
 
 $checksumLines = @()
-foreach ($file in @($manifestPath, $serverDesktopZip, $agentZip)) {
+foreach ($file in @($manifestPath, $serverDesktopManifestPath, $agentManifestPath, $serverDesktopZip, $agentZip)) {
     $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
     $checksumLines += "$hash  $([System.IO.Path]::GetFileName($file))"
 }

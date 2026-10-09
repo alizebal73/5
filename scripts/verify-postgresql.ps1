@@ -207,8 +207,50 @@ try {
         $env:DOTNET_ENVIRONMENT = "Development"
         Remove-Item Env:GAMENET_PROTECTED_SETTINGS_FILE -ErrorAction SilentlyContinue
 
-        & $dotnetPath @("run", "--project", $project, "--configuration", "Release", "--no-build", "--no-restore", "--", "--migrate-only")
-        if ($LASTEXITCODE -ne 0) { throw "Explicit Server --migrate-only command failed against the isolated clean PostgreSQL database." }
+        $serverExecutable = Join-Path (Get-Location) "src\Server\bin\Release\net10.0\GameNet.Server.exe"
+        if (-not (Test-Path -LiteralPath $serverExecutable -PathType Leaf)) {
+            throw "The built Server executable is required to certify the packaged migration command."
+        }
+        $migrationStdout = Join-Path $cleanRoot "migrate-only.stdout.log"
+        $migrationStderr = Join-Path $cleanRoot "migrate-only.stderr.log"
+        $migrationStart = @{
+            FilePath = $serverExecutable
+            ArgumentList = @("--migrate-only")
+            WorkingDirectory = (Get-Location).Path
+            RedirectStandardOutput = $migrationStdout
+            RedirectStandardError = $migrationStderr
+            PassThru = $true
+        }
+        $migrationProcess = Start-Process @migrationStart
+
+        $migrationDeadline = [DateTime]::UtcNow.AddSeconds(90)
+        while ($true) {
+            $migrationProcess.Refresh()
+            if ($migrationProcess.HasExited) { break }
+            if ([DateTime]::UtcNow -ge $migrationDeadline) {
+                try {
+                    $migrationProcess.Kill($true)
+                    $migrationProcess.WaitForExit()
+                }
+                catch { }
+                throw "Server --migrate-only did not exit within 90 seconds; refusing a possible unexpected listener."
+            }
+            Start-Sleep -Milliseconds 250
+        }
+
+        if ($migrationProcess.ExitCode -ne 0) {
+            throw "Server --migrate-only failed against the isolated clean PostgreSQL database (exit code $($migrationProcess.ExitCode))."
+        }
+        $migrationOutput = if (Test-Path -LiteralPath $migrationStdout) {
+            [System.IO.File]::ReadAllText($migrationStdout)
+        }
+        else { "" }
+        if ($migrationOutput -notmatch "GameNet database schema is current\.") {
+            throw "Server --migrate-only exited successfully without confirming that the schema is current."
+        }
+        if ($migrationOutput -match "(?i)Now listening on|Application started") {
+            throw "Server --migrate-only unexpectedly started the HTTP listener."
+        }
     }
     finally {
         if ($null -eq $previousConfigConnection) { Remove-Item Env:GameNet__DatabaseConnectionString -ErrorAction SilentlyContinue } else { $env:GameNet__DatabaseConnectionString = $previousConfigConnection }

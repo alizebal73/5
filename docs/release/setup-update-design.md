@@ -151,9 +151,9 @@ This is an early, internal installability track. It does **not** claim that the 
 
 ### Execution order
 
-1. Audit existing runtime configuration, Windows Service behavior, database migration path and Agent enrollment/provisioning before writing installer code.
+1. Audit existing runtime configuration, Windows Service behavior, database migration path and Agent enrollment/provisioning before writing installer code. The protected-settings writer is included in the Server/Desktop package and must never print secret values or create plaintext config files.
 2. Build/publish Server, Desktop, Agent and an explicit EF migration artifact from one source SHA.
-3. Validate the payload and create hashes/manifest; fail if any expected output is missing or any development secret/default is packaged.
+3. Validate the payload and create full + package-specific manifests/hashes; each ZIP manifest lists only the files in that archive. Fail if any expected output is missing or any development secret/default is packaged.
 4. Add the Server + Desktop setup path and independent Agent setup path. Run install/uninstall service operations with checked exit codes and preserve diagnostics on failure.
 5. Run a clean-install test on the server Windows PC and a different Windows client PC. Verify database connectivity/schema/readiness, secure first-owner bootstrap, Agent enrollment/unique credential, heartbeat, Health Probe, restart/reconnect and uninstall data preservation.
 6. Record package checksum, tested source SHA, Windows/PostgreSQL versions, log/evidence references and each unresolved defect in the roadmap/bug log.

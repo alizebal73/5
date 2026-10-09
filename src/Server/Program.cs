@@ -57,17 +57,21 @@ if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
 
 if (migrateOnly)
 {
-    await using var migrationScope = app.Services.CreateAsyncScope();
-    var db = migrationScope.ServiceProvider.GetRequiredService<GameNetDbContext>();
-    var pendingBefore = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-    Console.WriteLine($"GameNet database migration mode: {pendingBefore.Length} pending migration(s).");
-    await db.Database.MigrateAsync();
+    await using (var migrationScope = app.Services.CreateAsyncScope())
+    {
+        var db = migrationScope.ServiceProvider.GetRequiredService<GameNetDbContext>();
+        var pendingBefore = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+        Console.WriteLine($"GameNet database migration mode: {pendingBefore.Length} pending migration(s).");
+        await db.Database.MigrateAsync();
 
-    var pendingAfter = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-    if (pendingAfter.Length != 0)
-        throw new InvalidOperationException($"Database migration ended with {pendingAfter.Length} pending migration(s).");
+        var pendingAfter = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+        if (pendingAfter.Length != 0)
+            throw new InvalidOperationException($"Database migration ended with {pendingAfter.Length} pending migration(s).");
 
-    Console.WriteLine("GameNet database schema is current.");
+        Console.WriteLine("GameNet database schema is current.");
+    }
+
+    await app.DisposeAsync();
     return;
 }
 

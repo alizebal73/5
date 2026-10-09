@@ -105,3 +105,10 @@
 - ترتیب مقدماتی جدید: (۱) تعیین قرارداد و prerequisites انتشار؛ (۲) تولید خروجی‌های self-contained و manifest از SHA مشخص؛ (۳) بستهٔ Server + Desktop و بستهٔ مستقل Agent؛ (۴) تعیین/اعتبارسنجی امن PostgreSQL، schema migrations و bootstrap مدیر؛ (۵) نصب تمیز روی دو Windows PC، Health/Readiness/Agent heartbeat/Health Probe، disconnect/reconnect/Restart؛ (۶) ثبت شواهد و نقص‌ها. هیچ installer artifact تا زمان build، parse/validation و اجرای نصب، «آمادهٔ نصب» اعلام نشود.
 - تصمیم اجرایی باز: معلوم شود PostgreSQL را نصاب مدیریت/نصب می‌کند یا نسخهٔ ازپیش‌نصب‌شده را می‌پذیرد؛ تصمیم باید بر اساس نسخه/امنیت/backup/upgrade واقعی باشد، نه پنهان‌کردن نیاز به نصب.
 - این زیربخش، جایگزین مرحلهٔ کامل ۲۱ (repair/update/rollback و انتشار) نیست؛ تنها پیش‌نیاز عملیاتی برای تست زودهنگام پایه است. `main` و `foundation/runtime-final-v2` دست‌نخورده می‌مانند.
+
+
+## 2026-10-09 — گواهی خروجی خام و گیت مهاجرت صریح
+
+- SHA c5918d4627955acc46eab1bfeac6501f05be3a00: [Quick Validation #123](https://github.com/alizebal73/5/actions/runs/37954272590) موفق؛ build خروجی نسخه‌دار و Upload Artifact هم موفق شد. Artifact gamenet-deployment-payload-c5918d4627955acc46eab1bfeac6501f05be3a00 شناسهٔ 11627097942 است. این ZIP خروجی خام است، نه Setup.exe/MSI و نه تأیید نصب مشتری.
+- گام فعلی، اجرای Full Foundation روی harness مهاجرت است تا فرمان واقعی GameNet.Server.exe --migrate-only در PostgreSQL تازه، با deadline و بررسی صریح عدم شروع listener آزموده شود.
+- manifest کلی build جدا می‌ماند؛ هر ZIP manifest مختص payload خودش خواهد داشت. اسکریپت ساخت تنظیمات DPAPI نیز در بستهٔ Server/Database قرار می‌گیرد.
