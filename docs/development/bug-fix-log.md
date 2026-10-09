@@ -272,3 +272,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The available GitHub connection could read branch metadata but could not access/write the administrative branch-protection endpoint. Do not report remote protection as enabled until settings are applied and re-read/verified.
 
 
+
+
+## 2026-10-09 — Documentation-only changes excluded from full certification trigger
+
+- Workflow change commit: `935ede43843cc51491c8a87def55418f4bcb75bb`.
+- Full certification run [#162](https://github.com/alizebal73/5/actions/runs/37918565934) completed with conclusion `success` on that exact SHA.
+- The workflow now ignores changes under `docs/**` and Markdown files for push-triggered full certification. Changes to source, scripts, or workflow files still trigger certification; `workflow_dispatch` remains available.
+- This reduces avoidable runs for docs-only commits; it does not yet implement the separate, lightweight pull-request validation workflow planned for stage 3.
+
