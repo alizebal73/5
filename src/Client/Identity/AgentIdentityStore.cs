@@ -12,7 +12,7 @@ public sealed class AgentIdentityStore(IOptions<AgentIdentityOptions> options) :
 {
     public async Task<GameNet.Agent.AgentIdentity> GetOrCreateAsync(CancellationToken cancellationToken = default)
     {
-        var root = Path.GetFullPath(options.Value.RootPath);
+        var root = options.Value.ResolveRootPath();
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "identity.json");
 

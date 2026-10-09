@@ -440,3 +440,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Guard improvement: the CI parser gate now prints parser ErrorId/Message/Extent before failing, so a future script syntax defect carries a line/extent diagnostic instead of only a filename.
 - Verification: pending rerun on the exact fix commit; do not count the payload-build step as passed until the quick parser/build/tests and the packaging job are both successful.
 - Rollback: revert this narrow syntax/diagnostics fix if it causes a regression; do not suppress the parser gate.
+
+
+## 2026-10-09 — Packaging preflight found Agent ProgramData path expansion gap
+
+- Observation: Agent `appsettings.json` configures `RootPath` as `%ProgramData%\\GameNet Manager\\Agent`, but the options validation and storage code previously passed the string directly to `Path.IsPathFullyQualified` / `Path.GetFullPath`. .NET configuration does not automatically expand Windows `%NAME%` tokens; a clean installed service could therefore fail startup or resolve the wrong location.
+- Fix: `AgentIdentityOptions.ResolveRootPath()` now explicitly expands environment variables, rejects unresolved/non-absolute values, and returns a normalized absolute path. Startup validation plus both identity and DPAPI credential stores use the same resolver.
+- Regression evidence added: unit test sets a temporary environment variable and verifies expansion/normalization. Actual test execution is pending the new Quick Validation run.
+- Impact: do not use the payload from SHA `dc664185068fe3473fcb3f76e857cc2854126e92` for installation; the corrected pack must be built from the fix SHA.
+- Rollback: revert the narrow option resolver + call sites + test as a unit only if the regression test exposes an incompatibility; never disable absolute-path validation.

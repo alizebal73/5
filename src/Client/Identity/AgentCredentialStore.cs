@@ -12,7 +12,7 @@ public sealed class AgentCredentialStore(
     public async Task<string> GetOrBootstrapAsync(CancellationToken cancellationToken = default)
     {
         var variableName = transportOptions.Value.BootstrapCredentialEnvironmentVariableName;
-        var root = Path.GetFullPath(identityOptions.Value.RootPath);
+        var root = identityOptions.Value.ResolveRootPath();
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "credential.bin");
 
@@ -48,7 +48,7 @@ public sealed class AgentCredentialStore(
         if (string.IsNullOrWhiteSpace(secret) || secret.Length < 32)
             throw new ArgumentException("Agent credential must contain at least 32 characters.", nameof(secret));
 
-        var root = Path.GetFullPath(identityOptions.Value.RootPath);
+        var root = identityOptions.Value.ResolveRootPath();
         Directory.CreateDirectory(root);
         var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(secret), null, DataProtectionScope.CurrentUser);
         var path = Path.Combine(root, "credential.bin");

@@ -12,8 +12,21 @@ builder.Services
     .AddOptions<AgentIdentityOptions>()
     .BindConfiguration(AgentIdentityOptions.SectionName)
     .Validate(options =>
-        !string.IsNullOrWhiteSpace(options.RootPath) && Path.IsPathFullyQualified(options.RootPath),
-        "Agent RootPath must be an absolute path.")
+    {
+        try
+        {
+            _ = options.ResolveRootPath();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }, "Agent RootPath must resolve to an absolute path.")
     .ValidateOnStart();
 
 builder.Services

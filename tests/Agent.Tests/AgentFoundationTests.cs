@@ -31,6 +31,31 @@ public sealed class AgentFoundationTests
     }
 
     [Fact]
+    public void Agent_identity_options_expand_environment_variables_before_validating_the_root_path()
+    {
+        var variableName = "GAMENET_TEST_PROGRAMDATA";
+        var previous = Environment.GetEnvironmentVariable(variableName);
+        var testRoot = Path.Combine(Path.GetTempPath(), "gamenet-agent-options-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Environment.SetEnvironmentVariable(variableName, testRoot);
+            var options = new AgentIdentityOptions
+            {
+                RootPath = $"%{variableName}%\\GameNet Manager\\Agent"
+            };
+
+            Assert.Equal(
+                Path.GetFullPath(Path.Combine(testRoot, "GameNet Manager", "Agent")),
+                options.ResolveRootPath());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variableName, previous);
+        }
+    }
+
+    [Fact]
     public async Task Agent_identity_is_stable_across_store_recreation()
     {
         var root = Path.Combine(Path.GetTempPath(), "gamenet-agent-identity-test-" + Guid.NewGuid().ToString("N"));
