@@ -176,7 +176,7 @@ public sealed class SignalRAgentTransport(
         var now = timeProvider.GetUtcNow();
         var errorCode = identitySnapshot is null
             ? "agent.command.identity_unavailable"
-            : AgentCommandGuard.Validate(command, identitySnapshot.DeviceId, tokenSnapshot, expirySnapshot, now);
+            : AgentCommandGuard.Validate(command, identitySnapshot.Value.DeviceId, tokenSnapshot, expirySnapshot, now);
 
         AgentCommandAcknowledgement acknowledgement;
         if (errorCode is not null)
