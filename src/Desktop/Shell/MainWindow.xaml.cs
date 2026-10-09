@@ -18,13 +18,13 @@ public partial class MainWindow : Window
         DataContext = viewModel;
 
         stationHealthRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-        stationHealthRefreshTimer.Tick += (_, _) =>
+        stationHealthRefreshTimer.Tick += async (_, _) =>
         {
             if (DataContext is LoginViewModel { IsAuthenticated: true } current &&
                 !current.IsBusy &&
                 !current.StationBoard.IsBusy)
             {
-                current.StationBoard.RefreshCommand.Execute(null);
+                await current.StationBoard.RefreshHealthAsync();
             }
         };
 

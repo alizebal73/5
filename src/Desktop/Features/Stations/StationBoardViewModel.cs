@@ -86,14 +86,23 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
     public bool IsBusy { get => isBusy; private set => SetField(ref isBusy, value); }
 
-    public async Task RefreshAsync()
+    public Task RefreshAsync() => RefreshCoreAsync(reportSuccess: true);
+
+    // Used by the periodic health timer; unlike a manual refresh it does not overwrite
+    // the operator's last action/status message every few seconds.
+    public Task RefreshHealthAsync() => RefreshCoreAsync(reportSuccess: false);
+
+    private async Task RefreshCoreAsync(bool reportSuccess)
     {
+        if (IsBusy) return;
+
         ErrorMessage = "";
         IsBusy = true;
         try
         {
             await LoadCoreAsync();
-            StatusMessage = Text("فهرست ایستگاه‌ها به‌روزرسانی شد.", "Station list refreshed.");
+            if (reportSuccess)
+                StatusMessage = Text("فهرست ایستگاه‌ها به‌روزرسانی شد.", "Station list refreshed.");
         }
         catch (GameNetApiException ex) { ErrorMessage = DescribeError(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("ارتباط با سرور برقرار نشد.", "Could not connect to the Server."); }

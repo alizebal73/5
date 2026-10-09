@@ -123,7 +123,8 @@ public sealed class StationService(IStationRepository repository, ITransactionCo
     {
         state.TryGetValue(s.AgentDeviceId ?? string.Empty, out var a);
         return new StationDto(s.Id, s.Code, s.Name, s.Type, s.Status, s.Version, s.AgentDeviceId,
-            a is not null && a.LeaseExpiresAtUtc > now, a?.LastHeartbeatAtUtc, a?.AgentVersion, a?.StationState);
+            a is not null && a.LastHeartbeatAtUtc.HasValue && a.LeaseExpiresAtUtc > now,
+            a?.LastHeartbeatAtUtc, a?.AgentVersion, a?.StationState);
     }
 
     private void Audit(StationActorContext actor, string operation, Guid id, object? before, object after, string key) =>
