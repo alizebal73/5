@@ -5,6 +5,7 @@ using System.Text.Json;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.System;
+using GameNet.Shared.Contracts.V1.Stations;
 
 namespace GameNet.Desktop.Api;
 
@@ -40,6 +41,38 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         return await ReadPayloadAsync<CurrentOperatorResponse>(response, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<StationResponse>> GetStationsAsync(CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Get, "/api/v1/stations", authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var stations = await ReadPayloadAsync<StationResponse[]>(response, cancellationToken);
+        return stations ?? Array.Empty<StationResponse>();
+    }
+
+    public Task<StationResponse> CreateStationAsync(CreateStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendStationMutationAsync(HttpMethod.Post, "/api/v1/stations", request, idempotencyKey, cancellationToken);
+
+    public Task<StationResponse> RenameStationAsync(Guid id, RenameStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendStationMutationAsync(HttpMethod.Put, $"/api/v1/stations/{id:D}", request, idempotencyKey, cancellationToken);
+
+    public Task<StationResponse> BindStationAgentAsync(Guid id, BindStationAgentRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendStationMutationAsync(HttpMethod.Put, $"/api/v1/stations/{id:D}/agent", request, idempotencyKey, cancellationToken);
+
+    public Task<StationResponse> SetStationStatusAsync(Guid id, SetStationStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendStationMutationAsync(HttpMethod.Put, $"/api/v1/stations/{id:D}/status", request, idempotencyKey, cancellationToken);
+
+    private async Task<StationResponse> SendStationMutationAsync<TRequest>(
+        HttpMethod method, string path, TRequest body, string idempotencyKey, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        if (idempotencyKey.Length > 200) throw new ArgumentOutOfRangeException(nameof(idempotencyKey));
+        using var request = CreateRequest(method, path, authenticated: true);
+        request.Headers.TryAddWithoutValidation(ApiHeaders.IdempotencyKey, idempotencyKey.Trim());
+        request.Content = JsonContent.Create(body, options: JsonOptions);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadPayloadAsync<StationResponse>(response, cancellationToken);
+    }
+
     public async Task LogoutAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -58,9 +91,10 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string uri, bool authenticated)
     {
-        var isSensitiveRoute = uri.StartsWith("/api/v1/auth", StringComparison.Ordinal) ||
-                               uri.StartsWith("/api/v1/bootstrap/admin", StringComparison.Ordinal);
-        if (isSensitiveRoute && httpClient.BaseAddress is { } baseAddress &&
+        var requiresSecureTransport = authenticated ||
+                                      uri.StartsWith("/api/v1/auth", StringComparison.Ordinal) ||
+                                      uri.StartsWith("/api/v1/bootstrap/admin", StringComparison.Ordinal);
+        if (requiresSecureTransport && httpClient.BaseAddress is { } baseAddress &&
             baseAddress.Scheme != Uri.UriSchemeHttps && !baseAddress.IsLoopback)
         {
             throw new GameNetApiException("security.https_required", (int)System.Net.HttpStatusCode.UpgradeRequired);

@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
+using GameNet.Desktop.Features.Stations;
 using GameNet.Shared.Contracts.V1.Identity;
 
 namespace GameNet.Desktop.Features.Identity;
@@ -11,7 +12,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
 {
     private readonly IGameNetServerClient serverClient;
     private string username = string.Empty, password = string.Empty, errorMessage = string.Empty;
-    private string displayName = string.Empty, currentUsername = string.Empty, statusMessage = string.Empty;
+    private string displayName = string.Empty, currentUsername = string.Empty;
     private bool isBusy, isAuthenticated;
 
     public LoginViewModel(IGameNetServerClient serverClient)
@@ -19,19 +20,18 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         this.serverClient = serverClient;
         LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
         LogoutCommand = new AsyncUiAction(LogoutAsync, () => !IsBusy && IsAuthenticated);
-        StatusMessage = Text("نشست ورود از طرف سرور تأیید می‌شود. برد سیستم‌ها در برش بعدی وصل خواهد شد.",
-            "Your session is verified by the Server. The station board will be connected in the next slice.");
+        StationBoard = new StationBoardViewModel(serverClient);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public ICommand LoginCommand { get; }
     public ICommand LogoutCommand { get; }
+    public StationBoardViewModel StationBoard { get; }
     public string Username { get => username; set => SetField(ref username, value); }
     public string Password { get => password; set => SetField(ref password, value); }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string DisplayName { get => displayName; private set => SetField(ref displayName, value); }
     public string CurrentUsername { get => currentUsername; private set => SetField(ref currentUsername, value); }
-    public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
     public bool IsBusy { get => isBusy; private set { if (SetField(ref isBusy, value)) RaiseCommands(); } }
     public bool IsAuthenticated { get => isAuthenticated; private set { if (SetField(ref isAuthenticated, value)) RaiseCommands(); } }
 
@@ -52,6 +52,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             CurrentUsername = current.Username;
             IsAuthenticated = true;
             Password = string.Empty;
+            await StationBoard.RefreshAsync();
         }
         catch (GameNetApiException exception)
         {
@@ -100,6 +101,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             DisplayName = string.Empty;
             CurrentUsername = string.Empty;
             Password = string.Empty;
+            StationBoard.ClearLocalState();
             IsBusy = false;
         }
     }

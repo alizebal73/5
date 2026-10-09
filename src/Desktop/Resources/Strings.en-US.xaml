@@ -17,4 +17,16 @@
   <system:String x:Key="Identity.AccountDisabled">This account is disabled.</system:String>
   <system:String x:Key="Identity.ConnectionError">Could not connect to the Server. Check your network.</system:String>
   <system:String x:Key="Identity.UnexpectedError">Sign in failed. Check the Server status.</system:String>
+  <system:String x:Key="Station.Title">Stations</system:String>
+  <system:String x:Key="Station.Subtitle">Agent online state comes from the Server lease and heartbeat.</system:String>
+  <system:String x:Key="Station.Refresh">Refresh</system:String>
+  <system:String x:Key="Station.CreateSection">Add station</system:String>
+  <system:String x:Key="Station.Code">Code</system:String><system:String x:Key="Station.Name">Name</system:String><system:String x:Key="Station.Type">Type</system:String>
+  <system:String x:Key="Station.Create">Create station</system:String><system:String x:Key="Station.List">Stations</system:String>
+  <system:String x:Key="Station.Empty">No stations have been registered yet.</system:String><system:String x:Key="Station.SelectHint">Select a station to manage it.</system:String>
+  <system:String x:Key="Station.Selected">Selected station</system:String><system:String x:Key="Station.Rename">Rename</system:String>
+  <system:String x:Key="Station.RenameButton">Save name</system:String><system:String x:Key="Station.DeviceId">Agent device ID</system:String>
+  <system:String x:Key="Station.BindAgent">Bind Agent</system:String><system:String x:Key="Station.Maintenance">Maintenance</system>
+  <system:String x:Key="Station.Available">Available</system:String><system:String x:Key="Station.AgentVersion">Agent version</system:String>
+  <system:String x:Key="Station.AgentState">Reported state</system:String><system:String x:Key="Station.StatusAdmin">Administrative status</system:String>
 </ResourceDictionary>

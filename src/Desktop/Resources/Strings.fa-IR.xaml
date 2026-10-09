@@ -17,4 +17,17 @@
   <system:String x:Key="Identity.AccountDisabled">این حساب غیرفعال است.</system:String>
   <system:String x:Key="Identity.ConnectionError">ارتباط با سرور برقرار نشد. اتصال شبکه را بررسی کنید.</system:String>
   <system:String x:Key="Identity.UnexpectedError">ورود انجام نشد. وضعیت سرور را بررسی کنید.</system:String>
+  <system:String x:Key="Station.Title">ایستگاه‌ها</system:String>
+  <system:String x:Key="Station.Subtitle">وضعیت آنلاین Agent از lease و heartbeat سرور محاسبه می‌شود.</system:String>
+  <system:String x:Key="Station.Refresh">تازه‌سازی</system:String>
+  <system:String x:Key="Station.CreateSection">افزودن ایستگاه</system:String>
+  <system:String x:Key="Station.Code">کد</system:String><system:String x:Key="Station.Name">نام</system:String><system:String x:Key="Station.Type">نوع</system:String>
+  <system:String x:Key="Station.Create">ساخت ایستگاه</system:String><system:String x:Key="Station.List">فهرست ایستگاه‌ها</system:String>
+  <system:String x:Key="Station.Empty">هنوز ایستگاهی ثبت نشده است.</system:String><system:String x:Key="Station.SelectHint">برای مدیریت، یک ایستگاه را انتخاب کنید.</system:String>
+  <system:String x:Key="Station.Selected">ایستگاه انتخاب‌شده</system:String><system:String x:Key="Station.Rename">تغییر نام</system:String>
+  <system:String x:Key="Station.RenameButton">ذخیره نام</system:String><system:String x:Key="Station.DeviceId">شناسه دستگاه Agent</system:String>
+  <system:String x:Key="Station.BindAgent">اتصال Agent</system:String><system:String x:Key="Station.Maintenance">تعمیرات</system>
+  <system:String x:Key="Station.Available">آماده</system:String>
+  <system:String x:Key="Station.AgentVersion">نسخه Agent</system:String><system:String x:Key="Station.AgentState">وضعیت گزارش‌شده</system:String>
+  <system:String x:Key="Station.StatusAdmin">وضعیت اداری</system:String>
 </ResourceDictionary>

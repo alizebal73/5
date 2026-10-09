@@ -68,12 +68,107 @@
             <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}"
                     Content="{DynamicResource Identity.LogoutButton}" Command="{Binding LogoutCommand}"/>
           </DockPanel>
-          <Border Grid.Row="1" Padding="24" Background="#F8FAFC" CornerRadius="12">
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="{DynamicResource Identity.LoginSucceeded}" FontSize="22" FontWeight="SemiBold" Foreground="#182230" TextWrapping="Wrap"/>
-              <TextBlock Text="{Binding StatusMessage}" FontSize="15" Foreground="#475467" Margin="0,14,0,0" TextWrapping="Wrap"/>
-              <TextBlock Text="{Binding ErrorMessage}" Foreground="#B42318" Margin="0,14,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
+<Border Grid.Row="1" Padding="20" Background="#F8FAFC" CornerRadius="12">
+            <Grid>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                <Button DockPanel.Dock="Right" Padding="10,6" Content="{DynamicResource Station.Refresh}" Command="{Binding StationBoard.RefreshCommand}"/>
+                <StackPanel>
+                  <TextBlock Text="{DynamicResource Station.Title}" FontSize="21" FontWeight="Bold" Foreground="#182230"/>
+                  <TextBlock Text="{DynamicResource Station.Subtitle}" FontSize="12" Foreground="#667085"/>
+                </StackPanel>
+              </DockPanel>
+              <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                <TextBlock Text="{Binding StationBoard.ErrorMessage}" Foreground="#B42318" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding StationBoard.StatusMessage}" Foreground="#475467" TextWrapping="Wrap"/>
+              </StackPanel>
+              <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="0.9*"/></Grid.ColumnDefinitions>
+                <Grid Grid.Column="0" Margin="0,0,12,0">
+                  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                  <Border Grid.Row="0" Padding="12" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8" Margin="0,0,0,8">
+                    <StackPanel>
+                      <TextBlock Text="{DynamicResource Station.CreateSection}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                          <TextBlock Text="{DynamicResource Station.Code}" FontSize="12"/>
+                          <TextBox Margin="0,4,0,8" Padding="7" Text="{Binding StationBoard.NewCode, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                          <TextBlock Text="{DynamicResource Station.Name}" FontSize="12"/>
+                          <TextBox Margin="0,4,0,8" Padding="7" Text="{Binding StationBoard.NewName, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                          <TextBlock Text="{DynamicResource Station.Type}" FontSize="12"/>
+                          <ComboBox Margin="0,4,0,8" Padding="5" ItemsSource="{Binding StationBoard.StationTypes}" SelectedItem="{Binding StationBoard.NewType}"/>
+                        </StackPanel>
+                      </Grid>
+                      <Button Padding="9,6" Content="{DynamicResource Station.Create}" Command="{Binding StationBoard.CreateCommand}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Grid.Row="1" Padding="10" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Station.List}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                      <TextBlock DockPanel.Dock="Bottom" Text="{DynamicResource Station.Empty}" Foreground="#98A2B3" Margin="0,8,0,0">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding StationBoard.Stations.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                      </TextBlock>
+                      <ListBox ItemsSource="{Binding StationBoard.Stations}" SelectedItem="{Binding StationBoard.SelectedStation, Mode=TwoWay}" BorderThickness="0" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                          <DataTemplate>
+                            <Border Padding="9" Margin="0,0,0,6" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6">
+                              <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                  <TextBlock Text="{Binding Code}" FontSize="14" FontWeight="SemiBold"/>
+                                  <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#475467"/>
+                                  <TextBlock Text="{Binding AgentText}" FontSize="11" Foreground="#667085" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                  <TextBlock Text="{Binding RuntimeText}" FontSize="12" FontWeight="SemiBold"/>
+                                  <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#667085"/>
+                                </StackPanel>
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ListBox.ItemTemplate>
+                      </ListBox>
+                    </DockPanel>
+                  </Border>
+                </Grid>
+                <Border Grid.Column="1" Padding="14" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8">
+                  <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                      <TextBlock Text="{DynamicResource Station.Selected}" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,8"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.Code}" FontSize="18" FontWeight="Bold"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.Name}" Foreground="#475467" Margin="0,1,0,8"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.StatusText}" FontSize="12"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.RuntimeText}" FontWeight="SemiBold" FontSize="12" Margin="0,3,0,0"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.HeartbeatText}" FontSize="11" Foreground="#667085" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                      <Separator Margin="0,10,0,8"/>
+                      <TextBlock Text="{DynamicResource Station.Rename}" FontWeight="SemiBold"/>
+                      <TextBox Margin="0,4,0,8" Padding="7" Text="{Binding StationBoard.RenameName, UpdateSourceTrigger=PropertyChanged}"/>
+                      <Button Padding="9,6" Content="{DynamicResource Station.RenameButton}" Command="{Binding StationBoard.RenameCommand}"/>
+                      <Separator Margin="0,10,0,8"/>
+                      <TextBlock Text="{DynamicResource Station.DeviceId}" FontWeight="SemiBold"/>
+                      <TextBox Margin="0,4,0,8" Padding="7" Text="{Binding StationBoard.DeviceId, UpdateSourceTrigger=PropertyChanged}"/>
+                      <Button Padding="9,6" Content="{DynamicResource Station.BindAgent}" Command="{Binding StationBoard.BindAgentCommand}"/>
+                      <Separator Margin="0,10,0,8"/>
+                      <TextBlock Text="{DynamicResource Station.AgentVersion}" FontSize="12" Foreground="#667085"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.AgentVersionText}" FontSize="12" Margin="0,0,0,6"/>
+                      <TextBlock Text="{DynamicResource Station.AgentState}" FontSize="12" Foreground="#667085"/>
+                      <TextBlock Text="{Binding StationBoard.SelectedStation.AgentStateText}" FontSize="12" Margin="0,0,0,6"/>
+                      <TextBlock Text="{DynamicResource Station.StatusAdmin}" FontWeight="SemiBold"/>
+                      <WrapPanel>
+                        <Button Padding="8,5" Margin="0,4,4,0" Content="{DynamicResource Station.Maintenance}" Command="{Binding StationBoard.MaintenanceCommand}"/>
+                        <Button Padding="8,5" Margin="0,4,4,0" Content="{DynamicResource Station.Available}" Command="{Binding StationBoard.AvailableCommand}"/>
+                      </WrapPanel>
+                      <TextBlock Text="{DynamicResource Station.SelectHint}" FontSize="11" Foreground="#98A2B3" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    </StackPanel>
+                  </ScrollViewer>
+                </Border>
+              </Grid>
+            </Grid>
           </Border>
         </Grid>
       </Border>
