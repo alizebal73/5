@@ -109,7 +109,7 @@ if ($LASTEXITCODE -ne 0) {
     $diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
     New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
     $diagnosticName = "ModelDriftDiagnostic" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
-    $diagnosticArgs = @("ef", "migrations", "add", $diagnosticName) + $efOptions
+    $diagnosticArgs = @("ef", "migrations", "add", $diagnosticName, "--output-dir", "Persistence/Migrations") + $efOptions
     $diagnosticOutput = & $dotnetPath @diagnosticArgs 2>&1
     $diagnosticExitCode = $LASTEXITCODE
     $diagnosticPath = Join-Path $diagnosticRoot "ef-model-drift-diagnostic.txt"
