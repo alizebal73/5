@@ -45,6 +45,7 @@ if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
 
 app.MapAgentCredentialRoutes();
 app.MapIdentityEndpoints();
+app.MapOperatorManagementEndpoints();
 app.MapStationEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
