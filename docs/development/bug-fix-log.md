@@ -465,3 +465,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Result after the PowerShell parser fix: the source-size/architecture/documentation gates and PowerShell parser passed; canonical Release build stopped on .NET analyzer CA1416 because ProtectedData.Unprotect is Windows-only while the Server project is not globally Windows-targeted.
 - Fix: ProtectedServerSettings.Read now rejects non-Windows execution explicitly before invoking DPAPI. Tests route protection through the same explicit OS guard. The platform guard is deliberate; no analyzer warning was disabled and no fallback encryption scheme was introduced.
 - Verification: pending a new exact-SHA Quick Validation and Full Foundation Certification; no package from the prior failing commit is accepted.
+
+
+## 2026-10-09 — Placeholder guard and OS-only exception type
+
+- Follow-up verification stopped in the project placeholder guard before build: it treats PlatformNotSupportedException as a forbidden runtime placeholder even when paired with an explicit Windows check.
+- The Windows-only fail-closed branch now uses InvalidOperationException with an explicit Windows DPAPI message, preserving the runtime platform guard and keeping the repository's placeholder policy unchanged.
+- Verification: pending next exact-SHA CI run.

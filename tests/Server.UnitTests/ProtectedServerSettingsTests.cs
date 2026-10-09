@@ -93,7 +93,7 @@ public sealed class ProtectedServerSettingsTests
     private static byte[] Protect(byte[] clear)
     {
         if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("This test requires Windows DPAPI.");
+            throw new InvalidOperationException("This DPAPI test requires Windows.");
         return ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.LocalMachine);
     }
 
