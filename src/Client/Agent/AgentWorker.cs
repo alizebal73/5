@@ -12,6 +12,8 @@ public sealed class AgentWorker(
     ILogger<AgentWorker> logger,
     TimeProvider timeProvider) : BackgroundService
 {
+    private readonly AgentCommandDeduplicator commandDeduplicator = new(timeProvider);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var identity = await identityStore.GetOrCreateAsync(stoppingToken);
@@ -78,6 +80,11 @@ public sealed class AgentWorker(
     }
 
     private Task<AgentCommandAcknowledgement> HandleCommandAsync(
+        AgentCommandEnvelope command,
+        CancellationToken cancellationToken) =>
+        commandDeduplicator.ExecuteOnceAsync(command, ExecuteCommandAsync, cancellationToken);
+
+    private Task<AgentCommandAcknowledgement> ExecuteCommandAsync(
         AgentCommandEnvelope command,
         CancellationToken cancellationToken)
     {

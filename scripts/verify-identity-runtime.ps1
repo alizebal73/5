@@ -312,6 +312,20 @@ try {
         [string]$healthProbe.Json.data.stationId -ne $stationId -or $healthProbe.Json.data.deviceId -ne $stationDeviceId -or
         [string]::IsNullOrWhiteSpace([string]$healthProbe.Json.data.agentVersion) -or $healthProbe.Json.data.stationState -ne "Ready") {
         throw "The Agent health-probe command did not return a valid success acknowledgement."
+
+    # The command test has completed. Stop the disposable Agent and prove the Server no longer reports it online.
+    Stop-Process -Id $agentProcess.Id -Force -ErrorAction Stop
+    $agentProcess.Dispose()
+    $agentProcess = $null
+    $agentOffline = $false
+    for ($attempt = 1; $attempt -le 15; $attempt++) {
+        Start-Sleep -Seconds 1
+        $afterAgentStop = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+        Assert-Status $afterAgentStop 200 "Read station state after Agent disconnect"
+        $stoppedStation = @($afterAgentStop.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+        if ($stoppedStation -and $stoppedStation.agentOnline -eq $false) { $agentOffline = $true; break }
+    }
+    if (-not $agentOffline) { throw "Server did not transition the PC to offline after the Agent connection closed." }
     }
     }
 
@@ -513,8 +527,8 @@ try {
 $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     Assert-Status $stationList 200 "List stations"
     $listedStation = @($stationList.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
-    if (-not $listedStation -or $listedStation.agentOnline -ne $true) {
-        throw "Station list did not reflect the authoritative online Agent state after the health-probe test."
+    if (-not $listedStation -or $listedStation.agentOnline -ne $false) {
+        throw "Station list did not reflect the authoritative offline state after the test Agent disconnected."
     }
 
     $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
@@ -558,7 +572,7 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
         expectedVersion = 2
     }
     Assert-Status $maintenance 200 "Set station administrative maintenance status"
-    if ($maintenance.Json.data.status -ne 3 -or $maintenance.Json.data.agentOnline -ne $true) {
+    if ($maintenance.Json.data.status -ne 3 -or $maintenance.Json.data.agentOnline -ne $false) {
         throw "Administrative status was not kept separate from Agent runtime state."
     }
 
