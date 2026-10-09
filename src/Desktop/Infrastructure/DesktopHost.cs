@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Shell;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Primitives;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -17,7 +18,7 @@ public static class DesktopHost
         builder.Services
             .AddOptions<ServerConnectionOptions>()
             .BindConfiguration(ServerConnectionOptions.SectionName)
-            .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)), "Server BaseUrl must use HTTPS, except for loopback development.")
+            .Validate(options => ServerEndpointAddress.IsAllowed(options.BaseUrl), "Server BaseUrl must be a root HTTPS origin, except for loopback development.")
             .ValidateOnStart();
 
         builder.Services.AddHttpClient<IGameNetServerClient, GameNetServerClient>((provider, client) =>

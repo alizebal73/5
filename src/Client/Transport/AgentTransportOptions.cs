@@ -1,3 +1,5 @@
+using GameNet.Shared.Primitives;
+
 namespace GameNet.Agent.Transport;
 
 public sealed class AgentTransportOptions
@@ -11,14 +13,10 @@ public sealed class AgentTransportOptions
 
     public void Validate()
     {
-        if (!Uri.TryCreate(ServerBaseUrl, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)) ||
-            !string.IsNullOrEmpty(uri.UserInfo) ||
-            !string.IsNullOrEmpty(uri.Query) ||
-            !string.IsNullOrEmpty(uri.Fragment))
+        if (!ServerEndpointAddress.IsAllowed(ServerBaseUrl))
         {
             throw new InvalidOperationException(
-                "Agent ServerBaseUrl must use HTTPS except for loopback development and must not contain embedded credentials, query or fragment.");
+                "Agent ServerBaseUrl must be a root HTTPS origin, except for loopback development, without embedded credentials, query or fragment.");
         }
 
         if (HeartbeatIntervalSeconds is < 1 or > 60)

@@ -13,6 +13,15 @@ A defect is not closed because a later refactor hides it.
 - Verified: [Quick Validation #127](https://github.com/alizebal73/5/actions/runs/37959248404) and [Full Foundation Certification #195](https://github.com/alizebal73/5/actions/runs/37959248381) both passed on `b95eab6c68e89b4d8f4500f714f1445ffd9ca4c4`. Foundation passed canonical build/tests, PostgreSQL, isolated backup/restore, Desktop runtime, Agent runtime and evidence upload. This closes the Agent URL validation defect only; the LAN TLS/Kestrel/certificate contract remains open.
 - Rollback: revert only the Agent URL validation and its regression tests if they introduce a regression; do not weaken Server HTTPS enforcement.
 
+## 2026-10-09 — Desktop/Agent Server-origin policy centralized
+
+- Symptom: Desktop and Agent each maintained a separate URL validator; their allowed-origin policies could drift, and both had previously allowed an HTTP/LAN or a non-root URL to reach runtime instead of failing during configuration validation.
+- Root cause: transport-origin validation was duplicated at two client boundaries rather than owned by a shared, dependency-light contract.
+- Fix: add `GameNet.Shared.Primitives.ServerEndpointAddress` as the single origin policy. Desktop and Agent now consume it. Only root HTTPS origins are valid for remote deployment; HTTP is valid only for loopback development; credentials, path prefixes, query and fragment are rejected.
+- Regression coverage: shared positive/negative URI tests plus Agent and Desktop consumer tests.
+- Verification: pending Quick Validation and Full Foundation Certification on the exact fix SHA. Do not mark this item closed until both pass.
+- Rollback: revert the shared policy and its consumers/tests together; do not relax remote HTTPS enforcement.
+
 **Required process/templates for all new entries:** [bug-fix process](bug-fix-process.md), [bug-fix template](../templates/bug-fix-template.md), [Definition of Ready](../planning/definition-of-ready.md) and [Definition of Done](../planning/definition-of-done.md). This is a historical append-only log. Preserve old entries; correct factual mistakes transparently; append verified outcomes rather than overwriting history.
 
 ## 2026-10-08 — Repo 2/3 regression controls carried into GameNet 5

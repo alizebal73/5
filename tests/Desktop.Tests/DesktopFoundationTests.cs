@@ -1,6 +1,8 @@
 using Xunit;
 using GameNet.Desktop.Infrastructure;
 using GameNet.Desktop.Shell;
+using GameNet.Desktop.Api;
+using GameNet.Shared.Primitives;
 
 namespace GameNet.Desktop.Tests;
 
@@ -8,6 +10,14 @@ public sealed class DesktopFoundationTests
 {
     [Fact]
     public void Shell_type_exists() => Assert.NotNull(typeof(MainWindow));
+
+    [Fact]
+    public void Desktop_and_agent_use_the_shared_server_origin_policy()
+    {
+        Assert.True(ServerEndpointAddress.IsAllowed(new ServerConnectionOptions().BaseUrl));
+        Assert.False(ServerEndpointAddress.IsAllowed("http://192.168.0.9:5080"));
+        Assert.False(ServerEndpointAddress.IsAllowed("https://server.example/api"));
+    }
 
     [Theory]
     [InlineData("fa-IR", "fa-IR")]

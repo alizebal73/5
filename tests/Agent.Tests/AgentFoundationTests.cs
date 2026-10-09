@@ -25,6 +25,7 @@ public sealed class AgentFoundationTests
     {
         Assert.Throws<InvalidOperationException>(() => new AgentTransportOptions { ServerBaseUrl = "file:///tmp/gamenet" }.Validate());
         Assert.Throws<InvalidOperationException>(() => new AgentTransportOptions { ServerBaseUrl = "https://user:secret@server.example" }.Validate());
+        Assert.Throws<InvalidOperationException>(() => new AgentTransportOptions { ServerBaseUrl = "https://server.example/api" }.Validate());
         Assert.Throws<InvalidOperationException>(() => new AgentTransportOptions { ServerBaseUrl = "http://192.168.0.9:5080" }.Validate());
         Assert.Throws<InvalidOperationException>(() => new AgentTransportOptions { HeartbeatIntervalSeconds = 0 }.Validate());
         Assert.Throws<InvalidOperationException>(() => new AgentTransportOptions { InitialRetrySeconds = 121 }.Validate());
