@@ -64,7 +64,9 @@
 - یافتهٔ کد: نسخهٔ قبلی business gate فقط مقدار `status=certified` را بررسی می‌کرد و ancestry مربوط به `certifiedCommit` را بررسی نمی‌کرد. guard جدید باید commit را در checkout پیدا کند و ثابت کند ancestor واقعی HEAD است؛ checkout کامل تاریخچه نیز شرط اجرای معتبر آن است.
 - یافتهٔ GitHub: API شاخه‌ها برای `main`, `foundation/runtime-final-v2` و شاخهٔ فعال مقدار `protected=false` گزارش کرده و فهرست Repository Rulesets خالی بوده است. فعال‌کردن تنظیمات حفاظت شاخه از اتصال فعلی در دسترس نبود؛ این زیرکار در سند `docs/operations/branch-governance.md` باز و صریح ثبت شده است.
 - وضعیت کد مرحلهٔ ۲: گیت ancestry و آزمون مثبت/منفی آن روی SHA `2b731276ca89015cb32be4a2eb90dc5f449c4d49` با اجرای کامل [#161](https://github.com/alizebal73/5/actions/runs/37918110954) موفق تأیید شدند. گواهی PostgreSQL، بازیابی، Desktop، Agent و ثبت شواهد نیز پاس شدند.
-- زیرکار باز مرحلهٔ ۲: حفاظت واقعی شاخه‌های `main` و `foundation/runtime-*` باید در تنظیمات GitHub فعال و پس از آن دوباره خوانده/تأیید شود. دسترسی اتصال فعلی اجازهٔ تغییر تنظیمات مدیریتی را نمی‌دهد. تا آن زمان `main` خالی می‌ماند و ادغام مستقیم انجام نمی‌شود.
+- حفاظت GitHub تأیید شد: Rulesetهای `protect-main` و `protect-foundation-runtime` هر دو `active` هستند؛ متادیتای GitHub نیز برای `main` و `foundation/runtime-final-v2` مقدار `protected=true` می‌دهد. تنظیمات هر دو شامل Pull Request، جلوگیری از حذف و Force Push، رفع گفتگوهای باز و Squash-only است. تأیید اجباری صفر و bypass list خالی است.
+- Issue پیگیری محافظت شاخه‌ها: [#9](https://github.com/alizebal73/5/issues/9) پس از مشاهدهٔ وضعیت ذخیره‌شده بسته می‌شود.
+- نتیجه: **مرحلهٔ ۲ تکمیل شد**. مرحلهٔ جاری اکنون **۳ — طراحی CI کم‌تکرار: PR validation سبک در کنار گواهی کامل** است.
 - پیگیری صاحب مخزن: [Issue #9 — فعال‌کردن Branch protection](https://github.com/alizebal73/5/issues/9).
 - کاهش اجرای بی‌مورد: workflow اکنون تغییرات صرفاً در `docs/**` و فایل‌های Markdown را از گواهی کامل حذف می‌کند؛ تغییرات `src/`, `scripts/` و خود workflow همچنان گواهی را اجرا می‌کنند. تفکیک کامل سریع‌سنجی و گواهی کامل برای مرحلهٔ ۳ باقی است.
-- پس از بستن مرحلهٔ ۲، مرحلهٔ ۳ (طراحی CI کم‌تکرار با سریع‌سنجی PR جدا از گواهی کامل) شروع می‌شود.
+

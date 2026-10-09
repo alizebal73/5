@@ -281,3 +281,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The workflow now ignores changes under `docs/**` and Markdown files for push-triggered full certification. Changes to source, scripts, or workflow files still trigger certification; `workflow_dispatch` remains available.
 - This reduces avoidable runs for docs-only commits; it does not yet implement the separate, lightweight pull-request validation workflow planned for stage 3.
 
+
+
+## 2026-10-09 — GitHub branch protection verified; stage 2 closed
+
+- Read-back from GitHub confirmed Ruleset `protect-main` (ID `24783754`) is `active` for `refs/heads/main`, and `protect-foundation-runtime` (ID `24784035`) is `active` for `refs/heads/foundation/runtime-*`.
+- GitHub branch metadata now reports `protected=true` for both `main` (SHA `b9288471f2047570eaf8d0d6552cf87bc0ddc214`) and `foundation/runtime-final-v2` (SHA `adb2159fb85564187718df8cbddcd3377e599c1c`).
+- Both rules enforce pull requests, prevent deletion and non-fast-forward updates (force pushes), require conversation resolution, and allow Squash only. Required approvals are zero; bypass list is empty; extra approval for unattributed Copilot PRs is disabled in both.
+- This closes the branch-protection subtask and Stage 2. Next is Stage 3: separate a lightweight PR validation workflow from the full Foundation certification without weakening code checks.
+
