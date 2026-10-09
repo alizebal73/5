@@ -16,6 +16,7 @@ GameNet 5 is a Windows-first, single-site cybercafe management platform for:
 - Customer identity, PIN/profile, wallet/debt/payment, discounts and VIP.
 - Session start/stop/pause/transfer/release with concurrency protection.
 - Station health, Agent pairing, reconnect/recovery and operator diagnostics.
+- Optional Steam/Gaming Account management and session-scoped launch/login orchestration, strictly gated by the account model and authorization permitted by Valve's current PC Café terms.
 - Inventory and buffet sales with ledger-based stock accounting.
 - Reports, audit, approvals, backup/recovery and controlled updates.
 - Persian RTL/Toman as the primary operating experience, with localization infrastructure for en-US.
@@ -39,6 +40,8 @@ GameNet 5 is a Windows-first, single-site cybercafe management platform for:
 15. Every production defect becomes regression evidence.
 16. Main only receives reviewed, verified work.
 17. Installer/update logic is a first-class product boundary, not a post-build script pile.
+18. External gaming accounts are not customer identities or Server deployment secrets; manage them through a separate, audited GamingAccounts boundary.
+19. Never automate Steam sign-in through UI scripting, credential injection or Steam Guard bypass unless the exact mechanism is expressly supported or authorized by Valve; unresolved authorization keeps automation disabled.
 
 ## Delivery gates
 
@@ -159,6 +162,7 @@ Initial modules:
 - Customers
 - Stations
 - Agents
+- GamingAccounts
 - Sessions
 - Tariffs
 - Billing
@@ -238,7 +242,8 @@ Acceptance:
 - duplicate station code rejected safely;
 - one active Agent lease owns a PC station at a time;
 - reconnect cannot resurrect stale control;
-- Agent reports do not overwrite authoritative Server decisions.
+- Agent reports do not overwrite authoritative Server decisions;
+- account-related Agent commands, when introduced, must be Server-authorized and constrained by the current lease and station policy.
 
 ## Stage 5 — Customers
 
@@ -290,6 +295,19 @@ Acceptance:
 - stale transfers fail safely;
 - releasing a PC cannot leave an orphan session;
 - reconnect/restart does not double-charge.
+
+### Optional Steam account lifecycle
+
+Steam account automation is a separately gated integration within the session workflow; it must not become a second authority for Station or Session state.
+
+- For the standard Steam PC Café model, patrons use their own Steam accounts while the venue offers commercial licenses through the Steam PC Café license pool. GameNet must not collect or store patrons' personal Steam passwords.
+- Dedicated accounts assigned to individual stations are allowed only when the venue's actual Steam model and applicable authorization permit them. Valve's current documentation describes the dedicated-account-per-station model for VR arcades; do not assume it is the ordinary PC Café model.
+- Auto-login is disabled by default until the exact integration method is verified as supported/authorized under the current Steam agreements or written authorization is recorded. Do not use credential injection, GUI scripts/macros, process/UI tampering, Steam Guard bypass or account-creation automation.
+- A future GamingAccounts module owns account metadata, allowed station assignment, enable/disable, credential rotation state and audit. Steam passwords are never returned in normal UI/API reads. If an authorized provider requires a credential at a station, release it only for that permitted account + station + active session over authenticated transport; do not persist it in Agent files, environment variables or logs.
+- The external-account credential vault is separate from PostgreSQL/Steam metadata and from Server deployment secrets. Store only non-secret metadata plus, where needed, encrypted per-account credential material; keep its versioned vault key outside the database and rotate it independently. Do not include plaintext external credentials in backups, logs, diagnostics or JSON configuration.
+- Account assignment and session transitions must be idempotent and concurrency-protected. One dedicated account cannot be assigned to two active stations unless the authorized Steam model expressly permits it. Steam login state never overwrites authoritative session state; failed login/authorization becomes a typed, audited station/session outcome.
+
+Acceptance for any enabled Steam mode: documented licensing/account model; permission checks; no plaintext secrets in logs/storage; concurrent-assignment tests; single-use/short-lived credential handoff where supported; restart/reconnect reconciliation; login-failure and logout/cleanup behavior; and a policy gate that prevents unsupported automation from being enabled.
 
 ## Stage 7 — Tariffs, billing and wallet
 
