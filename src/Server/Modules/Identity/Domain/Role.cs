@@ -7,6 +7,8 @@ public sealed class Role
     {
         Id = id;
         Code = Normalize(code, 64, nameof(code)).ToLowerInvariant();
+        if (!char.IsAsciiLetter(Code[0]) || Code.Any(ch => !char.IsAsciiLetterOrDigit(ch) && ch != '.' && ch != '-' && ch != '_'))
+            throw new ArgumentException("Role code must start with a letter and contain only letters, digits, dots, hyphens or underscores.", nameof(code));
         Name = Normalize(name, 120, nameof(name));
     }
     public Guid Id { get; private set; }
