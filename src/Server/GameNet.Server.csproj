@@ -10,7 +10,5 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
-    <PackageReference Include="System.IO.FileSystem.AccessControl" />
-    <PackageReference Include="System.Security.Principal.Windows" />
   </ItemGroup>
 </Project>
