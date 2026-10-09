@@ -27,6 +27,8 @@ $environmentNames = @(
     "ASPNETCORE_ENVIRONMENT",
     "DOTNET_ENVIRONMENT",
     "GameNet__Authentication__Enabled",
+    "GameNet__ProtectedSettings__Enabled",
+    "GAMENET_PROTECTED_SETTINGS_FILE",
     "GameNet__Authentication__Issuer",
     "GameNet__Authentication__Audience",
     "GameNet__Authentication__SigningKey",
@@ -64,6 +66,8 @@ try {
     $env:ASPNETCORE_URLS = $serverUrl
     $env:ASPNETCORE_ENVIRONMENT = "Production"
     $env:DOTNET_ENVIRONMENT = "Production"
+    $env:GameNet__ProtectedSettings__Enabled = "false"
+    Remove-Item Env:GAMENET_PROTECTED_SETTINGS_FILE -ErrorAction SilentlyContinue
 
     # Program.cs intentionally refuses to start in Production with authentication disabled.
     # Use throwaway credentials so the smoke test exercises the real Production startup guard.
