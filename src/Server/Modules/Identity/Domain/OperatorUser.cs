@@ -43,6 +43,7 @@ public sealed class OperatorUser
         LastLoginAtUtc = utcNow;
     }
     public void Disable() => IsActive = false;
+    public void SetActive(bool isActive) => IsActive = isActive;
 
     private static string NormalizeUsername(string value)
     {
