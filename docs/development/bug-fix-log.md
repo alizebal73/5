@@ -193,3 +193,11 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Cause: EF convention creates an index for the `AuthSession.UserId` foreign key, but the hand-authored Identity model snapshot/designer omitted that index. The entity configuration also relied on the convention without documenting it.
 - Fix: explicitly configure the UserId index in `AuthSessionConfiguration`, record it in both the migration's target model and the context snapshot, and include the index creation in `20261009010000_OperatorIdentity`. The reverse migration drops the whole `auth_sessions` table, so its index is removed with the table. The pending-model gate remains enabled.
 - Verification required: `dotnet ef migrations has-pending-model-changes` must pass; then clean PostgreSQL migration/concurrency, backup/restore, Desktop runtime and Agent runtime must all pass on the same feature commit.
+
+
+## 2026-10-09 — Identity end-to-end verification gap
+
+- The full Foundation workflow passed, but the existing Desktop smoke intentionally exits after `GET /health`; it does not exercise the new login screen or operator API. The Agent smoke covers agent leases, not operator Identity.
+- Added a real Identity runtime check against the isolated, clean PostgreSQL cluster as part of PostgreSQL certification. It exercises bootstrap-secret validation, first-owner create-once semantics, invalid and valid login, database-derived owner permissions, authenticated `/auth/me`, logout/rejected reuse of a revoked JWT, and five-attempt account lockout.
+- The helper uses a random throwaway owner/secrets and restores all process environment variables. On failure it emits a redacted diagnostic file matched by the existing workflow artifact rule. It does not touch the configured machine database.
+- Verification: the next full Certification must pass with the new Identity runtime path; the preceding successful run did not include these end-to-end assertions.

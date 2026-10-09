@@ -199,7 +199,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Clean PostgreSQL migration execution failed." }
 
     Assert-FoundationSchema $env:GAMENET_DATABASE_CONNECTION
-    Write-Host "Clean PostgreSQL migration/schema verification passed."
+    & "$PSScriptRoot/verify-identity-runtime.ps1"
+    Write-Host "Clean PostgreSQL migration/schema/Identity runtime verification passed."
 }
 finally {
     if ($null -eq $previousProcessConnection) {
