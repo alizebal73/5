@@ -214,3 +214,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 
 
 - Follow-up migration diagnostic found the manually inserted `RequestHash` snapshot metadata was attached to `AuditEntry` because both entities have an `Operation` property. Moved the metadata specifically inside the `IdempotencyRecord` snapshot/designer block. The generated diff now must be rechecked by EF; the gate remains on.
+
+
+## 2026-10-09 — Stations end-to-end certification
+
+- Extended the isolated Identity runtime harness to exercise the new Stations API with a bootstrapped Owner token: create, replay of the same idempotency key, rejection of the same key with a different payload, provisioning and binding an active Agent credential, authoritative offline state, unique device binding, stale Version rejection, and administrative status separation.
+- These assertions use the isolated clean PostgreSQL database and random throwaway station/device IDs. They do not contact or mutate the production machine database.
+- Verification requirement: the full Foundation + Identity + Stations workflow must pass on the same commit before the Stations slice is treated as certified.

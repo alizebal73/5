@@ -197,6 +197,110 @@ try {
     Assert-Status $current 200 "Authenticated current-operator request"
     if ($current.Json.data.username -ne $username) { throw "The current-operator endpoint returned the wrong identity." }
 
+    # Station mutations must be idempotent and Station online state must not be inferred from credential existence.
+    $stationCode = "CI-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+    $stationCreateKey = "ci-station-create-" + [Guid]::NewGuid().ToString("N")
+    $stationCreateHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = $stationCreateKey
+    }
+    $stationCreateBody = @{ code = $stationCode; name = "CI Station"; type = 1 }
+    $stationCreate = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationCreateBody
+    Assert-Status $stationCreate 201 "Create station"
+    $stationId = [string]$stationCreate.Json.data.id
+    if ([string]::IsNullOrWhiteSpace($stationId) -or $stationCreate.Json.data.code -ne $stationCode) {
+        throw "Station create did not return the expected station identity."
+    }
+
+    $stationReplay = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationCreateBody
+    Assert-Status $stationReplay 201 "Replay identical station create"
+    if ([string]$stationReplay.Json.data.id -ne $stationId) {
+        throw "Idempotency replay returned a different station."
+    }
+
+    $stationDifferentBody = @{ code = $stationCode; name = "Different Station"; type = 1 }
+    $stationKeyConflict = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationDifferentBody
+    Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
+
+    $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
+    $provisionHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
+    }
+    $provisionedAgent = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/provision" $provisionHeaders @{
+        deviceId = $stationDeviceId
+    }
+    Assert-Status $provisionedAgent 200 "Provision Agent credential for station binding"
+
+    $bindHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $boundStation = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/agent" $bindHeaders @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-Status $boundStation 200 "Bind provisioned Agent to station"
+    if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
+        $boundStation.Json.data.agentOnline -ne $false -or
+        $boundStation.Json.data.version -ne 2) {
+        throw "Station binding or server-derived offline state was incorrect before Agent connection."
+    }
+
+    $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+    Assert-Status $stationList 200 "List stations"
+    $listedStation = @($stationList.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+    if (-not $listedStation -or $listedStation.agentOnline -ne $false) {
+        throw "Station list did not reflect the authoritative offline state."
+    }
+
+    $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $secondStationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-create-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $secondStation = Invoke-IdentityRequest "POST" "/api/v1/stations" $secondStationHeaders @{
+        code = $secondStationCode
+        name = "Second CI Station"
+        type = 1
+    }
+    Assert-Status $secondStation 201 "Create second station"
+    $duplicateBinding = Invoke-IdentityRequest "PUT" "/api/v1/stations/$($secondStation.Json.data.id)/agent" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-ErrorCode $duplicateBinding 409 "stations.device_already_bound" "Prevent Agent binding to two stations"
+
+    $staleRename = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-stale-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        name = "Stale rename"
+        expectedVersion = 1
+    }
+    Assert-ErrorCode $staleRename 409 "stations.version_conflict" "Reject stale station version"
+
+    $maintenance = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/status" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-status-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        status = 3
+        expectedVersion = 2
+    }
+    Assert-Status $maintenance 200 "Set station administrative maintenance status"
+    if ($maintenance.Json.data.status -ne 3 -or $maintenance.Json.data.agentOnline -ne $false) {
+        throw "Administrative status was not kept separate from Agent runtime state."
+    }
+
     $logout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $operatorHeaders
     Assert-Status $logout 200 "Operator logout"
     if (-not $logout.Json.data.success) { throw "The logout endpoint did not report success." }
@@ -217,7 +321,7 @@ try {
     }
     Assert-ErrorCode $locked 423 "auth.locked" "Login after lockout threshold"
 
-    Write-Host "IDENTITY RUNTIME / BOOTSTRAP / LOGIN / PERMISSIONS / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
+    Write-Host "IDENTITY / STATIONS / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
     $testSucceeded = $true
 }
 catch {
