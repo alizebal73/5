@@ -41,7 +41,7 @@ if (Test-Path $modulesRoot) {
     foreach ($module in $moduleDirs) {
         $others = $moduleDirs | Where-Object Name -ne $module.Name
         foreach ($other in $others) {
-            Assert-NoMatch (Join-Path $modulesRoot $module.Name) ("GameNet\.Server\.Modules\$([regex]::Escape($other.Name))") "Cross-module implementation reference detected: $($module.Name) -> $($other.Name)."
+            Assert-NoMatch (Join-Path $modulesRoot $module.Name) ([regex]::Escape("GameNet.Server.Modules.$($other.Name)")) "Cross-module implementation reference detected: $($module.Name) -> $($other.Name)."
         }
     }
 }
