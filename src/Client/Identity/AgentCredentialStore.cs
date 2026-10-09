@@ -11,6 +11,7 @@ public sealed class AgentCredentialStore(
 {
     public async Task<string> GetOrBootstrapAsync(CancellationToken cancellationToken = default)
     {
+        var variableName = transportOptions.Value.BootstrapCredentialEnvironmentVariableName;
         var root = Path.GetFullPath(identityOptions.Value.RootPath);
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "credential.bin");
@@ -23,15 +24,16 @@ public sealed class AgentCredentialStore(
                 var clear = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
                 var stored = Encoding.UTF8.GetString(clear);
                 if (!string.IsNullOrWhiteSpace(stored))
+                {
+                    Environment.SetEnvironmentVariable(variableName, null, EnvironmentVariableTarget.Process);
                     return stored;
+                }
             }
             catch (CryptographicException exception)
             {
                 throw new InvalidOperationException("Stored Agent credential cannot be decrypted.", exception);
             }
         }
-
-        var variableName = transportOptions.Value.BootstrapCredentialEnvironmentVariableName;
         var bootstrap = Environment.GetEnvironmentVariable(variableName);
         if (string.IsNullOrWhiteSpace(bootstrap))
             throw new InvalidOperationException($"No Agent bootstrap credential is available. Set {variableName} for the Agent service identity.");

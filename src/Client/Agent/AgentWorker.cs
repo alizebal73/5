@@ -40,7 +40,15 @@ public sealed class AgentWorker(
                     if (!await transport.HeartbeatAsync(heartbeat, stoppingToken))
                         throw new InvalidOperationException("Server rejected the Agent heartbeat lease.");
 
-                    await transport.ReconcileAsync(identity.DeviceId, "heartbeat", stoppingToken);
+                    var reconciliation = await transport.ReconcileAsync(identity.DeviceId, "heartbeat", stoppingToken);
+                    if (!string.Equals(reconciliation.DeviceId, identity.DeviceId, StringComparison.Ordinal) ||
+                        reconciliation.AgentProtocolVersion != AgentProtocolVersions.V1 ||
+                        !reconciliation.AuthoritativeConnection ||
+                        reconciliation.Scope != AgentReconciliationScope.LeaseAndIdentity)
+                    {
+                        throw new InvalidOperationException("Server reconciliation did not confirm the authoritative Agent identity and lease.");
+                    }
+
                     succeeded = true;
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
