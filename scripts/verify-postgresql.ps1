@@ -131,6 +131,14 @@ if ($LASTEXITCODE -ne 0) {
         $diagnosticLines += "===== $($file.Name) ====="
         $diagnosticLines += [System.IO.File]::ReadAllText($file.FullName)
     }
+
+    $updatedSnapshot = Join-Path (Get-Location) "src/Server/Persistence/Migrations/GameNetDbContextModelSnapshot.cs"
+    if (Test-Path -LiteralPath $updatedSnapshot -PathType Leaf) {
+        $diagnosticLines += ""
+        $diagnosticLines += "===== GameNetDbContextModelSnapshot.cs (EF-scaffolded current model) ====="
+        $diagnosticLines += [System.IO.File]::ReadAllText($updatedSnapshot)
+    }
+
     if ($generated.Count -eq 0) {
         $diagnosticLines += "No generated migration source was found."
     }
