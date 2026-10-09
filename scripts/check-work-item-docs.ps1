@@ -96,7 +96,7 @@ Assert-RequiredTerms $tracePath $trace @(
 )
 Assert-RequiredTerms $matrixPath $matrix @(
     "requirements-traceability.md",
-    "الگوی شکست مشاهده‌شده",
+    "قواعد تجاری‌ای که هر UI باید از Server بگیرد",
     "Server",
     "P0",
     "Deferred"
