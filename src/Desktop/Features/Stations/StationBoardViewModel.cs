@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
+using GameNet.Desktop.Features.Identity;
 using GameNet.Shared.Contracts.V1.Stations;
 
 namespace GameNet.Desktop.Features.Stations;
