@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace GameNet.Server.Persistence.Migrations;
 
-public sealed partial class OperatorIdentity : Migration
+public partial class OperatorIdentity : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {

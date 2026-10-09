@@ -2,7 +2,7 @@ using System.Windows.Input;
 
 namespace GameNet.Desktop.Features.Identity;
 
-public sealed class AsyncRelayCommand(Func<Task> execute, Func<bool> canExecute) : ICommand
+public sealed class AsyncUiAction(Func<Task> execute, Func<bool> canExecute) : ICommand
 {
     public event EventHandler? CanExecuteChanged;
     public bool CanExecute(object? parameter) => canExecute();

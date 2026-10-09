@@ -17,8 +17,8 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     public LoginViewModel(IGameNetServerClient serverClient)
     {
         this.serverClient = serverClient;
-        LoginCommand = new AsyncRelayCommand(LoginAsync, () => !IsBusy && !IsAuthenticated);
-        LogoutCommand = new AsyncRelayCommand(LogoutAsync, () => !IsBusy && IsAuthenticated);
+        LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
+        LogoutCommand = new AsyncUiAction(LogoutAsync, () => !IsBusy && IsAuthenticated);
         StatusMessage = Text("نشست ورود از طرف سرور تأیید می‌شود. برد سیستم‌ها در برش بعدی وصل خواهد شد.",
             "Your session is verified by the Server. The station board will be connected in the next slice.");
     }
@@ -106,8 +106,8 @@ public sealed class LoginViewModel : INotifyPropertyChanged
 
     private void RaiseCommands()
     {
-        if (LoginCommand is AsyncRelayCommand login) login.RaiseCanExecuteChanged();
-        if (LogoutCommand is AsyncRelayCommand logout) logout.RaiseCanExecuteChanged();
+        if (LoginCommand is AsyncUiAction login) login.RaiseCanExecuteChanged();
+        if (LogoutCommand is AsyncUiAction logout) logout.RaiseCanExecuteChanged();
     }
 
     private static string Text(string persian, string english) =>

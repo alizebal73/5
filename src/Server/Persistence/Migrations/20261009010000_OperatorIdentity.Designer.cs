@@ -13,7 +13,7 @@ namespace GameNet.Server.Persistence.Migrations
 {
     [DbContext(typeof(GameNetDbContext))]
     [Migration("20261009010000_OperatorIdentity")]
-    public sealed partial class OperatorIdentity : Migration
+    public partial class OperatorIdentity
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {

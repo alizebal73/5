@@ -171,3 +171,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Correct boundary: keep `IIdentityRepository` in Identity.Application and move the EF implementation to `src/Server/Infrastructure/Persistence/Identity`, with registration owned by Server composition. Do not weaken `check-architecture.ps1`.
 - The same review found the new handwritten migration lacked the required EF `.Designer.cs` artifact. Added a migration designer target model derived from the current model snapshot and made the migration class partial so the existing migration-integrity gate can verify it.
 - Verification: the new commit must pass architecture, migration-integrity, clean PostgreSQL migration, pending-model-change, full unit/contract tests, Desktop smoke, and Agent runtime before this slice can be considered for merge.
+
+
+## 2026-10-09 — CI blocker / command naming and EF migration partial pattern
+
+- The next canonical run reached the architecture guard and correctly rejected the WPF command helper because its type name ended in `Command`, matching the guard's reserved transport contract suffix rule. Renamed the UI-only type to `AsyncUiAction`; the guard remains unchanged and transport DTOs stay exclusively in Shared.Contracts.
+- Standardized the new EF migration into the normal partial-class pattern: migration source declares the `Migration` base, designer owns the `DbContext`/`Migration` attributes and target model.
+- Verification: rerun canonical and full runtime certification on this exact branch head. Migration snapshot drift and compile/runtime failures remain unknown until those gates execute.
