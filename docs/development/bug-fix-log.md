@@ -334,3 +334,14 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Critical old failure patterns converted to gates: transfer/Agent/Login ownership races; PendingPayment vs Debt and session-payment allocation; wallet/gift/revenue reconciliation; warehouse/showcase stock and reversal; idempotency/concurrency; stale realtime connection/lease; production mocks; migration drift; installer secret/data-root/LAN startup; and physical PC certification.
 - Evidence boundary: Identity and Stations exist as code candidates, but latest-head certification remains required. The remaining commercial modules are not described as implemented merely because they appear in requirements documentation. No production code changed in Stage 4.
 - Result: Stage 4 is closed. Next: Stage 5, standardize bug records and enforce Ready/Done fields on each implementation slice.
+
+
+## 2026-10-09 — Stage 5 complete: standardized work-item controls
+
+- Added Definition of Ready and Definition of Done as explicit entry/closure gates, plus a bug-fix process, reusable bug record, and vertical-slice template.
+- Updated the Engineering Constitution, master build plan and Bug-Fix Log preamble to make the process mandatory for new work while preserving the historical log as append-only.
+- Added scripts/check-work-item-docs.ps1 to validate required policy/template files and headings and require at least 50 unique REQ IDs in the traceability matrix. Wired it into scripts/verify.ps1 so Canonical verification cannot pass if those work-item controls disappear or requirement IDs duplicate.
+- The first two gate runs failed on incorrect expected text in the new validator: [run 75](https://github.com/alizebal73/5/actions/runs/37925664994) expected separate English “Definition of Done” text where the source used a combined heading, and [run 76](https://github.com/alizebal73/5/actions/runs/37925776663) expected an English historical-failure label absent from the Persian capability summary. The validation assertions were corrected to match the actual source-of-truth headings rather than changing the product documents to satisfy an inaccurate check.
+- Final verification: [quick-validation run 77](https://github.com/alizebal73/5/actions/runs/37925813224) completed with success on exact SHA  bcc18e998962ad724498f69d289ca8f9c084006f. PowerShell parser and the Canonical build/test step passed, including the new work-item documentation gate.
+- Scope/evidence boundary: no product runtime code or database schema changed in this stage. This is a documentation/process/verification improvement, not a claim that new product features or release readiness have been certified.
+- Result: Stage 5 is closed. Next: Stage 6, operator identity and secure login, with exact-SHA runtime evidence and no completion claim based only on source presence.
