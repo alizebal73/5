@@ -15,7 +15,12 @@ if (Test-Path -LiteralPath $fullDestination) {
     throw "Protected settings already exist. Refusing to overwrite the Server secrets file."
 }
 
-Add-Type -AssemblyName System.Security.Cryptography.ProtectedData
+try {
+    Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop
+}
+catch {
+    Add-Type -AssemblyName System.Security -ErrorAction Stop
+}
 
 function Read-RequiredText([string]$Prompt, [int]$MaximumLength = 512) {
     $value = Read-Host $Prompt
@@ -27,21 +32,41 @@ function Read-RequiredText([string]$Prompt, [int]$MaximumLength = 512) {
 
 function Read-SecretText([string]$Prompt, [int]$MinimumLength = 32, [int]$MaximumLength = 1024) {
     $secure = Read-Host -Prompt $Prompt -AsSecureString
+    $pointer = [IntPtr]::Zero
     try {
-        $value = ConvertFrom-SecureString -SecureString $secure -AsPlainText
+        $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        $value = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
         if ($value.Length -lt $MinimumLength -or $value.Length -gt $MaximumLength) {
             throw "The secret must contain $MinimumLength-$MaximumLength characters."
         }
         return $value
     }
     finally {
+        if ($pointer -ne [IntPtr]::Zero) {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+        }
         $secure.Dispose()
     }
 }
 
+function Clear-ByteArray([byte[]]$Bytes) {
+    if ($null -ne $Bytes -and $Bytes.Length -gt 0) {
+        [Array]::Clear($Bytes, 0, $Bytes.Length)
+    }
+}
+
 function New-RandomSecret([int]$ByteCount = 48) {
-    $value = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes($ByteCount))
-    return $value.TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    $bytes = New-Object byte[] $ByteCount
+    $random = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $random.GetBytes($bytes)
+        $value = [Convert]::ToBase64String($bytes)
+        return $value.TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    }
+    finally {
+        $random.Dispose()
+        Clear-ByteArray $bytes
+    }
 }
 
 $directory = Split-Path -Parent $fullDestination
@@ -91,7 +116,7 @@ if ((Test-Path -LiteralPath $certificatePath) -or (Test-Path -LiteralPath $publi
     throw "A Server TLS certificate already exists. Refusing to overwrite existing TLS material."
 }
 
-$certificate = $null
+$certificateInfo = $null
 $secureCertificatePassword = $null
 $certificatePassword = $null
 $certificatePfxCreated = $false
@@ -104,60 +129,22 @@ try {
     $certificatePassword = New-RandomSecret 48
     $secureCertificatePassword = ConvertTo-SecureString -String $certificatePassword -AsPlainText -Force
 
-    $certificate = New-SelfSignedCertificate `
-        -Type SSLServerAuthentication `
-        -Subject "CN=GameNet Server" `
-        -TextExtension @("2.5.29.17={text}IPAddress=$($serverAddress.ToString())") `
-        -KeyAlgorithm RSA `
-        -KeyLength 3072 `
-        -HashAlgorithm SHA256 `
-        -KeyExportPolicy Exportable `
-        -CertStoreLocation "Cert:\\LocalMachine\\My" `
-        -NotAfter (Get-Date).AddYears(2)
-    if ($null -eq $certificate -or -not $certificate.HasPrivateKey) {
-        throw "Could not create a Server TLS certificate with a private key."
+    Import-Module -Name (Join-Path $PSScriptRoot "modules/ServerTlsCertificate.psm1") -Force
+    $certificateOptions = @{
+        ServerAddress = $serverAddress
+        PfxPath = $certificatePath
+        PublicCertificatePath = $publicCertificatePath
+        Password = $secureCertificatePassword
+        CertificateStoreLocation = "Cert:\LocalMachine\My"
     }
-
-    $sanExtension = $certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.17" } | Select-Object -First 1
-    if ($null -eq $sanExtension -or $sanExtension.Format($true) -notmatch [regex]::Escape($serverAddress.ToString())) {
-        throw "The generated Server TLS certificate does not contain the requested LAN IP in its Subject Alternative Name."
-    }
-
-    $ekuExtension = $certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.37" } | Select-Object -First 1
-    $hasServerAuthentication = $false
-    if ($null -ne $ekuExtension) {
-        $ekuOids = ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExtension).EnhancedKeyUsages
-        foreach ($oid in $ekuOids) {
-            if ($oid.Value -eq "1.3.6.1.5.5.7.3.1") { $hasServerAuthentication = $true }
-        }
-    }
-    if (-not $hasServerAuthentication) {
-        throw "The generated Server TLS certificate is missing the Server Authentication EKU."
-    }
-
+    $certificateInfo = New-GameNetServerTlsCertificate @certificateOptions
     $certificatePfxCreated = $true
-    Export-PfxCertificate -Cert $certificate -FilePath $certificatePath -Password $secureCertificatePassword | Out-Null
     $publicCertificateCreated = $true
-    Export-Certificate -Cert $certificate -FilePath $publicCertificatePath -Type CERT | Out-Null
-
-    if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf) -or
-        (Get-Item -LiteralPath $certificatePath).Length -lt 1024) {
-        throw "Server TLS private certificate export is missing or unexpectedly small."
-    }
-    $publicCertificate = Get-PfxCertificate -FilePath $publicCertificatePath
-    if ($null -eq $publicCertificate -or $publicCertificate.HasPrivateKey -or
-        $publicCertificate.Thumbprint -ne $certificate.Thumbprint) {
-        throw "The exported public Server certificate did not match the generated certificate."
-    }
 
     foreach ($certificateFile in @($certificatePath, $publicCertificatePath)) {
         & icacls.exe $certificateFile /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Could not restrict Server TLS certificate file ACLs." }
     }
-
-    # The private key is retained only in the ACL-protected PFX; do not leave a second store copy.
-    $storeCertificatePath = "Cert:\\LocalMachine\\My\\$($certificate.Thumbprint)"
-    Remove-Item -LiteralPath $storeCertificatePath -Force
 
     $settings = [ordered]@{
         "GameNet:DatabaseConnectionString" = $connectionString
@@ -196,7 +183,8 @@ try {
     Write-Host "Protected Server settings and TLS certificate were written and ACL-restricted."
     Write-Host "The Server will listen on HTTPS port 5081; use https://$($serverAddress.ToString()):5081 from the LAN."
     Write-Host "Public certificate file: $publicCertificatePath"
-    Write-Host ("SHA-256 certificate fingerprint: {0}" -f (Get-FileHash -LiteralPath $publicCertificatePath -Algorithm SHA256).Hash)
+    Write-Host ("SHA-256 certificate fingerprint: {0}" -f $certificateInfo.Sha256Fingerprint)
+    Write-Host ("Certificate expires (UTC): {0}" -f $certificateInfo.ExpiresUtc)
     Write-Host "Copy only server-trust.cer to each client PC; verify this fingerprint out of band before trusting it."
     Write-Host "Never distribute server.pfx. No secret values were displayed or written to plaintext configuration."
     Write-Host "Re-enter the bootstrap secret when running scripts/bootstrap-admin.ps1."
@@ -211,22 +199,16 @@ catch {
     if ($publicCertificateCreated -and (Test-Path -LiteralPath $publicCertificatePath)) {
         Remove-Item -LiteralPath $publicCertificatePath -Force -ErrorAction SilentlyContinue
     }
-    if ($null -ne $certificate) {
-        $storeCertificatePath = "Cert:\\LocalMachine\\My\\$($certificate.Thumbprint)"
-        if (Test-Path -LiteralPath $storeCertificatePath) {
-            Remove-Item -LiteralPath $storeCertificatePath -Force -ErrorAction SilentlyContinue
-        }
-    }
     throw
 }
 finally {
-    if ($null -ne $certificate) { $certificate.Dispose() }
     if ($null -ne $secureCertificatePassword) { $secureCertificatePassword.Dispose() }
-    if ($null -ne $clearBytes) { [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearBytes) }
-    if ($null -ne $protectedBytes) { [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedBytes) }
+    Clear-ByteArray $clearBytes
+    Clear-ByteArray $protectedBytes
     $connectionString = $null
     $dbPassword = $null
     $bootstrapSecret = $null
     $certificatePassword = $null
+    $certificateInfo = $null
     $settings = $null
 }

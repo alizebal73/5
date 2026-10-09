@@ -18,6 +18,13 @@ on:
       - "scripts/verify-backup-restore.ps1"
       - "scripts/verify-desktop-runtime.ps1"
       - "scripts/verify-agent-runtime.ps1"
+      - "scripts/verify-server-tls-certificate.ps1"
+      - "scripts/modules/**"
+      - "scripts/write-protected-server-settings.ps1"
+      - "scripts/publish-deployment-payloads.ps1"
+      - "scripts/verify.ps1"
+      - "src/Server/Infrastructure/Configuration/**"
+      - "tests/Server.UnitTests/**"
       - "src/Client/**"
       - "src/Shared/Contracts/V1/Protocol/**"
       - "src/Server/Infrastructure/Realtime/**"
@@ -54,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          foreach ($file in Get-ChildItem .\scripts -Recurse -File -Filter *.ps1) {
+          foreach ($file in Get-ChildItem .\scripts -Recurse -File | Where-Object { $_.Extension -in @(".ps1", ".psm1") }) {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)

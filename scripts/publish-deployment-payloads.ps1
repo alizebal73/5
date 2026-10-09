@@ -38,6 +38,8 @@ $requiredFiles = @(
     "src/Server/Program.cs",
     "src/Server/Infrastructure/Configuration/ProtectedServerSettings.cs",
     "scripts/write-protected-server-settings.ps1",
+    "scripts/modules/ServerTlsCertificate.psm1",
+    "scripts/verify-server-tls-certificate.ps1",
     "src/Server/Persistence/GameNetDbContextFactory.cs",
     "src/Client/GameNet.Agent.csproj",
     "src/Client/Program.cs",
@@ -136,8 +138,13 @@ finally {
 }
 
 $settingsWriter = Join-Path $repoRoot "scripts/write-protected-server-settings.ps1"
+$certificateModule = Join-Path $repoRoot "scripts/modules/ServerTlsCertificate.psm1"
 Assert-File $settingsWriter
+Assert-File $certificateModule
 Copy-Item -LiteralPath $settingsWriter -Destination (Join-Path $databaseOutput "write-protected-server-settings.ps1")
+$databaseModules = Join-Path $databaseOutput "modules"
+New-Item -ItemType Directory -Force -Path $databaseModules | Out-Null
+Copy-Item -LiteralPath $certificateModule -Destination (Join-Path $databaseModules "ServerTlsCertificate.psm1")
 
 # Production Server payload listens on explicit HTTPS; certificate path/password are supplied by the DPAPI-protected setup file.
 $productionSettingsPath = Join-Path $serverOutput "appsettings.Production.json"
