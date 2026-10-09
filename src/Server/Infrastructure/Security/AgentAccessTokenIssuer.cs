@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Primitives;
@@ -11,23 +10,21 @@ namespace GameNet.Server.Infrastructure.Security;
 
 public sealed class AgentAccessTokenIssuer(
     IOptions<GameNetOptions> options,
-    IGameClock clock) : IAgentAccessTokenIssuer
+    IGameClock clock,
+    IJwtSigningKeySecret signingSecret) : IAgentAccessTokenIssuer
 {
     public AgentTokenResponse Issue(string deviceId)
     {
         var auth = options.Value.Authentication;
         if (!auth.Enabled ||
             string.IsNullOrWhiteSpace(auth.Issuer) ||
-            string.IsNullOrWhiteSpace(auth.Audience) ||
-            string.IsNullOrWhiteSpace(auth.SigningKey))
-        {
+            string.IsNullOrWhiteSpace(auth.Audience))
             throw new InvalidOperationException("JWT authentication is not fully configured.");
-        }
 
         var now = clock.UtcNow;
         var expires = now.AddSeconds(options.Value.Agent.AccessTokenLifetimeSeconds);
         var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(auth.SigningKey)),
+            new SymmetricSecurityKey(Convert.FromBase64String(signingSecret.SigningKey)),
             SecurityAlgorithms.HmacSha256);
 
         var claims = new[]

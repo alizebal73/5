@@ -1,4 +1,3 @@
-using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -15,7 +14,7 @@ public static class AuthenticationRegistration
             .AddJwtBearer();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<IOptions<GameNetOptions>>((options, appOptions) =>
+            .Configure<IOptions<GameNetOptions>, IJwtSigningKeySecret>((options, appOptions, signingSecret) =>
             {
                 var settings = appOptions.Value.Authentication;
                 options.RequireHttpsMetadata = true;
@@ -28,9 +27,7 @@ public static class AuthenticationRegistration
                     ValidAudience = settings.Audience,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = string.IsNullOrWhiteSpace(settings.SigningKey)
-                        ? new SymmetricSecurityKey(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
-                        : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.SigningKey)),
+                    IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(signingSecret.SigningKey)),
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
 
@@ -41,9 +38,7 @@ public static class AuthenticationRegistration
                         var accessToken = context.Request.Query["access_token"].ToString();
                         if (!string.IsNullOrWhiteSpace(accessToken) &&
                             context.HttpContext.Request.Path.StartsWithSegments("/hubs/agent"))
-                        {
                             context.Token = accessToken;
-                        }
                         return Task.CompletedTask;
                     }
                 };
