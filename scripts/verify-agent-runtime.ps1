@@ -269,7 +269,7 @@ finally {
     foreach ($processToStop in @($agent, $agent2, $server)) {
         if ($null -eq $processToStop) { continue }
         try {
-            & (Join-Path $env:SystemRoot "System32\\taskkill.exe") /PID $processToStop.Id /T /F 2>$null | Out-Null
+            & (Join-Path $env:SystemRoot "System32\taskkill.exe") /PID $processToStop.Id /T /F 2>$null | Out-Null
         }
         catch {
             # Continue cleanup and preserve the original certification failure.
