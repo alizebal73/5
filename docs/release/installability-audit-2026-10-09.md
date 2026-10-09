@@ -64,3 +64,10 @@ For the first two-PC installability slice, either document and validate an alrea
 - No HTTP bypass, no certificate-validation bypass, no production mocks, and no shared Agent secret baked into packages.
 - Do not run destructive migration/installation tests against the live GameNet database.
 - The current CI results remain payload/Foun­dation evidence only. No `Setup.exe`/MSI has been certified; no physical two-PC installation has been recorded.
+
+
+## Exact-SHA update — Agent URL validation
+
+On SHA `b95eab6c68e89b4d8f4500f714f1445ffd9ca4c4`, `AgentTransportOptions.Validate()` was aligned with Desktop and Server policy: remote HTTPS is accepted, remote HTTP is rejected, and loopback HTTP remains available only for local development. Regression tests and [Quick Validation #127](https://github.com/alizebal73/5/actions/runs/37959248404) passed; [Full Foundation #195](https://github.com/alizebal73/5/actions/runs/37959248381) also passed, including PostgreSQL, backup/restore, Desktop Runtime, Agent Runtime and evidence upload.
+
+This closes the insecure-remote-HTTP configuration inconsistency only. It does not close the TLS listener, server certificate/trust, external runtime configuration, unique Agent enrollment, protected bootstrap-secret cleanup, or two-physical-PC installation gates.
