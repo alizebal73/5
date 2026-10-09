@@ -228,3 +228,9 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The first extended Stations runtime run reached the new scenario but its failure cleanup then failed reading the Server log because the child process still held the file open on Windows. That cleanup exception masked the original assertion and prevented actionable diagnostics.
 - Added bounded retry-based log reads with an explicit `DIAGNOSTIC_READ_FAILED` fallback so the original failure is preserved and the diagnostic artifact is still written.
 - The prior run is not considered passed; the same end-to-end Station scenario must be rerun after this diagnostic fix.
+
+
+## 2026-10-09 — Upload Identity runtime diagnostics on certification failure
+
+- The Stations end-to-end request correctly failed closed with HTTP 500, but the workflow upload glob did not match `identity-runtime-diagnostic-<token>.txt`; consequently the Server exception log was not preserved as an artifact.
+- Added the exact Identity diagnostic pattern to the existing failure-only artifact paths. The next run will expose the redacted inner Server exception without changing runtime behavior or reducing any assertion.
