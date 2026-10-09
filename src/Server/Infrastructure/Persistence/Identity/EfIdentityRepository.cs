@@ -4,7 +4,7 @@ using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace GameNet.Server.Modules.Identity.Infrastructure.Persistence;
+namespace GameNet.Server.Infrastructure.Persistence.Identity;
 
 public sealed class EfIdentityRepository(GameNetDbContext db) : IIdentityRepository
 {

@@ -1,14 +1,11 @@
 using GameNet.Server.Persistence;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace GameNet.Server.Persistence.Migrations;
 
-[DbContext(typeof(GameNetDbContext))]
-[Migration("20261009010000_OperatorIdentity")]
-public sealed class OperatorIdentity : Migration
+public sealed partial class OperatorIdentity : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {

@@ -9,7 +9,7 @@ using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
 using GameNet.Server.Modules.Identity.Application;
-using GameNet.Server.Modules.Identity.Infrastructure.Persistence;
+using GameNet.Server.Infrastructure.Persistence.Identity;
 using GameNet.Server.Modules.Identity.Infrastructure.Security;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;

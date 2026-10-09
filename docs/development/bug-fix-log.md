@@ -163,3 +163,11 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Static review found the Desktop host set `X-GameNet-Contract: v1` as a default HttpClient header while `GameNetServerClient` also added the same header to each request. That could serialize two values and cause the Server's exact contract-version guard to reject otherwise valid requests.
 - Fix: the request client now adds the contract header only when the host has not already configured it. A regression test simulates the Desktop host's default header and asserts exactly one contract version reaches the handler.
 - Verification: pending the full feature-branch workflow.
+
+
+## 2026-10-09 — CI blocker / module persistence boundary and migration artifacts
+
+- Verified the latest feature-branch CI failure from the workflow logs. PowerShell parsing and source-size checks passed; the architecture gate stopped on `src/Server/Modules/Identity/Infrastructure/Persistence/EfIdentityRepository.cs` because all files under a business module are prohibited from directly referencing EF/Persistence.
+- Correct boundary: keep `IIdentityRepository` in Identity.Application and move the EF implementation to `src/Server/Infrastructure/Persistence/Identity`, with registration owned by Server composition. Do not weaken `check-architecture.ps1`.
+- The same review found the new handwritten migration lacked the required EF `.Designer.cs` artifact. Added a migration designer target model derived from the current model snapshot and made the migration class partial so the existing migration-integrity gate can verify it.
+- Verification: the new commit must pass architecture, migration-integrity, clean PostgreSQL migration, pending-model-change, full unit/contract tests, Desktop smoke, and Agent runtime before this slice can be considered for merge.
