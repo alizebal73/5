@@ -118,6 +118,10 @@ $provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumber
 $username = "ci-owner-" + [Guid]::NewGuid().ToString("N").Substring(0, 16)
 $password = "CI-owner-" + [Guid]::NewGuid().ToString("N")
 $wrongPassword = "wrong-" + [Guid]::NewGuid().ToString("N")
+$basicOperatorPassword = $null
+$basicToken = $null
+$managerPassword = $null
+$managerToken = $null
 $accessToken = $null
 
 try {
@@ -278,7 +282,94 @@ try {
         throw "Station binding or server-derived offline state was incorrect before Agent connection."
     }
 
-    $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+    
+    # Operator/role management security boundary tests.
+    $roles = Invoke-IdentityRequest "GET" "/api/v1/identity/roles" $operatorHeaders
+    Assert-Status $roles 200 "List operator roles"
+    $ownerRole = @($roles.Json.data | Where-Object { $_.code -eq "owner" }) | Select-Object -First 1
+    if (-not $ownerRole -or -not ($ownerRole.permissions -contains "identity.roles.manage")) { throw "Owner role is missing current permission catalog." }
+
+    $basicRole = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-role-" + [Guid]::NewGuid().ToString("N"))
+    } @{ code = "readonly-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "CI Readonly"; permissions = @("stations.read") }
+    Assert-Status $basicRole 201 "Create least-privilege role"
+    $basicRoleId = [string]$basicRole.Json.data.id
+    $basicUsername = "ci-basic-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $basicOperatorPassword = "CI-basic-" + [Guid]::NewGuid().ToString("N")
+    $basicUserKey = "ci-user-" + [Guid]::NewGuid().ToString("N")
+    $basicUserHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"; "Idempotency-Key" = $basicUserKey }
+    $basicUserBody = @{ username = $basicUsername; displayName = "CI Basic"; password = $basicOperatorPassword; roleId = $basicRoleId }
+    $basicUser = Invoke-IdentityRequest "POST" "/api/v1/identity/users" $basicUserHeaders $basicUserBody
+    Assert-Status $basicUser 201 "Create limited operator"
+    $basicUserId = [string]$basicUser.Json.data.id
+    $basicReplay = Invoke-IdentityRequest "POST" "/api/v1/identity/users" $basicUserHeaders $basicUserBody
+    Assert-Status $basicReplay 201 "Replay operator creation with same idempotency key"
+    if ([string]$basicReplay.Json.data.id -ne $basicUserId) { throw "Operator idempotency replay returned a different user." }
+
+    $basicLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{ username = $basicUsername; password = $basicOperatorPassword }
+    Assert-Status $basicLogin 200 "Login limited operator"
+    $basicToken = [string]$basicLogin.Json.data.accessToken
+    if ($basicLogin.Json.data.permissions -contains "identity.roles.manage" -or $basicLogin.Json.data.permissions -contains "identity.users.write") {
+        throw "Limited operator received privileges not granted by its role."
+    }
+    $basicHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken" }
+    $missingPermission = Invoke-IdentityRequest "GET" "/api/v1/identity/users" $basicHeaders
+    Assert-Status $missingPermission 403 "Deny identity user listing without permission"
+
+    $basicPermissionUpdate = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$basicRoleId/permissions" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-role-perm-" + [Guid]::NewGuid().ToString("N"))
+    } @{ permissions = @("stations.read", "identity.users.read") }
+    Assert-Status $basicPermissionUpdate 200 "Owner updates role permissions"
+    $basicNowCanRead = Invoke-IdentityRequest "GET" "/api/v1/identity/users" $basicHeaders
+    Assert-Status $basicNowCanRead 200 "Refresh role permissions from authoritative Server state"
+    $basicLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $basicHeaders
+    Assert-Status $basicLogout 200 "Logout limited operator"
+
+    $managerRole = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-mgr-role-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        code = "manager-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+        name = "CI Restricted Manager"
+        permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "stations.read")
+    }
+    Assert-Status $managerRole 201 "Create constrained role manager"
+    $managerUsername = "ci-manager-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $managerPassword = "CI-manager-" + [Guid]::NewGuid().ToString("N")
+    $managerUser = Invoke-IdentityRequest "POST" "/api/v1/identity/users" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-mgr-user-" + [Guid]::NewGuid().ToString("N"))
+    } @{ username = $managerUsername; displayName = "CI Manager"; password = $managerPassword; roleId = [string]$managerRole.Json.data.id }
+    Assert-Status $managerUser 201 "Create constrained role manager account"
+    $managerTokenResponse = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{ username = $managerUsername; password = $managerPassword }
+    Assert-Status $managerTokenResponse 200 "Login constrained role manager"
+    $managerToken = [string]$managerTokenResponse.Json.data.accessToken
+    $managerHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken" }
+
+    $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-escalate-" + [Guid]::NewGuid().ToString("N"))
+    } @{ code = "blocked-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "No escalation"; permissions = @("settings.write") }
+    Assert-ErrorCode $managerEscalates 403 "identity.permission_escalation" "Deny privilege escalation when creating role"
+
+    $managerEditsOwner = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$($bootstrap.Json.data.userId)/active" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-disable-owner-" + [Guid]::NewGuid().ToString("N"))
+    } @{ isActive = $false }
+    Assert-ErrorCode $managerEditsOwner 403 "identity.owner_protected" "Deny non-owner from disabling Owner"
+
+    $systemRoleEdit = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($ownerRole.id)/permissions" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-system-role-" + [Guid]::NewGuid().ToString("N"))
+    } @{ permissions = @("stations.read") }
+    Assert-ErrorCode $systemRoleEdit 409 "identity.system_role_immutable" "Protect system Owner role"
+
+    $managerLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $managerHeaders
+    Assert-Status $managerLogout 200 "Logout constrained role manager"
+
+$stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     Assert-Status $stationList 200 "List stations"
     $listedStation = @($stationList.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
     if (-not $listedStation -or $listedStation.agentOnline -ne $false) {
@@ -372,7 +463,7 @@ finally {
     else {
         $stdout = Read-DiagnosticText $serverLog
         $stderr = Read-DiagnosticText $serverErrorLog
-        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken)) {
+        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken)) {
             if (-not [string]::IsNullOrWhiteSpace([string]$secretValue)) {
                 $stdout = $stdout.Replace([string]$secretValue, "<redacted>")
                 $stderr = $stderr.Replace([string]$secretValue, "<redacted>")
