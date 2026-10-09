@@ -34,9 +34,9 @@ if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $requiredFiles = @(
     "GameNet.slnx",
-    ".config/dotnet-tools.json",
     "src/Server/GameNet.Server.csproj",
     "src/Server/Program.cs",
+    "src/Server/Infrastructure/Configuration/ProtectedServerSettings.cs",
     "src/Server/Persistence/GameNetDbContextFactory.cs",
     "src/Client/GameNet.Agent.csproj",
     "src/Client/Program.cs",
@@ -49,21 +49,19 @@ foreach ($relativePath in $requiredFiles) {
     Assert-File (Join-Path $repoRoot $relativePath)
 }
 
-$toolManifest = Get-Content -LiteralPath (Join-Path $repoRoot ".config/dotnet-tools.json") -Raw
-if ($toolManifest -notmatch '"dotnet-ef"\s*:') {
-    throw "The local dotnet-ef tool must be declared in .config/dotnet-tools.json."
-}
-
 $serverProgram = Get-Content -LiteralPath (Join-Path $repoRoot "src/Server/Program.cs") -Raw
 $agentProgram = Get-Content -LiteralPath (Join-Path $repoRoot "src/Client/Program.cs") -Raw
-if ($serverProgram -notmatch 'UseWindowsService' -or $agentProgram -notmatch 'AddWindowsService') {
-    throw "Server and Agent must both use the Windows Service hosting integration before packaging."
+if ($serverProgram -notmatch 'UseWindowsService' -or
+    $serverProgram -notmatch '--migrate-only' -or
+    $serverProgram -notmatch 'ProtectedServerSettings.LoadInto' -or
+    $agentProgram -notmatch 'AddWindowsService') {
+    throw "Server/Agent Windows Service hosting, protected settings, and explicit migration mode are required before packaging."
 }
 
 $migrationFolder = Join-Path $repoRoot "src/Server/Persistence/Migrations"
 if (-not (Test-Path -LiteralPath $migrationFolder -PathType Container) -or
     -not (Get-ChildItem -LiteralPath $migrationFolder -File -Filter *.cs | Where-Object { $_.Name -notlike "*Snapshot*" })) {
-    throw "At least one versioned EF migration is required before a migration bundle can be packaged."
+    throw "At least one versioned EF migration is required before Server payloads can be packaged."
 }
 
 $dotnetPath = Join-Path $env:ProgramFiles "dotnet/dotnet.exe"
@@ -74,7 +72,7 @@ if (-not (Test-Path -LiteralPath $dotnetPath -PathType Leaf)) {
 Assert-File $dotnetPath
 
 if ($ValidateOnly) {
-    Write-Host "Deployment packaging preflight passed: Server, Desktop, Agent, EF tooling and migrations are present."
+    Write-Host "Deployment packaging preflight passed: Server, Desktop, Agent, protected settings and migrations are present."
     return
 }
 
@@ -116,13 +114,10 @@ $agentOutput = Join-Path $payloadRoot "Agent"
 $databaseOutput = Join-Path $payloadRoot "Database"
 New-Item -ItemType Directory -Force -Path $serverOutput,$desktopOutput,$agentOutput,$databaseOutput | Out-Null
 
-$previousDatabaseConnection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
 try {
     Push-Location $repoRoot
     try {
-        Invoke-Checked $dotnetPath @("tool", "restore")
         Invoke-Checked $dotnetPath @("restore", "GameNet.slnx")
-
         $publishCommon = @(
             "--configuration", "Release",
             "--runtime", "win-x64",
@@ -134,35 +129,38 @@ try {
         Invoke-Checked $dotnetPath (@("publish", "src/Server/GameNet.Server.csproj") + $publishCommon + @("--output", $serverOutput))
         Invoke-Checked $dotnetPath (@("publish", "src/Desktop/GameNet.Desktop.csproj") + $publishCommon + @("--output", $desktopOutput))
         Invoke-Checked $dotnetPath (@("publish", "src/Client/GameNet.Agent.csproj") + $publishCommon + @("--output", $agentOutput))
-
-        # The design-time factory requires a connection string, but building the migration
-        # bundle must not connect to or modify a real database. The value below is disposable.
-        $env:GAMENET_DATABASE_CONNECTION = "Host=127.0.0.1;Database=gamenet_bundle_design_only;Username=gamenet_bundle_design_only;Password=build-only-not-a-secret"
-        $migrationBundle = Join-Path $databaseOutput "GameNet.Migrations.exe"
-        Invoke-Checked $dotnetPath @(
-            "ef", "migrations", "bundle",
-            "--project", "src/Server/GameNet.Server.csproj",
-            "--startup-project", "src/Server/GameNet.Server.csproj",
-            "--configuration", "Release",
-            "--output", $migrationBundle,
-            "--self-contained",
-            "--target-runtime", "win-x64",
-            "--force"
-        )
     }
     finally {
         Pop-Location
     }
 }
-finally {
-    [Environment]::SetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", $previousDatabaseConnection, "Process")
-}
+
+$migrationInstructionsPath = Join-Path $databaseOutput "MIGRATION-MODE.txt"
+$protectedSettingsPath = Join-Path $env:ProgramData "GameNet Manager\Config\server-secrets.bin"
+$migrationInstructions = @"
+Database deployment for GameNet 5
+---------------------------------
+Do not run migrations automatically during routine Server service startup.
+
+After protected Server settings are provisioned, the DPAPI LocalMachine-protected file is expected at:
+  $protectedSettingsPath
+
+The Server configuration must set GameNet:ProtectedSettings:Enabled=true in
+appsettings.Production.json and the protected settings file must have an ACL limited
+to SYSTEM and Administrators. The package does not contain database or API secrets.
+
+Run the Server executable explicitly as Administrator/service identity:
+  GameNet.Server.exe --migrate-only
+
+The command applies pending EF migrations and exits with a non-zero code on any
+connection or migration failure. It does not start the HTTP listener.
+"@
+[System.IO.File]::WriteAllText($migrationInstructionsPath, $migrationInstructions, [System.Text.UTF8Encoding]::new($false))
 
 $expectedOutputs = @(
     (Join-Path $serverOutput "GameNet.Server.exe"),
     (Join-Path $desktopOutput "GameNet.Manager.Desktop.exe"),
-    (Join-Path $agentOutput "GameNet.Agent.exe"),
-    (Join-Path $databaseOutput "GameNet.Migrations.exe")
+    (Join-Path $agentOutput "GameNet.Agent.exe")
 )
 foreach ($path in $expectedOutputs) {
     Assert-File $path
@@ -227,7 +225,7 @@ $manifest = [ordered]@{
         [ordered]@{ name = "Server"; entryPoint = "Server/GameNet.Server.exe" },
         [ordered]@{ name = "Desktop"; entryPoint = "Desktop/GameNet.Manager.Desktop.exe" },
         [ordered]@{ name = "Agent"; entryPoint = "Agent/GameNet.Agent.exe" },
-        [ordered]@{ name = "DatabaseMigrations"; entryPoint = "Database/GameNet.Migrations.exe" }
+        [ordered]@{ name = "DatabaseMigrations"; entryPoint = "Server/GameNet.Server.exe --migrate-only" }
     )
     installerReady = $false
     installerStatus = "Payload-only; not an installer and not certified for end-user installation."
