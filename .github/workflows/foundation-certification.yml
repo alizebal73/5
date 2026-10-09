@@ -2,12 +2,13 @@ name: foundation-certification
 
 on:
   workflow_dispatch:
-  push:
+  # Required full gate for every proposed change to a protected Foundation branch.
+  pull_request:
     branches:
       - "foundation/runtime-*"
 
 concurrency:
-  group: foundation-certification-${{ github.ref }}
+  group: foundation-certification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -15,18 +16,25 @@ permissions:
 
 jobs:
   foundation:
+    name: foundation
     timeout-minutes: 45
     runs-on: [self-hosted, Windows, X64]
+    env:
+      GAMENET_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      GAMENET_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      GAMENET_PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: PowerShell parser gate
         timeout-minutes: 5
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          foreach ($file in Get-ChildItem .\scripts -Recurse -File -Filter *.ps1) {
+          foreach ($file in Get-ChildItem .\\scripts -Recurse -File -Filter *.ps1) {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
@@ -38,27 +46,27 @@ jobs:
       - name: Canonical verification
         timeout-minutes: 15
         shell: pwsh
-        run: .\scripts\verify.ps1
+        run: .\\scripts\\verify.ps1
 
       - name: PostgreSQL certification
         timeout-minutes: 15
         shell: pwsh
-        run: .\scripts\verify-postgresql.ps1
+        run: .\\scripts\\verify-postgresql.ps1
 
       - name: Backup and isolated restore certification
         timeout-minutes: 10
         shell: pwsh
-        run: .\scripts\verify-backup-restore.ps1
+        run: .\\scripts\\verify-backup-restore.ps1
 
       - name: Desktop runtime certification
         timeout-minutes: 10
         shell: pwsh
-        run: .\scripts\verify-desktop-runtime.ps1
+        run: .\\scripts\\verify-desktop-runtime.ps1
 
       - name: Agent runtime certification
         timeout-minutes: 15
         shell: pwsh
-        run: .\scripts\verify-agent-runtime.ps1
+        run: .\\scripts\\verify-agent-runtime.ps1
 
       - name: Upload failure diagnostics
         if: failure()
@@ -77,14 +85,19 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          New-Item -ItemType Directory -Force -Path .\artifacts\foundation | Out-Null
+          New-Item -ItemType Directory -Force -Path .\\artifacts\\foundation | Out-Null
           @(
-            "commit=$(git rev-parse HEAD)"
-            "branch=$(git branch --show-current)"
+            "testedCheckoutSha=$(git rev-parse HEAD)"
+            "githubSha=$env:GITHUB_SHA"
+            "eventName=$env:GITHUB_EVENT_NAME"
+            "pullRequestNumber=$env:GAMENET_PR_NUMBER"
+            "pullRequestHeadSha=$env:GAMENET_PR_HEAD_SHA"
+            "pullRequestBaseSha=$env:GAMENET_PR_BASE_SHA"
+            "gitBranch=$(git branch --show-current)"
             "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
             "result=FULL_FOUNDATION_CERTIFICATION_PASSED"
             "gates=PowerShellParser,CanonicalBuildAndTests,PostgreSQLCleanMigrationConcurrency,BackupIsolatedRestore,DesktopRuntime,AgentAuthLeaseHeartbeatFencingReconnect"
-          ) | Set-Content -LiteralPath .\artifacts\foundation\foundation-evidence.txt -Encoding utf8
+          ) | Set-Content -LiteralPath .\\artifacts\\foundation\\foundation-evidence.txt -Encoding utf8
 
       - name: Upload evidence
         timeout-minutes: 5
