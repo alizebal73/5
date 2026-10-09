@@ -178,3 +178,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The next canonical run reached the architecture guard and correctly rejected the WPF command helper because its type name ended in `Command`, matching the guard's reserved transport contract suffix rule. Renamed the UI-only type to `AsyncUiAction`; the guard remains unchanged and transport DTOs stay exclusively in Shared.Contracts.
 - Standardized the new EF migration into the normal partial-class pattern: migration source declares the `Migration` base, designer owns the `DbContext`/`Migration` attributes and target model.
 - Verification: rerun canonical and full runtime certification on this exact branch head. Migration snapshot drift and compile/runtime failures remain unknown until those gates execute.
+
+
+## 2026-10-09 — EF model snapshot drift diagnostic
+
+- The architecture gate and Release build/test suite pass, but `dotnet ef migrations has-pending-model-changes` fails on the current Identity slice. A hand-authored snapshot is not acceptable just because it compiles.
+- Added failure-only diagnostics to the PostgreSQL certification script: when the pending-model gate fails, CI asks EF itself to scaffold the exact model delta in its disposable checkout, writes the generated migration source/designer into `ef-model-drift-diagnostic.txt`, and fails closed before any database certification can be marked successful. The diagnostic migration is not committed to the branch.
+- The resulting EF-generated operations and target model must be reviewed and applied to the real migration/snapshot; do not suppress the pending-model gate or treat this failed run as certified.

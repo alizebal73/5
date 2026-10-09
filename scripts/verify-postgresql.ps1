@@ -105,7 +105,39 @@ $efOptions = @(
 )
 
 & $dotnetPath @(@("ef", "migrations", "has-pending-model-changes") + $efOptions)
-if ($LASTEXITCODE -ne 0) { throw "EF model/migration verification failed." }
+if ($LASTEXITCODE -ne 0) {
+    $diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
+    New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
+    $diagnosticName = "ModelDriftDiagnostic" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+    $diagnosticArgs = @("ef", "migrations", "add", $diagnosticName) + $efOptions
+    $diagnosticOutput = & $dotnetPath @diagnosticArgs 2>&1
+    $diagnosticExitCode = $LASTEXITCODE
+    $diagnosticPath = Join-Path $diagnosticRoot "ef-model-drift-diagnostic.txt"
+
+    $diagnosticLines = @(
+        "diagnostic=EF pending model changes"
+        "commit=$((git rev-parse HEAD 2>$null))"
+        "branch=$((git branch --show-current 2>$null))"
+        "migrationScaffoldExitCode=$diagnosticExitCode"
+        "migrationScaffoldOutput=$($diagnosticOutput -join [Environment]::NewLine)"
+    )
+
+    $generated = @(
+        Get-ChildItem -LiteralPath "src/Server/Persistence/Migrations" -File -Filter "*.cs" |
+            Where-Object { $_.Name -like "*$diagnosticName*" }
+    )
+    foreach ($file in $generated) {
+        $diagnosticLines += ""
+        $diagnosticLines += "===== $($file.Name) ====="
+        $diagnosticLines += [System.IO.File]::ReadAllText($file.FullName)
+    }
+    if ($generated.Count -eq 0) {
+        $diagnosticLines += "No generated migration source was found."
+    }
+
+    $diagnosticLines | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
+    throw "EF model/migration verification failed. Inspect artifacts/foundation/ef-model-drift-diagnostic.txt; the diagnostic migration exists only in this disposable CI workspace."
+}
 
 function Get-EphemeralPort {
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
