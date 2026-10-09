@@ -41,7 +41,7 @@ Run elevated PowerShell on each client PC, using the exact host or IP present in
 
 If a computer only needs one component, use -Component Desktop or -Component Agent. Restart the Desktop app and the Agent Windows service to load the files.
 
-The endpoint helper accepts HTTPS for network hosts. Plain HTTP is accepted only for loopback development/certification. URLs containing user information, query strings, fragments, or application paths are rejected. Neither HttpClient nor SignalR has a certificate-validation bypass.
+The endpoint helper accepts HTTPS for network hosts. Plain HTTP is accepted only for loopback development/certification. Foundation runtime harnesses use the explicit GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY test seam only with Development environment markers; it is rejected when either host environment is Production. This lets CI prove that Server, Desktop, and Agent consume their JSON configuration without writing to real machine ProgramData. URLs containing user information, query strings, fragments, or application paths are rejected. Neither HttpClient nor SignalR has a certificate-validation bypass.
 
 ## 4. Network validation
 

@@ -155,3 +155,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression evidence: scripts/verify-server-tls-certificate.ps1 covers SAN/EKU/validity, key non-exportability, public-only export, SHA-256 fingerprint, and no-overwrite. The trust-script test checks matching/mismatched SHA-256 and rejects the old 40-character value.
 - Verification result: pending full Foundation CI on the final commit. Neither automated test claims real Desktop/Agent LAN proof.
 - Rollback: revert the TLS lifecycle module, verifier, setup script, ADR and documentation as one atomic change; do not restore PFX certificate settings or weaken TLS validation.
+
+## 2026-10-09 — Runtime endpoint certification bypassed installed configuration
+
+- Symptom: Desktop and Agent Foundation smoke tests passed while overriding their Server endpoint from environment variables; the Server runtime checks also bound loopback by `ASPNETCORE_URLS`. This did not prove that the installed JSON configuration path was consumed.
+- Root cause: the harness verified transport and Agent lease behavior but supplied the endpoint through a higher-precedence provider rather than the runtime configuration file.
+- Fix: added a test-only configuration-directory resolver. The `GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY` override requires an absolute path and an explicit Development environment, and is rejected if either ASP.NET Core or .NET environment is Production. Desktop and Agent harnesses now write temporary `desktop.json`, `agent.json`, and `server.json` files, clear endpoint environment overrides, and launch the processes against those files. Temporary configuration is removed in cleanup.
+- Regression evidence: Shared tests cover default ProgramData path resolution, test-path acceptance in Development, and rejection for Production/missing environment/relative paths. Full Foundation runtime certification must prove server health, Desktop cultures, Agent lease/fencing/reconnect with these files.
+- Verification result: pending full Foundation on this exact commit. This still uses HTTP loopback for isolated CI; it does not prove real-LAN HTTPS or service-account private-key access.
+- Rollback: revert the resolver, its tests, harness updates, documentation and this entry together. Do not treat the previous environment-overridden smoke path as ProgramData certification.
