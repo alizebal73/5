@@ -4,6 +4,14 @@ Every defect records symptom, root cause, affected boundary, fix, regression evi
 
 A defect is not closed because a later refactor hides it.
 
+## 2026-10-09 — Agent URL scheme validation aligned with Server transport policy
+
+- Symptom: Agent configuration accepted a remote `http://` Server origin, even though Desktop rejects non-loopback HTTP and the Server's `SecureTransportMiddleware` rejects HTTP for remote authentication/bootstrap/Agent/SignalR routes. This let an invalid deployment configuration pass startup and fail later at enrollment or connection.
+- Root cause: `AgentTransportOptions.Validate()` accepted either HTTP or HTTPS without restricting HTTP to loopback development.
+- Fix: allow HTTPS for remote Server origins and HTTP only for loopback; retain rejection of embedded credentials, query/fragment, and invalid URLs. Regression tests cover rejected remote HTTP and accepted loopback HTTP / remote HTTPS.
+- Verification: pending Quick Validation on the exact fix commit; do not treat this finding as closed until the new Agent tests and canonical build pass.
+- Rollback: revert only the Agent URL validation and its regression tests if they introduce a regression; do not weaken Server HTTPS enforcement.
+
 **Required process/templates for all new entries:** [bug-fix process](bug-fix-process.md), [bug-fix template](../templates/bug-fix-template.md), [Definition of Ready](../planning/definition-of-ready.md) and [Definition of Done](../planning/definition-of-done.md). This is a historical append-only log. Preserve old entries; correct factual mistakes transparently; append verified outcomes rather than overwriting history.
 
 ## 2026-10-08 — Repo 2/3 regression controls carried into GameNet 5

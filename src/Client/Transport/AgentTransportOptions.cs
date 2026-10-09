@@ -12,13 +12,13 @@ public sealed class AgentTransportOptions
     public void Validate()
     {
         if (!Uri.TryCreate(ServerBaseUrl, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)) ||
             !string.IsNullOrEmpty(uri.UserInfo) ||
             !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment))
         {
             throw new InvalidOperationException(
-                "Agent ServerBaseUrl must be an absolute HTTP(S) URL without embedded credentials, query or fragment.");
+                "Agent ServerBaseUrl must use HTTPS except for loopback development and must not contain embedded credentials, query or fragment.");
         }
 
         if (HeartbeatIntervalSeconds is < 1 or > 60)
