@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$CertificatePath
+    [string]$CertificatePath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ExpectedThumbprint
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,10 +18,19 @@ if (-not (Test-Path -LiteralPath $CertificatePath -PathType Leaf)) {
     throw "Public certificate file was not found: $CertificatePath"
 }
 
+$expected = ($ExpectedThumbprint -replace '\s', '').ToUpperInvariant()
+if ($expected -notmatch '^[0-9A-F]{40}$') {
+    throw "ExpectedThumbprint must be a 40-character SHA-1 thumbprint."
+}
+
 $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new((Resolve-Path -LiteralPath $CertificatePath).Path)
 try {
     if ($certificate.HasPrivateKey) {
         throw "Refusing to import a certificate that contains a private key. Copy only the exported .cer file."
+    }
+
+    if (($certificate.Thumbprint -replace '\s', '').ToUpperInvariant() -ne $expected) {
+        throw "Certificate thumbprint does not match the thumbprint independently verified from the Server PC."
     }
 
     $hasSan = $certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.17" }
@@ -31,7 +43,7 @@ try {
     }
 
     Import-Certificate -FilePath (Resolve-Path -LiteralPath $CertificatePath).Path -CertStoreLocation "Cert:\LocalMachine\Root" | Out-Null
-    Write-Host "Trusted the public GameNet Server certificate in LocalMachine\Root."
+    Write-Host "Trusted the verified public GameNet Server certificate in LocalMachine\Root."
     Write-Host "The configured ServerBaseUrl host must match one of the certificate SAN entries."
 }
 finally {
