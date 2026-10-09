@@ -69,5 +69,5 @@
   - PRها عمداً با فیلتر مسیر حذف نمی‌شوند تا در صورت اجباری‌شدن status check، PR صرفاً مستنداتی با check مفقود/در حالت Pending قفل نشود. فیلتر Markdown-only فقط روی push lane سریع اعمال می‌شود.
   - `foundation-runtime.yml` به‌عنوان `foundation-postgresql-diagnostic` صریحاً فقط lane تشخیصی PostgreSQL است، نه جایگزین گواهی کامل.
   - فیلتر مسیر هرگز کل `docs/**` را حذف نمی‌کند؛ فایل‌های غیر-Markdown داخل docs، از جمله marker عملیاتی JSON، نباید از بررسی خودکار جا بمانند.
-- معیار عبور مرحلهٔ ۳: روی SHA دقیق تغییر workflowها، lane سریع و گواهی کاملِ workflow-definition موفق شوند؛ سپس در یک PR واقعی به شاخهٔ Foundation نام دقیق status check گواهی دیده و با تنظیم ruleset به‌عنوان check اجباری تنظیم شود. تا وقتی check اجباری تأیید نشده، Ruleهای PR به‌تنهایی تضمین نمی‌کنند که CI سبز باشد.
+- معیار عبور مرحلهٔ ۳: workflowها روی SHA دقیق `aaea71212111aec24f688ae791aabb2543b5633b` با اجرای [quick #73](https://github.com/alizebal73/5/actions/runs/37921715915) و [full #163](https://github.com/alizebal73/5/actions/runs/37921715979) سبز شدند. باقی‌مانده: در یک PR واقعی به Foundation نام دقیق status check گواهی مشاهده و همان Check در ruleset اجباری شود. تا وقتی check اجباری تأیید نشده، Ruleهای PR به‌تنهایی تضمین نمی‌کنند که CI سبز باشد.
 - `main` خالی می‌ماند؛ هیچ شاخه‌ای را در این مرحله ادغام نمی‌کنیم. قابلیت‌های محصول تا بسته‌شدن معیارهای این مرحله جلو برده نمی‌شوند.

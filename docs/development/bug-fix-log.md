@@ -298,5 +298,7 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Change: the PostgreSQL-only manual workflow is named `foundation-postgresql-diagnostic` and documents that this is a diagnostic lane only.
 - Path-filter safety: the old broad `docs/**` ignore would have skipped changes to `docs/operations/foundation-certification.json`, which the business gate reads. Filters now ignore Markdown only on push. PR workflows do not use path-ignore, so a docs-only PR still produces its required check.
 - No test gate was removed from full Foundation certification. Required status checks have not yet been configured in the GitHub rulesets; after a real Foundation PR exposes the exact check context, make the full certification check required before merging.
-- Verification: pending on the commit that includes these workflow changes; do not close Stage 3 until the exact commit has a successful quick lane and full workflow-definition self-check.
+- Initial workflow verification succeeded on exact SHA `aaea71212111aec24f688ae791aabb2543b5633b`: [quick validation #73](https://github.com/alizebal73/5/actions/runs/37921715915) and [full Foundation certification #163](https://github.com/alizebal73/5/actions/runs/37921715979) both completed with `success`, including every PostgreSQL, Backup/Restore, Desktop and Agent gate.
+- Stage 3 remains open until a real PR to `foundation/runtime-*` exposes its exact check context and that check is made required in the `protect-foundation-runtime` ruleset. The ruleset currently requires a PR, but not yet a passing CI status.
+
 

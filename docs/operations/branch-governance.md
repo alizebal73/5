@@ -54,5 +54,6 @@ GitHub branch metadata reports `protected=true` for `main` and `foundation/runti
 
 ## CI status-check follow-up (Stage 3)
 
-Both branch rulesets currently require pull requests but do not yet require a named CI status check. Keep that distinction explicit. After a real pull request targets `foundation/runtime-*`, read the check contexts from GitHub and require the exact full Foundation certification context in `protect-foundation-runtime`; do not guess or select a check that has not appeared on a real PR. For future PRs to `main`, require the observed `quick-validation` context when it is available.
+Both branch rulesets currently require pull requests but do not yet require a named CI status check. Keep that distinction explicit. Workflow validation evidence: [quick #73](https://github.com/alizebal73/5/actions/runs/37921715915) and [full #163](https://github.com/alizebal73/5/actions/runs/37921715979) both passed on SHA `aaea71212111aec24f688ae791aabb2543b5633b`. After a real pull request targets `foundation/runtime-*`, read the check contexts from GitHub and require the exact full Foundation certification context in `protect-foundation-runtime`; do not guess or select a check that has not appeared on a real PR. For future PRs to `main`, require the observed `quick-validation` context when it is available.
+
 
