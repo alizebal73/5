@@ -13,6 +13,13 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
+## Work item readiness and closure (mandatory)
+
+- [Definition of Ready](docs/planning/definition-of-ready.md) is the entry gate for every feature/bug slice; [Definition of Done](docs/planning/definition-of-done.md) is the closure gate.
+- Follow [bug-fix process](docs/development/bug-fix-process.md) and use [bug-fix template](docs/templates/bug-fix-template.md) for defects.
+- Use [vertical-slice template](docs/templates/vertical-slice-template.md) for product slices and link every slice to IDs in docs/planning/requirements-traceability.md.
+- scripts/check-work-item-docs.ps1 validates the required policies/templates and unique stable requirement IDs; scripts/verify.ps1 runs this gate during canonical verification.
+
 ## Product target
 
 GameNet 5 is a Windows-first, single-site cybercafe management platform for:

@@ -4,6 +4,8 @@ Every defect records symptom, root cause, affected boundary, fix, regression evi
 
 A defect is not closed because a later refactor hides it.
 
+**Required process/templates for all new entries:** [bug-fix process](bug-fix-process.md), [bug-fix template](../templates/bug-fix-template.md), [Definition of Ready](../planning/definition-of-ready.md) and [Definition of Done](../planning/definition-of-done.md). This is a historical append-only log. Preserve old entries; correct factual mistakes transparently; append verified outcomes rather than overwriting history.
+
 ## 2026-10-08 — Repo 2/3 regression controls carried into GameNet 5
 
 ### Repo 2 failure pattern

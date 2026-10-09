@@ -12,6 +12,7 @@ function Invoke-Checked {
 & "$PSScriptRoot/check-source-size.ps1"
 & "$PSScriptRoot/check-architecture.ps1"
 & "$PSScriptRoot/check-placeholders.ps1"
+& "$PSScriptRoot/check-work-item-docs.ps1"
 
 $dotnetPath = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
 if (-not (Test-Path -LiteralPath $dotnetPath -PathType Leaf)) {
