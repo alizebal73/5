@@ -172,3 +172,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: terminate each certification process tree, wait briefly for exit, and wrap individual diagnostic file reads so a locked/missing log cannot replace the original failure. The sanitized primary failure is included in the diagnostic summary.
 - Verification result: pending a new full Foundation run. The actual ProgramData Agent lease/reconnect result from the first attempt remains unknown; do not label this issue fixed until a new run passes.
 - Rollback: revert the process-tree cleanup and guarded-read changes as a unit only if they interfere with runner cleanup; never discard the original runtime failure signal.
+
+## 2026-10-09 — Agent runtime JSON provider ordering
+
+- Symptom from Foundation run 37973664515: the Server became Ready and credential provisioning returned HTTP 200, but the Agent failed during startup with ServerBaseUrl validation before SignalR negotiation or lease acquisition. The lease assertion is downstream of this startup failure.
+- Source-level defect corrected: runtime JSON insertion identified an environment provider by type name alone. That does not distinguish a prefixed host provider such as DOTNET_ from the unprefixed application environment provider, so the runtime file could be inserted before a later default source and lose precedence.
+- Fix: identify the unprefixed environment provider by its Prefix, otherwise insert before the command-line provider; keep explicit environment and command-line settings later in precedence. When the test-only configuration directory is requested, a missing directory or JSON file now fails with a direct diagnostic instead of silently falling back to defaults.
+- Regression evidence added: Agent configuration tests place a prefixed environment provider and a default endpoint before agent.json, then verify that the file supplies the loopback endpoint, an explicit environment variable overrides it, command-line arguments override both, HTTP loopback is accepted, and HTTP network endpoints remain rejected.
+- Verification result: pending Quick Validation and Full Foundation on the resulting exact SHA. Lease, authentication, TLS validation and fencing logic were not weakened. Do not mark Foundation certified until the complete Agent runtime gate passes on that SHA.
+- Rollback: revert the Agent runtime configuration loader, its tests and this entry as one unit if the exact-SHA gates do not pass; do not bypass endpoint validation or replace file-based certification with an environment-only smoke test.
+
