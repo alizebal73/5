@@ -106,6 +106,8 @@ $signingKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGener
 $provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $envNames = @(
     "ASPNETCORE_URLS",
+    "GameNet__ProtectedSettings__Enabled",
+    "GAMENET_PROTECTED_SETTINGS_FILE",
     "GameNet__Authentication__Enabled",
     "GameNet__Authentication__Issuer",
     "GameNet__Authentication__Audience",
@@ -141,6 +143,8 @@ $pgBase = $null
 
 try {
     $env:ASPNETCORE_URLS = $serverUrl
+    $env:GameNet__ProtectedSettings__Enabled = "false"
+    Remove-Item Env:GAMENET_PROTECTED_SETTINGS_FILE -ErrorAction SilentlyContinue
     $env:GameNet__Authentication__Enabled = "true"
     $env:GameNet__Authentication__Issuer = "GameNet5.Foundation.Certification"
     $env:GameNet__Authentication__Audience = "GameNet5.Agent"
