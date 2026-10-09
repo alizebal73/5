@@ -312,3 +312,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Draft PR #10 was closed without merging after the check was added; no feature code was integrated into Foundation or main.
 - Remaining Stage 3 item: obtain real PR evidence for the `quick-validation` job on a PR targeting `main`, then require that exact status check in `protect-main`. Do not mark Stage 3 complete until read-back verifies it.
 
+
+
+## 2026-10-09 — Stage 3 closed: required status checks verified
+
+- Main protection: after the exact PR check was observed, Ruleset [protect-main](https://github.com/alizebal73/5/rules/24783754) was read back from GitHub and is active for `refs/heads/main`; `required_status_checks` contains `quick-validation`.
+- PR validation evidence: [Draft PR #11](https://github.com/alizebal73/5/pull/11), head SHA `685301a6973666b0dca0aee27739f5afccdc9124`, produced the GitHub Actions check `quick-validation`; [run #74](https://github.com/alizebal73/5/actions/runs/37923320241) completed successfully on that SHA.
+- Foundation protection: Ruleset [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active for `refs/heads/foundation/runtime-*` and requires `foundation`; [run #164](https://github.com/alizebal73/5/actions/runs/37922148983) passed on PR #10's exact head SHA.
+- Both temporary validation PRs (#10 and #11) were closed without merging. No code was merged into `main` or Foundation; `main` remains at its starter commit.
+- Result: Stage 3 is closed. Next step is Stage 4, building a source-backed product requirements/dependency/ownership/acceptance matrix from the lessons and requirements of repositories 2 and 3 before adding more product features.
