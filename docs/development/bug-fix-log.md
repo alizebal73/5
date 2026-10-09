@@ -449,3 +449,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression evidence added: unit test sets a temporary environment variable and verifies expansion/normalization. Actual test execution is pending the new Quick Validation run.
 - Impact: do not use the payload from SHA `dc664185068fe3473fcb3f76e857cc2854126e92` for installation; the corrected pack must be built from the fix SHA.
 - Rollback: revert the narrow option resolver + call sites + test as a unit only if the regression test exposes an incompatibility; never disable absolute-path validation.
+
+
+## 2026-10-09 — Deployment payload PowerShell parser regression after migration-mode refactor
+
+- Symptom: Quick Validation on SHA 4e50b1ca5903b3fd77008e4516d289b74795d7a4 failed at the parser gate before build/tests; deployment payload was skipped. No artifacts were published.
+- Root cause: removing the EF bundle block left an outer try statement with no catch/finally in publish-deployment-payloads.ps1. The nested Push-Location try/finally was valid but the wrapper was not.
+- Fix: removed the unnecessary outer wrapper while retaining the inner Push-Location/Pop-Location finally, so working-directory restoration remains guaranteed.
+- Verification: pending new Quick Validation, Full Foundation Certification and payload job on the fix SHA.
+- Rollback: revert only this script restructuring if it causes a regression; do not bypass parser validation.

@@ -114,26 +114,24 @@ $agentOutput = Join-Path $payloadRoot "Agent"
 $databaseOutput = Join-Path $payloadRoot "Database"
 New-Item -ItemType Directory -Force -Path $serverOutput,$desktopOutput,$agentOutput,$databaseOutput | Out-Null
 
+Push-Location $repoRoot
 try {
-    Push-Location $repoRoot
-    try {
-        Invoke-Checked $dotnetPath @("restore", "GameNet.slnx")
+    Invoke-Checked $dotnetPath @("restore", "GameNet.slnx")
 
-        $publishCommon = @(
-            "--configuration", "Release",
-            "--runtime", "win-x64",
-            "--self-contained", "true",
-            "-p:PublishSingleFile=false",
-            "-p:UseAppHost=true",
-            "-p:Version=$Version"
-        )
-        Invoke-Checked $dotnetPath (@("publish", "src/Server/GameNet.Server.csproj") + $publishCommon + @("--output", $serverOutput))
-        Invoke-Checked $dotnetPath (@("publish", "src/Desktop/GameNet.Desktop.csproj") + $publishCommon + @("--output", $desktopOutput))
-        Invoke-Checked $dotnetPath (@("publish", "src/Client/GameNet.Agent.csproj") + $publishCommon + @("--output", $agentOutput))
-    }
-    finally {
-        Pop-Location
-    }
+    $publishCommon = @(
+        "--configuration", "Release",
+        "--runtime", "win-x64",
+        "--self-contained", "true",
+        "-p:PublishSingleFile=false",
+        "-p:UseAppHost=true",
+        "-p:Version=$Version"
+    )
+    Invoke-Checked $dotnetPath (@("publish", "src/Server/GameNet.Server.csproj") + $publishCommon + @("--output", $serverOutput))
+    Invoke-Checked $dotnetPath (@("publish", "src/Desktop/GameNet.Desktop.csproj") + $publishCommon + @("--output", $desktopOutput))
+    Invoke-Checked $dotnetPath (@("publish", "src/Client/GameNet.Agent.csproj") + $publishCommon + @("--output", $agentOutput))
+}
+finally {
+    Pop-Location
 }
 
 # Non-secret setting enables DPAPI secrets only inside the Production Server payload.
