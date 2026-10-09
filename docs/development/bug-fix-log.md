@@ -321,3 +321,14 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Foundation protection: Ruleset [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active for `refs/heads/foundation/runtime-*` and requires `foundation`; [run #164](https://github.com/alizebal73/5/actions/runs/37922148983) passed on PR #10's exact head SHA.
 - Both temporary validation PRs (#10 and #11) were closed without merging. No code was merged into `main` or Foundation; `main` remains at its starter commit.
 - Result: Stage 3 is closed. Next step is Stage 4, building a source-backed product requirements/dependency/ownership/acceptance matrix from the lessons and requirements of repositories 2 and 3 before adding more product features.
+
+
+## 2026-10-09 — Stage 4 complete: Repo 2/3 requirements consolidated
+
+- Audited the product synthesis, action map, client UX, product-completion/release backlog and physical-validation protocol from Repo 2, then reconciled them with Repo 3's capability map, foundation audit/gap matrix, module ownership, data ownership, transaction rules, time/money rules and Session/Inventory invariants.
+- Canonical deliverable: docs/planning/requirements-traceability.md, commit 970e13692f197510f178d3c5030191d5ad5a1e97. It records 56 requirement rows covering ownership, dependencies, acceptance criteria, priority/risk and the actual Repo 5 implementation status; it also maps old failure patterns to required regression tests.
+- Summary deliverable: docs/planning/capability-matrix.md, commit 122965218ef0b159396ed02c38107f4deb709a2c.
+- Durable decisions: Repo 5 keeps the modular Server + native WPF Desktop + separate Agent + Shared contract + PostgreSQL architecture; Repo 2's older React/SQLite proposal is not adopted. PS5/foosball remain timed stations without a pretend Windows Agent. First release remains single-shop and no code is copied/merged from repos 2 or 3.
+- Critical old failure patterns converted to gates: transfer/Agent/Login ownership races; PendingPayment vs Debt and session-payment allocation; wallet/gift/revenue reconciliation; warehouse/showcase stock and reversal; idempotency/concurrency; stale realtime connection/lease; production mocks; migration drift; installer secret/data-root/LAN startup; and physical PC certification.
+- Evidence boundary: Identity and Stations exist as code candidates, but latest-head certification remains required. The remaining commercial modules are not described as implemented merely because they appear in requirements documentation. No production code changed in Stage 4.
+- Result: Stage 4 is closed. Next: Stage 5, standardize bug records and enforce Ready/Done fields on each implementation slice.
