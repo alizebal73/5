@@ -59,7 +59,10 @@ jobs:
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
             if ($errors.Count -gt 0) {
-              throw "PowerShell syntax error in $($file.FullName)."
+              $details = @($errors | ForEach-Object {
+                "line $($_.Extent.StartLineNumber), column $($_.Extent.StartColumnNumber): $($_.Message)"
+              }) -join "; "
+              throw "PowerShell syntax error in $($file.FullName): $details"
             }
           }
 
