@@ -23,6 +23,7 @@ if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
 
 $environmentNames = @(
     "GAMENET_DATABASE_CONNECTION",
+    "GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY",
     "ASPNETCORE_URLS",
     "ASPNETCORE_ENVIRONMENT",
     "DOTNET_ENVIRONMENT",
@@ -50,6 +51,7 @@ $diagnosticFiles = @($serverLog, $serverErrorLog)
 $server = $null
 $failureMessage = $null
 $testSucceeded = $false
+$desktopConfigurationRoot = $null
 
 try {
     $databaseConnection = $previousEnvironment["GAMENET_DATABASE_CONNECTION"]
@@ -64,6 +66,8 @@ try {
     $env:ASPNETCORE_URLS = $serverUrl
     $env:ASPNETCORE_ENVIRONMENT = "Production"
     $env:DOTNET_ENVIRONMENT = "Production"
+    Remove-Item Env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY -ErrorAction SilentlyContinue
+    Remove-Item Env:GameNet__Server__BaseUrl -ErrorAction SilentlyContinue
 
     # Program.cs intentionally refuses to start in Production with authentication disabled.
     # Use throwaway credentials so the smoke test exercises the real Production startup guard.
@@ -99,8 +103,28 @@ try {
         throw "Desktop smoke Server did not become ready within 45 seconds. See $serverLog and $serverErrorLog."
     }
 
+    $desktopConfigurationRoot = Join-Path $env:TEMP ("gamenet5-desktop-runtime-config-" + $runToken)
+    New-Item -ItemType Directory -Force -Path $desktopConfigurationRoot | Out-Null
+    $desktopConfiguration = [ordered]@{
+        GameNet = [ordered]@{
+            Server = [ordered]@{
+                BaseUrl = $serverUrl
+            }
+        }
+    }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $desktopConfigurationRoot "desktop.json"),
+        ($desktopConfiguration | ConvertTo-Json -Depth 8) + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false))
+
+    # The Server above already started under Production. Run the Desktop process in Development
+    # only so it can use an isolated test configuration directory instead of the machine ProgramData.
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY = $desktopConfigurationRoot
+    Remove-Item Env:GameNet__Server__BaseUrl -ErrorAction SilentlyContinue
+
     foreach ($culture in @("fa-IR","en-US")) {
-        $env:GameNet__Server__BaseUrl = $serverUrl
         $env:GAMENET_DESKTOP_SMOKE = "1"
         $env:GAMENET_UI_CULTURE = $culture
 
@@ -162,6 +186,10 @@ finally {
         ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
 
         Write-Host "Desktop runtime diagnostics preserved under $diagnosticRoot."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($desktopConfigurationRoot) -and (Test-Path -LiteralPath $desktopConfigurationRoot)) {
+        Remove-Item -LiteralPath $desktopConfigurationRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     foreach ($name in $environmentNames) {

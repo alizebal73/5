@@ -1,9 +1,16 @@
 using GameNet.Agent;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
+using GameNet.Shared.Runtime;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+AgentRuntimeConfiguration.AddProgramDataConfiguration(
+    builder.Configuration,
+    builder.Services,
+    GameNetRuntimePaths.AgentConfigurationFileName);
 
 builder.Services.AddWindowsService(options => options.ServiceName = "GameNet 5 Agent");
 builder.Services.AddSingleton(TimeProvider.System);
@@ -15,7 +22,9 @@ builder.Services
 builder.Services
     .AddOptions<AgentTransportOptions>()
     .BindConfiguration(AgentTransportOptions.SectionName)
-    .Validate(options => Uri.TryCreate(options.ServerBaseUrl, UriKind.Absolute, out _), "ServerBaseUrl must be an absolute URI.")
+    .Validate(
+        options => ServerEndpointPolicy.IsValidBaseUrl(options.ServerBaseUrl),
+        "ServerBaseUrl must be HTTPS for network endpoints; HTTP is permitted only for loopback development and certification.")
     .ValidateOnStart();
 
 builder.Services.AddHttpClient("GameNetAgentCredentialClient");

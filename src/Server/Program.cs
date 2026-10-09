@@ -10,6 +10,7 @@ using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
 var builder = WebApplication.CreateBuilder(args);
+ServerTlsHostConfiguration.Configure(builder);
 
 var databaseConnection = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
 if (!string.IsNullOrWhiteSpace(databaseConnection) &&

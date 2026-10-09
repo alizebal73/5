@@ -137,3 +137,56 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Evidence artifact: [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/37860650826/artifacts/11585812517). The in-run evidence file records the certified SHA, branch and UTC timestamp.
 - Status: this exact Foundation checkpoint is certified. The installer/updater/rollback release gates remain required before production release. Business feature branches must be rebuilt/rebased from this checkpoint; no legacy feature branch is implicitly approved for merge.
 - Rollback: if a future regression appears, set the certification marker back to pending and remove the checkpoint's active status; never bypass a failing Foundation gate.
+
+## 2026-10-09 — Runtime TLS public-certificate fingerprint contract
+
+- Symptom: client trust accepted only a 40-character Windows certificate thumbprint (SHA-1), while the installability contract requires independently checking the exported public certificate with SHA-256 before trusting it.
+- Root cause: the Windows certificate-store locator was conflated with the out-of-band integrity check for the `.cer` file.
+- Fix: server TLS configuration now prints both identifiers with explicit labels; client trust verifies the SHA-256 hash of the exact public `.cer` file before validating its certificate profile or importing it. Certificate validity window, SAN, Server Authentication EKU, and absence of a private key are checked. A `-ValidateOnly` path supports tests without modifying certificate trust stores.
+- Regression evidence: `scripts/verify-trust-server-certificate.ps1` is part of canonical `scripts/verify.ps1`; it tests acceptance of the correct fingerprint, rejection of a mismatch and rejection of a 40-character value, without writing to LocalMachine\Root.
+- Verification result: pending the full Foundation workflow on the resulting exact commit. This automated test does not establish real client trust or physical LAN TLS.
+- Rollback: revert the fingerprint-contract change as one unit; never bypass Windows TLS validation or trust a certificate whose SHA-256 fingerprint has not been independently checked.
+
+## 2026-10-09 — TLS certificate lifecycle reconciliation
+
+- Finding: candidate branches implemented two competing certificate lifecycles: LocalMachine store plus non-exportable key, and PFX plus password in DPAPI settings. Porting both would create duplicate authority and ambiguous certificate permissions/rotation.
+- Decision: ADR-0001 makes the non-exportable LocalMachine certificate the single canonical TLS lifecycle. Only the public .cer is exported/imported, and the exact public file's SHA-256 is verified out of band before client trust.
+- Hardening: certificate creation/profile checks were extracted into a testable module; setup refuses existing configuration/public output, trusts only a public-only certificate copy in LocalMachine\Root, writes server.json using a temporary file and atomic move, and removes newly-created TLS artifacts from failure paths.
+- Regression evidence: scripts/verify-server-tls-certificate.ps1 covers SAN/EKU/validity, key non-exportability, public-only export, SHA-256 fingerprint, and no-overwrite. The trust-script test checks matching/mismatched SHA-256 and rejects the old 40-character value.
+- Verification result: pending full Foundation CI on the final commit. Neither automated test claims real Desktop/Agent LAN proof.
+- Rollback: revert the TLS lifecycle module, verifier, setup script, ADR and documentation as one atomic change; do not restore PFX certificate settings or weaken TLS validation.
+
+## 2026-10-09 — Runtime endpoint certification bypassed installed configuration
+
+- Symptom: Desktop and Agent Foundation smoke tests passed while overriding their Server endpoint from environment variables; the Server runtime checks also bound loopback by `ASPNETCORE_URLS`. This did not prove that the installed JSON configuration path was consumed.
+- Root cause: the harness verified transport and Agent lease behavior but supplied the endpoint through a higher-precedence provider rather than the runtime configuration file.
+- Fix: added a test-only configuration-directory resolver. The `GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY` override requires an absolute path and an explicit Development environment, and is rejected if either ASP.NET Core or .NET environment is Production. Desktop and Agent harnesses now write temporary `desktop.json`, `agent.json`, and `server.json` files, clear endpoint environment overrides, and launch the processes against those files. Temporary configuration is removed in cleanup.
+- Regression evidence: Shared tests cover default ProgramData path resolution, test-path acceptance in Development, and rejection for Production/missing environment/relative paths. Full Foundation runtime certification must prove server health, Desktop cultures, Agent lease/fencing/reconnect with these files.
+- Verification result: pending full Foundation on this exact commit. This still uses HTTP loopback for isolated CI; it does not prove real-LAN HTTPS or service-account private-key access.
+- Rollback: revert the resolver, its tests, harness updates, documentation and this entry together. Do not treat the previous environment-overridden smoke path as ProgramData certification.
+
+## 2026-10-09 — ProgramData Agent runtime failure diagnostics
+
+- Symptom: after moving the Agent smoke endpoint/state settings to temporary JSON configuration, the first Foundation run failed in the cleanup path while reading `server.log`; the child process still held the redirected output handle and the cleanup exception masked the primary runtime/lease error.
+- Root cause of the diagnostic failure: `Stop-Process` stopped the `dotnet run` parent without guaranteeing that its child host process had exited, and the diagnostics loop did not isolate file-read failures.
+- Fix: terminate each certification process tree, wait briefly for exit, and wrap individual diagnostic file reads so a locked/missing log cannot replace the original failure. The sanitized primary failure is included in the diagnostic summary.
+- Verification result: pending a new full Foundation run. The actual ProgramData Agent lease/reconnect result from the first attempt remains unknown; do not label this issue fixed until a new run passes.
+- Rollback: revert the process-tree cleanup and guarded-read changes as a unit only if they interfere with runner cleanup; never discard the original runtime failure signal.
+
+## 2026-10-09 — Agent runtime JSON provider ordering
+
+- Symptom from Foundation run 37973664515: the Server became Ready and credential provisioning returned HTTP 200, but the Agent failed during startup with ServerBaseUrl validation before SignalR negotiation or lease acquisition. The lease assertion is downstream of this startup failure.
+- Source-level defect corrected: runtime JSON insertion identified an environment provider by type name alone. That does not distinguish a prefixed host provider such as DOTNET_ from the unprefixed application environment provider, so the runtime file could be inserted before a later default source and lose precedence.
+- Fix: identify the unprefixed environment provider by its Prefix, otherwise insert before the command-line provider; keep explicit environment and command-line settings later in precedence. When the test-only configuration directory is requested, a missing directory or JSON file now fails with a direct diagnostic instead of silently falling back to defaults.
+- Regression evidence added: Agent configuration tests place a prefixed environment provider and a default endpoint before agent.json, then verify that the file supplies the loopback endpoint, an explicit environment variable overrides it, command-line arguments override both, HTTP loopback is accepted, and HTTP network endpoints remain rejected.
+- Verification result: passed. Quick Validation succeeded on head SHA `03a7efa2bf7fe98103107f3b4f5b06dbdd855df3` in [run 37976145715](https://github.com/alizebal73/5/actions/runs/37976145715). Full Foundation succeeded in [run 37976150807](https://github.com/alizebal73/5/actions/runs/37976150807); its evidence records tested merge checkout SHA `38f9632814482c2feba64cc7ad19dbfca29a1193`, PR head `03a7efa2bf7fe98103107f3b4f5b06dbdd855df3`, and passed gates including Agent auth, lease, heartbeat, fencing and reconnect. The implementation does not weaken lease, authentication, TLS validation or fencing. CI runtime certification passed; separate physical-LAN and setup/update/recovery gates remain release blockers.
+- Rollback: revert the Agent runtime configuration loader, its tests and this entry as one unit if the exact-SHA gates do not pass; do not bypass endpoint validation or replace file-based certification with an environment-only smoke test.
+
+
+## 2026-10-09 — Server ProgramData configuration precedence audit
+
+- Audit finding: `ServerTlsHostConfiguration` selected the first environment provider by type name only. Unlike the already-corrected Agent loader, this does not distinguish a prefixed host provider (for example `DOTNET_`) from the unprefixed application environment provider. Source review identifies a precedence risk; the regression test below is the authority for whether behavior is actually wrong.
+- Regression coverage added: construct a prefixed environment provider before a later default configuration source, then verify `server.json` wins over those defaults; separately verify that the unprefixed application environment and command-line arguments retain higher precedence. The runtime uses only loopback HTTP in Development and does not touch certificate trust or service state.
+- Fix candidate: identify the unprefixed `EnvironmentVariablesConfigurationSource` by its `Prefix`; if unavailable, insert before `CommandLineConfigurationSource`; otherwise append.
+- Verification result: Quick Validation passed on PR head `e66295fa8f4a887fa92885ba6aa89aa594ff8492` in [run 37979435573](https://github.com/alizebal73/5/actions/runs/37979435573). Full Foundation passed on the same PR head in [run 37979440463](https://github.com/alizebal73/5/actions/runs/37979440463). Evidence artifact [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/37979440463/artifacts/11641010657) records tested merge checkout SHA `845781d3f7ff43b15735d87df4a449040cf80e69`, PR head `e66295fa8f4a887fa92885ba6aa89aa594ff8492`, and all six Foundation gates passed. This certifies CI runtime only; physical-LAN HTTPS/service-account validation and Setup/Updater release gates remain open.
+- Rollback: revert the Server configuration-order fix, its regression tests, and this entry together if exact-SHA gates fail; do not remove fail-closed TLS/Production checks.
