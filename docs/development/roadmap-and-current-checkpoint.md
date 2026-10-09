@@ -62,7 +62,8 @@
 - مرحله‌های ۰ و ۱: تکمیل‌شده؛ اصلاح XML در [Foundation #160](https://github.com/alizebal73/5/actions/runs/37917339204) روی SHA دقیق موفق شد.
 - مرحلهٔ ۲: تکمیل‌شده؛ آزمون ancestry و گواهی کامل در [#161](https://github.com/alizebal73/5/actions/runs/37918110954) موفق شدند و Ruleهای [protect-main](https://github.com/alizebal73/5/rules/24783754) و [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) از GitHub دوباره خوانده شدند. هر دو فعال‌اند و GitHub شاخه‌های `main` و `foundation/runtime-final-v2` را محافظت‌شده گزارش می‌کند؛ [Issue #9](https://github.com/alizebal73/5/issues/9) بسته شده است.
 - مرحلهٔ ۳: **تکمیل شد** — تفکیک CI و ثبت Checkهای اجباری برای هر دو شاخهٔ محافظت‌شده.
-- مرحلهٔ جاری: **۴ — تجمیع نیازمندی‌ها و درس‌های پروژه‌های ۲ و ۳**.
+- مرحلهٔ ۴: **تکمیل شد** — نیازمندی‌های دو مخزن قدیمی با مرز معماری Repo 5 تطبیق داده و به معیارهای قابل‌آزمون تبدیل شدند.
+- مرحلهٔ جاری: **۵ — تثبیت دفتر باگ و Definition of Ready/Done**.
 - مشکل قبلی: push به شاخهٔ کاری و شاخه‌های Foundation گواهی کامل را تکرار می‌کرد؛ هم‌زمان `gamenet.yml` با Pull Request، Canonical Build/Test را جداگانه اجرا می‌کرد و شاخه‌های Foundation به علت شرط `if` از این lane کنار گذاشته می‌شدند. `foundation-runtime.yml` نیز lane محدود PostgreSQL داشت که از نامش می‌توانست با گواهی کامل اشتباه شود.
 - طرح مرحلهٔ ۳:
   - `gamenet.yml` یک lane سریع است: push به `feature/operator-identity-v1` (به‌جز pushهای Markdown-only) و PR به `main`؛ parser و Canonical build/test را اجرا می‌کند، ولی PostgreSQL/Backup/Desktop/Agent runtime certification را تکرار نمی‌کند.
@@ -75,4 +76,7 @@
 - مرحلهٔ ۳ با read-back نهایی هر دو Ruleset بسته شد: `protect-main` (ID `24783754`) اکنون `quick-validation` را الزامی می‌کند و `protect-foundation-runtime` (ID `24784035`)، Check به نام `foundation` را الزامی می‌کند.
 - شواهد PR واقعی: [quick-validation #74](https://github.com/alizebal73/5/actions/runs/37923320241) روی SHA `685301a6973666b0dca0aee27739f5afccdc9124` موفق شد؛ Check دقیق `quick-validation` از GitHub Actions در `protect-main` ذخیره و سپس از API دوباره خوانده شد. Foundation نیز پیش‌تر در [#164](https://github.com/alizebal73/5/actions/runs/37922148983) موفق بود و Check `foundation` در Ruleset مربوطه read-back شده است.
 - [Draft PR #11](https://github.com/alizebal73/5/pull/11) و [Draft PR #10](https://github.com/alizebal73/5/pull/10) فقط برای تأیید CI/Ruleset ساخته و هر دو بدون ادغام بسته شدند. هیچ تغییری از آن‌ها وارد `main` یا Foundation نشد.
-- گارد `main` فعال است؛ `main` خالی و دست‌نخورده می‌ماند. مرحلهٔ بعد، مرحلهٔ ۴ است: استخراج و تطبیق نظام‌مند نیازمندی‌ها و درس‌های پروژه‌های ۲ و ۳ پیش از گسترش قابلیت‌های محصول.
+- مرحلهٔ ۴ تکمیل شد: [ماتریس مرجع نیازمندی‌ها](../planning/requirements-traceability.md) اکنون ۵۶ ردیف نیازمندی با شناسه، معیار پذیرش، مالک/وابستگی، اولویت/ریسک، وضعیت فعلی Repo 5 و خطاهای قدیمیِ تبدیل‌شده به آزمون بازگشتی دارد. [Capability Matrix](../planning/capability-matrix.md) نیز به‌عنوان نمای خلاصه به‌روزرسانی شد.
+- منابع مرجع بررسی‌شده: Repo 2 در SHA `d8031070413338c50fd67155a8074c45c91b5f56` و Repo 3 در SHA `01e07fe6fe78ee7a2b078bba06edfea4252ca007`; وضعیت کد Repo 5 در snapshot `be88104d89d5f17ecab887cc22643967950b654e` ثبت شد. تفاوت پیشنهاد قدیمی SQLite/React با معماری فعلی PostgreSQL/WPF/Agent صریح شد؛ اعداد قدیمی ۴۰ PC/۶۱ ایستگاه نیز با دامنهٔ واقعی هدف اشتباه گرفته نمی‌شوند.
+- وضعیت پیاده‌سازی به‌صورت صادقانه ثبت شد: Identity و Stations کد نامزد دارند ولی گواهی latest-head لازم است؛ بقیهٔ ماژول‌های تجاری در snapshot هنوز نیازمندی/برنامه هستند، نه محصول آماده. هیچ کدی از Repo 2 یا 3 merge نشد.
+- گارد `main` فعال است؛ `main` خالی و دست‌نخورده می‌ماند. مرحلهٔ بعد، مرحلهٔ ۵ است: یکسان‌سازی قالب ثبت نقص‌ها و تثبیت Definition of Ready/Done برای هر برش محصول.
