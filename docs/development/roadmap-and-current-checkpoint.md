@@ -61,7 +61,8 @@
 
 - مرحله‌های ۰ و ۱: تکمیل‌شده؛ اصلاح XML در [Foundation #160](https://github.com/alizebal73/5/actions/runs/37917339204) روی SHA دقیق موفق شد.
 - مرحلهٔ ۲: تکمیل‌شده؛ آزمون ancestry و گواهی کامل در [#161](https://github.com/alizebal73/5/actions/runs/37918110954) موفق شدند و Ruleهای [protect-main](https://github.com/alizebal73/5/rules/24783754) و [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) از GitHub دوباره خوانده شدند. هر دو فعال‌اند و GitHub شاخه‌های `main` و `foundation/runtime-final-v2` را محافظت‌شده گزارش می‌کند؛ [Issue #9](https://github.com/alizebal73/5/issues/9) بسته شده است.
-- مرحلهٔ جاری: **۳ — تفکیک CI سریع از Foundation Certification کامل**.
+- مرحلهٔ ۳: **تکمیل شد** — تفکیک CI و ثبت Checkهای اجباری برای هر دو شاخهٔ محافظت‌شده.
+- مرحلهٔ جاری: **۴ — تجمیع نیازمندی‌ها و درس‌های پروژه‌های ۲ و ۳**.
 - مشکل قبلی: push به شاخهٔ کاری و شاخه‌های Foundation گواهی کامل را تکرار می‌کرد؛ هم‌زمان `gamenet.yml` با Pull Request، Canonical Build/Test را جداگانه اجرا می‌کرد و شاخه‌های Foundation به علت شرط `if` از این lane کنار گذاشته می‌شدند. `foundation-runtime.yml` نیز lane محدود PostgreSQL داشت که از نامش می‌توانست با گواهی کامل اشتباه شود.
 - طرح مرحلهٔ ۳:
   - `gamenet.yml` یک lane سریع است: push به `feature/operator-identity-v1` (به‌جز pushهای Markdown-only) و PR به `main`؛ parser و Canonical build/test را اجرا می‌کند، ولی PostgreSQL/Backup/Desktop/Agent runtime certification را تکرار نمی‌کند.
@@ -71,5 +72,7 @@
   - فیلتر مسیر هرگز کل `docs/**` را حذف نمی‌کند؛ فایل‌های غیر-Markdown داخل docs، از جمله marker عملیاتی JSON، نباید از بررسی خودکار جا بمانند.
 - نتیجهٔ تفکیک CI روی SHA `aaea71212111aec24f688ae791aabb2543b5633b` تأیید شد: [quick #73](https://github.com/alizebal73/5/actions/runs/37921715915) و [full #163](https://github.com/alizebal73/5/actions/runs/37921715979) هر دو سبز شدند.
 - Check اجباری Foundation نیز از روی PR واقعی تأیید شد: [Draft PR #10](https://github.com/alizebal73/5/pull/10) اجرای [#164](https://github.com/alizebal73/5/actions/runs/37922148983) را با Check دقیق `foundation` با موفقیت گذراند؛ سپس Ruleset `protect-foundation-runtime` به‌صورت read-back بررسی شد و `required_status_checks` شامل `{ context: foundation, integration: GitHub Actions }` بود. PR #10 بدون ادغام بسته شد چون فقط برای اعتبارسنجی CI ساخته شده بود.
-- **باقی‌ماندهٔ مرحلهٔ ۳:** `protect-main` هنوز status check اجباری ندارد. پیش از بستن مرحله، باید Check واقعی `quick-validation` روی یک PR به `main` مشاهده و همان Check به Ruleset اصلی افزوده شود. پس از آن، ruleset دوباره خوانده و نتیجه ثبت شود.
-- `main` خالی می‌ماند؛ هیچ شاخه‌ای را در این مرحله ادغام نمی‌کنیم. قابلیت‌های محصول تا بسته‌شدن معیارهای این مرحله جلو برده نمی‌شوند.
+- مرحلهٔ ۳ با read-back نهایی هر دو Ruleset بسته شد: `protect-main` (ID `24783754`) اکنون `quick-validation` را الزامی می‌کند و `protect-foundation-runtime` (ID `24784035`)، Check به نام `foundation` را الزامی می‌کند.
+- شواهد PR واقعی: [quick-validation #74](https://github.com/alizebal73/5/actions/runs/37923320241) روی SHA `685301a6973666b0dca0aee27739f5afccdc9124` موفق شد؛ Check دقیق `quick-validation` از GitHub Actions در `protect-main` ذخیره و سپس از API دوباره خوانده شد. Foundation نیز پیش‌تر در [#164](https://github.com/alizebal73/5/actions/runs/37922148983) موفق بود و Check `foundation` در Ruleset مربوطه read-back شده است.
+- [Draft PR #11](https://github.com/alizebal73/5/pull/11) و [Draft PR #10](https://github.com/alizebal73/5/pull/10) فقط برای تأیید CI/Ruleset ساخته و هر دو بدون ادغام بسته شدند. هیچ تغییری از آن‌ها وارد `main` یا Foundation نشد.
+- گارد `main` فعال است؛ `main` خالی و دست‌نخورده می‌ماند. مرحلهٔ بعد، مرحلهٔ ۴ است: استخراج و تطبیق نظام‌مند نیازمندی‌ها و درس‌های پروژه‌های ۲ و ۳ پیش از گسترش قابلیت‌های محصول.
