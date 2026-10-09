@@ -53,23 +53,29 @@ Do not put these values in server.json, appsettings.json, a database table, sour
 
 ### 3.2 Windows service identity and file permissions
 
-Proposed Server logon identity: NT AUTHORITY\NETWORK SERVICE, consistent with the identity used by the current TLS helper instructions. The production service must also have the dedicated service SID NT SERVICE\GameNet 5 Server enabled.
+Proposed Server logon identity: NT AUTHORITY\NETWORK SERVICE, consistent with the current TLS helper's default. The production service must also enable the dedicated service SID NT SERVICE\GameNet 5 Server.
 
 The Server secret directory and protected payload must have a deliberate, non-broad DACL. Access is limited to SYSTEM, local Administrators, and the dedicated GameNet Server service SID; ordinary Users, Authenticated Users, remote users and unrelated service identities receive no read/write access. The installer/configuration path may write the payload only through an elevated, audited provisioning operation.
 
 DPAPI LocalMachine protection does not replace ACLs: the DACL is a required part of the boundary. Create the restrictive directory/file ACL before writing secret material, preserve it on replacement, and use a same-volume atomic replacement pattern. Do not leave a plaintext temporary file when an operation fails.
 
-Enablement of the Server service SID and access to the TLS private key must be proven on Windows under the real service token. The current TLS helper grants access using a service-account argument; whether that helper should be changed to grant the dedicated service SID must be verified in implementation rather than assumed. Do not run a service test until the certificate ACL and protected-store ACL agree with the configured service identity.
+The Server must read the protected store and TLS private key under the actual service token. For least privilege, the target ACL should grant the dedicated Server service SID access rather than granting the key/store to every NetworkService process. The current TLS helper grants access by service-account name; align it with the dedicated service SID only after service registration and service-SID enablement are part of the controlled setup/test path. Do not run service certification until the protected-store ACL, service SID and TLS private-key ACL agree.
 
 ### 3.3 Agent device credential
 
 Keep the current per-device DPAPI CurrentUser protection model unless a reviewed implementation change demonstrates a better compatible model. The identity used to provision, decrypt and rotate the credential must be the same Agent service identity. A different service account must not be able to decrypt the stored credential.
 
-Proposed baseline Agent logon identity: NT AUTHORITY\LOCAL SERVICE, with the dedicated service SID NT SERVICE\GameNet 5 Agent enabled. This is a least-privilege starting point, not yet an accepted product decision: before acceptance, review the Agent's actual local station-control requirements and prove that they work with this identity. Any additional privilege must have a specific capability justification and a bounded permission; LocalSystem must not be selected merely as a convenience.
+Proposed baseline Agent logon identity: NT AUTHORITY\LOCAL SERVICE, with the dedicated service SID NT SERVICE\GameNet 5 Agent enabled.
+
+**Code-audit finding (Foundation candidate):** the current AgentWorker only creates/loads a device identity, connects to Server, sends heartbeat and requests reconciliation. It does not yet implement local station-control, desktop interaction, process termination or privileged workstation mutations. Therefore, for the current Foundation transport worker, LocalService is the recommended least-privilege identity, subject to Windows DPAPI/ACL/restart verification. This is not approval to add future local-control behavior under the same trust boundary.
+
+When PC-control functionality is designed, first define a capability map. Interactive user-session tasks should use a separate constrained per-session helper where required; any privileged broker must expose only explicit, authenticated and audited operations. Do not solve future capabilities by switching the network-facing Agent service to LocalSystem or granting it broad administrator rights.
 
 Apply a deliberate DACL to %ProgramData%\GameNet Manager\Agent so that only SYSTEM, local Administrators and the dedicated Agent service SID can access its state. Include identity state in the same access review to prevent an ordinary user from replacing or cloning the local device identity.
 
-The Agent bootstrap input currently read from an environment variable is a transitional certification seam only. Production enrollment must not pass a reusable credential through an ordinary command line, SMB handoff file, plaintext temp file or persistent machine/user environment variable. A one-time local provisioning channel must deliver the issued credential to the Agent service in memory; the exact authenticated operator/setup flow must be designed and tested before service-based enrollment is considered complete. Persist the credential only after DPAPI protection and restrictive ACLs are in place, then remove transient bootstrap material on success and failure.
+The Agent bootstrap input currently read from an environment variable is a transitional certification seam only. Production enrollment must not pass a reusable credential through an ordinary command line, SMB handoff file, plaintext temp file or persistent machine/user environment variable.
+
+The proposed production channel is a server-issued, short-lived, single-use enrollment token bound to the intended device. An authenticated management/provisioning action creates the token; only its hash and expiry are persisted server-side. On the client, an elevated local setup/provisioning UI passes the one-time token to the Agent service over a local named pipe whose ACL permits only SYSTEM, Administrators and the Agent service SID. The Agent redeems the token over normally validated HTTPS; Server atomically consumes it and returns a per-device credential once. The shared Server provisioning key never leaves the manager Server. This flow requires a dedicated Server-side issue/redeem contract and replay/race tests; until implemented, the existing environment-based bootstrap remains certification-only and production service enrollment is not accepted. Persist the credential only after DPAPI protection and restrictive ACLs are in place, then remove transient bootstrap material on success and failure.
 
 ### 3.4 Secret generation and purpose
 
@@ -158,12 +164,13 @@ A successful unit test or interactive process does not satisfy the Windows servi
 
 ## 9. Decisions still requiring explicit review
 
-This ADR intentionally remains Proposed until these are resolved and verified:
+This ADR intentionally remains Proposed until the remaining implementation and Windows evidence gates are resolved:
 
-- Confirm that the Server service uses NetworkService with its dedicated service SID enabled, and align the TLS private-key ACL with that actual token.
-- Review Agent station-control capabilities and either approve LocalService plus its service SID or record a justified, least-privilege alternative before testing.
-- Select and threat-model the one-time local Agent enrollment channel; do not use the previous SMB temporary-file handoff for production.
-- Confirm the protected-store ACL, DPAPI behavior, rotation/recovery semantics and test acceptance criteria against the Windows integration test design.
+- **Server service identity:** retain NetworkService as the proposed logon account for the current Server service and enable its dedicated service SID. Configure the protected-store and TLS private-key ACLs to grant the Server service SID, not broadly to every NetworkService process. Update and test the TLS helper only after service registration and service-SID enablement are part of the controlled test setup.
+- **Agent service identity:** code review supports LocalService for the current Foundation Agent worker because its current scope is identity persistence plus outbound Server transport/heartbeat/reconciliation only. Verify DPAPI CurrentUser persistence, ProgramData ACLs and reconnect across an actual Windows service restart. Re-open the privilege model before adding any interactive or privileged PC-control capability; prefer a separate constrained helper over raising the network-facing service's privilege.
+- **Enrollment protocol:** implement the authenticated management-side issue-token operation and atomic, single-use redemption endpoint. The proposed named-pipe ACL and failure cleanup require Windows integration tests. Do not promote environment/SMB/manual credential handoff to production.
+- **Protected store and key lifecycle:** implement and test store ACL creation, DPAPI LocalMachine behavior, atomic replacement, redaction, JWT/provisioning key rotation, recovery and rejection of environment-based secret fallback.
+- **Windows acceptance evidence:** verify exact service logon identities, enabled service SIDs, effective file ACLs, TLS private-key access, same-identity secret decryption, other-identity denial, restart, enrollment replay rejection and sanitized diagnostics on the exact tested commit.
 
 References:
 - ADR-0001: docs/decisions/ADR-0001-server-tls-certificate-lifecycle.md
