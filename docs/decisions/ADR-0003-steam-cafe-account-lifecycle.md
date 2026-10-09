@@ -140,6 +140,6 @@ Before an authorized dedicated-account provider is enabled:
 6. Keep Auto Login disabled until the exact venue/account model and integration method are supported or expressly authorized. If not authorized, ship the non-automating PC Café mode instead.
 
 References:
-- ADR-0002: docs/decisions/ADR-0002-server-secret-lifecycle.md
+- ADR-0002 (proposed in draft PR #18): https://github.com/alizebal73/5/pull/18
 - Master build plan: docs/planning/master-build-plan.md
 - Desktop UX architecture: docs/ui/desktop-ux-architecture.md
