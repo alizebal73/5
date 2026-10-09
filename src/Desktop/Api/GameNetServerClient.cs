@@ -67,7 +67,8 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         }
 
         var request = new HttpRequestMessage(method, uri);
-        request.Headers.TryAddWithoutValidation(ApiHeaders.ContractVersion, ContractVersions.V1);
+        if (!httpClient.DefaultRequestHeaders.Contains(ApiHeaders.ContractVersion))
+            request.Headers.TryAddWithoutValidation(ApiHeaders.ContractVersion, ContractVersions.V1);
         if (authenticated && !string.IsNullOrWhiteSpace(accessToken))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         return request;

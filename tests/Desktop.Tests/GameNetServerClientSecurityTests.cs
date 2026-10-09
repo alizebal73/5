@@ -1,4 +1,6 @@
+using System.Net;
 using GameNet.Desktop.Api;
+using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Identity;
 using Xunit;
 
@@ -28,4 +30,33 @@ public sealed class GameNetServerClientSecurityTests
             throw new InvalidOperationException("Sensitive login request must never be sent over remote HTTP.");
         }
     }
+    [Fact]
+    public async Task Api_client_does_not_duplicate_the_contract_header_configured_by_desktop_host()
+    {
+        var handler = new HeaderCaptureHandler();
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1:5096/") };
+        httpClient.DefaultRequestHeaders.TryAddWithoutValidation(ApiHeaders.ContractVersion, ContractVersions.V1);
+        var client = new GameNetServerClient(httpClient);
+
+        await Assert.ThrowsAsync<GameNetApiException>(() => client.GetHealthAsync());
+
+        Assert.Equal(new[] { ContractVersions.V1 }, handler.ContractVersions);
+    }
+
+    private sealed class HeaderCaptureHandler : HttpMessageHandler
+    {
+        public string[] ContractVersions { get; private set; } = Array.Empty<string>();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            ContractVersions = request.Headers.TryGetValues(ApiHeaders.ContractVersion, out var values)
+                ? values.ToArray()
+                : Array.Empty<string>();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent("{}")
+            });
+        }
+    }
+
 }
