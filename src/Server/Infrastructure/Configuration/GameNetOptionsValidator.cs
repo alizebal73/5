@@ -11,6 +11,9 @@ public sealed class GameNetOptionsValidator : IValidateOptions<GameNetOptions>
         if (options.Authentication.Enabled && (string.IsNullOrWhiteSpace(options.Authentication.Issuer) || string.IsNullOrWhiteSpace(options.Authentication.Audience) || string.IsNullOrWhiteSpace(options.Authentication.SigningKey) || options.Authentication.SigningKey.Length < 32))
             return ValidateOptionsResult.Fail("Production authentication requires issuer, audience and a 32+ character signing key.");
 
+        if (options.Authentication.Enabled && string.IsNullOrWhiteSpace(options.DatabaseConnectionString))
+            return ValidateOptionsResult.Fail("A database connection string is required when authentication is enabled.");
+
         if (options.Agent.LeaseDurationSeconds is < 5 or > 1800)
             return ValidateOptionsResult.Fail("Agent lease duration must be 5-1800 seconds.");
 

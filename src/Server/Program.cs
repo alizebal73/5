@@ -9,10 +9,16 @@ using GameNet.Server.Infrastructure.Security.Transport;
 using GameNet.Server.Modules.Identity.Api;
 using GameNet.Server.Modules.Stations.Api;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
-var builder = WebApplication.CreateBuilder(args);
+var migrateOnly = args.Contains("--migrate-only", StringComparer.Ordinal);
+var hostArguments = args
+    .Where(argument => !string.Equals(argument, "--migrate-only", StringComparison.Ordinal))
+    .ToArray();
+var builder = WebApplication.CreateBuilder(hostArguments);
 
 var databaseConnection = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
 if (!string.IsNullOrWhiteSpace(databaseConnection) &&
@@ -20,6 +26,12 @@ if (!string.IsNullOrWhiteSpace(databaseConnection) &&
 {
     builder.Configuration["GameNet:DatabaseConnectionString"] = databaseConnection;
 }
+
+var protectedSettingsEnabled =
+    builder.Environment.IsProduction() &&
+    bool.TryParse(builder.Configuration["GameNet:ProtectedSettings:Enabled"], out var enableProtectedFile) &&
+    enableProtectedFile;
+ProtectedServerSettings.LoadInto(builder.Configuration, protectedSettingsEnabled);
 
 var bootstrapSecret = Environment.GetEnvironmentVariable("GAMENET_BOOTSTRAP_SECRET");
 if (!string.IsNullOrWhiteSpace(bootstrapSecret) &&
@@ -42,6 +54,22 @@ app.UseAuthorization();
 var runtimeOptions = app.Services.GetRequiredService<IOptions<GameNetOptions>>().Value;
 if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
     throw new InvalidOperationException("Production authentication must be enabled.");
+
+if (migrateOnly)
+{
+    await using var migrationScope = app.Services.CreateAsyncScope();
+    var db = migrationScope.ServiceProvider.GetRequiredService<GameNetDbContext>();
+    var pendingBefore = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+    Console.WriteLine($"GameNet database migration mode: {pendingBefore.Length} pending migration(s).");
+    await db.Database.MigrateAsync();
+
+    var pendingAfter = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if (pendingAfter.Length != 0)
+        throw new InvalidOperationException($"Database migration ended with {pendingAfter.Length} pending migration(s).");
+
+    Console.WriteLine("GameNet database schema is current.");
+    return;
+}
 
 app.MapAgentCredentialRoutes();
 app.MapIdentityEndpoints();
