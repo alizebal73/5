@@ -57,3 +57,13 @@ GitHub branch metadata reports `protected=true` for `main` and `foundation/runti
 Both branch rulesets currently require pull requests but do not yet require a named CI status check. Keep that distinction explicit. Workflow validation evidence: [quick #73](https://github.com/alizebal73/5/actions/runs/37921715915) and [full #163](https://github.com/alizebal73/5/actions/runs/37921715979) both passed on SHA `aaea71212111aec24f688ae791aabb2543b5633b`. After a real pull request targets `foundation/runtime-*`, read the check contexts from GitHub and require the exact full Foundation certification context in `protect-foundation-runtime`; do not guess or select a check that has not appeared on a real PR. For future PRs to `main`, require the observed `quick-validation` context when it is available.
 
 
+
+
+## Foundation required-check verification (2026-10-09)
+
+GitHub Ruleset read-back confirms `protect-foundation-runtime` now requires the exact status check `foundation` with the GitHub Actions integration ID, based on real PR validation [#10](https://github.com/alizebal73/5/pull/10) and successful run [#164](https://github.com/alizebal73/5/actions/runs/37922148983). The validation PR was closed without merging.
+
+## Remaining CI protection item
+
+`protect-main` still has no `required_status_checks` rule. In a draft PR targeting `main`, observe the exact quick-validation check name from GitHub Actions, add that exact check as required in `protect-main`, and verify by reading the saved ruleset again. Keep that validation PR draft and close without merging after evidence is captured.
+

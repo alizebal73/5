@@ -302,3 +302,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Stage 3 remains open until a real PR to `foundation/runtime-*` exposes its exact check context and that check is made required in the `protect-foundation-runtime` ruleset. The ruleset currently requires a PR, but not yet a passing CI status.
 
 
+
+
+## 2026-10-09 — Foundation required status check configured from a real PR
+
+- Draft PR [#10](https://github.com/alizebal73/5/pull/10) targeted `foundation/runtime-final-v2` at base SHA `adb2159fb85564187718df8cbddcd3377e599c1c`; it was opened only to observe the actual `pull_request` event and exact status-check context.
+- Full Foundation run [#164](https://github.com/alizebal73/5/actions/runs/37922148983) completed with `success` on PR head SHA `fbceb07b9564065b58000ddb53323592627b9c07`.
+- GitHub's saved Ruleset `protect-foundation-runtime` (ID `24784035`) was read back and confirmed to require `context=foundation` from GitHub Actions (`integration_id=15368`). Required checks have `strict_required_status_checks_policy=false` (PR is not required to be up-to-date with base).
+- Draft PR #10 was closed without merging after the check was added; no feature code was integrated into Foundation or main.
+- Remaining Stage 3 item: obtain real PR evidence for the `quick-validation` job on a PR targeting `main`, then require that exact status check in `protect-main`. Do not mark Stage 3 complete until read-back verifies it.
+
