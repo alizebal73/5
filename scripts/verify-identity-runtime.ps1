@@ -294,7 +294,7 @@ try {
     @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
     $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
     $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
-    $env:GAMENET_AGENT_BOOTSTRAP_SECRET = [string]$provisionedAgent.Json.data.secret
+    $env:GAMENET_AGENT_BOOTSTRAP_SECRET = [string]$provisionedAgent.Json.secret
     $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
 
     $agentOnline = $false
