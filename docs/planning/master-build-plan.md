@@ -136,10 +136,14 @@ Work only in platform infrastructure:
 - add fa-IR/en-US localization resources;
 - add native Desktop smoke harness;
 - add backup/restore proof;
-- add updater/rollback proof;
-- record exact evidence.
+- record exact evidence against the exact tested commit and runtime payload;
+- keep physical-LAN and actual Windows-service-identity validation as explicit Stage 1 exit gates; CI and interactive-process smoke do not substitute for them.
 
-Exit condition: Foundation Certification document can honestly be marked green.
+Stage 1 scope boundary: Setup, updater, repair, rollback, uninstall and release certification remain required product work, but they are not Stage 1 tasks. They belong to Stages 15–18 / Gate E and must not be pulled forward as prerequisites for business development.
+
+Runtime-boundary acceptance must include the documented physical-LAN checks using the supported deployment topology: normal Windows TLS/SAN validation and health/readiness; Agent provisioning and authoritative lease/heartbeat; reconnect after service restart; and proof that the actual Server service identity can read its TLS private key. Record the exact tested commit/package hash, endpoint IP/SAN, public-certificate SHA-256, OS/PostgreSQL versions and results. Use a disposable database and throwaway credentials.
+
+Exit condition: Foundation Certification document can honestly be marked green only after the required Foundation evidence and physical-LAN runtime boundary are accepted. A green CI run or a successful interactive-process smoke alone is insufficient.
 
 ## Stage 2 — Repository and module skeleton
 
