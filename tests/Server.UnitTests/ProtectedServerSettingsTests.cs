@@ -19,8 +19,11 @@ public sealed class ProtectedServerSettingsTests
         try
         {
             var signingKeyBytes = Encoding.UTF8.GetBytes(settings["GameNet:Authentication:SigningKey"]!);
+            var certificatePasswordBytes = Encoding.UTF8.GetBytes(settings["Kestrel:Endpoints:Https:Certificate:Password"]!);
             Assert.False(ContainsSequence(encrypted, signingKeyBytes));
+            Assert.False(ContainsSequence(encrypted, certificatePasswordBytes));
             CryptographicOperations.ZeroMemory(signingKeyBytes);
+            CryptographicOperations.ZeroMemory(certificatePasswordBytes);
             File.WriteAllBytes(path, encrypted);
 
             var loaded = ProtectedServerSettings.Read(path);
@@ -31,6 +34,27 @@ public sealed class ProtectedServerSettingsTests
             var configuration = new ConfigurationManager();
             ProtectedServerSettings.LoadInto(configuration, enableDefaultProtectedFile: false, explicitFilePath: path);
             Assert.Equal(settings["GameNet:Agent:ProvisioningKey"], configuration["GameNet:Agent:ProvisioningKey"]);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+            CryptographicOperations.ZeroMemory(encrypted);
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Protected_settings_reject_relative_tls_certificate_paths()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "gamenet-server-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
+        var settings = CreateValidSettings();
+        settings["Kestrel:Endpoints:Https:Certificate:Path"] = "server.pfx";
+        var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
+        var encrypted = Protect(clear);
+        try
+        {
+            File.WriteAllBytes(path, encrypted);
+            Assert.Throws<InvalidOperationException>(() => ProtectedServerSettings.Read(path));
         }
         finally
         {
@@ -122,6 +146,8 @@ public sealed class ProtectedServerSettingsTests
         ["GameNet:Authentication:Audience"] = "GameNet.Tests.Client",
         ["GameNet:Authentication:SigningKey"] = new string('s', 48),
         ["GameNet:Agent:ProvisioningKey"] = new string('p', 48),
-        ["GameNet:Setup:BootstrapSecret"] = new string('b', 48)
+        ["GameNet:Setup:BootstrapSecret"] = new string('b', 48),
+        ["Kestrel:Endpoints:Https:Certificate:Path"] = Path.Combine(Path.GetTempPath(), "gamenet-server.pfx"),
+        ["Kestrel:Endpoints:Https:Certificate:Password"] = new string('c', 48)
     };
 }

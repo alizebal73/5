@@ -17,7 +17,9 @@ public static class ProtectedServerSettings
         "GameNet:Authentication:Audience",
         "GameNet:Authentication:SigningKey",
         "GameNet:Agent:ProvisioningKey",
-        "GameNet:Setup:BootstrapSecret"
+        "GameNet:Setup:BootstrapSecret",
+        "Kestrel:Endpoints:Https:Certificate:Path",
+        "Kestrel:Endpoints:Https:Certificate:Password"
     };
 
     public static string GetDefaultPath() =>
@@ -102,6 +104,14 @@ public static class ProtectedServerSettings
             RequireNonBlank(result, "GameNet:Authentication:Audience");
             RequireNonBlank(result, "GameNet:Authentication:SigningKey");
             RequireNonBlank(result, "GameNet:Agent:ProvisioningKey");
+            RequireNonBlank(result, "Kestrel:Endpoints:Https:Certificate:Path");
+            RequireNonBlank(result, "Kestrel:Endpoints:Https:Certificate:Password");
+
+            var certificatePath = result["Kestrel:Endpoints:Https:Certificate:Path"]!;
+            if (!Path.IsPathFullyQualified(certificatePath))
+                throw new InvalidOperationException("Protected Server TLS certificate path must be absolute.");
+            if (result["Kestrel:Endpoints:Https:Certificate:Password"]!.Length < 32)
+                throw new InvalidOperationException("Protected Server TLS certificate password must contain at least 32 characters.");
 
             if (!bool.TryParse(result["GameNet:Authentication:Enabled"], out var enabled) || !enabled)
                 throw new InvalidOperationException("Protected Server settings must enable authentication.");

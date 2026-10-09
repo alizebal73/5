@@ -139,9 +139,17 @@ $settingsWriter = Join-Path $repoRoot "scripts/write-protected-server-settings.p
 Assert-File $settingsWriter
 Copy-Item -LiteralPath $settingsWriter -Destination (Join-Path $databaseOutput "write-protected-server-settings.ps1")
 
-# Non-secret setting enables DPAPI secrets only inside the Production Server payload.
+# Production Server payload listens on explicit HTTPS; certificate path/password are supplied by the DPAPI-protected setup file.
 $productionSettingsPath = Join-Path $serverOutput "appsettings.Production.json"
 $productionSettings = [ordered]@{
+    Kestrel = [ordered]@{
+        Endpoints = [ordered]@{
+            Https = [ordered]@{
+                Url = "https://0.0.0.0:5081"
+                SslProtocols = @("Tls12", "Tls13")
+            }
+        }
+    }
     GameNet = [ordered]@{
         ProtectedSettings = [ordered]@{ Enabled = $true }
     }
@@ -158,13 +166,17 @@ Database deployment for GameNet 5
 ---------------------------------
 Do not run migrations automatically during routine Server service startup.
 
-1. Run .\Database\write-protected-server-settings.ps1 from an elevated PowerShell session
-   on the Server PC. It prompts for PostgreSQL password and bootstrap secret, generates
-   unique authentication/provisioning keys, encrypts settings with DPAPI LocalMachine,
-   and restricts the settings directory and file ACLs.
-2. Run the Server executable as the configured Server service identity:
+1. Reserve a stable IPv4 address for the Server PC, then run
+   .\Database\write-protected-server-settings.ps1 from an elevated PowerShell session.
+   The script creates an IP-SAN Server Authentication certificate, exports the private PFX
+   only to ACL-restricted ProgramData, writes its password in DPAPI-protected settings, and
+   emits a public server-trust.cer plus SHA-256 fingerprint. Never distribute server.pfx.
+2. Copy only server-trust.cer to each client PC. Before trusting it, compare its SHA-256
+   fingerprint with the value recorded on the Server PC; do not disable TLS validation.
+3. Run the Server executable as the configured Server service identity:
    GameNet.Server.exe --migrate-only
-3. Require a zero exit code, then require /health to report Ready before sign-in.
+4. Require a zero exit code, then require https://<server-ip>:5081/health to report Ready.
+   Agent/Desktop runtime URL configuration and service installation are separate gates.
 
 The protected settings file is expected at:
   $protectedSettingsPath
