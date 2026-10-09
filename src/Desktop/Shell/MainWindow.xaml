@@ -136,11 +136,36 @@
                   </Border>
                   <Border Grid.Row="1" Padding="10" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8">
                     <DockPanel>
-                      <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Station.List}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                      <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <DockPanel Margin="0,0,0,6">
+                          <TextBlock Text="{DynamicResource Station.List}" FontWeight="SemiBold"/>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding StationBoard.CountSummary}" FontSize="11" Foreground="#667085" Margin="8,0,0,0"/>
+                        </DockPanel>
+                        <TextBox Padding="7" Margin="0,0,0,6" ToolTip="{DynamicResource Station.Search}" Text="{Binding StationBoard.SearchText, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Grid>
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                          <ComboBox Grid.Column="0" Margin="0,0,4,0" Padding="5" ToolTip="{DynamicResource Station.FilterType}" SelectedValuePath="Tag" SelectedValue="{Binding StationBoard.TypeFilter, UpdateSourceTrigger=PropertyChanged}">
+                            <ComboBoxItem Content="{DynamicResource Station.FilterAll}" Tag="All"/>
+                            <ComboBoxItem Content="PC" Tag="PC"/>
+                            <ComboBoxItem Content="PS5" Tag="PS5"/>
+                            <ComboBoxItem Content="Foosball" Tag="Foosball"/>
+                          </ComboBox>
+                          <ComboBox Grid.Column="1" Margin="4,0,0,0" Padding="5" ToolTip="{DynamicResource Station.FilterStatus}" SelectedValuePath="Tag" SelectedValue="{Binding StationBoard.StatusFilter, UpdateSourceTrigger=PropertyChanged}">
+                            <ComboBoxItem Content="{DynamicResource Station.FilterAll}" Tag="All"/>
+                            <ComboBoxItem Content="{DynamicResource Station.Available}" Tag="Available"/>
+                            <ComboBoxItem Content="{DynamicResource Station.Disabled}" Tag="Disabled"/>
+                            <ComboBoxItem Content="{DynamicResource Station.Maintenance}" Tag="Maintenance"/>
+                            <ComboBoxItem Content="{DynamicResource Station.RecoveryRequired}" Tag="RecoveryRequired"/>
+                          </ComboBox>
+                        </Grid>
+                      </StackPanel>
                       <TextBlock DockPanel.Dock="Bottom" Text="{DynamicResource Station.Empty}" Foreground="#98A2B3" Margin="0,8,0,0">
-                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding StationBoard.Stations.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding StationBoard.HasNoStations}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                       </TextBlock>
-                      <ListBox ItemsSource="{Binding StationBoard.Stations}" SelectedItem="{Binding StationBoard.SelectedStation, Mode=TwoWay}" BorderThickness="0" Background="Transparent">
+                      <TextBlock DockPanel.Dock="Bottom" Text="{DynamicResource Station.NoResults}" Foreground="#667085" Margin="0,8,0,0" TextWrapping="Wrap">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding StationBoard.HasNoFilteredStations}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                      </TextBlock>
+                      <ListBox ItemsSource="{Binding StationBoard.VisibleStations}" SelectedItem="{Binding StationBoard.SelectedStation, Mode=TwoWay}" BorderThickness="0" Background="Transparent">
                         <ListBox.ItemTemplate>
                           <DataTemplate>
                             <Border Padding="9" Margin="0,0,0,6" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6">

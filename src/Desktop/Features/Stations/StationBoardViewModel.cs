@@ -15,6 +15,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
     private readonly Dictionary<string, string> pendingKeys = new(StringComparer.Ordinal);
     private StationBoardItem? selectedStation;
     private string newCode = "", newName = "", newType = "PC", renameName = "", deviceId = "", errorMessage = "", statusMessage = "";
+    private string searchText = "", typeFilter = "All", statusFilter = "All";
     private bool isBusy;
 
     public StationBoardViewModel(IGameNetServerClient api)
@@ -31,6 +32,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public ObservableCollection<StationBoardItem> Stations { get; } = new();
+    public ObservableCollection<StationBoardItem> VisibleStations { get; } = new();
     public IReadOnlyList<string> StationTypes { get; }
     public ICommand RefreshCommand { get; }
     public ICommand CreateCommand { get; }
@@ -49,6 +51,31 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
             DeviceId = value?.Station.AgentDeviceId ?? "";
         }
     }
+
+    public string SearchText
+    {
+        get => searchText;
+        set { if (SetField(ref searchText, value ?? "")) RebuildVisibleStations(); }
+    }
+    public string TypeFilter
+    {
+        get => typeFilter;
+        set { if (SetField(ref typeFilter, string.IsNullOrWhiteSpace(value) ? "All" : value)) RebuildVisibleStations(); }
+    }
+    public string StatusFilter
+    {
+        get => statusFilter;
+        set { if (SetField(ref statusFilter, string.IsNullOrWhiteSpace(value) ? "All" : value)) RebuildVisibleStations(); }
+    }
+    public int StationCount => Stations.Count;
+    public int VisibleStationCount => VisibleStations.Count;
+    public int VisibleOnlinePcCount => VisibleStations.Count(x => x.Station.Type == StationTypeContract.Pc && x.Station.AgentOnline);
+    public bool HasNoStations => Stations.Count == 0;
+    public bool HasNoFilteredStations => Stations.Count > 0 && VisibleStations.Count == 0;
+    public string CountSummary => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture,
+        Text("{0} از {1} ایستگاه؛ {2} رایانه آنلاین", "{0} of {1} stations; {2} PCs online"),
+        VisibleStationCount, StationCount, VisibleOnlinePcCount);
 
     public string NewCode { get => newCode; set => SetField(ref newCode, value); }
     public string NewName { get => newName; set => SetField(ref newName, value); }
@@ -78,8 +105,13 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
     public void ClearLocalState()
     {
         Stations.Clear();
+        VisibleStations.Clear();
         SelectedStation = null;
         pendingKeys.Clear();
+        SearchText = "";
+        TypeFilter = "All";
+        StatusFilter = "All";
+        RebuildVisibleStations();
         ErrorMessage = "";
         StatusMessage = "";
         NewCode = "";
@@ -166,7 +198,32 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         Stations.Clear();
         foreach (var item in list.OrderBy(x => x.Code, StringComparer.Ordinal))
             Stations.Add(new StationBoardItem(item));
-        SelectedStation = Stations.FirstOrDefault(x => x.Id == keepId) ?? Stations.FirstOrDefault();
+        RebuildVisibleStations();
+        SelectedStation = VisibleStations.FirstOrDefault(x => x.Id == keepId) ?? VisibleStations.FirstOrDefault();
+    }
+
+    private void RebuildVisibleStations()
+    {
+        var selectedId = SelectedStation?.Id;
+        var matches = Stations
+            .Where(item => StationBoardFilter.Matches(item, SearchText, TypeFilter, StatusFilter))
+            .ToArray();
+
+        VisibleStations.Clear();
+        foreach (var item in matches) VisibleStations.Add(item);
+
+        if (selectedId.HasValue)
+        {
+            var replacement = matches.FirstOrDefault(item => item.Id == selectedId.Value);
+            if (!ReferenceEquals(SelectedStation, replacement)) SelectedStation = replacement;
+        }
+
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StationCount)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(VisibleStationCount)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(VisibleOnlinePcCount)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasNoStations)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasNoFilteredStations)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CountSummary)));
     }
 
     private string Key(string scope)
@@ -233,6 +290,7 @@ public sealed class StationBoardItem(StationResponse station)
     public string Code => Station.Code;
     public string Name => Station.Name;
     public string TypeText => Station.Type switch { StationTypeContract.Pc => "PC", StationTypeContract.Ps5 => "PS5", StationTypeContract.Foosball => "Foosball", _ => "Unknown" };
+    public string StatusFilterKey => Station.Status.ToString();
     public string StatusText => Station.Status switch
     {
         StationStatusContract.Available => Text("آماده", "Available"),
