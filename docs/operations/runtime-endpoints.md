@@ -52,3 +52,8 @@ A green build, a loopback smoke test, or a successful /health request from the S
 ## Remaining release gate
 
 The final proof must run on the actual LAN with the Server PC, Desktop PC, and at least one Agent PC on the tested build: verified trusted certificate, real health/readiness response, Agent credential provisioning, authoritative lease acquisition, heartbeat/reconciliation, and successful reconnect after service restart. Record the exact tested commit and evidence. Until then, the final Setup and two-PC installation remain uncertified.
+
+
+## Canonical TLS lifecycle
+
+The canonical choice is documented in the Server TLS Certificate Lifecycle decision record at docs/decisions/ADR-0001-server-tls-certificate-lifecycle.md: a non-exportable Server certificate in LocalMachine\My, a public-only .cer export, and SHA-256 verification before client trust. The 40-character store thumbprint is only for Server-side certificate lookup. The initial setup script refuses overwrites; a certificate rotation procedure is a separate release gate. Do not port the PFX/password TLS lifecycle from a divergent branch unchanged.

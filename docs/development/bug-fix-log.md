@@ -146,3 +146,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression evidence: `scripts/verify-trust-server-certificate.ps1` is part of canonical `scripts/verify.ps1`; it tests acceptance of the correct fingerprint, rejection of a mismatch and rejection of a 40-character value, without writing to LocalMachine\Root.
 - Verification result: pending the full Foundation workflow on the resulting exact commit. This automated test does not establish real client trust or physical LAN TLS.
 - Rollback: revert the fingerprint-contract change as one unit; never bypass Windows TLS validation or trust a certificate whose SHA-256 fingerprint has not been independently checked.
+
+## 2026-10-09 — TLS certificate lifecycle reconciliation
+
+- Finding: candidate branches implemented two competing certificate lifecycles: LocalMachine store plus non-exportable key, and PFX plus password in DPAPI settings. Porting both would create duplicate authority and ambiguous certificate permissions/rotation.
+- Decision: ADR-0001 makes the non-exportable LocalMachine certificate the single canonical TLS lifecycle. Only the public .cer is exported/imported, and the exact public file's SHA-256 is verified out of band before client trust.
+- Hardening: certificate creation/profile checks were extracted into a testable module; setup refuses existing configuration/public output, trusts only a public-only certificate copy in LocalMachine\Root, writes server.json using a temporary file and atomic move, and removes newly-created TLS artifacts from failure paths.
+- Regression evidence: scripts/verify-server-tls-certificate.ps1 covers SAN/EKU/validity, key non-exportability, public-only export, SHA-256 fingerprint, and no-overwrite. The trust-script test checks matching/mismatched SHA-256 and rejects the old 40-character value.
+- Verification result: pending full Foundation CI on the final commit. Neither automated test claims real Desktop/Agent LAN proof.
+- Rollback: revert the TLS lifecycle module, verifier, setup script, ADR and documentation as one atomic change; do not restore PFX certificate settings or weaken TLS validation.
