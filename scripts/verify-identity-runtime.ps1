@@ -312,6 +312,7 @@ try {
         [string]$healthProbe.Json.data.stationId -ne $stationId -or $healthProbe.Json.data.deviceId -ne $stationDeviceId -or
         [string]::IsNullOrWhiteSpace([string]$healthProbe.Json.data.agentVersion) -or $healthProbe.Json.data.stationState -ne "Ready") {
         throw "The Agent health-probe command did not return a valid success acknowledgement."
+    }
 
     # The command test has completed. Stop the disposable Agent and prove the Server no longer reports it online.
     Stop-Process -Id $agentProcess.Id -Force -ErrorAction Stop
@@ -326,10 +327,8 @@ try {
         if ($stoppedStation -and $stoppedStation.agentOnline -eq $false) { $agentOffline = $true; break }
     }
     if (-not $agentOffline) { throw "Server did not transition the PC to offline after the Agent connection closed." }
-    }
-    }
 
-    
+
     # Operator/role management security boundary tests.
     $roles = Invoke-IdentityRequest "GET" "/api/v1/identity/roles" $operatorHeaders
     Assert-Status $roles 200 "List operator roles"
