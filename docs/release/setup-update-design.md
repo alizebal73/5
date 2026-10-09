@@ -161,3 +161,7 @@ This is an early, internal installability track. It does **not** claim that the 
 ### Explicit status
 
 As of this checkpoint, this is **not implemented or installer-certified**. The repository's current Agent runtime test launches the project with `dotnet run` against an isolated test Server; that is useful integration evidence but not a substitute for installing the packaged services on clean Windows machines. Do not publish a `Setup.exe`/MSI download link until the package has actually been built and tested.
+
+### Runtime integration gate discovered — 2026-10-09
+
+Before adding Windows service-install scripts, close the concrete runtime gaps recorded in [Installability Integration Audit](installability-audit-2026-10-09.md): production Kestrel has no declared LAN HTTPS endpoint/certificate in the generated payload; Desktop and Agent payload defaults still use loopback URLs; sensitive remote API/Agent routes correctly reject HTTP; bootstrap-secret instructions did not match the DPAPI configuration source; and Agent enrollment requires a unique, service-scoped one-time credential plus protected ProgramData state. These are cross-component contracts, not optional installer polish. Keep the current no-Setup/no-physical-install status until they are implemented and tested together.

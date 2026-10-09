@@ -39,7 +39,7 @@ try {
 
     $username = (Read-Host "Owner username").Trim()
     $displayName = (Read-Host "Owner display name").Trim()
-    $secureSecret = Read-Host "Enter the server's configured GAMENET_BOOTSTRAP_SECRET" -AsSecureString
+    $secureSecret = Read-Host "Initial owner bootstrap secret (the same value entered in the protected Server settings file)" -AsSecureString
     $securePassword = Read-Host "Choose an owner password (minimum 10 characters)" -AsSecureString
     $bootstrapSecret = ConvertFrom-SecurePrompt $secureSecret
     $password = ConvertFrom-SecurePrompt $securePassword
@@ -53,7 +53,8 @@ try {
     $response = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/v1/bootstrap/admin" -Headers $headers -ContentType "application/json" -Body $payload -TimeoutSec 15
 
     Write-Host ("Initial owner created: {0} ({1})" -f $response.data.username, $response.data.userId)
-    Write-Host "Remove GAMENET_BOOTSTRAP_SECRET from the Server environment after setup, then restart the Server."
+    Write-Host "The Server reads the expected bootstrap secret from its DPAPI-protected settings file; a machine-wide GAMENET_BOOTSTRAP_SECRET is not required."
+Write-Warning "The one-time bootstrap secret remains in the protected file. Installation is not considered fully hardened until a supported post-bootstrap step removes it from that file."
 }
 finally {
     [void]$headers.Remove("X-GameNet-Bootstrap-Secret")
