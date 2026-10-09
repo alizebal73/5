@@ -18,6 +18,11 @@ on:
       - "scripts/verify-backup-restore.ps1"
       - "scripts/verify-desktop-runtime.ps1"
       - "scripts/verify-agent-runtime.ps1"
+      - "src/Desktop/Features/Stations/**"
+      - "src/Desktop/Shell/MainWindow.xaml"
+      - "src/Desktop/Resources/Strings.en-US.xaml"
+      - "src/Desktop/Resources/Strings.fa-IR.xaml"
+      - "tests/Desktop.Tests/StationBoardFilterTests.cs"
 
 concurrency:
   group: foundation-certification-${{ github.event.pull_request.number || github.ref }}
