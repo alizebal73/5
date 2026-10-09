@@ -18,6 +18,12 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
                 await tx.CommitAsync(cancellationToken);
                 return result;
             }
+            catch (Exception ex) when (ContainsUniqueViolation(ex))
+            {
+                await tx.RollbackAsync(cancellationToken);
+                db.ChangeTracker.Clear();
+                throw new PersistenceConflictException("persistence.unique", ex);
+            }
             catch (PostgresException ex) when ((ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected) && attempt < 3)
             {
                 await tx.RollbackAsync(cancellationToken);
@@ -25,5 +31,13 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
             }
         }
         throw new InvalidOperationException("TRANSACTION_RETRY_EXHAUSTED");
+    }
+
+    private static bool ContainsUniqueViolation(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+            if (current is PostgresException pg && string.Equals(pg.SqlState, PostgresErrorCodes.UniqueViolation, StringComparison.Ordinal))
+                return true;
+        return false;
     }
 }

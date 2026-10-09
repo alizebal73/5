@@ -6,6 +6,7 @@ public sealed class IdempotencyRecord
     public string Scope { get; set; } = string.Empty;
     public string Key { get; set; } = string.Empty;
     public string Operation { get; set; } = string.Empty;
+    public string? RequestHash { get; set; }
     public string State { get; set; } = string.Empty;
     public string LeaseToken { get; set; } = string.Empty;
     public int StatusCode { get; set; }

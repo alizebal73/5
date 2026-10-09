@@ -7,6 +7,7 @@ using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Security.Transport;
 using GameNet.Server.Modules.Identity.Api;
+using GameNet.Server.Modules.Stations.Api;
 using Microsoft.Extensions.Options;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
@@ -44,6 +45,7 @@ if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
 
 app.MapAgentCredentialRoutes();
 app.MapIdentityEndpoints();
+app.MapStationEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 app.MapGet("/health", async (

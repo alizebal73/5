@@ -14,6 +14,7 @@ public sealed class IdempotencyRecordConfiguration : IEntityTypeConfiguration<Id
         builder.Property(x => x.Scope).HasMaxLength(160).IsRequired().HasColumnName("scope");
         builder.Property(x => x.Key).HasMaxLength(200).IsRequired().HasColumnName("key");
         builder.Property(x => x.Operation).HasMaxLength(200).IsRequired().HasColumnName("operation");
+        builder.Property(x => x.RequestHash).HasMaxLength(128).HasColumnName("request_hash");
         builder.Property(x => x.State).HasMaxLength(32).IsRequired().HasColumnName("state");
         builder.Property(x => x.LeaseToken).HasMaxLength(128).IsRequired().HasColumnName("lease_token");
         builder.Property(x => x.StatusCode).HasColumnName("status_code");

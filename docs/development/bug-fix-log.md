@@ -201,3 +201,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Added a real Identity runtime check against the isolated, clean PostgreSQL cluster as part of PostgreSQL certification. It exercises bootstrap-secret validation, first-owner create-once semantics, invalid and valid login, database-derived owner permissions, authenticated `/auth/me`, logout/rejected reuse of a revoked JWT, and five-attempt account lockout.
 - The helper uses a random throwaway owner/secrets and restores all process environment variables. On failure it emits a redacted diagnostic file matched by the existing workflow artifact rule. It does not touch the configured machine database.
 - Verification: the next full Certification must pass with the new Identity runtime path; the preceding successful run did not include these end-to-end assertions.
+
+
+## 2026-10-09 — Stations slice / live Agent status and idempotency integrity
+
+- Added Stations domain/API/repository on the certified Identity branch. Legacy migration is not imported because it recreates Foundation-owned audit/idempotency tables.
+- Online state is derived from the Server-owned `agent_connection_leases` expiry and heartbeat; administrative Station status is a separate field.
+- Agent binding requires a non-revoked provisioned credential and is unique per Station. Mutations enforce expected Version, request-hash idempotency and transactional audit.
+- Existing idempotency storage now records request hashes, so reusing an active/completed key for a different operation or payload returns a stable conflict instead of replaying an unrelated response.
+- Migration `20261009020000_StationBoard` is additive: one nullable idempotency request-hash column plus the Stations table and indexes. It does not recreate Foundation schema.
+- Verification required before merge: full certification, idempotency conflict tests and end-to-end station/Agent binding and status tests on one commit.

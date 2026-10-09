@@ -3,6 +3,7 @@ using GameNet.Server.Infrastructure.Outbox;
 using GameNet.Server.Persistence.Configurations;
 using GameNet.Server.Persistence.Entities;
 using GameNet.Server.Modules.Identity.Domain;
+using GameNet.Server.Modules.Stations.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameNet.Server.Persistence;
@@ -19,6 +20,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
+    public DbSet<Station> Stations => Set<Station>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -51,6 +53,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
         modelBuilder.ApplyConfiguration(new RolePermissionConfiguration());
         modelBuilder.ApplyConfiguration(new UserRoleConfiguration());
         modelBuilder.ApplyConfiguration(new AuthSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new StationConfiguration());
     }
 
     private void RejectAuditMutation()
