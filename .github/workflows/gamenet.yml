@@ -50,3 +50,32 @@ jobs:
         timeout-minutes: 15
         shell: pwsh
         run: .\scripts\verify.ps1
+
+  deployment-payload:
+    name: deployment-payload
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-deployment-payload]')
+    needs: quick-validation
+    timeout-minutes: 35
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Checkout exact verified commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish versioned self-contained payloads
+        shell: pwsh
+        run: |
+          $version = "0.1.0-preview.${{ github.run_number }}.${{ github.run_attempt }}"
+          .\scripts\publish-deployment-payloads.ps1 -Version $version
+
+      - name: Upload payload archives and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamenet-deployment-payload-${{ github.sha }}
+          path: |
+            artifacts/deployment/**/*.zip
+            artifacts/deployment/**/release-manifest.json
+            artifacts/deployment/**/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
