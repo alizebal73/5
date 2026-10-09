@@ -29,8 +29,8 @@ public sealed class HmacRequestFingerprintTests
     public void Fingerprint_changes_when_server_key_rotates()
     {
         var payload = new { Operation = "users.create", Password = "Sensitive-Password-123" };
-        var first = Create("a").Compute(payload);
-        var rotated = Create("b").Compute(payload);
+        var first = Create('a').Compute(payload);
+        var rotated = Create('b').Compute(payload);
         Assert.NotEqual(first, rotated);
     }
 
