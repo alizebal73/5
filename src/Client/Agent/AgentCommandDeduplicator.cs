@@ -3,14 +3,13 @@ using GameNet.Shared.Contracts.V1.Protocol;
 namespace GameNet.Agent;
 
 /// <summary>
-/// Deduplicates delivery by CommandId for this Agent process. The cache is bounded; commands are
-/// also short-lived and lease-bound, so an evicted command cannot become valid again after expiry.
+/// Deduplicates delivery by CommandId for this Agent process. Entries are retained through their
+/// command expiry. When capacity is exhausted the Agent fails closed instead of evicting a live ID.
 /// </summary>
 public sealed class AgentCommandDeduplicator(TimeProvider timeProvider, int capacity = 1024)
 {
     private readonly object gate = new();
     private readonly Dictionary<Guid, Entry> entries = new();
-    private readonly Queue<(Guid CommandId, Entry Entry)> order = new();
 
     public Task<AgentCommandAcknowledgement> ExecuteOnceAsync(
         AgentCommandEnvelope command,
@@ -25,11 +24,19 @@ public sealed class AgentCommandDeduplicator(TimeProvider timeProvider, int capa
         Entry entry;
         lock (gate)
         {
+            var now = timeProvider.GetUtcNow();
+            foreach (var expiredId in entries
+                .Where(pair => pair.Value.Command.ExpiresAtUtc <= now)
+                .Select(pair => pair.Key)
+                .ToArray())
+            {
+                entries.Remove(expiredId);
+            }
+
             if (entries.TryGetValue(command.CommandId, out var existing))
             {
                 if (existing.Command != command)
                 {
-                    var now = timeProvider.GetUtcNow();
                     return Task.FromResult(new AgentCommandAcknowledgement(
                         command.CommandId,
                         command.DeviceId,
@@ -45,17 +52,22 @@ public sealed class AgentCommandDeduplicator(TimeProvider timeProvider, int capa
                 return existing.Completion.Task;
             }
 
+            if (entries.Count >= capacity)
+            {
+                return Task.FromResult(new AgentCommandAcknowledgement(
+                    command.CommandId,
+                    command.DeviceId,
+                    command.StationId,
+                    AgentCommandStatus.Rejected,
+                    now,
+                    now,
+                    "agent.command.dedup_capacity",
+                    null,
+                    null));
+            }
+
             entry = new Entry(command);
             entries.Add(command.CommandId, entry);
-            order.Enqueue((command.CommandId, entry));
-            while (entries.Count > capacity && order.TryDequeue(out var oldest))
-            {
-                if (entries.TryGetValue(oldest.CommandId, out var current) &&
-                    ReferenceEquals(current, oldest.Entry))
-                {
-                    entries.Remove(oldest.CommandId);
-                }
-            }
         }
 
         _ = CompleteAsync(entry, execute, cancellationToken);

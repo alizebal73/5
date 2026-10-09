@@ -57,7 +57,7 @@ public sealed class AgentCommandDeduplicatorTests
     }
 
     [Fact]
-    public async Task Cache_is_bounded_and_does_not_treat_an_evicted_command_as_in_flight()
+    public async Task Cache_saturation_fails_closed_without_evicting_unexpired_command_ids()
     {
         var deduplicator = new AgentCommandDeduplicator(TimeProvider.System, capacity: 1);
         var first = NewCommand();
@@ -72,11 +72,14 @@ public sealed class AgentCommandDeduplicatorTests
                 now, now, null, "1.0.0", "Ready"));
         }
 
-        await deduplicator.ExecuteOnceAsync(first, Execute);
-        await deduplicator.ExecuteOnceAsync(second, Execute);
-        await deduplicator.ExecuteOnceAsync(first, Execute);
+        var firstAck = await deduplicator.ExecuteOnceAsync(first, Execute);
+        var overflowAck = await deduplicator.ExecuteOnceAsync(second, Execute);
+        var repeatedAck = await deduplicator.ExecuteOnceAsync(first, Execute);
 
-        Assert.Equal(3, executions);
+        Assert.Equal(1, executions);
+        Assert.Equal(AgentCommandStatus.Rejected, overflowAck.Status);
+        Assert.Equal("agent.command.dedup_capacity", overflowAck.ErrorCode);
+        Assert.Equal(firstAck, repeatedAck);
     }
 
     private static AgentCommandEnvelope NewCommand() => new(
