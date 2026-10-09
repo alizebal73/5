@@ -134,3 +134,30 @@ For every release candidate:
 - rollback;
 - service restart;
 - uninstall without business-data loss.
+
+
+## Early installability track — 2026-10-09
+
+This is an early, internal installability track. It does **not** claim that the final installer/updater/rollback is complete and does not replace the release gates below.
+
+### First delivery shape
+
+- **Server + Desktop package:** installed on the designated server PC.
+- **Agent package:** independently installed on a different Windows PC.
+- **PostgreSQL:** the setup path must make its provisioning model explicit. It may not silently assume an undocumented database, and Server readiness must fail if the required schema is missing or migrations remain pending. Before bundling a PostgreSQL installer, validate the supported major version, service account, data path, backup/upgrade behavior and license/distribution implications.
+- **Published payloads:** self-contained `win-x64` outputs where supported; no reliance on the developer's source checkout or global `dotnet run` at the destination. Generate a manifest with exact source SHA, component versions, payload hashes, runtime target and migration bundle identity.
+- **Security:** secrets are created/provided during setup and not committed to the repository, embedded as shared constants, printed in logs, or left in package archives. Remote bootstrap/provisioning uses HTTPS. Each Agent must receive a unique identity/credential; a shared server provisioning key must never be shipped inside every client installer.
+- **State separation:** application binaries live below Program Files; mutable configuration, identity, logs and backups live in protected ProgramData locations. Normal uninstall may remove services/binaries but must preserve database/business data unless an explicit, separately confirmed destructive action exists.
+
+### Execution order
+
+1. Audit existing runtime configuration, Windows Service behavior, database migration path and Agent enrollment/provisioning before writing installer code.
+2. Build/publish Server, Desktop, Agent and an explicit EF migration artifact from one source SHA.
+3. Validate the payload and create hashes/manifest; fail if any expected output is missing or any development secret/default is packaged.
+4. Add the Server + Desktop setup path and independent Agent setup path. Run install/uninstall service operations with checked exit codes and preserve diagnostics on failure.
+5. Run a clean-install test on the server Windows PC and a different Windows client PC. Verify database connectivity/schema/readiness, secure first-owner bootstrap, Agent enrollment/unique credential, heartbeat, Health Probe, restart/reconnect and uninstall data preservation.
+6. Record package checksum, tested source SHA, Windows/PostgreSQL versions, log/evidence references and each unresolved defect in the roadmap/bug log.
+
+### Explicit status
+
+As of this checkpoint, this is **not implemented or installer-certified**. The repository's current Agent runtime test launches the project with `dotnet run` against an isolated test Server; that is useful integration evidence but not a substitute for installing the packaged services on clean Windows machines. Do not publish a `Setup.exe`/MSI download link until the package has actually been built and tested.
