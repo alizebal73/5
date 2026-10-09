@@ -365,3 +365,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Added domain validation for role codes and a unit-test file. Clean PostgreSQL runtime scenarios now cover the limited-role boundary, idempotent user creation, live permission refresh, denial without permission, role permission escalation, Owner protection and system-role immutability.
 - Quick validation [run #84](https://github.com/alizebal73/5/actions/runs/37929829011) passed on SHA `2e6013c98501f2fbac106cba866074598e3f7851` before documentation-only follow-ups. A preceding run [#81](https://github.com/alizebal73/5/actions/runs/37929430932) found the missing `OperatorUser.SetActive` domain method; it was added and the next build passed.
 - Evidence boundary: full Foundation Runtime has not yet run against the final management harness SHA; do not close these criteria until its real PostgreSQL Identity/runtime and all other Foundation gates pass. Password change/reset remains open.
+
+
+## 2026-10-09 — Stage 6B runtime certification passed
+
+- Full Foundation Certification [run #168](https://github.com/alizebal73/5/actions/runs/37930045661) completed with `success` on exact code SHA `bf0c355837c15f1cf9dedf324779fa1f09f4b180`. The run passed PowerShell parser, Canonical Release build/tests, PostgreSQL clean migration/schema/concurrency plus Identity/Stations runtime, Backup/isolated restore, Desktop runtime, Agent runtime and certification evidence upload.
+- The new PostgreSQL Identity runtime cases passed: owner role listing, limited role/operator creation, same-key idempotent replay, denial when a permission is absent, live permission refresh from persisted role changes, role-manager privilege escalation denial, non-owner Owner-protection denial, and system Owner-role immutability. Existing session revocation/lockout and station/Agent checks also passed.
+- Quick validation [run #89](https://github.com/alizebal73/5/actions/runs/37929829011) passed the Canonical build/tests on SHA `2e6013c98501f2fbac106cba866074598e3f7851` before later documentation-only commits. The full certification applies to the code SHA named above.
+- Draft validation PR [#10](https://github.com/alizebal73/5/pull/10) was closed without merge. `main` remains at starter SHA `b9288471f2047570eaf8d0d6552cf87bc0ddc214`; no feature code was merged into Foundation or main.
+- Scope boundary: Stage 6 remains open for password change/reset and any remaining identity acceptance criteria. This is not an installer, physical pilot or production-release certification.
