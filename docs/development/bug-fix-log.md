@@ -458,3 +458,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: removed the unnecessary outer wrapper while retaining the inner Push-Location/Pop-Location finally, so working-directory restoration remains guaranteed.
 - Verification: pending new Quick Validation, Full Foundation Certification and payload job on the fix SHA.
 - Rollback: revert only this script restructuring if it causes a regression; do not bypass parser validation.
+
+
+## 2026-10-09 — DPAPI platform compatibility guard
+
+- Result after the PowerShell parser fix: the source-size/architecture/documentation gates and PowerShell parser passed; canonical Release build stopped on .NET analyzer CA1416 because ProtectedData.Unprotect is Windows-only while the Server project is not globally Windows-targeted.
+- Fix: ProtectedServerSettings.Read now rejects non-Windows execution explicitly before invoking DPAPI. Tests route protection through the same explicit OS guard. The platform guard is deliberate; no analyzer warning was disabled and no fallback encryption scheme was introduced.
+- Verification: pending a new exact-SHA Quick Validation and Full Foundation Certification; no package from the prior failing commit is accepted.

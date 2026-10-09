@@ -15,7 +15,7 @@ public sealed class ProtectedServerSettingsTests
         var path = Path.Combine(Path.GetTempPath(), "gamenet-server-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
         var settings = CreateValidSettings();
         var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
-        var encrypted = ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.LocalMachine);
+        var encrypted = Protect(clear);
         try
         {
             var signingKeyBytes = Encoding.UTF8.GetBytes(settings["GameNet:Authentication:SigningKey"]!);
@@ -47,7 +47,7 @@ public sealed class ProtectedServerSettingsTests
         var settings = CreateValidSettings();
         settings["GameNet:Unexpected:Value"] = "no";
         var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
-        var encrypted = ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.LocalMachine);
+        var encrypted = Protect(clear);
         try
         {
             File.WriteAllBytes(path, encrypted);
@@ -66,7 +66,7 @@ public sealed class ProtectedServerSettingsTests
     {
         var path = Path.Combine(Path.GetTempPath(), "gamenet-server-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
         var clear = JsonSerializer.SerializeToUtf8Bytes(CreateValidSettings());
-        var encrypted = ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.LocalMachine);
+        var encrypted = Protect(clear);
         encrypted[0] ^= 0x80;
         try
         {
@@ -88,6 +88,13 @@ public sealed class ProtectedServerSettingsTests
         var configuration = new ConfigurationManager();
         Assert.Throws<FileNotFoundException>(() =>
             ProtectedServerSettings.LoadInto(configuration, enableDefaultProtectedFile: true, explicitFilePath: path));
+    }
+
+    private static byte[] Protect(byte[] clear)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("This test requires Windows DPAPI.");
+        return ProtectedData.Protect(clear, optionalEntropy: null, DataProtectionScope.LocalMachine);
     }
 
     private static bool ContainsSequence(byte[] haystack, byte[] needle)

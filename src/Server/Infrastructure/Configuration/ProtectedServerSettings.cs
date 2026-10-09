@@ -65,6 +65,9 @@ public static class ProtectedServerSettings
         if (!File.Exists(path))
             throw new FileNotFoundException("Protected Server settings file was not found.", path);
 
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Protected Server settings require Windows DPAPI.");
+
         byte[] clearBytes;
         try
         {
