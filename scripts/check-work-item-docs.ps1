@@ -68,7 +68,7 @@ Assert-RequiredTerms $processPath $process @(
     "## قواعد وضعیت",
     "## نگهداری Bug-Fix Log",
     "FIXED_UNVERIFIED",
-    "root cause"
+    "علت ریشه‌ای"
 )
 Assert-RequiredTerms $bugTemplatePath $bugTemplate @(
     "## Identity and state",
@@ -92,12 +92,11 @@ Assert-RequiredTerms $tracePath $trace @(
     "REQ-ARCH-001",
     "REQ-WAL-002",
     "REQ-SES-003",
-    "Definition of Ready",
-    "Definition of Done"
+    "Definition of Ready / Done"
 )
 Assert-RequiredTerms $matrixPath $matrix @(
     "requirements-traceability.md",
-    "historical failure",
+    "الگوی شکست مشاهده‌شده",
     "Server",
     "P0",
     "Deferred"
