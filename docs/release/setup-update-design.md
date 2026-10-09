@@ -167,3 +167,8 @@ Production HTTPS endpoint/certificate generation is now configured and automated
 ### Runtime integration gate discovered — 2026-10-09
 
 Before adding Windows service-install scripts, close the concrete runtime gaps recorded in [Installability Integration Audit](installability-audit-2026-10-09.md): production Kestrel has no declared LAN HTTPS endpoint/certificate in the generated payload; Desktop and Agent payload defaults still use loopback URLs; sensitive remote API/Agent routes correctly reject HTTP; bootstrap-secret instructions did not match the DPAPI configuration source; and Agent enrollment requires a unique, service-scoped one-time credential plus protected ProgramData state. These are cross-component contracts, not optional installer polish. Keep the current no-Setup/no-physical-install status until they are implemented and tested together.
+
+
+## Verified prerequisites and remaining client-install gap — 2026-10-09
+
+The Server-side HTTPS endpoint, DPAPI-protected certificate settings and certificate generation/export checks passed Foundation and payload CI. Desktop and Agent also now share a single root-origin transport policy. These checks do not install the public certificate into client trust stores and do not configure the real Server URL outside immutable appsettings defaults. The next work item is an explicit runtime settings and certificate-trust path, with out-of-band SHA-256 confirmation, before any service installer or two-PC claim.

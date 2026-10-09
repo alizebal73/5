@@ -19,7 +19,7 @@ A defect is not closed because a later refactor hides it.
 - Root cause: transport-origin validation was duplicated at two client boundaries rather than owned by a shared, dependency-light contract.
 - Fix: add `GameNet.Shared.Primitives.ServerEndpointAddress` as the single origin policy. Desktop and Agent now consume it. Only root HTTPS origins are valid for remote deployment; HTTP is valid only for loopback development; credentials, path prefixes, query and fragment are rejected.
 - Regression coverage: shared positive/negative URI tests plus Agent and Desktop consumer tests.
-- Verification: pending Quick Validation and Full Foundation Certification on the exact fix SHA. Do not mark this item closed until both pass.
+- Verified on exact SHA `553dc80f6f553b0e793b7cbb2b82ba9136b116c0`: [Quick Validation](https://github.com/alizebal73/5/actions/runs/37963001084) and [Full Foundation Certification](https://github.com/alizebal73/5/actions/runs/37963001068) both passed. Canonical build/tests, PostgreSQL, isolated backup/restore, Desktop runtime, Agent runtime and evidence upload all passed. This verifies the common origin policy only; no LAN connection or physical two-PC install is implied.
 - Rollback: revert the shared policy and its consumers/tests together; do not relax remote HTTPS enforcement.
 
 **Required process/templates for all new entries:** [bug-fix process](bug-fix-process.md), [bug-fix template](../templates/bug-fix-template.md), [Definition of Ready](../planning/definition-of-ready.md) and [Definition of Done](../planning/definition-of-done.md). This is a historical append-only log. Preserve old entries; correct factual mistakes transparently; append verified outcomes rather than overwriting history.

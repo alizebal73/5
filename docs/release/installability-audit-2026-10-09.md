@@ -1,5 +1,11 @@
 # GameNet 5 Installability Integration Audit — 2026-10-09
 
+## Current verified state — 2026-10-09, SHA `553dc80f6f553b0e793b7cbb2b82ba9136b116c0`
+
+- Production Server HTTPS listener configuration and certificate material generation were implemented and CI-certified at parent SHA `7ab5108b342c74d88faf87ba6303a1c08ac9de9b`; this means the packaged Server knows how to bind HTTPS when provisioned with protected settings. It does **not** establish that Desktop/Agent have trusted the certificate or that LAN traffic has been exercised.
+- The shared root-origin policy for Desktop and Agent passed the exact-SHA Quick and Foundation gates linked in the roadmap. The policy allows remote HTTPS only, permits HTTP only for loopback development, and rejects URL credentials, query, fragment and path prefixes.
+- **Current next boundary:** client-side trust installation after out-of-band SHA-256 fingerprint verification, ProgramData runtime endpoint configuration for Desktop/Agent, then secure bootstrap/enrollment lifecycle and real LAN integration. Setup.exe/MSI, Windows service commissioning and two-PC validation are not complete.
+
 **Status:** Audit complete; implementation gates remain open. This document is not a claim that Setup or two-PC installation is complete.
 
 **Reviewed checkpoint:** `feature/operator-identity-v1`, repository head `8a89a6863bc83bd2c6fd4329e0484f1e8ca72e78`. The latest application/payload implementation under review was certified at code SHA `c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7` and payload-builder SHA `b7e232d068fb6c085716980249a83abb205961b3`; later commits in this branch were documentation-only. The existing evidence proves Foundation/runtime tests and ZIP payload integrity, not installation on clean physical PCs.
