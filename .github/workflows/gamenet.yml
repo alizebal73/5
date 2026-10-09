@@ -1,29 +1,43 @@
-name: gamenet-verification
+name: gamenet-quick-validation
 
 on:
   workflow_dispatch:
+  # Low-noise fast lane for active feature/fix branches; Markdown-only pushes skip CI.
+  push:
+    branches:
+      - "feature/**"
+      - "fix/**"
+    paths-ignore:
+      - "**/*.md"
+  # Required check for changes proposed to main.
   pull_request:
+    branches:
+      - main
 
 concurrency:
-  group: gamenet-verification-${{ github.event.pull_request.number || github.ref }}
+  group: gamenet-quick-validation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify:
-    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'foundation/runtime-') }}
+  quick-validation:
+    name: quick-validation
+    timeout-minutes: 20
     runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: PowerShell parser gate
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          foreach ($file in Get-ChildItem .\scripts -Recurse -File -Filter *.ps1) {
+          foreach ($file in Get-ChildItem .\\scripts -Recurse -File -Filter *.ps1) {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
@@ -32,6 +46,7 @@ jobs:
             }
           }
 
-      - name: Canonical verification
+      - name: Canonical build and tests
+        timeout-minutes: 15
         shell: pwsh
-        run: .\scripts\verify.ps1
+        run: .\\scripts\\verify.ps1
