@@ -136,10 +136,11 @@
 ## 10. Recommended next sequence
 
 1. Keep this evidence attached to the runtime/TLS candidate; do not merge it into main or foundation/runtime-final-v2 without the repository's review/certification process.
-2. Develop the actual WPF operator shell and real dashboard views per docs/ui/desktop-ux-architecture.md; the current two-text window is only a placeholder shell.
-3. Define/approve the service secret lifecycle and the actual Windows service identities before testing service-based deployment.
-4. In a controlled, approved test window, validate Server service TLS private-key access, Agent as service with protected credentials, server restart/reconnect, and process/credential cleanup.
-5. Build and certify the actual Setup path separately; the current ZIP/payload is not an installer.
+2. Define and approve the canonical secret lifecycle and Windows service identities before any service-based deployment test. Cover PostgreSQL credentials, the JWT signing key and Agent provisioning key: protected storage, least-privilege ACLs for the real service identities, redaction, rotation and recovery. Do not put secrets in server.json, source control, plaintext logs or ordinary installer command lines.
+3. Review the current state of the manager machine before cleanup. This smoke created Server TLS/configuration artifacts on 192.168.0.9 even though the payload README recommends an isolated test Server PC. Do not rerun the TLS setup script or remove its certificate/configuration blindly; first determine whether the test Server process/service is still using them and whether they overlap the existing installation.
+4. Complete the remaining physical runtime gate in a controlled test window with a disposable database and throwaway secrets: verify the actual Server Windows service identity can access its TLS private key; run Agent under its intended service identity with protected credentials; verify lease/heartbeat and reconnect after service restart; and record the exact tested commit/package hash, endpoint IP/SAN, public-certificate SHA-256, OS/PostgreSQL versions and results. Do not treat the previous interactive-process smoke as this proof.
+5. Only after the Stage 1 runtime boundary is accepted, follow the master build plan in order: Stage 2 module skeleton, Stage 3 identity/authorization, Stage 4 stations/agents, then Stage 5 customers. The real dashboard remains native WPF per docs/ui/desktop-ux-architecture.md; do not start feature work out of sequence.
+6. Implement and certify Setup, update, repair and rollback separately at Stages 15–18 / Gate E. The current ZIP is a runtime test payload, not an installer.
 
 ## References
 
