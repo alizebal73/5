@@ -61,6 +61,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
                 "auth.invalid_credentials" => Text("نام کاربری یا گذرواژه نادرست است.", "Username or password is incorrect."),
                 "auth.locked" => Text("حساب موقتاً قفل شده است. کمی بعد تلاش کنید.", "This account is temporarily locked. Try again later."),
                 "auth.disabled" => Text("این حساب غیرفعال است.", "This account is disabled."),
+                "security.https_required" => Text("برای اتصال به سرور راه دور، ارتباط امن HTTPS لازم است.", "A secure HTTPS connection is required for remote servers."),
                 _ => Text("ورود انجام نشد. وضعیت سرور را بررسی کنید.", "Sign in failed. Check the Server status.")
             };
         }

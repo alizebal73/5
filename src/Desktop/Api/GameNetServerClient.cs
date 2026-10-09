@@ -58,6 +58,14 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string uri, bool authenticated)
     {
+        var isSensitiveRoute = uri.StartsWith("/api/v1/auth", StringComparison.Ordinal) ||
+                               uri.StartsWith("/api/v1/bootstrap/admin", StringComparison.Ordinal);
+        if (isSensitiveRoute && httpClient.BaseAddress is { } baseAddress &&
+            baseAddress.Scheme != Uri.UriSchemeHttps && !baseAddress.IsLoopback)
+        {
+            throw new GameNetApiException("security.https_required", (int)System.Net.HttpStatusCode.UpgradeRequired);
+        }
+
         var request = new HttpRequestMessage(method, uri);
         request.Headers.TryAddWithoutValidation(ApiHeaders.ContractVersion, ContractVersions.V1);
         if (authenticated && !string.IsNullOrWhiteSpace(accessToken))

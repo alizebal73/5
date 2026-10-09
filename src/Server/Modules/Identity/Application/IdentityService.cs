@@ -117,7 +117,7 @@ public sealed class IdentityService(
             audit.Append(new AuditRecord(
                 OccurredAtUtc: now, ActorType: "Operator", ActorId: userId.ToString("D"),
                 Operation: "identity.logout", ReferenceType: "AuthSession", ReferenceId: session.Id.ToString("D"),
-                Reason: null, CorrelationId: correlationId, Source: "Desktop", Outcome: "Succeeded", IdempotencyKey: jti));
+                Reason: null, CorrelationId: correlationId, Source: "Desktop", Outcome: "Succeeded"));
             return Result<bool>.Success(true);
         }, cancellationToken);
 

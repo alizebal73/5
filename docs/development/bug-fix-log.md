@@ -146,3 +146,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Only Identity-owned tables are added by a new migration after FoundationCore. Existing Foundation schema and audit/idempotency/outbox models are preserved.
 - Verification: pending full Foundation certification on the feature branch. Do not merge into the Foundation branch unless clean PostgreSQL migration, Desktop smoke, Agent runtime and canonical gates pass on the same commit.
 - Production HTTPS provisioning remains a release gate; bootstrap secrets and passwords must not be used over unencrypted LAN connections.
+
+
+## 2026-10-09 — Operator Identity / secure transport and migration review
+
+- Added a server-side transport guard for operator authentication, first-owner bootstrap, Agent credential APIs and SignalR Agent connections. Non-loopback HTTP is rejected with a stable 426 contract error; loopback HTTP remains available for local smoke/development.
+- Desktop connection options now accept HTTPS for remote hosts and HTTP only for loopback. The HTTP client independently refuses to submit operator credentials to remote non-HTTPS BaseUrls.
+- Added regression tests for the server transport boundary and Desktop's no-send-on-insecure-URL behavior.
+- Added an interactive bootstrap PowerShell script that prompts for the setup secret and owner password as SecureString inputs, refuses remote HTTP, requires setup to still be pending, and does not write credentials to disk. The Server operator must configure GAMENET_BOOTSTRAP_SECRET separately before running it.
+- Migration snapshot review: explicitly recorded ValueGeneratedNever for Identity GUID keys to match the entity configurations and keep the migration snapshot deterministic.
+- Verification: full Certification on the feature branch remains pending. Do not merge if any canonical, clean PostgreSQL migration, Desktop or Agent gate fails.

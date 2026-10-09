@@ -327,7 +327,7 @@ namespace GameNet.Server.Persistence.Migrations
 
             modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.OperatorUser", b =>
                 {
-                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
                     b.Property<string>("Username").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("username");
                     b.Property<string>("DisplayName").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("display_name");
                     b.Property<string>("PasswordHash").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("password_hash");
@@ -342,7 +342,7 @@ namespace GameNet.Server.Persistence.Migrations
                 });
             modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.Role", b =>
                 {
-                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
                     b.Property<string>("Code").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)").HasColumnName("code");
                     b.Property<string>("Name").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("name");
                     b.HasKey("Id").HasName("pk_roles");
@@ -351,7 +351,7 @@ namespace GameNet.Server.Persistence.Migrations
                 });
             modelBuilder.Entity("GameNet.Server.Modules.Identity.Domain.AuthSession", b =>
                 {
-                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
                     b.Property<Guid>("UserId").HasColumnType("uuid").HasColumnName("user_id");
                     b.Property<string>("Jti").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("jti");
                     b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");

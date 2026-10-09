@@ -17,7 +17,7 @@ public static class DesktopHost
         builder.Services
             .AddOptions<ServerConnectionOptions>()
             .BindConfiguration(ServerConnectionOptions.SectionName)
-            .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _), "Server BaseUrl must be an absolute URI.")
+            .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)), "Server BaseUrl must use HTTPS, except for loopback development.")
             .ValidateOnStart();
 
         builder.Services.AddHttpClient<IGameNetServerClient, GameNetServerClient>((provider, client) =>
