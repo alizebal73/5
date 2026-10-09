@@ -41,6 +41,8 @@ public static class ServiceRegistration
         services.AddScoped<IAgentCredentialService, AgentCredentialService>();
         services.AddScoped<IIdentityRepository, EfIdentityRepository>();
         services.AddScoped<IdentityService>();
+        services.AddScoped<IOperatorManagementRepository, EfOperatorManagementRepository>();
+        services.AddScoped<OperatorManagementService>();
         services.AddScoped<IStationRepository, EfStationRepository>();
         services.AddScoped<StationService>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
