@@ -431,3 +431,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - الزامات ایمنی: secret/connection string در repo یا package ثابت نشود؛ هر Agent اعتبار مستقل داشته باشد؛ HTTPS برای اتصال remote لازم باشد؛ migration صریح و قابل گزارش باشد؛ uninstall دادهٔ تجاری/backup را پاک نکند؛ نصب خراب یا readiness ناموفق به موفقیت ختم نشود.
 - وضعیت فعلی: باز؛ در این commit فقط نقشهٔ راه و معیارهای پذیرش به‌روز می‌شوند. هنوز هیچ فایل Setup.exe / MSI به‌عنوان آماده معرفی نمی‌شود.
 - معیار بستن: بسته از SHA مشخص ساخته و hash-manifest تولید شود؛ دو installer از سورس یکسان نسخه‌دار باشند؛ روی ماشین پاک نصب شوند؛ Server Ready، Desktop login و Agent heartbeat/Health Probe واقعی تأیید و شواهد نگهداری شود؛ failure/restart/uninstall بررسی شود.
+
+
+## 2026-10-09 — Deployment payload builder / PowerShell parser regression
+
+- Symptom: the first Quick Validation after adding `scripts/publish-deployment-payloads.ps1` stopped in the PowerShell parser gate before build or packaging; `deployment-payload` was skipped by its dependency gate. No installer or payload artifact was produced by this attempt.
+- Root cause from source inspection: the error message interpolated `$LASTEXITCODE` immediately followed by `:`, which PowerShell parses as an invalid scoped-variable reference. The interpolation is now explicitly delimited as `${LASTEXITCODE}`.
+- Guard improvement: the CI parser gate now prints parser ErrorId/Message/Extent before failing, so a future script syntax defect carries a line/extent diagnostic instead of only a filename.
+- Verification: pending rerun on the exact fix commit; do not count the payload-build step as passed until the quick parser/build/tests and the packaging job are both successful.
+- Rollback: revert this narrow syntax/diagnostics fix if it causes a regression; do not suppress the parser gate.
