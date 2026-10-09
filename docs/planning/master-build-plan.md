@@ -6,6 +6,13 @@ This is the single delivery plan for building GameNet 5 from the clean foundatio
 
 The plan is intentionally sequential. A later stage cannot silently compensate for an incomplete earlier stage.
 
+## Product requirements source of truth
+
+- Detailed requirement IDs, acceptance criteria, ownership/dependencies, priority/risk and current implementation status are maintained in docs/planning/requirements-traceability.md.
+- docs/planning/capability-matrix.md is the summarized domain/priority view; it does not claim feature completion.
+- Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
+- The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
+
 ## Product target
 
 GameNet 5 is a Windows-first, single-site cybercafe management platform for:
