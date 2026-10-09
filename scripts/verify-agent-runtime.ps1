@@ -264,9 +264,19 @@ catch {
     throw
 }
 finally {
-    if ($agent) { Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue }
-    if ($agent2) { Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue }
-    if ($server) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
+    # dotnet run owns child host processes which can keep redirected log files locked.
+    # Terminate each certification process tree before collecting failure diagnostics.
+    foreach ($processToStop in @($agent, $agent2, $server)) {
+        if ($null -eq $processToStop) { continue }
+        try {
+            & (Join-Path $env:SystemRoot "System32\\taskkill.exe") /PID $processToStop.Id /T /F 2>$null | Out-Null
+        }
+        catch {
+            # Continue cleanup and preserve the original certification failure.
+        }
+        try { $processToStop.WaitForExit(5000) | Out-Null } catch {}
+        try { $processToStop.Dispose() } catch {}
+    }
 
     foreach ($name in $envNames) {
         $previous = $old[$name]
@@ -294,7 +304,13 @@ finally {
 
         foreach ($entry in $logFiles) {
             if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) { continue }
-            $content = [System.IO.File]::ReadAllText($entry.Path)
+            try {
+                $content = [System.IO.File]::ReadAllText($entry.Path)
+            }
+            catch {
+                # Diagnostic collection must never hide the original Agent/runtime failure.
+                $content = "DIAGNOSTIC_READ_FAILURE path=$($entry.Name) message=$($_.Exception.Message)"
+            }
             $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
             $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|refresh_token|client_secret|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
             $content = [Regex]::Replace($content, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
@@ -311,6 +327,7 @@ finally {
                 ForEach-Object { Join-Path $diagnosticRoot ('agent-runtime-' + $runToken + '-' + $_.Name) } |
                 Where-Object { Test-Path -LiteralPath $_ }
         )
+        Write-Host "Agent runtime failed (redacted summary): $safeFailure"
         $diagnosticPath = Join-Path $diagnosticRoot ("agent-runtime-diagnostic-" + $runToken + ".txt")
         @(
             "commit=$((git rev-parse HEAD 2>$null))"

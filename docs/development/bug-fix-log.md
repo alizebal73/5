@@ -164,3 +164,11 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression evidence: Shared tests cover default ProgramData path resolution, test-path acceptance in Development, and rejection for Production/missing environment/relative paths. Full Foundation runtime certification must prove server health, Desktop cultures, Agent lease/fencing/reconnect with these files.
 - Verification result: pending full Foundation on this exact commit. This still uses HTTP loopback for isolated CI; it does not prove real-LAN HTTPS or service-account private-key access.
 - Rollback: revert the resolver, its tests, harness updates, documentation and this entry together. Do not treat the previous environment-overridden smoke path as ProgramData certification.
+
+## 2026-10-09 — ProgramData Agent runtime failure diagnostics
+
+- Symptom: after moving the Agent smoke endpoint/state settings to temporary JSON configuration, the first Foundation run failed in the cleanup path while reading `server.log`; the child process still held the redirected output handle and the cleanup exception masked the primary runtime/lease error.
+- Root cause of the diagnostic failure: `Stop-Process` stopped the `dotnet run` parent without guaranteeing that its child host process had exited, and the diagnostics loop did not isolate file-read failures.
+- Fix: terminate each certification process tree, wait briefly for exit, and wrap individual diagnostic file reads so a locked/missing log cannot replace the original failure. The sanitized primary failure is included in the diagnostic summary.
+- Verification result: pending a new full Foundation run. The actual ProgramData Agent lease/reconnect result from the first attempt remains unknown; do not label this issue fixed until a new run passes.
+- Rollback: revert the process-tree cleanup and guarded-read changes as a unit only if they interfere with runner cleanup; never discard the original runtime failure signal.
