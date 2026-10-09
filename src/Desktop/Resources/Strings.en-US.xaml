@@ -40,5 +40,7 @@
   <system:String x:Key="Station.NoResults">No stations match these filters.</system:String>
   <system:String x:Key="Station.Disabled">Disabled</system:String>
   <system:String x:Key="Station.RecoveryRequired">Recovery required</system:String><system:String x:Key="Station.AgentVersion">Agent version</system:String>
-  <system:String x:Key="Station.AgentState">Reported state</system:String><system:String x:Key="Station.StatusAdmin">Administrative status</system:String>
+  <system:String x:Key="Station.AgentState">Reported state</system:String>
+  <system:String x:Key="Station.HealthProbe">Check Agent health</system:String>
+  <system:String x:Key="Station.StatusAdmin">Administrative status</system:String>
 </ResourceDictionary>

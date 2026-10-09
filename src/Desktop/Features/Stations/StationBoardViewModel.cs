@@ -28,6 +28,10 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         BindAgentCommand = new AsyncUiAction(BindAgentAsync, () => !IsBusy && SelectedStation is not null && !string.IsNullOrWhiteSpace(DeviceId));
         MaintenanceCommand = new AsyncUiAction(() => ChangeStatusAsync(StationStatusContract.Maintenance), () => !IsBusy && SelectedStation is not null);
         AvailableCommand = new AsyncUiAction(() => ChangeStatusAsync(StationStatusContract.Available), () => !IsBusy && SelectedStation is not null);
+        AgentHealthProbeCommand = new AsyncUiAction(
+            ProbeAgentHealthAsync,
+            () => !IsBusy && SelectedStation is { IsAgentManaged: true } &&
+                  !string.IsNullOrWhiteSpace(SelectedStation.Station.AgentDeviceId));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -40,6 +44,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
     public ICommand BindAgentCommand { get; }
     public ICommand MaintenanceCommand { get; }
     public ICommand AvailableCommand { get; }
+    public ICommand AgentHealthProbeCommand { get; }
 
     public StationBoardItem? SelectedStation
     {
@@ -171,6 +176,32 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
             Text("Agent به ایستگاه متصل شد.", "Agent bound to station."));
     }
 
+    private async Task ProbeAgentHealthAsync()
+    {
+        var row = SelectedStation;
+        if (row is null || !row.IsAgentManaged || string.IsNullOrWhiteSpace(row.Station.AgentDeviceId))
+            return;
+
+        ErrorMessage = "";
+        IsBusy = true;
+        try
+        {
+            var acknowledgement = await api.ProbeAgentHealthAsync(row.Id);
+            StatusMessage = acknowledgement.Status == AgentCommandStatus.Succeeded
+                ? string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                    Text("Agent پاسخ داد؛ نسخه {0}، وضعیت {1}.", "Agent responded; version {0}, state {1}."),
+                    acknowledgement.AgentVersion ?? "—", acknowledgement.StationState ?? "—")
+                : Text("Agent فرمان بررسی سلامت را تأیید نکرد: ", "Agent did not accept the health probe: ")
+                    + (acknowledgement.ErrorCode ?? "agent.command.rejected");
+            await LoadCoreAsync(row.Id);
+        }
+        catch (GameNetApiException ex) { ErrorMessage = DescribeError(ex.Code); }
+        catch (HttpRequestException) { ErrorMessage = Text("ارتباط با سرور برقرار نشد.", "Could not connect to the Server."); }
+        catch (TaskCanceledException) { ErrorMessage = Text("Agent در مهلت مقرر پاسخ نداد.", "The Agent did not respond before the timeout."); }
+        catch { ErrorMessage = Text("بررسی سلامت Agent ناموفق بود.", "Agent health probe failed."); }
+        finally { IsBusy = false; }
+    }
+
     private Task ChangeStatusAsync(StationStatusContract status)
     {
         var row = SelectedStation;
@@ -259,6 +290,9 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         "stations.invalid" => Text("اطلاعات ایستگاه معتبر نیست.", "Station details are invalid."),
         "stations.not_found" => Text("ایستگاه پیدا نشد؛ فهرست را تازه‌سازی کنید.", "Station was not found; refresh the list."),
         "stations.agent_not_provisioned" => Text("برای این Device ID اعتبارنامه فعال Agent وجود ندارد.", "No active Agent credential exists for that device ID."),
+        "stations.agent_not_applicable" => Text("این نوع ایستگاه Agent ندارد.", "This station type does not use the Windows Agent."),
+        "stations.agent_not_bound" => Text("ابتدا Agent را به این رایانه متصل کنید.", "Bind an Agent to this PC first."),
+        "stations.agent_unavailable" => Text("Agent آنلاین نیست یا در زمان مقرر پاسخ نداد.", "Agent is offline or did not respond in time."),
         "stations.device_already_bound" => Text("این Agent به ایستگاه دیگری متصل است.", "This Agent is already bound to another station."),
         "stations.version_conflict" => Text("ایستگاه تغییر کرده؛ تازه‌سازی کنید و دوباره تلاش کنید.", "The station changed; refresh and retry."),
         "stations.invalid_transition" => Text("این تغییر وضعیت مجاز نیست.", "This status transition is not allowed."),
@@ -280,6 +314,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         if (BindAgentCommand is AsyncUiAction d) d.RaiseCanExecuteChanged();
         if (MaintenanceCommand is AsyncUiAction e) e.RaiseCanExecuteChanged();
         if (AvailableCommand is AsyncUiAction f) f.RaiseCanExecuteChanged();
+        if (AgentHealthProbeCommand is AsyncUiAction g) g.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)

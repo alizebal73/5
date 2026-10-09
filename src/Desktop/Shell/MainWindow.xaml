@@ -210,6 +210,7 @@
                       <TextBlock Text="{Binding StationBoard.SelectedStation.AgentVersionText}" FontSize="12" Margin="0,0,0,6"/>
                       <TextBlock Text="{DynamicResource Station.AgentState}" FontSize="12" Foreground="#667085"/>
                       <TextBlock Text="{Binding StationBoard.SelectedStation.AgentStateText}" FontSize="12" Margin="0,0,0,6"/>
+                       <Button Padding="9,6" Margin="0,0,0,8" Content="{DynamicResource Station.HealthProbe}" Command="{Binding StationBoard.AgentHealthProbeCommand}"/>
                       <TextBlock Text="{DynamicResource Station.StatusAdmin}" FontWeight="SemiBold"/>
                       <WrapPanel>
                         <Button Padding="8,5" Margin="0,4,4,0" Content="{DynamicResource Station.Maintenance}" Command="{Binding StationBoard.MaintenanceCommand}"/>

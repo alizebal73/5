@@ -21,6 +21,9 @@ $envNames = @(
     "GameNet__Authentication__Audience",
     "GameNet__Authentication__SigningKey",
     "GameNet__Agent__ProvisioningKey",
+    "GameNet__AgentIdentity__RootPath",
+    "GameNet__AgentTransport__ServerBaseUrl",
+    "GAMENET_AGENT_BOOTSTRAP_SECRET",
     "GAMENET_BOOTSTRAP_SECRET",
     "GameNet__Setup__BootstrapSecret"
 )
@@ -105,6 +108,10 @@ function Assert-ErrorCode($Response, [int]$ExpectedStatus, [string]$ExpectedCode
 $serverUrl = "http://127.0.0.1:$(Get-EphemeralPort)"
 $root = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-identity-runtime-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $root | Out-Null
+$agentIdentityRoot = Join-Path $root "agent-identity"
+$agentLog = Join-Path $root "agent.log"
+$agentErrorLog = Join-Path $root "agent.err"
+$agentProcess = $null
 $serverLog = Join-Path $root "server.log"
 $serverErrorLog = Join-Path $root "server.err"
 $diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
@@ -280,6 +287,32 @@ try {
         $boundStation.Json.data.agentOnline -ne $false -or
         $boundStation.Json.data.version -ne 2) {
         throw "Station binding or server-derived offline state was incorrect before Agent connection."
+
+    # Exercise a real Server-to-Agent command against this isolated runtime Server.
+    New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
+    @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
+    $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
+    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
+    $env:GAMENET_AGENT_BOOTSTRAP_SECRET = [string]$provisionedAgent.Json.data.secret
+    $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
+
+    $agentOnline = $false
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        $liveStations = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+        Assert-Status $liveStations 200 "Read station state while Agent starts"
+        $liveStation = @($liveStations.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+        if ($liveStation -and $liveStation.agentOnline -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$liveStation.lastHeartbeatAtUtc)) { $agentOnline = $true; break }
+    }
+    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat." }
+
+    $healthProbe = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
+    Assert-Status $healthProbe 200 "Dispatch safe Agent health-probe command"
+    if ($healthProbe.Json.data.status -ne 1 -or [string]$healthProbe.Json.data.commandId -eq [Guid]::Empty.ToString() -or
+        [string]$healthProbe.Json.data.stationId -ne $stationId -or $healthProbe.Json.data.deviceId -ne $stationDeviceId -or
+        [string]::IsNullOrWhiteSpace([string]$healthProbe.Json.data.agentVersion) -or $healthProbe.Json.data.stationState -ne "Ready") {
+        throw "The Agent health-probe command did not return a valid success acknowledgement."
+    }
     }
 
     
@@ -480,8 +513,8 @@ try {
 $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     Assert-Status $stationList 200 "List stations"
     $listedStation = @($stationList.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
-    if (-not $listedStation -or $listedStation.agentOnline -ne $false) {
-        throw "Station list did not reflect the authoritative offline state."
+    if (-not $listedStation -or $listedStation.agentOnline -ne $true) {
+        throw "Station list did not reflect the authoritative online Agent state after the health-probe test."
     }
 
     $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
@@ -525,7 +558,7 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
         expectedVersion = 2
     }
     Assert-Status $maintenance 200 "Set station administrative maintenance status"
-    if ($maintenance.Json.data.status -ne 3 -or $maintenance.Json.data.agentOnline -ne $false) {
+    if ($maintenance.Json.data.status -ne 3 -or $maintenance.Json.data.agentOnline -ne $true) {
         throw "Administrative status was not kept separate from Agent runtime state."
     }
 
@@ -557,6 +590,7 @@ catch {
     throw
 }
 finally {
+    if ($agentProcess) { Stop-Process -Id $agentProcess.Id -Force -ErrorAction SilentlyContinue; $agentProcess.Dispose() }
     if ($server) {
         $server.Refresh()
         if (-not $server.HasExited) {

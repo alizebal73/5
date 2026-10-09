@@ -6,6 +6,7 @@ using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Stations;
+using GameNet.Shared.Contracts.V1.Protocol;
 
 namespace GameNet.Desktop.Api;
 
@@ -72,6 +73,13 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
 
     public Task<StationResponse> SetStationStatusAsync(Guid id, SetStationStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendStationMutationAsync(HttpMethod.Put, $"/api/v1/stations/{id:D}/status", request, idempotencyKey, cancellationToken);
+
+    public async Task<AgentCommandAcknowledgement> ProbeAgentHealthAsync(Guid stationId, CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Post, $"/api/v1/stations/{stationId:D}/agent/health-probe", authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadPayloadAsync<AgentCommandAcknowledgement>(response, cancellationToken);
+    }
 
     private async Task<StationResponse> SendStationMutationAsync<TRequest>(
         HttpMethod method, string path, TRequest body, string idempotencyKey, CancellationToken cancellationToken)

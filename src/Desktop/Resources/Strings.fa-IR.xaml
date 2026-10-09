@@ -41,5 +41,6 @@
   <system:String x:Key="Station.Disabled">غیرفعال</system:String>
   <system:String x:Key="Station.RecoveryRequired">نیازمند بازیابی</system:String>
   <system:String x:Key="Station.AgentVersion">نسخه Agent</system:String><system:String x:Key="Station.AgentState">وضعیت گزارش‌شده</system:String>
+  <system:String x:Key="Station.HealthProbe">بررسی سلامت Agent</system:String>
   <system:String x:Key="Station.StatusAdmin">وضعیت اداری</system:String>
 </ResourceDictionary>
