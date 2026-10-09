@@ -287,6 +287,7 @@ try {
         $boundStation.Json.data.agentOnline -ne $false -or
         $boundStation.Json.data.version -ne 2) {
         throw "Station binding or server-derived offline state was incorrect before Agent connection."
+    }
 
     # Exercise a real Server-to-Agent command against this isolated runtime Server.
     New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
