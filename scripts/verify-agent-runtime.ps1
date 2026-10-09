@@ -227,6 +227,7 @@ WHERE device_id = '$deviceId';
     if ($healthFields -notmatch '^.+\|Ready$') {
         throw "Agent version or reported station state is missing or invalid: $healthFields"
     }
+    $env:GameNet__AgentIdentity__RootPath = $identityRoot2
     $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Err -PassThru
     Start-Sleep -Seconds 8
 
@@ -336,11 +337,6 @@ finally {
 
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
-) {
-        throw "Agent version or reported station state is missing or invalid: $healthFields"
-    }
-
-    $env:GameNet__AgentIdentity__RootPath = $identityRoot2
     $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Err -PassThru
     Start-Sleep -Seconds 8
 
