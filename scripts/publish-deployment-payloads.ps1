@@ -316,10 +316,72 @@ Compress-Archive -Path @(
     $noticePath
 ) -DestinationPath $agentZip -CompressionLevel Optimal
 
+function Assert-ArchiveMatchesManifest([string]$ArchivePath, [string]$ManifestPath) {
+    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -Depth 10
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($ArchivePath)
+    try {
+        $entries = @{}
+        foreach ($entry in $archive.Entries) {
+            if (-not $entry.FullName.EndsWith("/", [StringComparison]::Ordinal)) {
+                $entries[$entry.FullName] = $entry
+            }
+        }
+        if (-not $entries.ContainsKey("release-manifest.json")) {
+            throw "Package archive is missing its root release-manifest.json: $ArchivePath"
+        }
+
+        foreach ($file in $manifest.files) {
+            if (-not $entries.ContainsKey([string]$file.path)) {
+                throw "Package file is missing from its archive manifest: $($file.path)"
+            }
+
+            $entry = $entries[[string]$file.path]
+            if ([long]$entry.Length -ne [long]$file.sizeBytes) {
+                throw "Package file size differs from its manifest: $($file.path)"
+            }
+
+            $stream = $entry.Open()
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try {
+                $entryHash = [Convert]::ToHexString($sha.ComputeHash($stream)).ToLowerInvariant()
+            }
+            finally {
+                $sha.Dispose()
+                $stream.Dispose()
+            }
+            if (-not [string]::Equals($entryHash, [string]$file.sha256, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Package file hash differs from its manifest: $($file.path)"
+            }
+        }
+
+        $manifestStream = $entries["release-manifest.json"].Open()
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $embeddedManifestHash = [Convert]::ToHexString($sha.ComputeHash($manifestStream)).ToLowerInvariant()
+        }
+        finally {
+            $sha.Dispose()
+            $manifestStream.Dispose()
+        }
+        $expectedManifestHash = (Get-FileHash -LiteralPath $ManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if (-not [string]::Equals($embeddedManifestHash, $expectedManifestHash, [StringComparison]::Ordinal)) {
+            throw "The embedded manifest differs from the validated package manifest: $ArchivePath"
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+Assert-ArchiveMatchesManifest $serverDesktopZip $serverDesktopManifestPath
+Assert-ArchiveMatchesManifest $agentZip $agentManifestPath
+
 $checksumLines = @()
 foreach ($file in @($manifestPath, $serverDesktopManifestPath, $agentManifestPath, $serverDesktopZip, $agentZip)) {
     $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
-    $checksumLines += "$hash  $([System.IO.Path]::GetFileName($file))"
+    $relativePath = [System.IO.Path]::GetRelativePath($buildRoot, $file).Replace('\', '/')
+    $checksumLines += "$hash  $relativePath"
 }
 $checksumPath = Join-Path $buildRoot "SHA256SUMS.txt"
 [System.IO.File]::WriteAllLines($checksumPath, $checksumLines, [System.Text.UTF8Encoding]::new($false))

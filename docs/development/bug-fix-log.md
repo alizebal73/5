@@ -478,5 +478,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 
 - PostgreSQL certification now runs the built Server apphost directly with --migrate-only, requires exit within 90 seconds, checks schema-current confirmation, and rejects listener-start output. A regression cannot hang CI indefinitely or mistake a long-running API host for a completed migration.
 - Payload builder now includes write-protected-server-settings.ps1 in the Server/Database archive and emits per-package manifests: Server/Desktop/Database ZIP does not list Agent binaries; Agent ZIP does not list Server/Desktop files. A combined build manifest remains an external CI artifact.
-- Verification: pending the resulting SHA's Quick Validation, Full Foundation Certification and package-build/upload job.
+- Verification: Full Foundation Certification #194 passed on SHA `c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7`; Quick Validation also passed. PostgreSQL migration, backup/restore, Desktop runtime and Agent runtime gates are green. The package archive build/upload completed as artifact `11626939566`. ZIP-content/hash-manifest verification and unambiguous checksum paths are now being added and need another payload build.
 - The earlier raw output on SHA c5918d4627955acc46eab1bfeac6501f05be3a00 passed Quick + payload packaging but is superseded by these changes; artifact 11627097942 remains a non-installer, payload-only archive.
+
+
+## 2026-10-09 — Package archive integrity check and unambiguous checksum paths
+
+- The payload builder now opens each produced ZIP and verifies every manifest-listed file exists with the expected size and SHA-256, plus checks that the embedded root release-manifest.json exactly matches the validated package manifest.
+- SHA256SUMS.txt records paths relative to the versioned output root instead of basenames only, so the full manifest and the two package manifests cannot collide under the same filename.
+- Full Foundation #194 on SHA c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7 passed. The previous package artifact (11626939566) remains payload-only and is superseded pending these extra integrity checks.
+- Verification: pending Quick Validation and payload build/upload on the checksum/integrity-check commit.

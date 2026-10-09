@@ -112,3 +112,7 @@
 - SHA c5918d4627955acc46eab1bfeac6501f05be3a00: [Quick Validation #123](https://github.com/alizebal73/5/actions/runs/37954272590) موفق؛ build خروجی نسخه‌دار و Upload Artifact هم موفق شد. Artifact gamenet-deployment-payload-c5918d4627955acc46eab1bfeac6501f05be3a00 شناسهٔ 11627097942 است. این ZIP خروجی خام است، نه Setup.exe/MSI و نه تأیید نصب مشتری.
 - گام فعلی، اجرای Full Foundation روی harness مهاجرت است تا فرمان واقعی GameNet.Server.exe --migrate-only در PostgreSQL تازه، با deadline و بررسی صریح عدم شروع listener آزموده شود.
 - manifest کلی build جدا می‌ماند؛ هر ZIP manifest مختص payload خودش خواهد داشت. اسکریپت ساخت تنظیمات DPAPI نیز در بستهٔ Server/Database قرار می‌گیرد.
+
+
+- تکمیل گواهی فنی روی SHA c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7: [Full Foundation #194](https://github.com/alizebal73/5/actions/runs/37955024118) موفق؛ PostgreSQL clean migration از apphost واقعی با timeout و بررسی عدم شروع listener، Backup/Restore، Desktop Runtime و Agent Runtime همگی گذشتند.
+- Artifact خام همان SHA با شناسهٔ 11626939566 ساخته و آپلود شد؛ اکنون سازندهٔ بسته یک بررسی مستقل zip-entry/size/hash و checksumهای دارای مسیر نسبی اضافه می‌کند و باید خروجی تازه‌اش را هم تأیید کند. همچنان نصاب نیست و به ماشین مشتری نصب نشده است.
