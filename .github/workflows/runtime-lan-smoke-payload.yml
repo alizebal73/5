@@ -43,10 +43,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select pinned .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.401
+      - name: Verify pinned .NET SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = (dotnet --version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne "10.0.401") {
+            throw "Expected pinned .NET SDK 10.0.401; found '$actual'. Use the repository's installed SDK rather than attempting a system install."
+          }
 
       - name: Restore Windows x64 runtime graph
         shell: pwsh
