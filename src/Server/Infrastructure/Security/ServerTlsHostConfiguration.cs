@@ -1,6 +1,8 @@
 using GameNet.Shared.Runtime;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.CommandLine;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -100,13 +102,25 @@ public static class ServerTlsHostConfiguration
         var environmentIndex = -1;
         for (var index = 0; index < builder.Configuration.Sources.Count; index++)
         {
-            if (string.Equals(
-                    builder.Configuration.Sources[index].GetType().Name,
-                    "EnvironmentVariablesConfigurationSource",
-                    StringComparison.Ordinal))
+            if (builder.Configuration.Sources[index] is EnvironmentVariablesConfigurationSource environmentSource &&
+                string.IsNullOrEmpty(environmentSource.Prefix))
             {
                 environmentIndex = index;
                 break;
+            }
+        }
+
+        // If the host has no unprefixed environment source, insert before command-line
+        // arguments so explicit operational overrides keep their documented precedence.
+        if (environmentIndex < 0)
+        {
+            for (var index = 0; index < builder.Configuration.Sources.Count; index++)
+            {
+                if (builder.Configuration.Sources[index] is CommandLineConfigurationSource)
+                {
+                    environmentIndex = index;
+                    break;
+                }
             }
         }
 
