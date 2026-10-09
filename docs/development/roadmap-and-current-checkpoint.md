@@ -65,6 +65,8 @@
 - مرحلهٔ ۴: **تکمیل شد** — نیازمندی‌های دو مخزن قدیمی با مرز معماری Repo 5 تطبیق داده و به معیارهای قابل‌آزمون تبدیل شدند.
 - مرحلهٔ ۵: **تکمیل شد** — فرایند باگ، قالب‌های کار، Definition of Ready/Done و دروازهٔ خودکار مستندات ثبت شدند.
 - مرحلهٔ جاری: **۶ — هویت اپراتور و ورود امن**.
+- زیرمرحلهٔ ۶-A: محدودسازی ورودی‌های مسیر Login تأیید شد. ورودی username/password بیش از حدود پشتیبانی‌شده پیش از query/hash رد می‌شود؛ آزمون regression در PasswordHasher و harness واقعی Identity اضافه است. [quick-validation #78](https://github.com/alizebal73/5/actions/runs/37926450614) و [Full Foundation #166](https://github.com/alizebal73/5/actions/runs/37926586429) روی SHA دقیق 7909acba2c922f102e18693e3842743f7ad16afc موفق شدند.
+- مرحلهٔ ۶ هنوز باز است: API مدیریت کاربران/نقش‌ها، مسیر تغییر/بازیابی گذرواژه، و آزمون واقعی missing-permission باید پیاده‌سازی و تأیید شوند. وجود Role/RolePermission entity یا constant مجوز بدون مسیر مدیریت/آزمون، قبولی این معیارها محسوب نمی‌شود.
 - مشکل قبلی: push به شاخهٔ کاری و شاخه‌های Foundation گواهی کامل را تکرار می‌کرد؛ هم‌زمان `gamenet.yml` با Pull Request، Canonical Build/Test را جداگانه اجرا می‌کرد و شاخه‌های Foundation به علت شرط `if` از این lane کنار گذاشته می‌شدند. `foundation-runtime.yml` نیز lane محدود PostgreSQL داشت که از نامش می‌توانست با گواهی کامل اشتباه شود.
 - طرح مرحلهٔ ۳:
   - `gamenet.yml` یک lane سریع است: push به `feature/operator-identity-v1` (به‌جز pushهای Markdown-only) و PR به `main`؛ parser و Canonical build/test را اجرا می‌کند، ولی PostgreSQL/Backup/Desktop/Agent runtime certification را تکرار نمی‌کند.
