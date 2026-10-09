@@ -168,5 +168,5 @@ This ADR intentionally remains Proposed until these are resolved and verified:
 References:
 - ADR-0001: docs/decisions/ADR-0001-server-tls-certificate-lifecycle.md
 - Runtime endpoint/TLS contract: docs/operations/runtime-endpoints.md
-- Runtime LAN evidence and limitations: docs/operations/runtime-lan-smoke-evidence-2026-10-10.md
+- Runtime LAN evidence and limitations: draft PR #17 (https://github.com/alizebal73/5/pull/17).
 - Release gate and required sequence: Issue #16
