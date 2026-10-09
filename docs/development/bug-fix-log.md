@@ -290,3 +290,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Both rules enforce pull requests, prevent deletion and non-fast-forward updates (force pushes), require conversation resolution, and allow Squash only. Required approvals are zero; bypass list is empty; extra approval for unattributed Copilot PRs is disabled in both.
 - This closes the branch-protection subtask and Stage 2. Next is Stage 3: separate a lightweight PR validation workflow from the full Foundation certification without weakening code checks.
 
+## 2026-10-09 — Stage 3: CI lanes separated, triggers narrowed safely
+
+- Root cause: the full Foundation suite ran for normal commits on `feature/operator-identity-v1` and Foundation pushes, while `gamenet.yml` independently ran Canonical build/test on PRs. Its prior job condition skipped PRs whose **source/head** branch began with `foundation/runtime-`, potentially leaving those PRs without the intended quick lane. The manually dispatched `foundation-runtime.yml` had only PostgreSQL checks but its name could be mistaken for full certification.
+- Change: `gamenet.yml` is now `gamenet-quick-validation`, triggered on non-Markdown pushes to the feature branch and PRs targeting `main`; it runs PowerShell parsing plus `scripts/verify.ps1` (static architecture/size/placeholders, build and tests), but not the PostgreSQL/backup/Desktop/Agent runtime lanes.
+- Change: `foundation-certification.yml` retains every prior full gate and now runs full certification manually, for PRs **targeting** `foundation/runtime-*`, and when the certification workflow definition itself changes on the active feature branch. Normal feature-branch code pushes no longer rerun the full runtime suite; a PR into protected Foundation runs it before merge.
+- Change: the PostgreSQL-only manual workflow is named `foundation-postgresql-diagnostic` and documents that this is a diagnostic lane only.
+- Path-filter safety: the old broad `docs/**` ignore would have skipped changes to `docs/operations/foundation-certification.json`, which the business gate reads. Filters now ignore Markdown only on push. PR workflows do not use path-ignore, so a docs-only PR still produces its required check.
+- No test gate was removed from full Foundation certification. Required status checks have not yet been configured in the GitHub rulesets; after a real Foundation PR exposes the exact check context, make the full certification check required before merging.
+- Verification: pending on the commit that includes these workflow changes; do not close Stage 3 until the exact commit has a successful quick lane and full workflow-definition self-check.
+

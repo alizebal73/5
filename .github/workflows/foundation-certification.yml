@@ -2,16 +2,20 @@ name: foundation-certification
 
 on:
   workflow_dispatch:
-  push:
+  # Full certification is required before merging into a protected Foundation branch.
+  pull_request:
     branches:
       - "foundation/runtime-*"
+  # Full self-check when the certification workflow definition itself changes.
+  # Normal code pushes use the quick validation lane instead of repeating all runtime gates.
+  push:
+    branches:
       - "feature/operator-identity-v1"
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
+    paths:
+      - ".github/workflows/foundation-certification.yml"
 
 concurrency:
-  group: foundation-certification-${{ github.ref }}
+  group: foundation-certification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:

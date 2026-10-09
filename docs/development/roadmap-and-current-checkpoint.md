@@ -59,14 +59,15 @@
 
 ## کنترل مرحلهٔ جاری
 
-- مرحله‌های ۰ و ۱: تکمیل‌شده؛ علت خطای XML مستند و رفع آن با اجرای کامل #160 تأیید شده است.
-- مرحلهٔ جاری: **۲ — تثبیت پایه و قواعد شاخه‌ها**.
-- یافتهٔ کد: نسخهٔ قبلی business gate فقط مقدار `status=certified` را بررسی می‌کرد و ancestry مربوط به `certifiedCommit` را بررسی نمی‌کرد. guard جدید باید commit را در checkout پیدا کند و ثابت کند ancestor واقعی HEAD است؛ checkout کامل تاریخچه نیز شرط اجرای معتبر آن است.
-- یافتهٔ GitHub: API شاخه‌ها برای `main`, `foundation/runtime-final-v2` و شاخهٔ فعال مقدار `protected=false` گزارش کرده و فهرست Repository Rulesets خالی بوده است. فعال‌کردن تنظیمات حفاظت شاخه از اتصال فعلی در دسترس نبود؛ این زیرکار در سند `docs/operations/branch-governance.md` باز و صریح ثبت شده است.
-- وضعیت کد مرحلهٔ ۲: گیت ancestry و آزمون مثبت/منفی آن روی SHA `2b731276ca89015cb32be4a2eb90dc5f449c4d49` با اجرای کامل [#161](https://github.com/alizebal73/5/actions/runs/37918110954) موفق تأیید شدند. گواهی PostgreSQL، بازیابی، Desktop، Agent و ثبت شواهد نیز پاس شدند.
-- حفاظت GitHub تأیید شد: Rulesetهای `protect-main` و `protect-foundation-runtime` هر دو `active` هستند؛ متادیتای GitHub نیز برای `main` و `foundation/runtime-final-v2` مقدار `protected=true` می‌دهد. تنظیمات هر دو شامل Pull Request، جلوگیری از حذف و Force Push، رفع گفتگوهای باز و Squash-only است. تأیید اجباری صفر و bypass list خالی است.
-- Issue پیگیری محافظت شاخه‌ها: [#9](https://github.com/alizebal73/5/issues/9) پس از مشاهدهٔ وضعیت ذخیره‌شده بسته می‌شود.
-- نتیجه: **مرحلهٔ ۲ تکمیل شد**. مرحلهٔ جاری اکنون **۳ — طراحی CI کم‌تکرار: PR validation سبک در کنار گواهی کامل** است.
-- پیگیری صاحب مخزن: [Issue #9 — فعال‌کردن Branch protection](https://github.com/alizebal73/5/issues/9).
-- کاهش اجرای بی‌مورد: workflow اکنون تغییرات صرفاً در `docs/**` و فایل‌های Markdown را از گواهی کامل حذف می‌کند؛ تغییرات `src/`, `scripts/` و خود workflow همچنان گواهی را اجرا می‌کنند. تفکیک کامل سریع‌سنجی و گواهی کامل برای مرحلهٔ ۳ باقی است.
-
+- مرحله‌های ۰ و ۱: تکمیل‌شده؛ اصلاح XML در [Foundation #160](https://github.com/alizebal73/5/actions/runs/37917339204) روی SHA دقیق موفق شد.
+- مرحلهٔ ۲: تکمیل‌شده؛ آزمون ancestry و گواهی کامل در [#161](https://github.com/alizebal73/5/actions/runs/37918110954) موفق شدند و Ruleهای [protect-main](https://github.com/alizebal73/5/rules/24783754) و [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) از GitHub دوباره خوانده شدند. هر دو فعال‌اند و GitHub شاخه‌های `main` و `foundation/runtime-final-v2` را محافظت‌شده گزارش می‌کند؛ [Issue #9](https://github.com/alizebal73/5/issues/9) بسته شده است.
+- مرحلهٔ جاری: **۳ — تفکیک CI سریع از Foundation Certification کامل**.
+- مشکل قبلی: push به شاخهٔ کاری و شاخه‌های Foundation گواهی کامل را تکرار می‌کرد؛ هم‌زمان `gamenet.yml` با Pull Request، Canonical Build/Test را جداگانه اجرا می‌کرد و شاخه‌های Foundation به علت شرط `if` از این lane کنار گذاشته می‌شدند. `foundation-runtime.yml` نیز lane محدود PostgreSQL داشت که از نامش می‌توانست با گواهی کامل اشتباه شود.
+- طرح مرحلهٔ ۳:
+  - `gamenet.yml` یک lane سریع است: push به `feature/operator-identity-v1` (به‌جز pushهای Markdown-only) و PR به `main`؛ parser و Canonical build/test را اجرا می‌کند، ولی PostgreSQL/Backup/Desktop/Agent runtime certification را تکرار نمی‌کند.
+  - `foundation-certification.yml` گواهی کامل را با همهٔ دروازه‌های فعلی روی PRهای مقصد `foundation/runtime-*`، به‌صورت دستی، و روی تغییر خود فایل تعریف workflow اجرا می‌کند. push عادی کد به شاخهٔ feature دیگر گواهی کامل را تکرار نمی‌کند.
+  - PRها عمداً با فیلتر مسیر حذف نمی‌شوند تا در صورت اجباری‌شدن status check، PR صرفاً مستنداتی با check مفقود/در حالت Pending قفل نشود. فیلتر Markdown-only فقط روی push lane سریع اعمال می‌شود.
+  - `foundation-runtime.yml` به‌عنوان `foundation-postgresql-diagnostic` صریحاً فقط lane تشخیصی PostgreSQL است، نه جایگزین گواهی کامل.
+  - فیلتر مسیر هرگز کل `docs/**` را حذف نمی‌کند؛ فایل‌های غیر-Markdown داخل docs، از جمله marker عملیاتی JSON، نباید از بررسی خودکار جا بمانند.
+- معیار عبور مرحلهٔ ۳: روی SHA دقیق تغییر workflowها، lane سریع و گواهی کاملِ workflow-definition موفق شوند؛ سپس در یک PR واقعی به شاخهٔ Foundation نام دقیق status check گواهی دیده و با تنظیم ruleset به‌عنوان check اجباری تنظیم شود. تا وقتی check اجباری تأیید نشده، Ruleهای PR به‌تنهایی تضمین نمی‌کنند که CI سبز باشد.
+- `main` خالی می‌ماند؛ هیچ شاخه‌ای را در این مرحله ادغام نمی‌کنیم. قابلیت‌های محصول تا بسته‌شدن معیارهای این مرحله جلو برده نمی‌شوند.

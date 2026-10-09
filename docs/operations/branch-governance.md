@@ -50,3 +50,9 @@ GitHub branch metadata reports `protected=true` for `main` and `foundation/runti
 - Current branch comparison at audit time showed `feature/operator-identity-v1` at `935ede43843cc51491c8a87def55418f4bcb75bb` is 26 commits ahead and 0 behind `foundation/runtime-final-v2` at `adb2159fb85564187718df8cbddcd3377e599c1c`. This confirms the working branch contains the current Foundation tip but does not remove the separate branch-protection requirement.
 
 
+
+
+## CI status-check follow-up (Stage 3)
+
+Both branch rulesets currently require pull requests but do not yet require a named CI status check. Keep that distinction explicit. After a real pull request targets `foundation/runtime-*`, read the check contexts from GitHub and require the exact full Foundation certification context in `protect-foundation-runtime`; do not guess or select a check that has not appeared on a real PR. For future PRs to `main`, require the observed `quick-validation` context when it is available.
+

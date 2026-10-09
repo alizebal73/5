@@ -1,6 +1,7 @@
-name: foundation-runtime-certification
+name: foundation-postgresql-diagnostic
 
 on:
+  # PostgreSQL-focused diagnostic lane only; this is not full Foundation certification.
   workflow_dispatch:
 
 concurrency:
