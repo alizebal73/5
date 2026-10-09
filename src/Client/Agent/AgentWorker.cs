@@ -21,6 +21,7 @@ public sealed class AgentWorker(
             identity.DeviceId,
             timeProvider.GetUtcNow());
 
+        transport.CommandReceived += HandleCommandAsync;
         try
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -71,7 +72,30 @@ public sealed class AgentWorker(
         }
         finally
         {
+            transport.CommandReceived -= HandleCommandAsync;
             await transport.DisposeAsync();
         }
+    }
+
+    private Task<AgentCommandAcknowledgement> HandleCommandAsync(
+        AgentCommandEnvelope command,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var started = timeProvider.GetUtcNow();
+
+        // The first command capability is deliberately read-only. OS-control commands are not
+        // implicitly permitted by this protocol and must be added as explicit allow-listed handlers.
+        var version = typeof(AgentWorker).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+        return Task.FromResult(new AgentCommandAcknowledgement(
+            command.CommandId,
+            command.DeviceId,
+            command.StationId,
+            AgentCommandStatus.Succeeded,
+            started,
+            timeProvider.GetUtcNow(),
+            null,
+            version,
+            "Ready"));
     }
 }

@@ -47,6 +47,8 @@ public sealed class SignalRAgentTransport(
                     })
                     .Build();
 
+                connection.On<AgentCommandEnvelope>("ReceiveCommand", HandleIncomingCommandAsync);
+
                 connection.Reconnecting += error =>
                 {
                     ClearLease();
@@ -140,11 +142,89 @@ public sealed class SignalRAgentTransport(
         }
     }
 
+    public async Task<bool> AcknowledgeCommandAsync(
+        AgentCommandAcknowledgement acknowledgement,
+        CancellationToken cancellationToken = default)
+    {
+        var current = connection ?? throw new InvalidOperationException("Agent transport is not initialized.");
+        if (!IsConnected)
+            throw new InvalidOperationException("Agent cannot acknowledge a command without its current authoritative lease.");
+
+        var accepted = await current.InvokeAsync<bool>(
+            "AcknowledgeCommandAsync", acknowledgement, cancellationToken);
+        if (!accepted)
+            logger.LogWarning(
+                "Server rejected command acknowledgement. CommandId={CommandId}; DeviceId={DeviceId}; Status={Status}",
+                acknowledgement.CommandId, acknowledgement.DeviceId, acknowledgement.Status);
+        return accepted;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (connection is not null)
             await connection.DisposeAsync();
         gate.Dispose();
+    }
+
+    private async Task HandleIncomingCommandAsync(AgentCommandEnvelope command)
+    {
+        var identitySnapshot = identity;
+        var tokenSnapshot = leaseToken;
+        var expirySnapshot = leaseExpiresAtUtc;
+        var now = timeProvider.GetUtcNow();
+        var errorCode = identitySnapshot is null
+            ? "agent.command.identity_unavailable"
+            : AgentCommandGuard.Validate(command, identitySnapshot.DeviceId, tokenSnapshot, expirySnapshot, now);
+
+        AgentCommandAcknowledgement acknowledgement;
+        if (errorCode is not null)
+        {
+            acknowledgement = new AgentCommandAcknowledgement(
+                command.CommandId, command.DeviceId, command.StationId,
+                AgentCommandStatus.Rejected, now, now, errorCode,
+                typeof(SignalRAgentTransport).Assembly.GetName().Version?.ToString() ?? "0.0.0",
+                null);
+        }
+        else
+        {
+            try
+            {
+                var handler = CommandReceived;
+                acknowledgement = handler is null
+                    ? new AgentCommandAcknowledgement(
+                        command.CommandId, command.DeviceId, command.StationId,
+                        AgentCommandStatus.Rejected, now, timeProvider.GetUtcNow(),
+                        "agent.command.handler_unavailable", null, null)
+                    : await handler(command, CancellationToken.None);
+
+                if (acknowledgement.CommandId != command.CommandId ||
+                    !string.Equals(acknowledgement.DeviceId, command.DeviceId, StringComparison.Ordinal) ||
+                    acknowledgement.StationId != command.StationId ||
+                    acknowledgement.FinishedAtUtc < acknowledgement.StartedAtUtc)
+                {
+                    throw new InvalidOperationException("Agent command handler returned a mismatched acknowledgement.");
+                }
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Agent command handling failed. CommandId={CommandId}; DeviceId={DeviceId}", command.CommandId, command.DeviceId);
+                var failedAt = timeProvider.GetUtcNow();
+                acknowledgement = new AgentCommandAcknowledgement(
+                    command.CommandId, command.DeviceId, command.StationId,
+                    AgentCommandStatus.Failed, now, failedAt, "agent.command.execution_failed",
+                    typeof(SignalRAgentTransport).Assembly.GetName().Version?.ToString() ?? "0.0.0",
+                    null);
+            }
+        }
+
+        try
+        {
+            _ = await AcknowledgeCommandAsync(acknowledgement, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not acknowledge Agent command. CommandId={CommandId}; DeviceId={DeviceId}", command.CommandId, command.DeviceId);
+        }
     }
 
     private async Task AcquireLeaseAsync(CancellationToken cancellationToken)
