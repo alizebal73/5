@@ -11,7 +11,7 @@ namespace GameNet.Server.Modules.Stations.Application;
 
 /// <summary>
 /// Use case for a read-only, short-lived Agent health probe. It never accepts arbitrary OS commands.
-/// Audit writes use their own short transactions; the external SignalR dispatch is never inside a DB transaction.
+/// Audit writes use their own short transactions; external command delivery is never inside a DB transaction.
 /// </summary>
 public sealed class StationAgentHealthService(
     IStationRepository stations,
@@ -66,7 +66,7 @@ public sealed class StationAgentHealthService(
         AgentCommandAcknowledgement? acknowledgement;
         try
         {
-            // Never keep a database transaction open across a SignalR/network operation.
+            // Never keep a database transaction open while waiting for the remote Agent.
             acknowledgement = await dispatcher.ProbeAsync(station.Id, station.AgentDeviceId, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
