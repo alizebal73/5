@@ -114,5 +114,6 @@
 - manifest کلی build جدا می‌ماند؛ هر ZIP manifest مختص payload خودش خواهد داشت. اسکریپت ساخت تنظیمات DPAPI نیز در بستهٔ Server/Database قرار می‌گیرد.
 
 
-- تکمیل گواهی فنی روی SHA c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7: [Full Foundation #194](https://github.com/alizebal73/5/actions/runs/37955024118) موفق؛ PostgreSQL clean migration از apphost واقعی با timeout و بررسی عدم شروع listener، Backup/Restore، Desktop Runtime و Agent Runtime همگی گذشتند.
-- Artifact خام همان SHA با شناسهٔ 11626939566 ساخته و آپلود شد؛ اکنون سازندهٔ بسته یک بررسی مستقل zip-entry/size/hash و checksumهای دارای مسیر نسبی اضافه می‌کند و باید خروجی تازه‌اش را هم تأیید کند. همچنان نصاب نیست و به ماشین مشتری نصب نشده است.
+- تکمیل گواهی فنی روی SHA `c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7`: [Full Foundation #194](https://github.com/alizebal73/5/actions/runs/37955024118) موفق؛ PostgreSQL clean migration از apphost واقعی با timeout و بررسی عدم شروع listener، Backup/Restore، Desktop Runtime و Agent Runtime همگی گذشتند.
+- SHA فعلی `b7e232d068fb6c085716980249a83abb205961b3` نسبت به SHA گواهی‌شدهٔ `c8a20ca...` فقط اسکریپت بسته‌بندی و مستندات را تغییر می‌دهد؛ [Quick Validation + payload #125](https://github.com/alizebal73/5/actions/runs/37955819051) روی همان SHA جاری موفق شدند.
+- Artifact آخر: `gamenet-deployment-payload-b7e232d068fb6c085716980249a83abb205961b3`, ID `11628326329`; شامل دو ZIP self-contained، manifest مجزای سازگار با هر ZIP و `SHA256SUMS.txt` است. بررسی قبل از upload، اندازه و SHA فایل‌های داخل هر ZIP را دوباره محاسبه می‌کند. این‌ها **خروجی خام هستند، نه Setup.exe/MSI** و روی دو رایانهٔ واقعی نصب نشده‌اند.

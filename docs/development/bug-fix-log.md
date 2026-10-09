@@ -438,7 +438,7 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Symptom: the first Quick Validation after adding `scripts/publish-deployment-payloads.ps1` stopped in the PowerShell parser gate before build or packaging; `deployment-payload` was skipped by its dependency gate. No installer or payload artifact was produced by this attempt.
 - Root cause from source inspection: the error message interpolated `$LASTEXITCODE` immediately followed by `:`, which PowerShell parses as an invalid scoped-variable reference. The interpolation is now explicitly delimited as `${LASTEXITCODE}`.
 - Guard improvement: the CI parser gate now prints parser ErrorId/Message/Extent before failing, so a future script syntax defect carries a line/extent diagnostic instead of only a filename.
-- Verification: pending rerun on the exact fix commit; do not count the payload-build step as passed until the quick parser/build/tests and the packaging job are both successful.
+- Verification: the syntax fix passed Quick Validation and the deployment-payload job in [run #118](https://github.com/alizebal73/5/actions/runs/37950006602). The subsequent Agent ProgramData expansion was separately tested on SHA `a00f6911ce584114fab70bfb2fba25f9e6deaaa0` in [Quick #119](https://github.com/alizebal73/5/actions/runs/37950593296) and [Full Foundation #192](https://github.com/alizebal73/5/actions/runs/37950593393).
 - Rollback: revert this narrow syntax/diagnostics fix if it causes a regression; do not suppress the parser gate.
 
 
@@ -464,22 +464,23 @@ When a defect reaches production or certification, fix the root boundary, add re
 
 - Result after the PowerShell parser fix: the source-size/architecture/documentation gates and PowerShell parser passed; canonical Release build stopped on .NET analyzer CA1416 because ProtectedData.Unprotect is Windows-only while the Server project is not globally Windows-targeted.
 - Fix: ProtectedServerSettings.Read now rejects non-Windows execution explicitly before invoking DPAPI. Tests route protection through the same explicit OS guard. The platform guard is deliberate; no analyzer warning was disabled and no fallback encryption scheme was introduced.
-- Verification: pending a new exact-SHA Quick Validation and Full Foundation Certification; no package from the prior failing commit is accepted.
+- Verification: the final Windows guard/exception choice passed Quick Validation on SHA `c5918d4627955acc46eab1bfeac6501f05be3a00` in [run #123](https://github.com/alizebal73/5/actions/runs/37954272590); the complete migration/settings implementation including that guard passed [Full Foundation #194](https://github.com/alizebal73/5/actions/runs/37955024118) on SHA `c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7`.
 
 
 ## 2026-10-09 — Placeholder guard and OS-only exception type
 
 - Follow-up verification stopped in the project placeholder guard before build: it treats PlatformNotSupportedException as a forbidden runtime placeholder even when paired with an explicit Windows check.
 - The Windows-only fail-closed branch now uses InvalidOperationException with an explicit Windows DPAPI message, preserving the runtime platform guard and keeping the repository's placeholder policy unchanged.
-- Verification: pending next exact-SHA CI run.
+- Verification: the revised guard passed [Quick Validation #123](https://github.com/alizebal73/5/actions/runs/37954272590), and the same source path was covered by [Full Foundation #194](https://github.com/alizebal73/5/actions/runs/37955024118).
 
 
 ## 2026-10-09 — Migration-only bounded runtime proof and package manifest isolation
 
 - PostgreSQL certification now runs the built Server apphost directly with --migrate-only, requires exit within 90 seconds, checks schema-current confirmation, and rejects listener-start output. A regression cannot hang CI indefinitely or mistake a long-running API host for a completed migration.
 - Payload builder now includes write-protected-server-settings.ps1 in the Server/Database archive and emits per-package manifests: Server/Desktop/Database ZIP does not list Agent binaries; Agent ZIP does not list Server/Desktop files. A combined build manifest remains an external CI artifact.
-- Verification: Full Foundation Certification #194 passed on SHA `c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7`; Quick Validation also passed. PostgreSQL migration, backup/restore, Desktop runtime and Agent runtime gates are green. The package archive build/upload completed as artifact `11626939566`. ZIP-content/hash-manifest verification and unambiguous checksum paths are now being added and need another payload build.
-- The earlier raw output on SHA c5918d4627955acc46eab1bfeac6501f05be3a00 passed Quick + payload packaging but is superseded by these changes; artifact 11627097942 remains a non-installer, payload-only archive.
+- Verification: Full Foundation Certification #194 passed on SHA `c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7`; Quick Validation and the subsequent payload integrity build passed. PostgreSQL migration, backup/restore, Desktop runtime and Agent runtime gates are green. The latest packaging-only/doc SHA `b7e232d068fb6c085716980249a83abb205961b3` passed [Quick + deployment-payload #125](https://github.com/alizebal73/5/actions/runs/37955819051). Artifact `11628326329` is `gamenet-deployment-payload-b7e232d068fb6c085716980249a83abb205961b3`.
+- Package integrity verification now runs before upload: each ZIP is opened, every manifest-listed item has its SHA-256 and byte length recomputed and matched, and the embedded `release-manifest.json` is compared to the specific validated package manifest. `SHA256SUMS.txt` uses relative paths so identical manifest basenames cannot collide.
+- The artifact remains a **payload only**, with `installerReady=false`; it is not a Setup.exe/MSI, has not been installed on either server PC or client PC, and does not certify service registration, TLS provisioning, or uninstall/update/rollback.
 
 
 ## 2026-10-09 — Package archive integrity check and unambiguous checksum paths
@@ -487,4 +488,4 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The payload builder now opens each produced ZIP and verifies every manifest-listed file exists with the expected size and SHA-256, plus checks that the embedded root release-manifest.json exactly matches the validated package manifest.
 - SHA256SUMS.txt records paths relative to the versioned output root instead of basenames only, so the full manifest and the two package manifests cannot collide under the same filename.
 - Full Foundation #194 on SHA c8a20caabad2c963c6a4b1cbcac7e3cbcb3575f7 passed. The previous package artifact (11626939566) remains payload-only and is superseded pending these extra integrity checks.
-- Verification: pending Quick Validation and payload build/upload on the checksum/integrity-check commit.
+- Verification outcome: [Quick Validation + payload build/upload #125](https://github.com/alizebal73/5/actions/runs/37955819051) passed on SHA `b7e232d068fb6c085716980249a83abb205961b3`; artifact `11628326329` was uploaded. This is still a payload-only artifact, not an installer or two-PC install certificate.
