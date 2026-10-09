@@ -102,6 +102,14 @@
 ## 2026-10-09 — تغییر اولویت: آزمون نصب یکپارچه پیش از فرمان PC بعدی
 
 - علت: مرور نیازمندی نشان داد آزمون Agent از سورس در CI، نصب واقعی Server/Agent روی دو دستگاه را اثبات نمی‌کند؛ در مخزن فعلی طرح نصب وجود دارد اما اسکریپت/بستهٔ نصاب عملیاتی تأییدشده موجود نیست.
-- ترتیب مقدماتی جدید: (۱) تعیین قرارداد و prerequisites انتشار؛ (۲) تولید خروجی‌های self-contained و manifest از SHA مشخص؛ (۳) بستهٔ Server + Desktop و بستهٔ مستقل Agent؛ (۴) تعیین/اعتبارسنجی امن PostgreSQL، schema migrations و bootstrap مدیر؛ (۵) نصب تمیز روی دو Windows PC، Health/Readiness/Agent heartbeat/Health Probe، disconnect/reconnect/Restart؛ (۶) ثبت شواهد و نقص‌ها. هیچ installer artifact تا زمان build، parse/validation و اجرای نصب، «آمادهٔ نصب» اعلام نشود.
+- ترتیب مقدماتی جدید: (۱) تعیین قرارداد و prerequisites انتشار؛ (۲) تولید خروجی‌های self-contained و manifest از SHA مشخص؛ (۳) بستهٔ Server + Desktop و بستهٔ مستقل Agent؛ (۴) فایل تنظیمات حساس DPAPI و مهاجرت صریح با `GameNet.Server.exe --migrate-only`؛ (۵) تعیین/اعتبارسنجی امن PostgreSQL و bootstrap مدیر؛ (۵) نصب تمیز روی دو Windows PC، Health/Readiness/Agent heartbeat/Health Probe، disconnect/reconnect/Restart؛ (۶) ثبت شواهد و نقص‌ها. هیچ installer artifact تا زمان build، parse/validation و اجرای نصب، «آمادهٔ نصب» اعلام نشود.
 - تصمیم اجرایی باز: معلوم شود PostgreSQL را نصاب مدیریت/نصب می‌کند یا نسخهٔ ازپیش‌نصب‌شده را می‌پذیرد؛ تصمیم باید بر اساس نسخه/امنیت/backup/upgrade واقعی باشد، نه پنهان‌کردن نیاز به نصب.
 - این زیربخش، جایگزین مرحلهٔ کامل ۲۱ (repair/update/rollback و انتشار) نیست؛ تنها پیش‌نیاز عملیاتی برای تست زودهنگام پایه است. `main` و `foundation/runtime-final-v2` دست‌نخورده می‌مانند.
+
+
+### وضعیت اجرایی نصب‌پذیری — به‌روزرسانی 2026-10-09
+
+- خروجی‌های self-contained نسخه‌دار Server/Desktop/Agent و manifest/SHA-256 در شاخهٔ feature ساخته شده‌اند؛ این‌ها ZIP payload هستند، نه Setup.exe/MSI.
+- گام جاری: خواندن تنظیمات حساس DPAPI روی Windows و اجرای explicit `--migrate-only`؛ در CI، گواهی PostgreSQL باید همان مسیر مهاجرتی را روی دیتابیس تمیزِ ایزوله اجرا کند.
+- تست‌های Integration عمداً `GameNet__ProtectedSettings__Enabled=false` و مسیر override خالی می‌گذارند تا secrets احتمالی ماشین Runner در تست استفاده نشوند.
+- هنوز ابزار امن ایجاد فایل DPAPI، نصاب/commissioning برای Windows Service، TLS/LAN enrollment و آزمون clean-install دوماشینه پیاده‌سازی/گواهی نشده است. هیچ فایل ZIP را نصب‌کننده تلقی نکن.
