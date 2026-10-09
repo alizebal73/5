@@ -6,13 +6,18 @@ on:
   pull_request:
     branches:
       - "foundation/runtime-*"
-  # Full self-check when the certification workflow definition itself changes.
-  # Normal code pushes use the quick validation lane instead of repeating all runtime gates.
+  # Full certification also runs when a runtime harness/gate changes on the active feature branch.
+  # Routine product code pushes use the quick lane; a Draft Foundation PR is the normal full-gate path.
   push:
     branches:
       - "feature/operator-identity-v1"
     paths:
       - ".github/workflows/foundation-certification.yml"
+      - "scripts/verify-identity-runtime.ps1"
+      - "scripts/verify-postgresql.ps1"
+      - "scripts/verify-backup-restore.ps1"
+      - "scripts/verify-desktop-runtime.ps1"
+      - "scripts/verify-agent-runtime.ps1"
 
 concurrency:
   group: foundation-certification-${{ github.event.pull_request.number || github.ref }}
