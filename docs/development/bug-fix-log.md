@@ -221,3 +221,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Extended the isolated Identity runtime harness to exercise the new Stations API with a bootstrapped Owner token: create, replay of the same idempotency key, rejection of the same key with a different payload, provisioning and binding an active Agent credential, authoritative offline state, unique device binding, stale Version rejection, and administrative status separation.
 - These assertions use the isolated clean PostgreSQL database and random throwaway station/device IDs. They do not contact or mutate the production machine database.
 - Verification requirement: the full Foundation + Identity + Stations workflow must pass on the same commit before the Stations slice is treated as certified.
+
+
+## 2026-10-09 — Runtime diagnostics must not mask the original failure
+
+- The first extended Stations runtime run reached the new scenario but its failure cleanup then failed reading the Server log because the child process still held the file open on Windows. That cleanup exception masked the original assertion and prevented actionable diagnostics.
+- Added bounded retry-based log reads with an explicit `DIAGNOSTIC_READ_FAILED` fallback so the original failure is preserved and the diagnostic artifact is still written.
+- The prior run is not considered passed; the same end-to-end Station scenario must be rerun after this diagnostic fix.

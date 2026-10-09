@@ -71,6 +71,23 @@ function Invoke-IdentityRequest(
     }
 }
 
+function Read-DiagnosticText([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "" }
+
+    $lastError = ""
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        try {
+            return [System.IO.File]::ReadAllText($Path)
+        }
+        catch {
+            $lastError = $_.Exception.Message
+            Start-Sleep -Milliseconds 250
+        }
+    }
+
+    return "DIAGNOSTIC_READ_FAILED after retries: $lastError"
+}
+
 function Assert-Status($Response, [int]$Expected, [string]$Operation) {
     if ($Response.StatusCode -ne $Expected) {
         $errorCode = $Response.Json.error.code
@@ -341,8 +358,8 @@ finally {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }
     else {
-        $stdout = if (Test-Path -LiteralPath $serverLog -PathType Leaf) { [System.IO.File]::ReadAllText($serverLog) } else { "" }
-        $stderr = if (Test-Path -LiteralPath $serverErrorLog -PathType Leaf) { [System.IO.File]::ReadAllText($serverErrorLog) } else { "" }
+        $stdout = Read-DiagnosticText $serverLog
+        $stderr = Read-DiagnosticText $serverErrorLog
         foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken)) {
             if (-not [string]::IsNullOrWhiteSpace([string]$secretValue)) {
                 $stdout = $stdout.Replace([string]$secretValue, "<redacted>")
