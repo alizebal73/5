@@ -449,3 +449,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression evidence added: unit test sets a temporary environment variable and verifies expansion/normalization. Actual test execution is pending the new Quick Validation run.
 - Impact: do not use the payload from SHA `dc664185068fe3473fcb3f76e857cc2854126e92` for installation; the corrected pack must be built from the fix SHA.
 - Rollback: revert the narrow option resolver + call sites + test as a unit only if the regression test exposes an incompatibility; never disable absolute-path validation.
+
+
+## 2026-10-09 — Protected Server configuration and explicit database deployment
+
+- Added a Windows DPAPI LocalMachine-protected settings reader with a strict allowlist for PostgreSQL/authentication/Agent provisioning settings. It rejects unsupported fields, duplicates, wrong field types, missing required keys, weak signing/provisioning keys and tampered ciphertext.
+- Production only loads the default ProgramData file when `GameNet:ProtectedSettings:Enabled=true`; test harnesses explicitly disable this path and clear `GAMENET_PROTECTED_SETTINGS_FILE` to avoid accidentally reading machine-installed secrets.
+- Added one-shot `GameNet.Server.exe --migrate-only`, which applies pending EF migrations, confirms none remain, exits without exposing HTTP and is never run as part of normal service startup.
+- PostgreSQL clean-database verification now invokes the product migration entry point; new unit tests cover encrypted file round-trip, safe loading, rejection of unknown settings/tampered ciphertext and validation that authenticated Server configuration requires a database.
+- Deployment payload builder no longer produces a separate EF bundle needing database credentials via a command-line argument. It ships a migration instruction file and self-contained Server/Desktop/Agent payloads.
+- Status at documentation time: awaiting Quick Validation, Foundation Certification and artifact build on the exact commit. This remains a payload, not a usable installer. The protected-secret file writer/first-run commissioning, service installation, TLS certificate trust, unique Agent enrollment and two-machine clean install remain open. `main` and `foundation/runtime-final-v2` are not changed.
