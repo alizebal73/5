@@ -23,6 +23,7 @@ The main navigation tree is feature-based:
 - Overview
 - Stations
 - Customers
+- Gaming Accounts
 - Sessions
 - Billing
 - Wallet
@@ -67,6 +68,21 @@ Right-click/context actions are feature commands, not code-behind mutations:
 - Change station settings (permission protected)
 - Pair/recover Agent (PC only)
 - Disconnect/logout where applicable
+
+## Gaming Accounts workspace
+
+The workspace manages only venue-controlled external gaming accounts that are permitted by the selected Steam PC Café/VR Arcade model. It is not a place to collect customer-owned Steam credentials.
+
+Show, according to permissions:
+
+- account label and Steam identity/reference;
+- operating model and authorization state;
+- station assignment and availability;
+- connection/login readiness, last result and reauthentication requirement;
+- credential state such as Not configured / Configured / Rotation required, never the stored password;
+- audit history for assignment, enable/disable, rotation and session use.
+
+Credential creation/replacement occurs through a protected write-only flow. Never offer a normal “reveal password” view, put passwords in logs, persist customer personal credentials, or bypass Steam Guard. Auto-login controls stay unavailable until the integration is explicitly supported/authorized for the configured model. The Server owns permission and station/session assignment; the Agent may execute only a scoped authorized command and reports the result.
 
 ## Customer workspace
 
