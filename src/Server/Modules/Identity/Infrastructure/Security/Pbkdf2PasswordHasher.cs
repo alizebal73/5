@@ -19,7 +19,7 @@ public sealed class Pbkdf2PasswordHasher : IPasswordHasher
     }
     public bool Verify(string password, string encodedHash)
     {
-        if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(encodedHash)) return false;
+        if (string.IsNullOrWhiteSpace(password) || password.Length > 256 || string.IsNullOrWhiteSpace(encodedHash)) return false;
         var parts = encodedHash.Split('$');
         if (parts.Length != 5 || parts[0] != "pbkdf2-sha256" || parts[1] != "v1" ||
             !int.TryParse(parts[2], out var iterations) || iterations < 100_000 || iterations > MaximumAcceptedIterations) return false;

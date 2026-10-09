@@ -52,12 +52,20 @@ public sealed class IdentityService(
         CancellationToken cancellationToken) =>
         transactions.ExecuteAsync(async ct =>
         {
-            var normalized = (username ?? string.Empty).Trim().ToLowerInvariant();
-            if (normalized.Length == 0 || string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(username) || username.Length > 256 ||
+                string.IsNullOrWhiteSpace(password) || password.Length > 256)
             {
                 AppendLoginRejected(null, null, correlationId);
                 return Result<OperatorLoginResult>.Failure(new Error("auth.invalid_credentials", "Username or password is incorrect."));
             }
+
+            var normalized = username.Trim().ToLowerInvariant();
+            if (normalized.Length == 0 || normalized.Length > 64)
+            {
+                AppendLoginRejected(null, null, correlationId);
+                return Result<OperatorLoginResult>.Failure(new Error("auth.invalid_credentials", "Username or password is incorrect."));
+            }
+
             var user = await repository.FindUserAsync(normalized, ct);
             if (user is null)
             {

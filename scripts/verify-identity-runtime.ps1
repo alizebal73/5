@@ -200,6 +200,18 @@ try {
     $invalidLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders $loginBody
     Assert-ErrorCode $invalidLogin 401 "auth.invalid_credentials" "Login with incorrect password"
 
+    $oversizedUsernameLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = ("u" * 65)
+        password = $password
+    }
+    Assert-ErrorCode $oversizedUsernameLogin 401 "auth.invalid_credentials" "Reject overlong operator username"
+
+    $oversizedPasswordLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $username
+        password = ("x" * 257)
+    }
+    Assert-ErrorCode $oversizedPasswordLogin 401 "auth.invalid_credentials" "Reject overlong operator password"
+
     $loginBody.password = $password
     $login = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders $loginBody
     Assert-Status $login 200 "Valid operator login"
