@@ -251,3 +251,23 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Status at entry: correction committed; verification pending. Do not treat the failed run #159 as a passing checkpoint.
 - Roadmap/checkpoint: see `docs/development/roadmap-and-current-checkpoint.md`.
 
+## 2026-10-09 — Full Foundation Certification passed after WPF XAML correction
+
+- Exact commit: `853f23427783a93638a0212cb1dc5e97386e0e8f`.
+- GitHub Actions run [#160](https://github.com/alizebal73/5/actions/runs/37917339204) completed with conclusion `success` on that exact SHA.
+- Passed gates: PowerShell parser, canonical Release build/test, isolated PostgreSQL migration/concurrency and runtime assertions, backup/restore, Desktop runtime, Agent runtime, and evidence upload.
+- This closes the XAML correction stage. Later commits are not automatically certified; each requires its own relevant verification.
+
+## 2026-10-09 — Business gate must verify certified Foundation ancestry
+
+- Root cause: `scripts/check-business-gate.ps1` trusted only `status=certified`; it did not validate the 40-character `certifiedCommit`, confirm the commit object existed, or prove it was an ancestor of current `HEAD`. A stale or unrelated marker could therefore pass.
+- Fix in this commit: resolve the marker SHA and current HEAD, use `git merge-base --is-ancestor`, and fail closed for missing, malformed, unrelated or uncheckable certificate commits. The workflow fetches full history (`fetch-depth: 0`) so the ancestry proof is meaningful.
+- Regression test: `scripts/test-business-gate.ps1` builds a temporary Git repository, proves an actual ancestor is accepted, and proves a real commit from unrelated history is rejected. It does not modify the project repository or production database.
+- Verification status: included in stage-2 change; full CI on the resulting SHA is required before marking this code part complete.
+
+## 2026-10-09 — GitHub branch governance still needs repository-level protection
+
+- API audit reported `protected=false` for `main`, `foundation/runtime-final-v2`, and `feature/operator-identity-v1`; the repository rulesets endpoint returned an empty list.
+- Recommended protection policy is recorded in `docs/operations/branch-governance.md`. No remote repository settings were changed by this commit.
+- The available GitHub connection could read branch metadata but could not access/write the administrative branch-protection endpoint. Do not report remote protection as enabled until settings are applied and re-read/verified.
+

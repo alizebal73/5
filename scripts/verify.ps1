@@ -7,6 +7,7 @@ function Invoke-Checked {
     if ($LASTEXITCODE -ne 0) { throw "Command failed with exit code $LASTEXITCODE." }
 }
 
+& "$PSScriptRoot/test-business-gate.ps1"
 & "$PSScriptRoot/check-business-gate.ps1"
 & "$PSScriptRoot/check-source-size.ps1"
 & "$PSScriptRoot/check-architecture.ps1"
