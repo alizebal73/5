@@ -59,5 +59,8 @@ public sealed class StationBoardFilterTests
         Assert.Equal(StationTypeContract.Ps5, ps5.Station.Type);
         Assert.Null(ps5.Station.AgentDeviceId);
         Assert.False(ps5.Station.AgentOnline);
+        Assert.False(ps5.IsAgentManaged);
+        Assert.DoesNotContain("Offline", ps5.RuntimeText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("heartbeat received", ps5.HeartbeatText, StringComparison.OrdinalIgnoreCase);
     }
 }

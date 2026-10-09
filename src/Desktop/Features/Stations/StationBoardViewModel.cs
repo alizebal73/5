@@ -299,13 +299,20 @@ public sealed class StationBoardItem(StationResponse station)
         StationStatusContract.RecoveryRequired => Text("نیازمند بازیابی", "Recovery required"),
         _ => "Unknown"
     };
-    public string RuntimeText => Station.AgentOnline ? Text("آنلاین", "Online") : Text("آفلاین", "Offline");
-    public string AgentText => string.IsNullOrWhiteSpace(Station.AgentDeviceId) ? Text("Agent متصل نیست", "No Agent bound") : Station.AgentDeviceId;
-    public string HeartbeatText => Station.LastHeartbeatAtUtc.HasValue
-        ? Station.LastHeartbeatAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture)
-        : Text("هنوز heartbeat دریافت نشده", "No heartbeat received yet");
-    public string AgentVersionText => Station.AgentVersion ?? "—";
-    public string AgentStateText => Station.AgentReportedState ?? "—";
+    public bool IsAgentManaged => Station.Type == StationTypeContract.Pc;
+    public string RuntimeText => !IsAgentManaged
+        ? Text("فقط تایمر؛ بدون Agent", "Timer only; no Agent")
+        : Station.AgentOnline ? Text("آنلاین", "Online") : Text("آفلاین", "Offline");
+    public string AgentText => !IsAgentManaged
+        ? Text("برای این ایستگاه Agent لازم نیست", "Agent not applicable to this station")
+        : string.IsNullOrWhiteSpace(Station.AgentDeviceId) ? Text("Agent متصل نیست", "No Agent bound") : Station.AgentDeviceId;
+    public string HeartbeatText => !IsAgentManaged
+        ? Text("پایش Agent برای این ایستگاه کاربرد ندارد", "Agent heartbeat not applicable")
+        : Station.LastHeartbeatAtUtc.HasValue
+            ? Station.LastHeartbeatAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture)
+            : Text("هنوز heartbeat دریافت نشده", "No heartbeat received yet");
+    public string AgentVersionText => IsAgentManaged ? Station.AgentVersion ?? "—" : "—";
+    public string AgentStateText => IsAgentManaged ? Station.AgentReportedState ?? "—" : "—";
     private static string Text(string fa, string en) =>
         System.Globalization.CultureInfo.CurrentUICulture.Name.Equals("en-US", StringComparison.OrdinalIgnoreCase) ? en : fa;
 }

@@ -30,7 +30,9 @@ public sealed class EfAgentConnectionLeaseStore(
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default)
     {
-        ValidateStrings(deviceId, connectionId, leaseToken);
+        ValidateDeviceId(deviceId);
+        ValidateBoundedText(connectionId, nameof(connectionId), 128);
+        ValidateBoundedText(leaseToken, nameof(leaseToken), 128);
         ValidateLeaseDuration(leaseDuration);
 
         var now = clock.UtcNow;
@@ -58,9 +60,12 @@ public sealed class EfAgentConnectionLeaseStore(
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default)
     {
-        ValidateStrings(heartbeat.DeviceId, connectionId, leaseToken);
-        ArgumentException.ThrowIfNullOrWhiteSpace(heartbeat.AgentVersion);
-        ArgumentException.ThrowIfNullOrWhiteSpace(heartbeat.StationState);
+        ArgumentNullException.ThrowIfNull(heartbeat);
+        ValidateDeviceId(heartbeat.DeviceId);
+        ValidateBoundedText(connectionId, nameof(connectionId), 128);
+        ValidateBoundedText(leaseToken, nameof(leaseToken), 128);
+        ValidateBoundedText(heartbeat.AgentVersion, nameof(heartbeat.AgentVersion), 64);
+        ValidateBoundedText(heartbeat.StationState, nameof(heartbeat.StationState), 64);
         ValidateLeaseDuration(leaseDuration);
 
         var now = clock.UtcNow;
@@ -69,7 +74,7 @@ public sealed class EfAgentConnectionLeaseStore(
         var updated = await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE agent_connection_leases
-            SET last_heartbeat_at_utc = {heartbeat.SentAtUtc},
+            SET last_heartbeat_at_utc = {now},
                 lease_expires_at_utc = {expires},
                 agent_version = {heartbeat.AgentVersion},
                 station_state = {heartbeat.StationState},
@@ -90,7 +95,9 @@ public sealed class EfAgentConnectionLeaseStore(
         string leaseToken,
         CancellationToken cancellationToken = default)
     {
-        ValidateStrings(deviceId, connectionId, leaseToken);
+        ValidateDeviceId(deviceId);
+        ValidateBoundedText(connectionId, nameof(connectionId), 128);
+        ValidateBoundedText(leaseToken, nameof(leaseToken), 128);
 
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
@@ -176,18 +183,28 @@ public sealed class EfAgentConnectionLeaseStore(
     }
 
     private static AgentConnectionLeaseState ToState(AgentConnectionLease entity, bool authoritative) =>
-        new(entity.DeviceId, entity.ConnectionId, entity.LeaseToken, entity.LeaseExpiresAtUtc, authoritative);
+        new(entity.DeviceId, entity.ConnectionId, authoritative ? entity.LeaseToken : string.Empty, entity.LeaseExpiresAtUtc, authoritative);
 
     private static void Validate(AgentConnectionLeaseRequest request, TimeSpan leaseDuration)
     {
-        ValidateStrings(request.DeviceId, request.ConnectionId);
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateDeviceId(request.DeviceId);
+        ValidateBoundedText(request.ConnectionId, nameof(request.ConnectionId), 128);
         ValidateLeaseDuration(leaseDuration);
     }
 
-    private static void ValidateStrings(params string[] values)
+    private static void ValidateDeviceId(string deviceId)
     {
-        foreach (var value in values)
-            ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        ValidateBoundedText(deviceId, nameof(deviceId), 128);
+        if (deviceId.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')))
+            throw new ArgumentException("DeviceId contains unsupported characters.", nameof(deviceId));
+    }
+
+    private static void ValidateBoundedText(string value, string parameterName, int maximumLength)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (value.Length > maximumLength || value.Any(char.IsControl))
+            throw new ArgumentException($"Value must be at most {maximumLength} characters and contain no control characters.", parameterName);
     }
 
     private static void ValidateLeaseDuration(TimeSpan leaseDuration)

@@ -30,6 +30,14 @@ public sealed class AgentHub(
         if (lease is null)
             throw new HubException("AGENT_LEASE_ACQUISITION_FAILED");
 
+        if (!lease.IsAuthoritative ||
+            !string.Equals(lease.DeviceId, deviceId, StringComparison.Ordinal) ||
+            !string.Equals(lease.ConnectionId, Context.ConnectionId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(lease.LeaseToken))
+        {
+            throw new HubException("AGENT_LEASE_ALREADY_HELD");
+        }
+
         Context.Items[LeaseTokenKey] = lease.LeaseToken;
         Context.Items[DeviceIdKey] = deviceId;
         return lease;

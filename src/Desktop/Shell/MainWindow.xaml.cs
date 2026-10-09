@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Threading;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
 
@@ -7,12 +8,31 @@ namespace GameNet.Desktop.Shell;
 
 public partial class MainWindow : Window
 {
+    private readonly DispatcherTimer stationHealthRefreshTimer;
+
     public MainWindow(IGameNetServerClient serverClient)
     {
         InitializeComponent();
         var viewModel = new LoginViewModel(serverClient);
         viewModel.PropertyChanged += ViewModelOnPropertyChanged;
         DataContext = viewModel;
+
+        stationHealthRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        stationHealthRefreshTimer.Tick += (_, _) =>
+        {
+            if (DataContext is LoginViewModel { IsAuthenticated: true } current &&
+                !current.IsBusy &&
+                !current.StationBoard.IsBusy)
+            {
+                current.StationBoard.RefreshCommand.Execute(null);
+            }
+        };
+
+        Closed += (_, _) =>
+        {
+            stationHealthRefreshTimer.Stop();
+            viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
+        };
     }
 
     private void PasswordInput_OnPasswordChanged(object sender, RoutedEventArgs e)
@@ -43,7 +63,14 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName == nameof(LoginViewModel.IsAuthenticated) &&
             sender is LoginViewModel { IsAuthenticated: true })
+        {
             PasswordInput.Clear();
+            stationHealthRefreshTimer.Start();
+        }
+
+        if (e.PropertyName == nameof(LoginViewModel.IsAuthenticated) &&
+            sender is LoginViewModel { IsAuthenticated: false })
+            stationHealthRefreshTimer.Stop();
 
         if (e.PropertyName == nameof(LoginViewModel.PasswordChangeSucceeded) &&
             sender is LoginViewModel { PasswordChangeSucceeded: true })
