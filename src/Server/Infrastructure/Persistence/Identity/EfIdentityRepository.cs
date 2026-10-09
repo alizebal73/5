@@ -1,6 +1,7 @@
 using GameNet.Server.Modules.Identity.Application;
 using GameNet.Server.Modules.Identity.Domain;
 using GameNet.Server.Persistence;
+using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -24,6 +25,16 @@ public sealed class EfIdentityRepository(GameNetDbContext db) : IIdentityReposit
         db.OperatorUsers.SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
     public async Task<IReadOnlySet<string>> GetPermissionsAsync(Guid userId, CancellationToken cancellationToken)
     {
+        var isOwner = await (from userRole in db.UserRoles.AsNoTracking()
+            join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+            where userRole.UserId == userId && role.Code == "owner"
+            select userRole.UserId).AnyAsync(cancellationToken);
+        if (isOwner)
+        {
+            var catalog = typeof(Permissions).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                .Where(field => field.FieldType == typeof(string)).Select(field => (string)field.GetValue(null)!);
+            return new HashSet<string>(catalog, StringComparer.Ordinal);
+        }
         var permissions = await (from userRole in db.UserRoles
             join rolePermission in db.RolePermissions on userRole.RoleId equals rolePermission.RoleId
             where userRole.UserId == userId
