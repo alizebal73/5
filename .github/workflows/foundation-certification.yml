@@ -6,6 +6,9 @@ on:
     branches:
       - "foundation/runtime-*"
       - "feature/operator-identity-v1"
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 concurrency:
   group: foundation-certification-${{ github.ref }}

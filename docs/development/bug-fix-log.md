@@ -263,11 +263,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Root cause: `scripts/check-business-gate.ps1` trusted only `status=certified`; it did not validate the 40-character `certifiedCommit`, confirm the commit object existed, or prove it was an ancestor of current `HEAD`. A stale or unrelated marker could therefore pass.
 - Fix in this commit: resolve the marker SHA and current HEAD, use `git merge-base --is-ancestor`, and fail closed for missing, malformed, unrelated or uncheckable certificate commits. The workflow fetches full history (`fetch-depth: 0`) so the ancestry proof is meaningful.
 - Regression test: `scripts/test-business-gate.ps1` builds a temporary Git repository, proves an actual ancestor is accepted, and proves a real commit from unrelated history is rejected. It does not modify the project repository or production database.
-- Verification status: included in stage-2 change; full CI on the resulting SHA is required before marking this code part complete.
+- Verification: GitHub Actions run [#161](https://github.com/alizebal73/5/actions/runs/37918110954) completed with `success` on exact SHA `2b731276ca89015cb32be4a2eb90dc5f449c4d49`. The regression test ran inside Canonical verification; PostgreSQL, isolated backup/restore, Desktop runtime, Agent runtime, and evidence upload also passed.
 
 ## 2026-10-09 — GitHub branch governance still needs repository-level protection
 
 - API audit reported `protected=false` for `main`, `foundation/runtime-final-v2`, and `feature/operator-identity-v1`; the repository rulesets endpoint returned an empty list.
 - Recommended protection policy is recorded in `docs/operations/branch-governance.md`. No remote repository settings were changed by this commit.
 - The available GitHub connection could read branch metadata but could not access/write the administrative branch-protection endpoint. Do not report remote protection as enabled until settings are applied and re-read/verified.
+
 
