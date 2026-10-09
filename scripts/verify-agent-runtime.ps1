@@ -224,128 +224,17 @@ WHERE device_id = '$deviceId';
 
     $healthFieldsQuery = "SELECT COALESCE(agent_version,'') || '|' || COALESCE(station_state,'') FROM agent_connection_leases WHERE device_id = '$deviceId';"
     $healthFields = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $healthFieldsQuery 2>$null) -join ""
-    if ($healthFields -notmatch '^.+\|Ready
-    $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Err -PassThru
-    Start-Sleep -Seconds 8
-
-    $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
-    $afterSecond = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $query 2>$null) -join ""
-    if ($afterSecond.Trim() -ne $leaseConnectionId) {
-        throw "Agent fencing failed: a second connection replaced the authoritative lease."
-    }
-
-    $authoritativeHeartbeat = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
-    if ([string]::IsNullOrWhiteSpace($authoritativeHeartbeat.Trim())) {
-        throw "A competing Agent cleared or invalidated the authoritative heartbeat."
-    }
-
-    Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-
-    Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 4
-
-    $query = "SELECT connection_id FROM agent_connection_leases WHERE device_id = '$deviceId';"
-    $released = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $query 2>$null) -join ""
-    if (-not [string]::IsNullOrWhiteSpace($released.Trim())) {
-        throw "Agent lease was not released by the owning connection."
-    }
-
-    $env:GameNet__AgentIdentity__RootPath = $identityRoot
-    $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentErr -PassThru
-
-    $reconnected = $false
-    for ($i = 0; $i -lt 40; $i++) {
-        Start-Sleep -Seconds 1
-        $value = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $query 2>$null) -join ""
-        if (-not [string]::IsNullOrWhiteSpace($value.Trim()) -and $value.Trim() -ne $leaseConnectionId) {
-            $reconnected = $true
-            break
-        }
-    }
-    if (-not $reconnected) { throw "Agent reconnect did not establish a new authoritative connection." }
-
-    Write-Host "AGENT RUNTIME / AUTH / HEARTBEAT / FENCING / RECONNECT CERTIFICATION PASSED."
-    $testSucceeded = $true
-}
-catch {
-    $failureMessage = $_.Exception.ToString()
-    throw
-}
-finally {
-    if ($agent) { Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue }
-    if ($agent2) { Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue }
-    if ($server) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
-
-    foreach ($name in $envNames) {
-        $previous = $old[$name]
-        if ($null -eq $previous) {
-            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
-        }
-        else {
-            Set-Item "Env:$name" $previous
-        }
-    }
-
-    if ($null -eq $oldPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $oldPgPassword }
-    if ($null -eq $oldPgSslMode) { Remove-Item Env:PGSSLMODE -ErrorAction SilentlyContinue } else { $env:PGSSLMODE = $oldPgSslMode }
-    if (-not $testSucceeded) {
-        New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
-
-        $logFiles = @(
-            @{ Path = $serverLog; Name = "server.log" },
-            @{ Path = $serverErr; Name = "server.err" },
-            @{ Path = $agentLog; Name = "agent.log" },
-            @{ Path = $agentErr; Name = "agent.err" },
-            @{ Path = $agent2Log; Name = "agent-second.log" },
-            @{ Path = $agent2Err; Name = "agent-second.err" }
-        )
-
-        foreach ($entry in $logFiles) {
-            if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) { continue }
-            $content = [System.IO.File]::ReadAllText($entry.Path)
-            $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
-            $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|refresh_token|client_secret|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
-            $content = [Regex]::Replace($content, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
-            $content = [Regex]::Replace($content, '\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b', '<redacted-jwt>')
-            $destination = Join-Path $diagnosticRoot ("agent-runtime-" + $runToken + "-" + $entry.Name)
-            Set-Content -LiteralPath $destination -Value $content -Encoding utf8
-        }
-
-        $safeFailure = [string]$failureMessage
-        $safeFailure = [Regex]::Replace($safeFailure, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
-        $safeFailure = [Regex]::Replace($safeFailure, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
-        $diagnosticLogPaths = @(
-            $logFiles |
-                ForEach-Object { Join-Path $diagnosticRoot ('agent-runtime-' + $runToken + '-' + $_.Name) } |
-                Where-Object { Test-Path -LiteralPath $_ }
-        )
-        $diagnosticPath = Join-Path $diagnosticRoot ("agent-runtime-diagnostic-" + $runToken + ".txt")
-        @(
-            "commit=$((git rev-parse HEAD 2>$null))"
-            "branch=$((git branch --show-current 2>$null))"
-            "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
-            "failure=$safeFailure"
-            "diagnosticLogs=$($diagnosticLogPaths -join ';')"
-        ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
-
-        Write-Host "Agent runtime diagnostics preserved under $diagnosticRoot."
-    }
-
-    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-}
-) {
+    if ($healthFields -notmatch '^.+\|Ready$') {
         throw "Agent version or reported station state is missing or invalid: $healthFields"
     }
-
-    # Expire only this disposable certification Agent's server-side lease while the local
-    # Agent still holds the cached token. Its next heartbeat must be rejected; it must then
-    # clear that token, reacquire authority, and resume reporting health.
+    # Expire only the disposable certification Agent's lease while its local SignalR connection remains alive.
+    # The next server heartbeat must be rejected, then the Agent must reacquire a fresh lease and resume health reporting.
     $leaseTokenQuery = "SELECT lease_token FROM agent_connection_leases WHERE device_id = '$deviceId';"
     $leaseTokenBefore = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $leaseTokenQuery 2>$null) -join ""
     $expireLeaseQuery = "UPDATE agent_connection_leases SET lease_expires_at_utc = NOW() - INTERVAL '1 second' WHERE device_id = '$deviceId';"
     [void](& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $expireLeaseQuery 2>$null)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($leaseTokenBefore.Trim())) {
+    $expireExitCode = $LASTEXITCODE
+    if ($expireExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($leaseTokenBefore.Trim())) {
         throw "Could not prepare the disposable expired-lease recovery scenario."
     }
 
@@ -354,8 +243,9 @@ finally {
     for ($i = 0; $i -lt 40; $i++) {
         Start-Sleep -Seconds 1
         $recovery = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $recoveryQuery 2>$null) -join ""
-        $parts = $recovery.Trim().Split('|', 2)
-        if ($LASTEXITCODE -eq 0 -and $parts.Count -eq 2 -and
+        $recoveryExitCode = $LASTEXITCODE
+        $parts = $recovery.Trim() -split '\|', 2
+        if ($recoveryExitCode -eq 0 -and $parts.Count -eq 2 -and
             $parts[0] -ne $leaseTokenBefore.Trim() -and $parts[1] -eq "fresh") {
             $leaseRecovered = $true
             break
