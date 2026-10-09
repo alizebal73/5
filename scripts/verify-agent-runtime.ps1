@@ -224,7 +224,9 @@ WHERE device_id = '$deviceId';
 
     $healthFieldsQuery = "SELECT COALESCE(agent_version,'') || '|' || COALESCE(station_state,'') FROM agent_connection_leases WHERE device_id = '$deviceId';"
     $healthFields = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $healthFieldsQuery 2>$null) -join ""
-    if ($healthFields -notmatch '^.+\|Ready
+    if ($healthFields -notmatch '^.+\|Ready$') {
+        throw "Agent version or reported station state is missing or invalid: $healthFields"
+    }
     $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Err -PassThru
     Start-Sleep -Seconds 8
 
