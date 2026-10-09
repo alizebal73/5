@@ -19,17 +19,17 @@ Run an elevated PowerShell session on the Server PC. Replace the sample IPv4 add
 
 This creates a machine certificate with a SAN for the provided IP and DNS name, places it in the LocalMachine certificate store, configures the Server endpoint and certificate thumbprint in ProgramData, and exports only the public .cer file for client trust. It also grants the configured Windows service identity access to the private key. The private key is not exported.
 
-Record the 40-character thumbprint printed by this script using a trusted channel. The script's service account must match the actual Windows account that runs GameNet 5 Server. When setup registers the service with a different account, pass that account explicitly. Restart the Server service after the configuration is in place.
+The script prints two different identifiers. The 40-character Windows certificate-store thumbprint is used only by the Server to locate the certificate in LocalMachine\My. For client trust, record and independently verify the 64-character SHA-256 fingerprint of the exported public .cer file; do not use the SHA-1 thumbprint as the out-of-band integrity check. The script's service account must match the actual Windows account that runs GameNet 5 Server. When setup registers the service with a different account, pass that account explicitly. Restart the Server service after the configuration is in place.
 
 The configuration binds HTTPS to the selected server IP and port. Production startup refuses a non-loopback HTTP listener or an HTTPS listener without a valid certificate thumbprint.
 
 ## 2. Trust the public certificate on each client PC
 
-Copy gamenet-server.cer to the Desktop PC and each Agent PC. Run elevated PowerShell on each, using the thumbprint that you independently verified from the Server PC:
+Copy gamenet-server.cer to the Desktop PC and each Agent PC. Run elevated PowerShell on each, using the SHA-256 fingerprint that you independently verified from the Server PC:
 
-    .\scripts\trust-server-certificate.ps1 -CertificatePath "C:\Temp\gamenet-server.cer" -ExpectedThumbprint "PASTE_VERIFIED_40_CHARACTER_THUMBPRINT"
+    .\scripts\trust-server-certificate.ps1 -CertificatePath "C:\Temp\gamenet-server.cer" -ExpectedSha256Fingerprint "PASTE_VERIFIED_64_CHARACTER_SHA256_FINGERPRINT"
 
-Only the public certificate is copied. Never distribute the Server's private key. The trust script rejects certificates with mismatched thumbprints, private keys, or missing SAN / TLS Server Authentication EKU. This local single-site certificate is trusted explicitly in Windows LocalMachine\Root; Windows clients continue to perform normal certificate-chain, validity, and host-name/IP SAN verification.
+Only the public certificate is copied. Never distribute the Server's private key. The trust script hashes the exported .cer file with SHA-256 and rejects a fingerprint mismatch before import; it also rejects private keys, expired/not-yet-valid certificates, and certificates without SAN / TLS Server Authentication EKU. This local single-site certificate is trusted explicitly in Windows LocalMachine\Root; Windows clients continue to perform normal certificate-chain, validity, and host-name/IP SAN verification. The -ValidateOnly switch is reserved for automated verification and makes no trust-store changes.
 
 ## 3. Configure the endpoint on Desktop and Agent PCs
 

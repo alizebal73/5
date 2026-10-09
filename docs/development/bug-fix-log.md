@@ -137,3 +137,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Evidence artifact: [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/37860650826/artifacts/11585812517). The in-run evidence file records the certified SHA, branch and UTC timestamp.
 - Status: this exact Foundation checkpoint is certified. The installer/updater/rollback release gates remain required before production release. Business feature branches must be rebuilt/rebased from this checkpoint; no legacy feature branch is implicitly approved for merge.
 - Rollback: if a future regression appears, set the certification marker back to pending and remove the checkpoint's active status; never bypass a failing Foundation gate.
+
+## 2026-10-09 — Runtime TLS public-certificate fingerprint contract
+
+- Symptom: client trust accepted only a 40-character Windows certificate thumbprint (SHA-1), while the installability contract requires independently checking the exported public certificate with SHA-256 before trusting it.
+- Root cause: the Windows certificate-store locator was conflated with the out-of-band integrity check for the `.cer` file.
+- Fix: server TLS configuration now prints both identifiers with explicit labels; client trust verifies the SHA-256 hash of the exact public `.cer` file before validating its certificate profile or importing it. Certificate validity window, SAN, Server Authentication EKU, and absence of a private key are checked. A `-ValidateOnly` path supports tests without modifying certificate trust stores.
+- Regression evidence: `scripts/verify-trust-server-certificate.ps1` is part of canonical `scripts/verify.ps1`; it tests acceptance of the correct fingerprint, rejection of a mismatch and rejection of a 40-character value, without writing to LocalMachine\Root.
+- Verification result: pending the full Foundation workflow on the resulting exact commit. This automated test does not establish real client trust or physical LAN TLS.
+- Rollback: revert the fingerprint-contract change as one unit; never bypass Windows TLS validation or trust a certificate whose SHA-256 fingerprint has not been independently checked.
