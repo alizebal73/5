@@ -12,6 +12,8 @@ public sealed class SignalRAgentTransport(
     TimeProvider timeProvider) : IAgentTransport
 {
     private readonly SemaphoreSlim gate = new(1, 1);
+    public event Func<AgentCommandEnvelope, CancellationToken, Task<AgentCommandAcknowledgement>>? CommandReceived;
+
     private HubConnection? connection;
     private GameNet.Agent.AgentIdentity? identity;
     private string? leaseToken;
