@@ -10,6 +10,7 @@ namespace GameNet.Server.Infrastructure.Realtime;
 [Authorize(Policy = "AgentTransport")]
 public sealed class AgentHub(
     IAgentConnectionLeaseStore leases,
+    AgentCommandResultCoordinator commandResults,
     GameNet.Shared.Primitives.IGameClock clock,
     IOptions<GameNetOptions> options) : Hub
 {
@@ -73,6 +74,21 @@ public sealed class AgentHub(
             AgentProtocolVersions.V1,
             true,
             AgentReconciliationScope.LeaseAndIdentity));
+    }
+
+    public async Task<bool> AcknowledgeCommandAsync(AgentCommandAcknowledgement acknowledgement)
+    {
+        ArgumentNullException.ThrowIfNull(acknowledgement);
+        var deviceId = RequireDeviceId();
+        var token = RequireLeaseToken();
+
+        if (!string.Equals(deviceId, acknowledgement.DeviceId, StringComparison.Ordinal))
+            throw new HubException("AGENT_DEVICE_ID_MISMATCH");
+
+        if (!await leases.IsCurrentLeaseAsync(deviceId, Context.ConnectionId, token, Context.ConnectionAborted))
+            throw new HubException("AGENT_LEASE_NOT_AUTHORITATIVE");
+
+        return commandResults.TryComplete(deviceId, Context.ConnectionId, token, acknowledgement);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

@@ -3,6 +3,7 @@ using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Modules.Stations.Application;
 using GameNet.Server.Modules.Stations.Domain;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Primitives;
 namespace GameNet.Server.Modules.Stations.Api;
@@ -39,6 +40,14 @@ public static class StationEndpoints
             var r = await svc.SetStatusAsync(new SetStationStatusCommand(id, (StationStatus)req.Status, req.ExpectedVersion, ctx.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), Actor(ctx)), ct);
             return r.IsSuccess ? Results.Ok(new ApiEnvelope<StationResponse>(ToResponse(r.Value), CorrelationIdMiddleware.GetCurrent(ctx))) : Failure(r.Error, ctx);
         });
+        group.MapPost("/{id:guid}/agent/health-probe", async (
+            Guid id, StationAgentHealthService health, HttpContext ctx, CancellationToken ct) =>
+        {
+            var r = await health.ProbeAsync(id, Actor(ctx), ct);
+            return r.IsSuccess
+                ? Results.Ok(new ApiEnvelope<AgentCommandAcknowledgement>(r.Value, CorrelationIdMiddleware.GetCurrent(ctx)))
+                : Failure(r.Error, ctx);
+        });
     }
     private static StationActorContext Actor(HttpContext c)
     {
@@ -54,6 +63,7 @@ public static class StationEndpoints
         var status = code switch
         {
             "stations.forbidden" => 403, "stations.not_found" => 404,
+            "stations.agent_not_applicable" or "stations.agent_not_bound" or "stations.agent_unavailable" => 409,
             "stations.code_exists" or "stations.device_already_bound" or "stations.agent_not_provisioned" or "stations.version_conflict" or "stations.conflict" or "idempotency.in_flight" or "idempotency.key_reused" or "idempotency.unavailable" => 409,
             "idempotency.required" or "stations.invalid" or "stations.invalid_transition" => 400, _ => 500
         };

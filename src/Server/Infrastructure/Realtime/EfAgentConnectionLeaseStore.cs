@@ -89,6 +89,58 @@ public sealed class EfAgentConnectionLeaseStore(
         return updated == 1;
     }
 
+    public async Task<AgentCommandLeaseTarget?> GetFreshLeaseForCommandAsync(
+        string deviceId,
+        TimeSpan heartbeatFreshness,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(deviceId);
+        if (heartbeatFreshness <= TimeSpan.Zero || heartbeatFreshness > TimeSpan.FromMinutes(2))
+            throw new ArgumentOutOfRangeException(nameof(heartbeatFreshness));
+
+        var now = clock.UtcNow;
+        var current = await dbContext.AgentConnectionLeases
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.DeviceId == deviceId, cancellationToken);
+
+        if (current is null ||
+            current.LeaseExpiresAtUtc <= now ||
+            !current.LastHeartbeatAtUtc.HasValue ||
+            current.LastHeartbeatAtUtc.Value < now.Subtract(heartbeatFreshness) ||
+            current.LastHeartbeatAtUtc.Value > now.AddSeconds(2))
+            return null;
+
+        return new AgentCommandLeaseTarget(
+            current.DeviceId,
+            current.ConnectionId,
+            current.LeaseToken,
+            current.LeaseExpiresAtUtc,
+            current.LastHeartbeatAtUtc.Value,
+            current.AgentVersion,
+            current.StationState);
+    }
+
+    public async Task<bool> IsCurrentLeaseAsync(
+        string deviceId,
+        string connectionId,
+        string leaseToken,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(deviceId);
+        ValidateBoundedText(connectionId, nameof(connectionId), 128);
+        ValidateBoundedText(leaseToken, nameof(leaseToken), 128);
+        var now = clock.UtcNow;
+
+        return await dbContext.AgentConnectionLeases
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.DeviceId == deviceId &&
+                x.ConnectionId == connectionId &&
+                x.LeaseToken == leaseToken &&
+                x.LeaseExpiresAtUtc > now,
+                cancellationToken);
+    }
+
     public async Task ReleaseIfOwnerAsync(
         string deviceId,
         string connectionId,

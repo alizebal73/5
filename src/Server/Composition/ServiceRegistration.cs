@@ -39,6 +39,9 @@ public static class ServiceRegistration
         services.AddScoped<IOutboxWriter, EfOutboxWriter>();
         services.AddScoped<IOutboxDispatcher, EfOutboxDispatcher>();
         services.AddScoped<IAgentConnectionLeaseStore, EfAgentConnectionLeaseStore>();
+        services.AddSingleton<AgentCommandResultCoordinator>();
+        services.AddScoped<IAgentHealthProbeDispatcher, AgentHealthProbeDispatcher>();
+        services.AddScoped<StationAgentHealthService>();
         services.AddScoped<IAgentCredentialService, AgentCredentialService>();
         services.AddScoped<IIdentityRepository, EfIdentityRepository>();
         services.AddScoped<IdentityService>();
