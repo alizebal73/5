@@ -129,8 +129,8 @@ internal static class DpapiServerSecretStore
             protectedBytes = ProtectedData.Protect(plaintext, Entropy, DataProtectionScope.LocalMachine);
 
             // Create the temporary file with its final DACL from the first filesystem operation.
-            using (var stream = new FileInfo(tempPath).Create(
-                tempPath,
+            using (var stream = System.IO.FileSystemAclExtensions.Create(
+                new FileInfo(tempPath),
                 FileMode.CreateNew,
                 FileSystemRights.ReadAndExecute | FileSystemRights.WriteData,
                 FileShare.None,
