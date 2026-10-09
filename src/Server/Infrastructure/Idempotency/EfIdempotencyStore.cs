@@ -23,18 +23,20 @@ public sealed class EfIdempotencyStore(GameNetDbContext dbContext, IGameClock cl
         var leaseExpiresAtUtc = now.Add(leaseDuration);
         var expiresAtUtc = now.Add(retention);
         var token = Guid.NewGuid().ToString("N");
-        var insertedToken = await dbContext.Database.SqlQueryRaw<string>(
-            """
+        const string emptyResponseJson = "{}";
+        var insertedRows = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
             INSERT INTO idempotency_records
                 (scope, key, operation, request_hash, state, lease_token, status_code, response_json,
                  created_at_utc, lease_expires_at_utc, expires_at_utc)
-            VALUES ({0}, {1}, {2}, {3}, 'processing', {4}, 0, '{}'::jsonb, {5}, {6}, {7})
+            VALUES
+                ({scope}, {key}, {operation}, {requestHash}, {"processing"}, {token}, 0,
+                 CAST({emptyResponseJson} AS jsonb), {now}, {leaseExpiresAtUtc}, {expiresAtUtc})
             ON CONFLICT (scope, key) DO NOTHING
-            RETURNING lease_token AS "Value"
-            """, scope, key, operation, requestHash, token, now, leaseExpiresAtUtc, expiresAtUtc)
-            .SingleOrDefaultAsync(cancellationToken);
+            """,
+            cancellationToken);
 
-        if (string.Equals(insertedToken, token, StringComparison.Ordinal))
+        if (insertedRows == 1)
             return new IdempotencyClaim(true, false, false, token, null, null);
 
         var record = await dbContext.IdempotencyRecords.AsNoTracking()
