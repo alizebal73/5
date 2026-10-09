@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http.Headers;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Shell;
