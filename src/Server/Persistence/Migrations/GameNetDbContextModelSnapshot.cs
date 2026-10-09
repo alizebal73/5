@@ -68,10 +68,6 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("operation");
-                    b.Property<string>("RequestHash")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("request_hash");
 
                     b.Property<string>("Outcome")
                         .IsRequired()
@@ -297,6 +293,11 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("operation");
+
+                    b.Property<string>("RequestHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("request_hash");
 
                     b.Property<string>("ResponseJson")
                         .IsRequired()

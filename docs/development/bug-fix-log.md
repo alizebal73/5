@@ -211,3 +211,6 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Existing idempotency storage now records request hashes, so reusing an active/completed key for a different operation or payload returns a stable conflict instead of replaying an unrelated response.
 - Migration `20261009020000_StationBoard` is additive: one nullable idempotency request-hash column plus the Stations table and indexes. It does not recreate Foundation schema.
 - Verification required before merge: full certification, idempotency conflict tests and end-to-end station/Agent binding and status tests on one commit.
+
+
+- Follow-up migration diagnostic found the manually inserted `RequestHash` snapshot metadata was attached to `AuditEntry` because both entities have an `Operation` property. Moved the metadata specifically inside the `IdempotencyRecord` snapshot/designer block. The generated diff now must be rechecked by EF; the gate remains on.
