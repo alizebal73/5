@@ -15,4 +15,5 @@ public static class Permissions
     public const string BackupOperate = "backup.operate";
     public const string IdentityUsersRead = "identity.users.read";
     public const string IdentityUsersWrite = "identity.users.write";
+    public const string IdentityRolesManage = "identity.roles.manage";
 }
