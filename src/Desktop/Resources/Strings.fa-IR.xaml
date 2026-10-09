@@ -10,6 +10,11 @@
   <system:String x:Key="Identity.LoginHint">ورود با حساب اپراتوری ساخته‌شده توسط مدیر سامانه انجام می‌شود.</system:String>
   <system:String x:Key="Identity.SignedIn">کاربر واردشده</system:String>
   <system:String x:Key="Identity.LogoutButton">خروج</system:String>
+  <system:String x:Key="Identity.ChangePasswordTitle">تغییر گذرواژه</system:String>
+  <system:String x:Key="Identity.CurrentPassword">گذرواژه فعلی</system:String>
+  <system:String x:Key="Identity.NewPassword">گذرواژه جدید</system:String>
+  <system:String x:Key="Identity.ConfirmNewPassword">تکرار گذرواژه جدید</system:String>
+  <system:String x:Key="Identity.ChangePasswordButton">تغییر گذرواژه</system:String>
   <system:String x:Key="Identity.LoginSucceeded">ورود با موفقیت انجام شد</system:String>
   <system:String x:Key="Identity.UsernameRequired">نام کاربری و گذرواژه را وارد کنید.</system:String>
   <system:String x:Key="Identity.InvalidCredentials">نام کاربری یا گذرواژه نادرست است.</system:String>

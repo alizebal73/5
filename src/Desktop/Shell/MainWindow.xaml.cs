@@ -21,10 +21,44 @@ public partial class MainWindow : Window
             viewModel.Password = PasswordInput.Password;
     }
 
+    private void CurrentPasswordChangeInput_OnPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is LoginViewModel viewModel)
+            viewModel.CurrentPassword = CurrentPasswordChangeInput.Password;
+    }
+
+    private void NewPasswordChangeInput_OnPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is LoginViewModel viewModel)
+            viewModel.NewPassword = NewPasswordChangeInput.Password;
+    }
+
+    private void ConfirmPasswordChangeInput_OnPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is LoginViewModel viewModel)
+            viewModel.ConfirmNewPassword = ConfirmPasswordChangeInput.Password;
+    }
+
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(LoginViewModel.IsAuthenticated) &&
             sender is LoginViewModel { IsAuthenticated: true })
             PasswordInput.Clear();
+
+        if (e.PropertyName == nameof(LoginViewModel.PasswordChangeSucceeded) &&
+            sender is LoginViewModel { PasswordChangeSucceeded: true })
+        {
+            CurrentPasswordChangeInput.Clear();
+            NewPasswordChangeInput.Clear();
+            ConfirmPasswordChangeInput.Clear();
+        }
+
+        if (e.PropertyName == nameof(LoginViewModel.IsAuthenticated) &&
+            sender is LoginViewModel { IsAuthenticated: false })
+        {
+            CurrentPasswordChangeInput.Clear();
+            NewPasswordChangeInput.Clear();
+            ConfirmPasswordChangeInput.Clear();
+        }
     }
 }

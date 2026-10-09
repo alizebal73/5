@@ -41,6 +41,18 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         return await ReadPayloadAsync<CurrentOperatorResponse>(response, cancellationToken);
     }
 
+    public async Task<ChangeOwnPasswordResponse> ChangeOwnPasswordAsync(
+        ChangeOwnPasswordRequest body, string idempotencyKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        if (idempotencyKey.Length > 200) throw new ArgumentOutOfRangeException(nameof(idempotencyKey));
+        using var request = CreateRequest(HttpMethod.Put, "/api/v1/identity/me/password", authenticated: true);
+        request.Headers.TryAddWithoutValidation(ApiHeaders.IdempotencyKey, idempotencyKey.Trim());
+        request.Content = JsonContent.Create(body, options: JsonOptions);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadPayloadAsync<ChangeOwnPasswordResponse>(response, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<StationResponse>> GetStationsAsync(CancellationToken cancellationToken = default)
     {
         using var request = CreateRequest(HttpMethod.Get, "/api/v1/stations", authenticated: true);

@@ -16,6 +16,22 @@ public sealed class OperatorUserTests
         Assert.False(user.IsLocked(now.AddMinutes(11)));
     }
     [Fact]
+    public void Changing_password_resets_failed_login_lockout_without_changing_identity()
+    {
+        var now = DateTimeOffset.Parse("2026-10-09T00:00:00Z");
+        var user = OperatorUser.Create(Guid.NewGuid(), "operator", "Test Operator", "old-hash", now);
+        for (var i = 0; i < 5; i++) user.RecordFailedLogin(now);
+        Assert.True(user.IsLocked(now));
+
+        user.ChangePassword("new-hash");
+
+        Assert.Equal("new-hash", user.PasswordHash);
+        Assert.Equal("operator", user.Username);
+        Assert.Equal(0, user.FailedLoginCount);
+        Assert.False(user.IsLocked(now));
+    }
+
+    [Fact]
     public void Successful_login_clears_lockout_and_updates_last_login()
     {
         var now = DateTimeOffset.Parse("2026-10-09T00:00:00Z");

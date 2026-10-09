@@ -10,6 +10,11 @@
   <system:String x:Key="Identity.LoginHint">Sign in with an operator account created by the system owner.</system:String>
   <system:String x:Key="Identity.SignedIn">Signed in as</system:String>
   <system:String x:Key="Identity.LogoutButton">Sign out</system:String>
+  <system:String x:Key="Identity.ChangePasswordTitle">Change password</system:String>
+  <system:String x:Key="Identity.CurrentPassword">Current password</system:String>
+  <system:String x:Key="Identity.NewPassword">New password</system:String>
+  <system:String x:Key="Identity.ConfirmNewPassword">Confirm new password</system:String>
+  <system:String x:Key="Identity.ChangePasswordButton">Change password</system:String>
   <system:String x:Key="Identity.LoginSucceeded">You are signed in</system:String>
   <system:String x:Key="Identity.UsernameRequired">Enter your username and password.</system:String>
   <system:String x:Key="Identity.InvalidCredentials">Username or password is incorrect.</system:String>

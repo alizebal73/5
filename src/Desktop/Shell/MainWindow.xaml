@@ -70,7 +70,7 @@
           </DockPanel>
 <Border Grid.Row="1" Padding="20" Background="#F8FAFC" CornerRadius="12">
             <Grid>
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <DockPanel Grid.Row="0" Margin="0,0,0,10">
                 <Button DockPanel.Dock="Right" Padding="10,6" Content="{DynamicResource Station.Refresh}" Command="{Binding StationBoard.RefreshCommand}"/>
                 <StackPanel>
@@ -82,7 +82,34 @@
                 <TextBlock Text="{Binding StationBoard.ErrorMessage}" Foreground="#B42318" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding StationBoard.StatusMessage}" Foreground="#475467" TextWrapping="Wrap"/>
               </StackPanel>
-              <Grid Grid.Row="2">
+              <Expander Grid.Row="2" Header="{DynamicResource Identity.ChangePasswordTitle}" Margin="0,0,0,10">
+                <Border Padding="12" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8">
+                  <StackPanel>
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                        <TextBlock Text="{DynamicResource Identity.CurrentPassword}" FontSize="12"/>
+                        <PasswordBox x:Name="CurrentPasswordChangeInput" FontSize="14" Padding="8" Margin="0,4,0,8" PasswordChanged="CurrentPasswordChangeInput_OnPasswordChanged"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                        <TextBlock Text="{DynamicResource Identity.NewPassword}" FontSize="12"/>
+                        <PasswordBox x:Name="NewPasswordChangeInput" FontSize="14" Padding="8" Margin="0,4,0,8" PasswordChanged="NewPasswordChangeInput_OnPasswordChanged"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="{DynamicResource Identity.ConfirmNewPassword}" FontSize="12"/>
+                        <PasswordBox x:Name="ConfirmPasswordChangeInput" FontSize="14" Padding="8" Margin="0,4,0,8" PasswordChanged="ConfirmPasswordChangeInput_OnPasswordChanged"/>
+                      </StackPanel>
+                    </Grid>
+                    <DockPanel LastChildFill="True">
+                      <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right"
+                              Content="{DynamicResource Identity.ChangePasswordButton}" Command="{Binding ChangePasswordCommand}"/>
+                      <TextBlock Text="{Binding PasswordChangeMessage}" VerticalAlignment="Center" Foreground="#475467"
+                                 TextWrapping="Wrap" Margin="0,0,12,0"/>
+                    </DockPanel>
+                  </StackPanel>
+                </Border>
+              </Expander>
+              <Grid Grid.Row="3">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="0.9*"/></Grid.ColumnDefinitions>
                 <Grid Grid.Column="0" Margin="0,0,12,0">
                   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>

@@ -20,6 +20,7 @@ public interface IOperatorManagementRepository
     Task ReplaceRolePermissionsAsync(Guid roleId, IReadOnlyCollection<string> permissions, CancellationToken cancellationToken);
     Task ReplaceUserRoleAsync(Guid userId, Guid roleId, CancellationToken cancellationToken);
     Task RevokeActiveSessionsAsync(Guid userId, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken);
+    Task RevokeOtherActiveSessionsAsync(Guid userId, string currentSessionJti, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken);
 }
 
 public sealed record OperatorUserSnapshot(
@@ -30,7 +31,7 @@ public sealed record OperatorManagedDto(
     Guid Id, string Username, string DisplayName, bool IsActive, int FailedLoginCount,
     DateTimeOffset CreatedAtUtc, DateTimeOffset? LastLoginAtUtc, Guid[] RoleIds, string[] RoleCodes, bool IsOwner);
 public sealed record RoleManagedDto(Guid Id, string Code, string Name, string[] Permissions, bool IsSystemRole);
-public sealed record IdentityActor(Guid UserId, string CorrelationId, string Source);
+public sealed record IdentityActor(Guid UserId, string CorrelationId, string Source, string? CurrentSessionJti = null);
 public sealed record CreateOperatorCommand(
     string Username, string DisplayName, string Password, Guid RoleId, string IdempotencyKey, IdentityActor Actor);
 public sealed record AssignOperatorRoleCommand(
@@ -41,3 +42,9 @@ public sealed record CreateRoleCommand(
     string Code, string Name, string[]? Permissions, string IdempotencyKey, IdentityActor Actor);
 public sealed record UpdateRolePermissionsCommand(
     Guid RoleId, string[]? Permissions, string IdempotencyKey, IdentityActor Actor);
+public sealed record ChangeOwnPasswordCommand(
+    string CurrentPassword, string NewPassword, string IdempotencyKey, IdentityActor Actor);
+public sealed record ResetOperatorPasswordCommand(
+    Guid OperatorId, string NewPassword, string Reason, string IdempotencyKey, IdentityActor Actor);
+public sealed record ChangeOwnPasswordResult(bool OtherSessionsRevoked);
+public sealed record ResetOperatorPasswordResult(Guid OperatorId, bool SessionsRevoked);

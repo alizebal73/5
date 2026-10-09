@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Idempotency;
@@ -16,6 +14,7 @@ public sealed class OperatorManagementService(
     IPasswordHasher passwordHasher,
     ITransactionCoordinator transactions,
     IIdempotencyStore idempotency,
+    IRequestFingerprint requestFingerprint,
     IAuditWriter audit,
     IGameClock clock)
 {
@@ -202,13 +201,103 @@ public sealed class OperatorManagementService(
                 return Result<OperatorManagedDto>.Success(after);
             }, ct);
 
+    public Task<Result<ChangeOwnPasswordResult>> ChangeOwnPasswordAsync(ChangeOwnPasswordCommand command, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(command.CurrentPassword) || command.CurrentPassword.Length > 256 ||
+            string.IsNullOrWhiteSpace(command.NewPassword) || command.NewPassword.Length < 10 || command.NewPassword.Length > 256)
+            return Task.FromResult(Fail<ChangeOwnPasswordResult>("identity.invalid", "The current password or new password is invalid."));
+
+        var currentJti = command.Actor.CurrentSessionJti;
+        if (string.IsNullOrWhiteSpace(currentJti) || currentJti.Length > 128)
+            return Task.FromResult(Fail<ChangeOwnPasswordResult>("auth.identity_missing", "The current authenticated session is missing."));
+        var sessionJti = currentJti.Trim();
+
+        return MutateAsync("users.password.change-own", command.IdempotencyKey,
+            new { command.CurrentPassword, command.NewPassword }, command.Actor, 200,
+            async token =>
+            {
+                var user = await identityRepository.FindUserByIdAsync(command.Actor.UserId, token);
+                if (user is null || !user.IsActive)
+                    return Fail<ChangeOwnPasswordResult>("identity.user_not_found", "The operator account was not found.");
+                if (!passwordHasher.Verify(command.CurrentPassword, user.PasswordHash))
+                    return Fail<ChangeOwnPasswordResult>("identity.current_password_invalid", "The current password is incorrect.");
+                if (passwordHasher.Verify(command.NewPassword, user.PasswordHash))
+                    return Fail<ChangeOwnPasswordResult>("identity.password_unchanged", "The new password must differ from the current password.");
+
+                string newHash;
+                try { newHash = passwordHasher.Hash(command.NewPassword); }
+                catch (ArgumentException) { return Fail<ChangeOwnPasswordResult>("identity.invalid", "The new password is invalid."); }
+
+                var now = clock.UtcNow;
+                var before = new { user.Id, user.Username };
+                user.ChangePassword(newHash);
+                await repository.RevokeOtherActiveSessionsAsync(user.Id, sessionJti, now, token);
+                audit.Append(new AuditRecord(now, "Operator", command.Actor.UserId.ToString("D"),
+                    "identity.password_change", "OperatorUser", user.Id.ToString("D"),
+                    "Operator changed own password; other sessions were revoked",
+                    command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
+                    BeforeJson: JsonSerializer.Serialize(before),
+                    AfterJson: JsonSerializer.Serialize(new { user.Id, OtherSessionsRevoked = true })));
+                return Result<ChangeOwnPasswordResult>.Success(new ChangeOwnPasswordResult(true));
+            }, ct);
+    }
+
+    public Task<Result<ResetOperatorPasswordResult>> ResetOperatorPasswordAsync(ResetOperatorPasswordCommand command, CancellationToken ct)
+    {
+        var normalizedReason = command.Reason?.Trim();
+        if (command.OperatorId == Guid.Empty || string.IsNullOrWhiteSpace(command.NewPassword) ||
+            command.NewPassword.Length < 10 || command.NewPassword.Length > 256 ||
+            string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 3 || normalizedReason.Length > 256)
+            return Task.FromResult(Fail<ResetOperatorPasswordResult>("identity.invalid", "The target, new password or reset reason is invalid."));
+
+        if (command.Actor.UserId == command.OperatorId)
+            return Task.FromResult(Fail<ResetOperatorPasswordResult>("identity.self_management_forbidden", "Use the current-password flow to change your own password."));
+
+        return MutateAsync("users.password.reset", command.IdempotencyKey,
+            new { command.OperatorId, command.NewPassword, Reason = normalizedReason }, command.Actor, 200,
+            async token =>
+            {
+                var actorPermissions = await identityRepository.GetPermissionsAsync(command.Actor.UserId, token);
+                if (!actorPermissions.Contains(Permissions.IdentityUsersPasswordReset))
+                    return Fail<ResetOperatorPasswordResult>("identity.forbidden", "Not allowed to reset operator passwords.");
+
+                var user = await identityRepository.FindUserByIdAsync(command.OperatorId, token);
+                if (user is null)
+                    return Fail<ResetOperatorPasswordResult>("identity.user_not_found", "The operator account was not found.");
+
+                var snapshot = (await repository.ListUsersAsync(token)).SingleOrDefault(x => x.Id == user.Id);
+                if (snapshot is null)
+                    return Fail<ResetOperatorPasswordResult>("identity.user_not_found", "The operator account was not found.");
+
+                var actorIsOwner = await repository.IsOwnerAsync(command.Actor.UserId, token);
+                var targetIsOwner = snapshot.RoleCodes.Contains("owner", StringComparer.Ordinal);
+                if (targetIsOwner && !actorIsOwner)
+                    return Fail<ResetOperatorPasswordResult>("identity.owner_protected", "Only an Owner can reset an Owner account password.");
+
+                string newHash;
+                try { newHash = passwordHasher.Hash(command.NewPassword); }
+                catch (ArgumentException) { return Fail<ResetOperatorPasswordResult>("identity.invalid", "The new password is invalid."); }
+
+                var before = ToOperatorDto(snapshot);
+                var now = clock.UtcNow;
+                user.ChangePassword(newHash);
+                await repository.RevokeActiveSessionsAsync(user.Id, now, token);
+                audit.Append(new AuditRecord(now, "Operator", command.Actor.UserId.ToString("D"),
+                    "identity.user_password_reset", "OperatorUser", user.Id.ToString("D"),
+                    normalizedReason, command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
+                    BeforeJson: JsonSerializer.Serialize(before),
+                    AfterJson: JsonSerializer.Serialize(new { user.Id, user.Username, PasswordReset = true, SessionsRevoked = true, IsActive = user.IsActive })));
+                return Result<ResetOperatorPasswordResult>.Success(new ResetOperatorPasswordResult(user.Id, true));
+            }, ct);
+    }
+
     private async Task<Result<T>> MutateAsync<T>(string operation, string key, object payload, IdentityActor actor, int status,
         Func<CancellationToken, Task<Result<T>>> action, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
             return Fail<T>("idempotency.required", "A valid Idempotency-Key is required.");
         var scope = $"identity.{operation}:{actor.UserId:D}";
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload))));
+        var hash = requestFingerprint.Compute(payload);
         try
         {
             return await transactions.ExecuteAsync(async token =>

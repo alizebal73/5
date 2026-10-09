@@ -90,4 +90,13 @@ public sealed class EfOperatorManagementRepository(GameNetDbContext db) : IOpera
             .ToListAsync(ct);
         foreach (var session in sessions) session.Revoke(revokedAtUtc);
     }
+    
+    public async Task RevokeOtherActiveSessionsAsync(Guid userId, string currentSessionJti, DateTimeOffset revokedAtUtc, CancellationToken ct)
+    {
+        var sessions = await db.AuthSessions
+            .Where(x => x.UserId == userId && x.Jti != currentSessionJti && x.RevokedAtUtc == null && x.ExpiresAtUtc > revokedAtUtc)
+            .ToListAsync(ct);
+        foreach (var session in sessions) session.Revoke(revokedAtUtc);
+    }
+
 }

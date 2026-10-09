@@ -42,6 +42,15 @@ public sealed class OperatorUser
         LockoutUntilUtc = null;
         LastLoginAtUtc = utcNow;
     }
+    public void ChangePassword(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash)) throw new ArgumentException("Password hash is required.", nameof(passwordHash));
+        if (passwordHash.Length > 512) throw new ArgumentException("Password hash is too long.", nameof(passwordHash));
+        PasswordHash = passwordHash;
+        FailedLoginCount = 0;
+        LockoutUntilUtc = null;
+    }
+
     public void Disable() => IsActive = false;
     public void SetActive(bool isActive) => IsActive = isActive;
 

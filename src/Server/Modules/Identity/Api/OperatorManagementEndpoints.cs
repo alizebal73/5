@@ -14,6 +14,29 @@ public static class OperatorManagementEndpoints
     public static void MapOperatorManagementEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/identity").RequireAuthorization("Operator");
+        group.MapPut("/me/password", async (ChangeOwnPasswordRequest request, OperatorManagementService service, HttpContext context, CancellationToken ct) =>
+        {
+            if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+            var result = await service.ChangeOwnPasswordAsync(new ChangeOwnPasswordCommand(
+                request.CurrentPassword, request.NewPassword,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<ChangeOwnPasswordResponse>(
+                    new ChangeOwnPasswordResponse(result.Value.OtherSessionsRevoked), CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        });
+
+        group.MapPut("/users/{id:guid}/password", async (Guid id, ResetOperatorPasswordRequest request, OperatorManagementService service, HttpContext context, CancellationToken ct) =>
+        {
+            if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+            var result = await service.ResetOperatorPasswordAsync(new ResetOperatorPasswordCommand(id, request.NewPassword,
+                request.Reason, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<ResetOperatorPasswordResponse>(
+                    new ResetOperatorPasswordResponse(result.Value.OperatorId, result.Value.SessionsRevoked), CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.IdentityUsersPasswordReset);
+
         group.MapGet("/users", async (OperatorManagementService service, HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
@@ -89,7 +112,9 @@ public static class OperatorManagementEndpoints
     {
         var text = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub);
         if (!Guid.TryParse(text, out var id)) { actor = null!; return false; }
-        actor = new IdentityActor(id, CorrelationIdMiddleware.GetCurrent(context), "Desktop");
+        var jti = context.User.FindFirstValue(JwtRegisteredClaimNames.Jti) ?? context.User.FindFirstValue(ClaimTypes.SerialNumber);
+        actor = new IdentityActor(id, CorrelationIdMiddleware.GetCurrent(context), "Desktop",
+            string.IsNullOrWhiteSpace(jti) ? null : jti);
         return true;
     }
 
@@ -105,10 +130,11 @@ public static class OperatorManagementEndpoints
         var status = error.Code switch
         {
             "identity.invalid" or "identity.unknown_permission" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "identity.current_password_invalid" => StatusCodes.Status403Forbidden,
             "identity.forbidden" or "identity.permission_escalation" or "identity.owner_assignment_forbidden" or "identity.owner_protected" => StatusCodes.Status403Forbidden,
             "identity.role_not_found" or "identity.user_not_found" => StatusCodes.Status404NotFound,
             "identity.username_exists" or "identity.role_code_exists" or "identity.system_role_immutable" or "identity.last_owner_required" or
-                "identity.self_management_forbidden" or "identity.conflict" or "idempotency.in_flight" or "idempotency.key_reused" or "idempotency.unavailable" => StatusCodes.Status409Conflict,
+                "identity.self_management_forbidden" or "identity.password_unchanged" or "identity.conflict" or "idempotency.in_flight" or "idempotency.key_reused" or "idempotency.unavailable" => StatusCodes.Status409Conflict,
             "auth.identity_missing" => StatusCodes.Status401Unauthorized,
             _ => StatusCodes.Status500InternalServerError
         };

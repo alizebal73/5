@@ -8,3 +8,7 @@ public sealed record LoginResponse(string AccessToken, string TokenType, DateTim
     Guid UserId, string Username, string DisplayName, string[] Permissions);
 public sealed record CurrentOperatorResponse(Guid UserId, string Username, string DisplayName, string[] Permissions);
 public sealed record LogoutResponse(bool Success);
+public sealed record ChangeOwnPasswordRequest(string CurrentPassword, string NewPassword);
+public sealed record ChangeOwnPasswordResponse(bool OtherSessionsRevoked);
+public sealed record ResetOperatorPasswordRequest(string NewPassword, string Reason);
+public sealed record ResetOperatorPasswordResponse(Guid OperatorId, bool SessionsRevoked);

@@ -35,6 +35,7 @@ public static class ServiceRegistration
         services.AddScoped<IServerReadinessProbe, ServerReadinessProbe>();
         services.AddScoped<IAuditWriter, EfAuditWriter>();
         services.AddScoped<IIdempotencyStore, EfIdempotencyStore>();
+        services.AddSingleton<IRequestFingerprint, HmacRequestFingerprint>();
         services.AddScoped<IOutboxWriter, EfOutboxWriter>();
         services.AddScoped<IOutboxDispatcher, EfOutboxDispatcher>();
         services.AddScoped<IAgentConnectionLeaseStore, EfAgentConnectionLeaseStore>();

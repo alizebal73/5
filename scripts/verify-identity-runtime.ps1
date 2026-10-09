@@ -324,6 +324,54 @@ try {
     Assert-Status $basicPermissionUpdate 200 "Owner updates role permissions"
     $basicNowCanRead = Invoke-IdentityRequest "GET" "/api/v1/identity/users" $basicHeaders
     Assert-Status $basicNowCanRead 200 "Refresh role permissions from authoritative Server state"
+
+    # Self-service password change: verify credential ownership, no-op rejection,
+    # idempotent retry, current-session continuity, and the new credential.
+    $newBasicPassword = "CI-basic-updated-" + [Guid]::NewGuid().ToString("N")
+    $badCurrentPassword = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken"
+        "Idempotency-Key" = ("ci-bad-current-" + [Guid]::NewGuid().ToString("N"))
+    } @{ currentPassword = ("incorrect-" + [Guid]::NewGuid().ToString("N")); newPassword = $newBasicPassword }
+    Assert-ErrorCode $badCurrentPassword 403 "identity.current_password_invalid" "Reject password change with incorrect current password"
+
+    $unchangedPassword = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken"
+        "Idempotency-Key" = ("ci-unchanged-password-" + [Guid]::NewGuid().ToString("N"))
+    } @{ currentPassword = $basicOperatorPassword; newPassword = $basicOperatorPassword }
+    Assert-ErrorCode $unchangedPassword 409 "identity.password_unchanged" "Reject unchanged operator password"
+
+    $selfPasswordChangeKey = "ci-self-password-" + [Guid]::NewGuid().ToString("N")
+    $selfPasswordBody = @{ currentPassword = $basicOperatorPassword; newPassword = $newBasicPassword }
+    $selfPasswordHeaders = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken"; "Idempotency-Key" = $selfPasswordChangeKey
+    }
+    $selfPasswordChange = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" $selfPasswordHeaders $selfPasswordBody
+    Assert-Status $selfPasswordChange 200 "Change own operator password"
+    if ($selfPasswordChange.Json.data.otherSessionsRevoked -ne $true) {
+        throw "Self-service password change did not report revocation of other sessions."
+    }
+    $selfPasswordReplay = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" $selfPasswordHeaders $selfPasswordBody
+    Assert-Status $selfPasswordReplay 200 "Replay identical own-password change"
+    $selfPasswordDifferentPayload = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" $selfPasswordHeaders @{
+        currentPassword = $basicOperatorPassword; newPassword = ("different-" + [Guid]::NewGuid().ToString("N"))
+    }
+    Assert-ErrorCode $selfPasswordDifferentPayload 409 "idempotency.key_reused" "Reject reuse of a password idempotency key with different content"
+
+    $currentSessionAfterPasswordChange = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $basicHeaders
+    Assert-Status $currentSessionAfterPasswordChange 200 "Keep the current session active after self-service password change"
+    $oldPasswordLoginAfterChange = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $basicOperatorPassword
+    }
+    Assert-ErrorCode $oldPasswordLoginAfterChange 401 "auth.invalid_credentials" "Reject old operator password after self-service change"
+    $newPasswordLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $newBasicPassword
+    }
+    Assert-Status $newPasswordLogin 200 "Login with changed operator password"
+    $basicTokenPostChange = [string]$newPasswordLogin.Json.data.accessToken
+    $basicHeadersPostChange = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicTokenPostChange"
+    }
+
     $basicLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $basicHeaders
     Assert-Status $basicLogout 200 "Logout limited operator"
 
@@ -360,6 +408,26 @@ try {
     } @{ isActive = $false }
     Assert-ErrorCode $managerEditsOwner 403 "identity.owner_protected" "Deny non-owner from disabling Owner"
 
+
+    # Password reset is a separate privilege and Owner accounts remain protected.
+    $managerResetDenied = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-manager-reset-denied-" + [Guid]::NewGuid().ToString("N"))
+    } @{ newPassword = ("Denied-" + [Guid]::NewGuid().ToString("N")); reason = "CI permission boundary" }
+    Assert-Status $managerResetDenied 403 "Deny password reset without its dedicated permission"
+
+    $grantPasswordReset = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($managerRole.Json.data.id)/permissions" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-grant-password-reset-" + [Guid]::NewGuid().ToString("N"))
+    } @{ permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "identity.users.password-reset", "stations.read") }
+    Assert-Status $grantPasswordReset 200 "Grant dedicated password-reset permission"
+
+    $managerResetOwner = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$($bootstrap.Json.data.userId)/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-manager-reset-owner-" + [Guid]::NewGuid().ToString("N"))
+    } @{ newPassword = ("Blocked-Owner-" + [Guid]::NewGuid().ToString("N")); reason = "CI Owner protection test" }
+    Assert-ErrorCode $managerResetOwner 403 "identity.owner_protected" "Prevent a non-Owner from resetting an Owner password"
+
     $systemRoleEdit = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($ownerRole.id)/permissions" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
         "Idempotency-Key" = ("ci-system-role-" + [Guid]::NewGuid().ToString("N"))
@@ -368,6 +436,46 @@ try {
 
     $managerLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $managerHeaders
     Assert-Status $managerLogout 200 "Logout constrained role manager"
+
+
+    # Owner administrative reset: reasoned/audited operation, complete session revocation,
+    # and safe idempotent replay without repeating revocation side effects.
+    $adminResetPassword = "CI-reset-" + [Guid]::NewGuid().ToString("N")
+    $adminResetKey = "ci-admin-reset-" + [Guid]::NewGuid().ToString("N")
+    $adminResetBody = @{ newPassword = $adminResetPassword; reason = "CI verified operator recovery" }
+    $adminResetHeaders = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"; "Idempotency-Key" = $adminResetKey
+    }
+    $adminPasswordReset = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" $adminResetHeaders $adminResetBody
+    Assert-Status $adminPasswordReset 200 "Owner resets another operator password"
+    if ($adminPasswordReset.Json.data.operatorId -ne $basicUserId -or
+        $adminPasswordReset.Json.data.sessionsRevoked -ne $true) {
+        throw "Administrative reset response did not identify the target or confirm session revocation."
+    }
+
+    $revokedBasicSession = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $basicHeadersPostChange
+    Assert-Status $revokedBasicSession 401 "Administrative reset revokes target's pre-existing sessions"
+    $previousPasswordAfterReset = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $newBasicPassword
+    }
+    Assert-ErrorCode $previousPasswordAfterReset 401 "auth.invalid_credentials" "Reject pre-reset password after administrative reset"
+    $resetPasswordLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $adminResetPassword
+    }
+    Assert-Status $resetPasswordLogin 200 "Login with administratively reset password"
+    $basicTokenAfterReset = [string]$resetPasswordLogin.Json.data.accessToken
+    $basicHeadersAfterReset = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicTokenAfterReset"
+    }
+
+    $adminResetReplay = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" $adminResetHeaders $adminResetBody
+    Assert-Status $adminResetReplay 200 "Replay identical administrative password reset"
+    $adminResetDifferentPayload = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" $adminResetHeaders @{
+        newPassword = ("different-reset-" + [Guid]::NewGuid().ToString("N")); reason = "CI verified operator recovery"
+    }
+    Assert-ErrorCode $adminResetDifferentPayload 409 "idempotency.key_reused" "Reject reset idempotency key reuse with a different password"
+    $resetSessionAfterReplay = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $basicHeadersAfterReset
+    Assert-Status $resetSessionAfterReplay 200 "Idempotent reset replay preserves a newer session"
 
 $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     Assert-Status $stationList 200 "List stations"
