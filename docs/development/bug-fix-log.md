@@ -241,3 +241,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The Stations runtime test reached the API and got HTTP 500 on station creation. The captured Server exception identified EF Core composition over a non-composable `INSERT ... RETURNING` passed through `SqlQueryRaw<string>(...).SingleOrDefaultAsync()`.
 - Replaced that scalar query with parameterized `ExecuteSqlInterpolatedAsync` and an `INSERT ... ON CONFLICT DO NOTHING`; the affected-row count determines whether this request acquired the idempotency claim. This preserves parameter binding and does not suppress idempotency conflicts.
 - Verification is still required: the next full Certification must pass the same-key replay/different-payload conflict assertions and every PostgreSQL, restore, Desktop and Agent runtime gate on the exact same SHA.
+
+## 2026-10-09 — WPF localization XAML closing-tag defect (Foundation run #159)
+
+- Symptom: `Canonical verification` failed during the Release build with WPF/XAML error MC3000 at line 29 in both `Strings.en-US.xaml` and `Strings.fa-IR.xaml`.
+- Root cause: the `Station.Maintenance` resource opened as `<system:String ...>` but closed as `</system>`; the XML element names did not match.
+- Fix: corrected only the malformed closing tag to `</system:String>` in both locale dictionaries. The displayed translations and runtime behavior are unchanged.
+- Regression evidence: the canonical Release build compiles both XAML dictionaries; the full Foundation workflow must pass on the exact resulting commit before the branch is considered verified.
+- Status at entry: correction committed; verification pending. Do not treat the failed run #159 as a passing checkpoint.
+- Roadmap/checkpoint: see `docs/development/roadmap-and-current-checkpoint.md`.
+
