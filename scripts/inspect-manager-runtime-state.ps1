@@ -148,6 +148,8 @@ catch {
 }
 
 # Directory and file paths only. The protected files are not opened or decrypted.
+# Include the parent ACL because DELETE_CHILD or write rights here can affect the protected child directories.
+Add-PathAndAclReport -Path $ManagerRoot -ExpectedToExist $true -Kind "Manager root directory"
 Add-PathAndAclReport -Path $configDirectory -ExpectedToExist $true -Kind "Config directory"
 Add-PathAndAclReport -Path $serverConfigPath -ExpectedToExist $true -Kind "server.json"
 Add-PathAndAclReport -Path $setupSettingsPath -ExpectedToExist $false -Kind "Protected setup settings file"
