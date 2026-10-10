@@ -545,3 +545,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression coverage: added policy tests for Production rejection, valid Production settings, and Development test-path compatibility.
 - Verification: Quick Validation #205 passed for PR head `12e28216968f79b1947ffdc316d4ec1ccdb357f2` on merge checkout `478ccd91fed345880c71c0604993ab9d4897ffdc` (base `55a340305f9eba3bc8f9a1ce65fb37bedbae7580`): [run 38048106104](https://github.com/alizebal73/5/actions/runs/38048106104). PowerShell parsing passed; Release build had 0 warnings/errors; 143 tests passed with 0 failures/skips (Server 64, Agent 22, Desktop 18, Shared 38, Contract 1). Physical service identity, effective ACL, DPAPI restart and TLS private-key checks remain unverified.
 - Rollback: revert only the new Production policy enforcement and its tests if a supported Production configuration proves incompatible. Do not restore an unguarded alternate settings path or permit Production startup without protected settings.
+
+
+## 2026-10-10 — Clear Agent provisioning-key comparison buffers
+
+- Finding: the provisioning-key validator correctly used a fixed-time comparison, but left the UTF-8 byte arrays containing both the protected expected key and the supplied request header to ordinary garbage collection. The credential revoke endpoint also did not consistently set `Cache-Control: no-store` across successful and rejected responses.
+- Fix: zero both comparison buffers in a `finally` block and apply `Cache-Control: no-store` before validating provision, rotate and revoke requests, so secret-bearing responses and authorization failures are not cached.
+- Scope limit: these changes are hygiene hardening only. The provision/rotate/revoke routes still rely on the shared protected provisioning key; the independently authenticated management issue-token flow with atomic single-use redemption remains a separate required slice.
+- Verification: Quick Validation for this code change and the resulting current PR head is pending; prior CI success does not certify this commit.
+- Rollback: revert only the buffer-clearing and cache-policy changes if a verified compatibility issue arises; do not weaken the fixed-time key comparison.
