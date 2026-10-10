@@ -158,6 +158,7 @@ $verificationClearBytes = $null
 $tempPath = $null
 $configTempPath = $null
 $tokenCommitted = $false
+$tokenPathReplacementCompleted = $false
 $tokenId = $null
 $tokenExpires = $null
 $headers = @{ "X-GameNet-Contract" = "v1" }
@@ -236,6 +237,7 @@ try {
     else {
         [System.IO.File]::Move($tempPath, $tokenPath, $false)
     }
+    $tokenPathReplacementCompleted = $true
     $tempPath = $null
     Assert-ExactDacl $tokenPath $expectedTokenAcl
     $tokenCommitted = $true
@@ -270,7 +272,7 @@ finally {
         }
         catch { }
     }
-    if (-not $tokenCommitted -and (Test-Path -LiteralPath $tokenPath -PathType Leaf)) { Remove-Item -LiteralPath $tokenPath -Force -ErrorAction SilentlyContinue }
+    if (-not $tokenCommitted -and $tokenPathReplacementCompleted -and (Test-Path -LiteralPath $tokenPath -PathType Leaf)) { Remove-Item -LiteralPath $tokenPath -Force -ErrorAction SilentlyContinue }
     if (-not [string]::IsNullOrWhiteSpace($accessToken)) {
         try {
             $logoutHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken" }
