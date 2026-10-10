@@ -570,3 +570,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: set the response cache policy at the start of the route, before the disabled-authentication check and credential authentication, matching the provision/rotate/revoke endpoints.
 - Verification: Quick Validation must run against the resulting exact PR head. The workflow currently uses a self-hosted Windows runner; queued status is not a pass or failure. No live runtime or installed service was exercised.
 - Rollback: revert only this response-header placement if a supported integration test demonstrates a compatibility issue; retain no-store for responses that may carry credentials or tokens.
+
+## 2026-10-10 — Include Manager parent ACL in the read-only preflight
+
+- Finding: the preflight reported ACLs for the Config and Secrets child paths but omitted the `%ProgramData%\GameNet Manager` parent directory. Parent-level delete-child/write rights can affect whether protected child directories can be replaced even when those children have restrictive DACLs.
+- Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
+- Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
+- Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
