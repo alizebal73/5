@@ -119,15 +119,15 @@ public sealed class ServerSecretBootstrapTests
             return;
 
         const string connection = "Host=127.0.0.1;Database=isolated_test;Username=isolated_role;Password=unique-test-password";
-        const string signingKey = "VGhpc0lzQW5Jc29sYXRlZFRlc3RTaWduaW5nS2V5MTIzNDU2Nzg5MDEyMzQ1Njc4OTA=";
-        const string provisioningKey = "VGhpc0lzQW5Jzb2xhdGVkUHJvdmlzaW9uaW5nS2V5MTIzNDU2Nzg5MDEyMw==";
+        var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+        var provisioningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
 
         var expected = ServerSecretMaterial.Create(connection, signingKey, provisioningKey);
         var ciphertext = DpapiServerSecretStore.ProtectPayload(expected);
         try
         {
             Assert.NotEmpty(ciphertext);
-            Assert.DoesNotContain(Encoding.UTF8.GetBytes(connection), ciphertext);
+            Assert.False(Encoding.UTF8.GetString(ciphertext).Contains(connection, StringComparison.Ordinal));
             var actual = DpapiServerSecretStore.UnprotectPayload(ciphertext);
             Assert.Equal(expected.ConnectionString, actual.ConnectionString);
             Assert.Equal(expected.SigningKey, actual.SigningKey);

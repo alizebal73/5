@@ -89,7 +89,7 @@ internal static class DpapiServerSecretStore
         }
     }
 
-    internal static ServerSecretMaterial UnprotectPayload(ReadOnlySpan<byte> protectedBytes)
+    internal static ServerSecretMaterial UnprotectPayload(byte[] protectedBytes)
     {
         byte[]? plaintext = null;
         try
