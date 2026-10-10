@@ -306,6 +306,13 @@ try {
     if ([string]::IsNullOrWhiteSpace([string]$enrolledAgentLogin.Json.accessToken)) { throw "The enrolled Agent credential could not obtain an access token." }
 
     # Recovery must never restore or replace a credential that has authenticated, even after revocation.
+    $unknownRecoveryDeviceId = "ci-enrollment-no-history-" + [Guid]::NewGuid().ToString("N")
+    $unknownRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $unknownRecoveryDeviceId
+        reason = "CI verifies recovery cannot issue tokens for a DeviceId with no enrollment history."
+    }
+    Assert-ErrorCode $unknownRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery for DeviceId with no enrollment history"
+
     $usedCredentialRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
         deviceId = $enrollmentDeviceId
         reason = "CI must reject recovery after an Agent credential has authenticated."
