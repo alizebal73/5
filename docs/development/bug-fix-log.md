@@ -563,3 +563,10 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Safety boundary: the script is observational only. Its report is evidence for human review, not proof of effective service permissions, DPAPI restart access or an HTTPS handshake; provisioning remains a separate explicit step.
 - Verification: the canonical PowerShell parser gate and Release build/tests on the final current PR head are required; prior CI runs do not cover this new script.
 - Rollback: remove this script only if a supported Windows environment demonstrates a concrete compatibility issue; otherwise preserve the read-only preflight and correct it without adding machine-changing behavior.
+
+## 2026-10-10 — Apply no-store to every Agent token response
+
+- Finding: `/api/v1/agent/auth/token` only set `Cache-Control: no-store` after successful authentication. Disabled-authentication and rejected-credential responses took an earlier return path without the same explicit cache policy.
+- Fix: set the response cache policy at the start of the route, before the disabled-authentication check and credential authentication, matching the provision/rotate/revoke endpoints.
+- Verification: Quick Validation must run against the resulting exact PR head. The workflow currently uses a self-hosted Windows runner; queued status is not a pass or failure. No live runtime or installed service was exercised.
+- Rollback: revert only this response-header placement if a supported integration test demonstrates a compatibility issue; retain no-store for responses that may carry credentials or tokens.
