@@ -26,6 +26,7 @@ on:
       - "scripts/verify-server-tls-certificate.ps1"
       - "scripts/modules/**"
       - "scripts/write-protected-server-settings.ps1"
+      - "scripts/finalize-server-setup.ps1"
       - "scripts/configure-server-tls.ps1"
       - "scripts/publish-deployment-payloads.ps1"
       - "scripts/verify.ps1"
