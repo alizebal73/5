@@ -5,7 +5,7 @@ param(
     [string]$DnsName = "gamenet.local",
     [ValidateRange(1, 65535)]
     [int]$HttpsPort = 5080,
-    [string]$ServiceAccount = "NT AUTHORITY\NETWORK SERVICE",
+    [string]$ServiceAccount = "NT SERVICE\GameNet 5 Server",
     [string]$PublicCertificatePath = (Join-Path $PSScriptRoot "..\artifacts\gamenet-server.cer")
 )
 
@@ -16,6 +16,14 @@ $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.Wind
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw "Run this script from an elevated PowerShell session."
 }
+$expectedServiceSid = ([System.Security.Principal.NTAccount]::new("NT SERVICE\GameNet 5 Server")).Translate(
+    [System.Security.Principal.SecurityIdentifier])
+$configuredServiceSid = ([System.Security.Principal.NTAccount]::new($ServiceAccount)).Translate(
+    [System.Security.Principal.SecurityIdentifier])
+if ($configuredServiceSid.Value -ne $expectedServiceSid.Value) {
+    throw "TLS private-key and Config ACLs must target the dedicated GameNet Server service SID, not a shared service account."
+}
+
 if ($ServerIp.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or [System.Net.IPAddress]::IsLoopback($ServerIp)) {
     throw "ServerIp must be a reserved, non-loopback IPv4 address."
 }
@@ -162,7 +170,7 @@ try {
     Write-Host "Public certificate (copy this file to client PCs): $publicPath"
     Write-Host "Windows certificate-store thumbprint (SHA-1; Server lookup only): $certificateThumbprint"
     Write-Host "Public certificate SHA-256 fingerprint: $($certificateInfo.Sha256Fingerprint)"
-    Write-Host "If the Server service runs as an account other than '$ServiceAccount', pass that account explicitly."
+    Write-Host "The TLS private-key and Config ACLs use the dedicated service SID '$ServiceAccount', not a shared service account."
     Write-Host "This initial configuration refuses overwrites. Certificate rotation requires a separately tested procedure."
 }
 catch {
