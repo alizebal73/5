@@ -12,6 +12,7 @@ on:
     branches:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
+      - "refactor/desktop-view-boundaries-v1"
     paths:
       - ".github/workflows/foundation-certification.yml"
       - "scripts/verify-identity-runtime.ps1"

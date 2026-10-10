@@ -126,3 +126,16 @@ Optimistic UI is allowed only when it cannot contradict an authoritative invaria
 - Views remain presentation.
 - ViewModels coordinate UI state, commands and API calls.
 - Domain/application tests remain outside the WPF project.
+
+
+## Incremental implementation boundary
+
+The station workspace is hosted by `Features/Stations/StationBoardView.xaml` as a presentation-only WPF `UserControl`. It deliberately inherits the shell's current `LoginViewModel` DataContext for this first extraction, preserving the existing `StationBoard.*` bindings, commands, filters, and server-backed outcomes without changing API contracts or operational behavior. The control contains no code-behind event handlers or business logic.
+
+This is a compatibility-preserving first slice, not the completed shell refactor. Before adding substantial new screens, continue with these isolated steps:
+
+1. Move periodic Agent health refresh lifecycle out of `Shell/MainWindow.xaml.cs` into a testable feature/coordinator boundary, preserving the ten-second cadence, authenticated-only behavior, and cancellation on logout/shutdown.
+2. Extract login and password-change presentation into dedicated views while keeping credential handling narrowly scoped and avoiding password persistence.
+3. Reduce `MainWindow` to shell composition, authentication/navigation state, and the content host; add view-model/command smoke coverage for the resulting bindings.
+
+Each step must retain server-side authorization and must not move financial or operational authority into the UI.
