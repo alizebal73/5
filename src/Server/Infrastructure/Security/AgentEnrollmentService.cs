@@ -97,6 +97,116 @@ public sealed class AgentEnrollmentService(
         }
     }
 
+    public async Task<AgentEnrollmentIssueResponse> RecoverAsync(
+        AgentEnrollmentRecoverCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(command.DeviceId);
+        if (command.IssuedByOperatorId == Guid.Empty)
+            throw new AgentCredentialException("auth.identity_missing");
+        if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Trim().Length > 1000)
+            throw new AgentCredentialException("agent.enrollment_reason_invalid");
+
+        try
+        {
+            return await transactions.ExecuteAsync(async ct =>
+            {
+                var now = clock.UtcNow;
+                var credential = await dbContext.AgentCredentials.SingleOrDefaultAsync(
+                    x => x.DeviceId == command.DeviceId && x.RevokedAtUtc == null, ct);
+                var latestRedeemed = await dbContext.AgentEnrollmentTokens
+                    .Where(x => x.DeviceId == command.DeviceId && x.RedeemedAtUtc != null)
+                    .OrderByDescending(x => x.RedeemedAtUtc)
+                    .FirstOrDefaultAsync(ct);
+                var hasEnrollmentHistory = await dbContext.AgentEnrollmentTokens
+                    .AnyAsync(x => x.DeviceId == command.DeviceId, ct);
+
+                if (credential is null && !hasEnrollmentHistory)
+                    throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
+
+                if (credential is not null)
+                {
+                    // A recovery may revoke only a credential created by enrollment that
+                    // has never authenticated. Do not turn recovery into a general-purpose
+                    // credential revocation endpoint for an already-running Agent.
+                    if (credential.LastAuthenticatedAtUtc is not null ||
+                        latestRedeemed?.RedeemedAtUtc is not { } redeemedAt ||
+                        (credential.CreatedAtUtc - redeemedAt).Duration() > TimeSpan.FromSeconds(30))
+                    {
+                        throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
+                    }
+
+                    credential.Revoke(now);
+                    auditWriter.Append(new AuditRecord(
+                        now,
+                        "Operator",
+                        command.IssuedByOperatorId.ToString("D"),
+                        "agent.enrollment_recovery_credential_revoked",
+                        "AgentCredential",
+                        credential.Id.ToString("N"),
+                        "Never-authenticated enrollment credential revoked after explicit recovery request.",
+                        command.CorrelationId,
+                        command.Source,
+                        "Succeeded"));
+                }
+
+                var pending = await dbContext.AgentEnrollmentTokens
+                    .Where(x => x.DeviceId == command.DeviceId &&
+                                x.RedeemedAtUtc == null &&
+                                x.RevokedAtUtc == null)
+                    .ToListAsync(ct);
+                foreach (var oldToken in pending)
+                {
+                    oldToken.Revoke(now);
+                    auditWriter.Append(new AuditRecord(
+                        now,
+                        "Operator",
+                        command.IssuedByOperatorId.ToString("D"),
+                        "agent.enrollment_recovery_token_revoked",
+                        "AgentEnrollmentToken",
+                        oldToken.Id.ToString("N"),
+                        "Prior pending token invalidated by explicit enrollment recovery.",
+                        command.CorrelationId,
+                        command.Source,
+                        "Succeeded"));
+                }
+
+                // Clear the partial unique pending-device index before inserting the replacement.
+                if (pending.Count > 0)
+                    await dbContext.SaveChangesAsync(ct);
+
+                var tokenText = AgentCredentialSecretMaterial.Generate();
+                var tokenId = Guid.NewGuid();
+                var expiresAt = now.Add(TokenLifetime);
+                dbContext.AgentEnrollmentTokens.Add(AgentEnrollmentToken.Create(
+                    tokenId,
+                    command.DeviceId,
+                    AgentCredentialSecretMaterial.HashEnrollmentToken(tokenText),
+                    command.IssuedByOperatorId,
+                    now,
+                    expiresAt));
+
+                auditWriter.Append(new AuditRecord(
+                    now,
+                    "Operator",
+                    command.IssuedByOperatorId.ToString("D"),
+                    "agent.enrollment_recovery_issue",
+                    "AgentEnrollmentToken",
+                    tokenId.ToString("N"),
+                    command.Reason.Trim(),
+                    command.CorrelationId,
+                    command.Source,
+                    "Succeeded"));
+
+                return new AgentEnrollmentIssueResponse(tokenId, command.DeviceId, tokenText, expiresAt);
+            }, cancellationToken);
+        }
+        catch (PersistenceConflictException)
+        {
+            throw new AgentCredentialException("agent.enrollment_conflict");
+        }
+    }
+
     public async Task<AgentCredentialSecretResponse?> RedeemAsync(
         AgentEnrollmentRedeemRequest request,
         string correlationId,
