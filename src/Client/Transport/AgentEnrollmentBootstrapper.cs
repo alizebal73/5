@@ -76,13 +76,11 @@ public sealed class AgentEnrollmentBootstrapper(
                 "Server returned an invalid Agent enrollment response; the enrollment token has been retained for safe recovery.");
         }
 
-        // The Server has already consumed this one-time token. Persist the resulting
-        // per-device credential before deleting the local copy; if persistence fails,
-        // retain the protected file for the explicit operator recovery procedure. The
-        // same token cannot be redeemed again after a committed Server redemption.
+        // Persist the credential first, but retain a protected one-time token file
+        // until the normal Agent access-token request succeeds. If persistence or
+        // authentication fails, the operator retains an explicit recovery marker; the
+        // token itself remains non-redeemable after the Server commits its redemption.
         await credentialStore.SaveAsync(issued.Secret, cancellationToken);
-        if (protectedToken is not null)
-            await enrollmentTokenStore.DeleteAsync(cancellationToken);
         Environment.SetEnvironmentVariable(
             options.Value.EnrollmentTokenEnvironmentVariableName,
             null,
