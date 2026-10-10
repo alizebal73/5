@@ -25,6 +25,7 @@ on:
       - "scripts/inspect-manager-runtime-state.ps1"
       - "docs/operations/initial-admin-setup.md"
       - "scripts/configure-agent-runtime-state.ps1"
+      - "scripts/provision-agent-enrollment.ps1"
       - "docs/operations/agent-service-state.md"
       - "scripts/test-runtime-endpoint.ps1"
       - "scripts/modules/ServerTlsCertificate.psm1"
@@ -144,6 +145,7 @@ jobs:
           Copy-Item -LiteralPath "scripts/inspect-manager-runtime-state.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "docs/operations/initial-admin-setup.md" -Destination (Join-Path $toolsOutput "initial-admin-setup.md")
           Copy-Item -LiteralPath "scripts/configure-agent-runtime-state.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/provision-agent-enrollment.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "docs/operations/agent-service-state.md" -Destination (Join-Path $toolsOutput "agent-service-state.md")
           Copy-Item -LiteralPath "scripts/test-runtime-endpoint.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
@@ -155,6 +157,7 @@ jobs:
             (Join-Path $desktopOutput "GameNet.Manager.Desktop.exe"),
             $migrationBundle,
             (Join-Path $toolsOutput "configure-agent-runtime-state.ps1"),
+            (Join-Path $toolsOutput "provision-agent-enrollment.ps1"),
             (Join-Path $toolsOutput "agent-service-state.md"),
             (Join-Path $toolsOutput "write-protected-server-settings.ps1"),
             (Join-Path $toolsOutput "finalize-server-setup.ps1"),
@@ -183,7 +186,7 @@ jobs:
           - `Tools\write-protected-server-settings.ps1` for LocalMachine-DPAPI-protected setup settings
           - `Tools\bootstrap-admin.ps1` and `Tools\finalize-server-setup.ps1` for first-Owner setup and post-bootstrap cleanup
           - `Tools\inspect-manager-runtime-state.ps1` as a read-only preflight
-          - `Tools\initial-admin-setup.md` and `Tools\configure-agent-runtime-state.ps1` plus the Agent Windows Service state/DACL runbook
+          - `Tools\initial-admin-setup.md`, `Tools\configure-agent-runtime-state.ps1`, `Tools\provision-agent-enrollment.ps1`, and the Agent Windows Service state/DACL runbook
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
           ## Safety boundary
@@ -206,7 +209,7 @@ jobs:
           10. Run `Tools\test-runtime-endpoint.ps1 -Component Desktop` on the Desktop PC and `-Component Agent` on the Agent PC. Both checks use normal Windows TLS validation and require Server readiness to report `Ready`.
           11. Record what was tested and what was not. A successful health request alone does **not** prove Agent enrollment, an authoritative lease, heartbeat/reconciliation, restart/reconnect, or private-key access under the real Windows service identity.
 
-          For an Agent Windows-service test, first register the service explicitly on the disposable Agent PC with the LocalService logon identity and leave it stopped. Follow `Tools\agent-service-state.md`, then run `Tools\configure-agent-runtime-state.ps1` elevated before starting the service. This helper does not install/register the service and refuses to alter a machine with the Server service or Server-secret markers.
+          For an Agent Windows-service test, first register the service explicitly on the disposable Agent PC with the LocalService logon identity and leave it stopped. Follow `Tools\agent-service-state.md`, then run `Tools\configure-agent-runtime-state.ps1` elevated. Before starting the service, run `Tools\provision-agent-enrollment.ps1 -DeviceId "station-pc-01"` elevated on that same Agent PC. It securely prompts an authorized operator, issues a one-time token over HTTPS, stores it in the DPAPI-protected `Agent\enrollment-token.dpapi` file with a service-restricted DACL, and prints no token value. The Agent service then redeems that file at first start. Neither helper installs/registers the service.
 
           ## Explicit limitations
 
