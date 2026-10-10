@@ -114,35 +114,42 @@ public sealed class AgentEnrollmentService(
                 var now = clock.UtcNow;
                 var credential = await dbContext.AgentCredentials.SingleOrDefaultAsync(
                     x => x.DeviceId == command.DeviceId && x.RevokedAtUtc == null, ct);
+                var hasPreviouslyAuthenticatedCredential = await dbContext.AgentCredentials
+                    .AnyAsync(x => x.DeviceId == command.DeviceId && x.LastAuthenticatedAtUtc != null, ct);
                 var latestRedeemed = await dbContext.AgentEnrollmentTokens
                     .Where(x => x.DeviceId == command.DeviceId && x.RedeemedAtUtc != null)
                     .OrderByDescending(x => x.RedeemedAtUtc)
                     .FirstOrDefaultAsync(ct);
 
-                // Recovery is intentionally narrower than re-enrollment: it exists only
-                // for the atomic Server-redemption / local-persistence failure window.
-                // A missing or previously revoked credential can represent an ordinary
-                // operator revocation, so this endpoint must never recreate it.
-                if (credential is null ||
-                    credential.LastAuthenticatedAtUtc is not null ||
-                    latestRedeemed?.RedeemedAtUtc is not { } redeemedAt ||
-                    (credential.CreatedAtUtc - redeemedAt).Duration() > TimeSpan.FromSeconds(30))
-                {
+                // Never use recovery to undo a credential that has authenticated,
+                // even if it was subsequently revoked. This also permits replacing an
+                // expired/unredeemed token when no credential was ever authenticated.
+                if (hasPreviouslyAuthenticatedCredential)
                     throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
-                }
 
-                credential.Revoke(now);
-                auditWriter.Append(new AuditRecord(
-                    now,
-                    "Operator",
-                    command.IssuedByOperatorId.ToString("D"),
-                    "agent.enrollment_recovery_credential_revoked",
-                    "AgentCredential",
-                    credential.Id.ToString("N"),
-                    "Never-authenticated enrollment credential revoked after explicit recovery request.",
-                    command.CorrelationId,
-                    command.Source,
-                    "Succeeded"));
+                if (credential is not null)
+                {
+                    // When redemption succeeded but local persistence failed, the
+                    // active credential must correspond to that recent enrollment.
+                    if (latestRedeemed?.RedeemedAtUtc is not { } redeemedAt ||
+                        (credential.CreatedAtUtc - redeemedAt).Duration() > TimeSpan.FromSeconds(30))
+                    {
+                        throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
+                    }
+
+                    credential.Revoke(now);
+                    auditWriter.Append(new AuditRecord(
+                        now,
+                        "Operator",
+                        command.IssuedByOperatorId.ToString("D"),
+                        "agent.enrollment_recovery_credential_revoked",
+                        "AgentCredential",
+                        credential.Id.ToString("N"),
+                        "Never-authenticated enrollment credential revoked after explicit recovery request.",
+                        command.CorrelationId,
+                        command.Source,
+                        "Succeeded"));
+                }
 
                 var pending = await dbContext.AgentEnrollmentTokens
                     .Where(x => x.DeviceId == command.DeviceId &&
