@@ -200,7 +200,31 @@ if (Test-Path -LiteralPath $serverConfigPath -PathType Leaf) {
                     "Thumbprint={0}; Subject={1}; HasPrivateKey={2}; NotAfter={3:u}" -f
                     $certificate.Thumbprint, $certificate.Subject, $certificate.HasPrivateKey, $certificate.NotAfter
                 )
-                $certificate.Dispose()
+                $rsa = $null
+                try {
+                    $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificate)
+                    $keyPath = $null
+                    if ($rsa -is [System.Security.Cryptography.RSACng]) {
+                        $keyPath = Join-Path "$env:ProgramData\Microsoft\Crypto\Keys" $rsa.Key.UniqueName
+                    }
+                    elseif ($rsa -is [System.Security.Cryptography.RSACryptoServiceProvider]) {
+                        $keyPath = Join-Path "$env:ProgramData\Microsoft\Crypto\RSA\MachineKeys" $rsa.CspKeyContainerInfo.UniqueKeyContainerName
+                    }
+
+                    if (-not [string]::IsNullOrWhiteSpace($keyPath) -and (Test-Path -LiteralPath $keyPath -PathType Leaf)) {
+                        Add-PathAndAclReport -Path $keyPath -ExpectedToExist $true -Kind "TLS private-key file"
+                    }
+                    else {
+                        Add-PreflightCheck -Name "TLS private-key file ACL" -Status "WARN" -Details "Could not safely resolve the certificate's machine private-key file."
+                    }
+                }
+                catch {
+                    Add-PreflightCheck -Name "TLS private-key file ACL" -Status "WARN" -Details "Could not inspect the certificate private-key file ACL."
+                }
+                finally {
+                    if ($null -ne $rsa) { $rsa.Dispose() }
+                    $certificate.Dispose()
+                }
             }
             catch {
                 Add-PreflightCheck -Name "TLS certificate" -Status "WARN" -Details "The configured certificate was not found in LocalMachine\My."
