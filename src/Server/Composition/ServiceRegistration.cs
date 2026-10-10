@@ -43,6 +43,7 @@ public static class ServiceRegistration
         services.AddScoped<IAgentHealthProbeDispatcher, AgentHealthProbeDispatcher>();
         services.AddScoped<StationAgentHealthService>();
         services.AddScoped<IAgentCredentialService, AgentCredentialService>();
+        services.AddScoped<IAgentEnrollmentService, AgentEnrollmentService>();
         services.AddScoped<IIdentityRepository, EfIdentityRepository>();
         services.AddScoped<IdentityService>();
         services.AddScoped<IOperatorManagementRepository, EfOperatorManagementRepository>();
