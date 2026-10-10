@@ -103,3 +103,8 @@ Historical blocker before the final read-back: `protect-main` lacked a `required
 - Evidence for the main PR lane: [Draft PR #11](https://github.com/alizebal73/5/pull/11), head `685301a6973666b0dca0aee27739f5afccdc9124`, had a successful `quick-validation` check in [run #74](https://github.com/alizebal73/5/actions/runs/37923320241). Evidence for Foundation: [run #164](https://github.com/alizebal73/5/actions/runs/37922148983) passed on the temporary Foundation PR's head SHA.
 - PRs #10 and #11 were closed without merging after verification. No changes were merged into `main` or Foundation. `main` remains on its starter commit.
 - Stage 3 is complete. Stage 4 is next: consolidate product requirements, dependencies, module/data ownership, risks, and acceptance criteria based on repos 2 and 3 before expanding product implementation.
+
+
+## Security branch validation lane — 2026-10-10
+
+The PR-ready change in `.github/workflows/gamenet.yml` adds `security/**` to the Quick Validation push lane. Once PR #25 is merged, new commits on isolated security branches will receive the fast build/test gate, and pull requests targeting `integration/runtime-operator-v1` receive Quick Validation. Until then, do not interpret the absence of a run on PR #27 as a passing result.

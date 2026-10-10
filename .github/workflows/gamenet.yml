@@ -8,6 +8,7 @@ on:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
       - "docs/engineering-readiness-audit-v1"
+      - "security/**"
     paths-ignore:
       - "**/*.md"
   # Run the fast lane on protected main and the active review targets; never rely on a push-only green check for a PR.
