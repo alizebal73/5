@@ -21,8 +21,7 @@ public sealed class AgentCredentialStore(
         try
         {
             protectedBytes = await File.ReadAllBytesAsync(path, cancellationToken);
-            clearBytes = ProtectedData.Unprotect(
-                protectedBytes, null, DataProtectionScope.CurrentUser);
+            clearBytes = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
             var stored = Encoding.UTF8.GetString(clearBytes);
             if (string.IsNullOrWhiteSpace(stored))
                 throw new InvalidOperationException("Stored Agent credential is empty.");
@@ -85,8 +84,7 @@ public sealed class AgentCredentialStore(
         try
         {
             clearBytes = Encoding.UTF8.GetBytes(secret);
-            protectedBytes = ProtectedData.Protect(
-                clearBytes, null, DataProtectionScope.CurrentUser);
+            protectedBytes = ProtectedData.Protect(clearBytes, null, DataProtectionScope.CurrentUser);
             await File.WriteAllBytesAsync(temp, protectedBytes, cancellationToken);
             File.Move(temp, path, overwrite: true);
         }
