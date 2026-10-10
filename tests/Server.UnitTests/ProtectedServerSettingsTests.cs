@@ -86,6 +86,57 @@ public sealed class ProtectedServerSettingsTests
     }
 
     [Fact]
+    public void Protected_settings_can_be_loaded_after_bootstrap_secret_is_removed()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "gamenet-finalized-setup-" + Guid.NewGuid().ToString("N") + ".bin");
+        var settings = CreateValidSettings();
+        settings.Remove("GameNet:Setup:BootstrapSecret");
+        var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
+        var encrypted = Protect(clear);
+        try
+        {
+            File.WriteAllBytes(path, encrypted);
+
+            var loaded = ProtectedServerSettings.Read(path);
+            Assert.False(loaded.ContainsKey("GameNet:Setup:BootstrapSecret"));
+            Assert.Equal(settings["GameNet:ServerTls:CertificateThumbprint"], loaded["GameNet:ServerTls:CertificateThumbprint"]);
+            Assert.Equal(settings["GameNet:Authentication:Issuer"], loaded["GameNet:Authentication:Issuer"]);
+
+            var configuration = new ConfigurationManager();
+            ProtectedServerSettings.LoadInto(configuration, enableDefaultProtectedFile: false, explicitFilePath: path);
+            Assert.Null(configuration["GameNet:Setup:BootstrapSecret"]);
+            Assert.Equal(settings["GameNet:Authentication:Audience"], configuration["GameNet:Authentication:Audience"]);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+            CryptographicOperations.ZeroMemory(encrypted);
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Protected_settings_reject_a_short_bootstrap_secret_when_present()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "gamenet-invalid-bootstrap-" + Guid.NewGuid().ToString("N") + ".bin");
+        var settings = CreateValidSettings();
+        settings["GameNet:Setup:BootstrapSecret"] = new string('b', 31);
+        var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
+        var encrypted = Protect(clear);
+        try
+        {
+            File.WriteAllBytes(path, encrypted);
+            Assert.Throws<InvalidOperationException>(() => ProtectedServerSettings.Read(path));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+            CryptographicOperations.ZeroMemory(encrypted);
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Protected_settings_reject_invalid_tls_certificate_thumbprints()
     {
         var path = Path.Combine(Path.GetTempPath(), "gamenet-server-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
