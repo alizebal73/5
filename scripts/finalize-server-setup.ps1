@@ -35,64 +35,17 @@ if (-not [string]::IsNullOrEmpty($serverUri.UserInfo) -or $serverUri.AbsolutePat
 }
 
 $serverConfigurationPath = Join-Path $configDirectory "server.json"
-if (-not (Test-Path -LiteralPath $configDirectory -PathType Container) -or
-    -not (Test-Path -LiteralPath $serverConfigurationPath -PathType Leaf)) {
-    throw "The canonical Server configuration is unavailable. No settings were changed."
-}
-foreach ($candidate in @($managerRoot, $configDirectory, $serverConfigurationPath)) {
-    $item = Get-Item -LiteralPath $candidate -Force
-    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "The Server configuration path contains a reparse point. No settings were changed."
-    }
-}
-$serverConfiguration = Get-Content -LiteralPath $serverConfigurationPath -Raw | ConvertFrom-Json -AsHashtable
-$listenerText = [string]$serverConfiguration["urls"]
-$listenerUrls = @($listenerText -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
-if ($listenerUrls.Count -ne 1) {
-    throw "server.json must declare exactly one HTTPS listener before setup can be finalized."
-}
-try { $listenerUri = [Uri]::new($listenerUrls[0], [UriKind]::Absolute) }
-catch { throw "The configured Server listener URL is invalid. No settings were changed." }
-if ($listenerUri.Scheme -ne [Uri]::UriSchemeHttps -or
-    -not [string]::Equals($listenerUri.Host, $serverUri.Host, [StringComparison]::OrdinalIgnoreCase) -or
-    $listenerUri.Port -ne $serverUri.Port) {
-    throw "ServerBaseUrl does not match the local server.json HTTPS listener. No settings were changed."
-}
-
-# Do not touch the file unless the installed service exists and its own API confirms
-# that the initial Owner already exists.
-Get-Service -Name "GameNet 5 Server" -ErrorAction Stop | Out-Null
-$headers = @{ "X-GameNet-Contract" = "v1" }
-$baseUrl = $serverUri.GetLeftPart([UriPartial]::Authority).TrimEnd("/")
-try {
-    $status = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/v1/bootstrap/status" -Headers $headers -TimeoutSec 15
-}
-catch {
-    throw "Could not verify bootstrap status over the configured endpoint. No local file was changed."
-}
-if ($null -eq $status -or $null -eq $status.data -or $status.data.required -isnot [bool]) {
-    throw "The Server returned an invalid bootstrap-status response. No local file was changed."
-}
-if ($status.data.required) {
-    throw "No Owner is registered yet. The bootstrap secret was preserved and no local file was changed."
-}
-
 if (-not (Test-Path -LiteralPath $managerRoot -PathType Container) -or
     -not (Test-Path -LiteralPath $configDirectory -PathType Container) -or
     -not (Test-Path -LiteralPath $serverConfigurationPath -PathType Leaf) -or
     -not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
-    throw "The canonical protected settings path is unavailable. No file was changed."
+    throw "The canonical Server settings path is unavailable. No settings were changed."
 }
-
 foreach ($candidate in @($managerRoot, $configDirectory, $serverConfigurationPath, $settingsPath)) {
     $item = Get-Item -LiteralPath $candidate -Force
     if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "The protected settings path contains a reparse point. No file was changed."
+        throw "The Server configuration path contains a reparse point. No settings were changed."
     }
-}
-$item = Get-Item -LiteralPath $settingsPath -Force
-if ($item.Length -le 0 -or $item.Length -gt 65536) {
-    throw "Protected settings file size is invalid. No file was changed."
 }
 
 try {
@@ -190,6 +143,42 @@ function Clear-ByteArray([byte[]]$Bytes) {
 Assert-RestrictedDirectoryAcl $managerRoot
 Assert-RestrictedDirectoryAcl $configDirectory
 Assert-RestrictedSettingsAcl $settingsPath
+
+$item = Get-Item -LiteralPath $settingsPath -Force
+if ($item.Length -le 0 -or $item.Length -gt 65536) {
+    throw "Protected settings file size is invalid. No file was changed."
+}
+
+$serverConfiguration = Get-Content -LiteralPath $serverConfigurationPath -Raw | ConvertFrom-Json -AsHashtable
+$listenerText = [string]$serverConfiguration["urls"]
+$listenerUrls = @($listenerText -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+if ($listenerUrls.Count -ne 1) {
+    throw "server.json must declare exactly one HTTPS listener before setup can be finalized."
+}
+try { $listenerUri = [Uri]::new($listenerUrls[0], [UriKind]::Absolute) }
+catch { throw "The configured Server listener URL is invalid. No settings were changed." }
+if ($listenerUri.Scheme -ne [Uri]::UriSchemeHttps -or
+    -not [string]::Equals($listenerUri.Host, $serverUri.Host, [StringComparison]::OrdinalIgnoreCase) -or
+    $listenerUri.Port -ne $serverUri.Port) {
+    throw "ServerBaseUrl does not match the local server.json HTTPS listener. No settings were changed."
+}
+
+# Now that the local listener identity and protected paths are verified, query the exact Server.
+Get-Service -Name "GameNet 5 Server" -ErrorAction Stop | Out-Null
+$headers = @{ "X-GameNet-Contract" = "v1" }
+$baseUrl = $serverUri.GetLeftPart([UriPartial]::Authority).TrimEnd("/")
+try {
+    $status = Invoke-RestMethod -Method Get -Uri "$baseUrl/api/v1/bootstrap/status" -Headers $headers -TimeoutSec 15
+}
+catch {
+    throw "Could not verify bootstrap status over the configured endpoint. No local file was changed."
+}
+if ($null -eq $status -or $null -eq $status.data -or $status.data.required -isnot [bool]) {
+    throw "The Server returned an invalid bootstrap-status response. No local file was changed."
+}
+if ($status.data.required) {
+    throw "No Owner is registered yet. The bootstrap secret was preserved and no local file was changed."
+}
 
 $encryptedBytes = $null
 $clearBytes = $null
