@@ -1,4 +1,6 @@
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 
@@ -63,6 +65,20 @@ public static class ProtectedServerSettings
                 throw new FileNotFoundException("Protected Server settings are enabled, but the protected settings file is missing.", path);
         }
 
+        if (enableDefaultProtectedFile)
+        {
+            if (!string.Equals(
+                    Path.GetFullPath(path),
+                    Path.GetFullPath(GetDefaultPath()),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Production protected setup settings must use the canonical ProgramData path.");
+            }
+
+            ValidateCanonicalRuntimeAccessControl(path);
+        }
+
         var settings = Read(path);
         // Legacy encrypted settings may still contain these values, but they are no longer runtime providers.
         // ServerSecretBootstrap loads the canonical DACL-restricted secret store instead.
@@ -71,6 +87,152 @@ public static class ProtectedServerSettings
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
         configuration.AddInMemoryCollection(runtimeSettings);
     }
+
+    internal static void ValidateAccessRules(
+        IEnumerable<FileSystemAccessRule> accessRules,
+        bool isDirectory,
+        SecurityIdentifier serviceSid)
+    {
+        ArgumentNullException.ThrowIfNull(accessRules);
+        ArgumentNullException.ThrowIfNull(serviceSid);
+
+        var rules = accessRules.ToArray();
+        var systemSid = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        var administratorsSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+        var usersSid = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+        var networkServiceSid = new SecurityIdentifier(WellKnownSidType.NetworkServiceSid, null);
+        var approved = isDirectory
+            ? new HashSet<string>(StringComparer.Ordinal)
+            {
+                systemSid.Value, administratorsSid.Value, usersSid.Value,
+                networkServiceSid.Value, serviceSid.Value
+            }
+            : new HashSet<string>(StringComparer.Ordinal)
+            {
+                systemSid.Value, administratorsSid.Value, serviceSid.Value
+            };
+
+        if (rules.Length == 0 || rules.Any(rule =>
+                rule.AccessControlType != AccessControlType.Allow ||
+                rule.IdentityReference is not SecurityIdentifier sid ||
+                !approved.Contains(sid.Value)))
+        {
+            throw new InvalidOperationException(
+                "Protected Server settings ACL grants access to an unapproved principal.");
+        }
+
+        var systemRights = CombineRights(rules, systemSid);
+        var administratorRights = CombineRights(rules, administratorsSid);
+        var serviceRights = CombineRights(rules, serviceSid);
+        var requiredServiceRights = isDirectory
+            ? FileSystemRights.ReadAndExecute
+            : FileSystemRights.Read;
+        if ((systemRights & FileSystemRights.FullControl) != FileSystemRights.FullControl ||
+            (administratorRights & FileSystemRights.FullControl) != FileSystemRights.FullControl ||
+            (serviceRights & requiredServiceRights) != requiredServiceRights)
+        {
+            throw new InvalidOperationException(
+                "Protected Server settings ACL is missing a required access grant.");
+        }
+
+        const FileSystemRights writeRights =
+            FileSystemRights.WriteData | FileSystemRights.AppendData |
+            FileSystemRights.WriteAttributes | FileSystemRights.WriteExtendedAttributes |
+            FileSystemRights.Delete | FileSystemRights.ChangePermissions |
+            FileSystemRights.TakeOwnership | FileSystemRights.CreateFiles |
+            FileSystemRights.CreateDirectories | FileSystemRights.DeleteSubdirectoriesAndFiles;
+        if ((serviceRights & writeRights) != 0)
+        {
+            throw new InvalidOperationException(
+                "The GameNet Server service identity has excessive protected-settings permissions.");
+        }
+
+        if (isDirectory)
+        {
+            var usersRights = CombineRights(rules, usersSid);
+            var networkServiceRights = CombineRights(rules, networkServiceSid);
+            if ((usersRights & writeRights) != 0 ||
+                (networkServiceRights & writeRights) != 0)
+            {
+                throw new InvalidOperationException(
+                    "Protected Server configuration directory grants write access to a shared service or ordinary users.");
+            }
+        }
+    }
+
+    private static void ValidateCanonicalRuntimeAccessControl(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException("Protected Server settings ACL validation requires Windows.");
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(fullPath);
+            if (string.IsNullOrWhiteSpace(directory) ||
+                !Directory.Exists(directory) ||
+                !File.Exists(fullPath))
+            {
+                throw new InvalidOperationException("Protected Server settings path is unavailable.");
+            }
+
+            RejectReparsePoint(directory, isDirectory: true);
+            RejectReparsePoint(fullPath, isDirectory: false);
+
+            var serviceSid = (SecurityIdentifier)new NTAccount("NT SERVICE", "GameNet 5 Server")
+                .Translate(typeof(SecurityIdentifier));
+
+            var directorySecurity = new DirectoryInfo(directory)
+                .GetAccessControl(AccessControlSections.Access);
+            if (!directorySecurity.AreAccessRulesProtected)
+                throw new InvalidOperationException("Protected Server configuration directory ACL inheritance must be disabled.");
+            ValidateAccessRules(
+                directorySecurity.GetAccessRules(true, false, typeof(SecurityIdentifier))
+                    .Cast<FileSystemAccessRule>(),
+                isDirectory: true,
+                serviceSid);
+
+            var fileSecurity = new FileInfo(fullPath)
+                .GetAccessControl(AccessControlSections.Access);
+            if (!fileSecurity.AreAccessRulesProtected)
+                throw new InvalidOperationException("Protected Server settings file ACL inheritance must be disabled.");
+            ValidateAccessRules(
+                fileSecurity.GetAccessRules(true, false, typeof(SecurityIdentifier))
+                    .Cast<FileSystemAccessRule>(),
+                isDirectory: false,
+                serviceSid);
+
+            var info = new FileInfo(fullPath);
+            if (info.Length is <= 0 or > 65_536)
+                throw new InvalidOperationException("Protected Server settings file size is invalid.");
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch
+        {
+            throw new InvalidOperationException(
+                "Protected Server settings ACL or path validation failed; startup was stopped.");
+        }
+    }
+
+    private static void RejectReparsePoint(string path, bool isDirectory)
+    {
+        var attributes = File.GetAttributes(path);
+        if ((attributes & FileAttributes.ReparsePoint) != 0 ||
+            (isDirectory && (attributes & FileAttributes.Directory) == 0) ||
+            (!isDirectory && (attributes & FileAttributes.Directory) != 0))
+        {
+            throw new InvalidOperationException("Protected Server settings path contains an invalid filesystem object.");
+        }
+    }
+
+    private static FileSystemRights CombineRights(
+        IEnumerable<FileSystemAccessRule> rules,
+        SecurityIdentifier sid) =>
+        rules.Where(rule => rule.IdentityReference.Equals(sid))
+            .Aggregate((FileSystemRights)0, (rights, rule) => rights | rule.FileSystemRights);
 
     public static IReadOnlyDictionary<string, string?> Read(string path)
     {
