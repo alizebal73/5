@@ -23,7 +23,6 @@ internal static class DpapiServerSecretStore
             throw new ServerSecretStoreException("The protected Server secret store requires Windows DPAPI.");
 
         byte[]? protectedBytes = null;
-        byte[]? plaintext = null;
         try
         {
             var fullPath = Path.GetFullPath(path);
@@ -44,8 +43,7 @@ internal static class DpapiServerSecretStore
                 throw new ServerSecretStoreException("The protected Server secret store is invalid.");
 
             protectedBytes = File.ReadAllBytes(fullPath);
-            plaintext = ProtectedData.Unprotect(protectedBytes, Entropy, DataProtectionScope.LocalMachine);
-            return ParsePayload(plaintext);
+            return UnprotectPayload(protectedBytes);
         }
         catch (ServerSecretStoreException)
         {
@@ -59,6 +57,56 @@ internal static class DpapiServerSecretStore
         finally
         {
             if (protectedBytes is not null) CryptographicOperations.ZeroMemory(protectedBytes);
+        }
+    }
+
+    internal static byte[] ProtectPayload(ServerSecretMaterial secrets)
+    {
+        byte[]? plaintext = null;
+        try
+        {
+            plaintext = JsonSerializer.SerializeToUtf8Bytes(new ServerSecretPayload
+            {
+                SchemaVersion = SchemaVersion,
+                GenerationId = Guid.NewGuid().ToString("N"),
+                DatabaseConnectionString = secrets.ConnectionString,
+                JwtSigningKeyBase64 = secrets.SigningKey,
+                AgentProvisioningKeyBase64 = secrets.ProvisioningKey
+            });
+            return ProtectedData.Protect(plaintext, Entropy, DataProtectionScope.LocalMachine);
+        }
+        catch (ServerSecretStoreException)
+        {
+            throw;
+        }
+        catch
+        {
+            throw new ServerSecretStoreException("The Server secret payload could not be protected.");
+        }
+        finally
+        {
+            if (plaintext is not null) CryptographicOperations.ZeroMemory(plaintext);
+        }
+    }
+
+    internal static ServerSecretMaterial UnprotectPayload(ReadOnlySpan<byte> protectedBytes)
+    {
+        byte[]? plaintext = null;
+        try
+        {
+            plaintext = ProtectedData.Unprotect(protectedBytes, Entropy, DataProtectionScope.LocalMachine);
+            return ParsePayload(plaintext);
+        }
+        catch (ServerSecretStoreException)
+        {
+            throw;
+        }
+        catch
+        {
+            throw new ServerSecretStoreException("The protected Server secret payload could not be decrypted.");
+        }
+        finally
+        {
             if (plaintext is not null) CryptographicOperations.ZeroMemory(plaintext);
         }
     }
@@ -118,15 +166,7 @@ internal static class DpapiServerSecretStore
             new DirectoryInfo(directory).Create(directorySecurity);
             ValidateAccessControl(directory, isDirectory: true, serviceSid);
 
-            plaintext = JsonSerializer.SerializeToUtf8Bytes(new ServerSecretPayload
-            {
-                SchemaVersion = SchemaVersion,
-                GenerationId = Guid.NewGuid().ToString("N"),
-                DatabaseConnectionString = secrets.ConnectionString,
-                JwtSigningKeyBase64 = secrets.SigningKey,
-                AgentProvisioningKeyBase64 = secrets.ProvisioningKey
-            });
-            protectedBytes = ProtectedData.Protect(plaintext, Entropy, DataProtectionScope.LocalMachine);
+            protectedBytes = ProtectPayload(secrets);
 
             // Create the temporary file with its final DACL from the first filesystem operation.
             using (var stream = System.IO.FileSystemAclExtensions.Create(
@@ -158,7 +198,6 @@ internal static class DpapiServerSecretStore
         }
         finally
         {
-            if (plaintext is not null) CryptographicOperations.ZeroMemory(plaintext);
             if (protectedBytes is not null) CryptographicOperations.ZeroMemory(protectedBytes);
             try
             {
