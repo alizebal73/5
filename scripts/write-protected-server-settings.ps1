@@ -3,7 +3,7 @@ param(
     [Parameter()][string]$DestinationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server-secrets.bin"),
     [Parameter()][string]$ServerConfigurationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server.json"),
     [Parameter()][string]$PublicCertificatePath = (Join-Path $PSScriptRoot "..\artifacts\gamenet-server.cer"),
-    [Parameter()][string]$ServiceAccount = "NT AUTHORITY\NETWORK SERVICE"
+    [Parameter()][string]$ServiceAccount = "NT SERVICE\GameNet 5 Server"
 )
 
 $ErrorActionPreference = "Stop"
@@ -168,6 +168,11 @@ try {
     $administratorsSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544")
     $serviceSid = ([System.Security.Principal.NTAccount]::new($ServiceAccount)).Translate(
         [System.Security.Principal.SecurityIdentifier])
+    $expectedServiceSid = ([System.Security.Principal.NTAccount]::new("NT SERVICE\GameNet 5 Server")).Translate(
+        [System.Security.Principal.SecurityIdentifier])
+    if ($serviceSid.Value -ne $expectedServiceSid.Value) {
+        throw "The protected setup file must grant read access to the dedicated GameNet Server service SID, not a shared service account."
+    }
     if ($serviceSid.Value -eq $systemSid.Value -or $serviceSid.Value -eq $administratorsSid.Value) {
         throw "The configured Server service account must be distinct from SYSTEM and local Administrators."
     }
@@ -204,7 +209,7 @@ try {
         $stream.Dispose()
     }
 
-    # Only LocalSystem, Administrators, and the configured Server service identity may read the file.
+    # Only LocalSystem, Administrators, and the dedicated GameNet Server service SID may read the file.
     & icacls.exe $fullDestination /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' ("$ServiceAccount`:(R)") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not restrict protected settings file ACLs." }
 
