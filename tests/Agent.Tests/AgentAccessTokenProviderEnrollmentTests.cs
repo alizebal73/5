@@ -104,6 +104,63 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
         }
     }
 
+    [Fact]
+    public async Task Keeps_protected_recovery_token_when_saved_credential_is_rejected()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "gamenet-agent-recovery-token-" + Guid.NewGuid().ToString("N"));
+        const string variable = "GAMENET_TEST_AGENT_RECOVERY_TOKEN";
+        const string staleCredential = "stale-agent-credential-0123456789-_ABCDEFGHIJKLMNOP";
+        const string pendingToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcde";
+        var previous = Environment.GetEnvironmentVariable(variable);
+
+        try
+        {
+            Directory.CreateDirectory(root);
+            Environment.SetEnvironmentVariable(variable, null);
+            var identityOptions = Options.Create(new AgentIdentityOptions
+            {
+                RootPath = root,
+                DeviceId = "station-recovery-01"
+            });
+            var transportOptions = Options.Create(new AgentTransportOptions
+            {
+                ServerBaseUrl = "http://127.0.0.1:5080",
+                EnrollmentTokenEnvironmentVariableName = variable
+            });
+            var credentialStore = new AgentCredentialStore(identityOptions, transportOptions);
+            await credentialStore.SaveAsync(staleCredential);
+            await WriteProtectedEnrollmentTokenAsync(root, "station-recovery-01", pendingToken);
+            var enrollmentTokenStore = new AgentEnrollmentTokenStore(
+                identityOptions, TimeProvider.System, new TestHostEnvironment());
+
+            var handler = new StubHandler(async (request, cancellationToken) =>
+            {
+                Assert.Equal("/api/v1/agent/auth/token", request.RequestUri!.AbsolutePath);
+                var tokenRequest = await request.Content!.ReadFromJsonAsync<AgentTokenRequest>(
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken);
+                Assert.Equal(staleCredential, tokenRequest!.Secret);
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            });
+            using var client = new HttpClient(handler);
+            var factory = new SingleClientFactory(client);
+            var bootstrapper = new AgentEnrollmentBootstrapper(
+                factory, credentialStore, enrollmentTokenStore, new TestHostEnvironment(), transportOptions);
+            using var provider = new AgentAccessTokenProvider(
+                factory, credentialStore, bootstrapper, enrollmentTokenStore, transportOptions, TimeProvider.System);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => provider.GetAccessTokenAsync("station-recovery-01"));
+
+            Assert.True(File.Exists(Path.Combine(root, AgentEnrollmentTokenStore.FileName)));
+            Assert.Equal(staleCredential, await credentialStore.TryLoadAsync());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, previous);
+            try { Directory.Delete(root, recursive: true); } catch (DirectoryNotFoundException) { }
+        }
+    }
+
     private static async Task WriteProtectedEnrollmentTokenAsync(string root, string deviceId, string token)
     {
         Directory.CreateDirectory(root);
