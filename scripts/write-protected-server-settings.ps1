@@ -17,6 +17,11 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $fullDestination = [System.IO.Path]::GetFullPath($DestinationPath)
 $fullServerConfigurationPath = [System.IO.Path]::GetFullPath($ServerConfigurationPath)
 $fullPublicCertificatePath = [System.IO.Path]::GetFullPath($PublicCertificatePath)
+$configurationDirectory = [System.IO.Path]::GetFullPath((Split-Path -Parent $fullServerConfigurationPath))
+$destinationDirectory = [System.IO.Path]::GetFullPath((Split-Path -Parent $fullDestination))
+if (-not [string]::Equals($configurationDirectory, $destinationDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Protected Server secrets must be stored beside server.json in the ACL-protected configuration directory."
+}
 if (Test-Path -LiteralPath $fullDestination) {
     throw "Protected settings already exist. Refusing to overwrite the Server secrets file."
 }

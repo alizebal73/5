@@ -4,7 +4,9 @@ param(
     [string]$ServerBaseUrl,
 
     [ValidateSet("Desktop", "Agent", "Both")]
-    [string]$Component = "Both"
+    [string]$Component = "Both",
+
+    [string]$ServiceAccount = "NT AUTHORITY\NETWORK SERVICE"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,7 +41,7 @@ $inheritance = [System.Security.AccessControl.InheritanceFlags]::ContainerInheri
 $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new("S-1-5-18"), [System.Security.AccessControl.FileSystemRights]::FullControl, $inheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
 $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544"), [System.Security.AccessControl.FileSystemRights]::FullControl, $inheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
 $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-545"), [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, $inheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
-$acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new("NT AUTHORITY\NETWORK SERVICE", [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, $inheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+$acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($ServiceAccount, [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, $inheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
 Set-Acl -LiteralPath $configDirectory -AclObject $acl
 
 $encoding = [System.Text.UTF8Encoding]::new($false)
