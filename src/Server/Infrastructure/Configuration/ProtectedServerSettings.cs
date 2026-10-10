@@ -244,6 +244,7 @@ public static class ProtectedServerSettings
         }
     }
 
+    [SupportedOSPlatform("windows")]
     private static FileSystemRights CombineRights(
         IEnumerable<FileSystemAccessRule> rules,
         SecurityIdentifier sid) =>
