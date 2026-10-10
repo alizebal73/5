@@ -4,6 +4,8 @@ using System.Text.Json;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
 using GameNet.Shared.Contracts.V1.Security;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -35,6 +37,7 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
                 DeviceId = "station-pc-01"
             });
             var credentialStore = new AgentCredentialStore(identityOptions, transportOptions);
+            var enrollmentTokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System);
 
             var handler = new StubHandler(async (request, cancellationToken) =>
             {
@@ -71,11 +74,13 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
 
             using var client = new HttpClient(handler);
             var factory = new SingleClientFactory(client);
-            var bootstrapper = new AgentEnrollmentBootstrapper(factory, credentialStore, transportOptions);
+            var bootstrapper = new AgentEnrollmentBootstrapper(
+                factory, credentialStore, enrollmentTokenStore, new TestHostEnvironment(), transportOptions);
             using var provider = new AgentAccessTokenProvider(
                 factory,
                 credentialStore,
                 bootstrapper,
+                enrollmentTokenStore,
                 transportOptions,
                 TimeProvider.System);
 
@@ -93,6 +98,14 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
             Environment.SetEnvironmentVariable(variable, previous);
             try { Directory.Delete(root, recursive: true); } catch (DirectoryNotFoundException) { }
         }
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "GameNet.Agent.Tests";
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
