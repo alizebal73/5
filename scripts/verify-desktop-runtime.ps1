@@ -34,7 +34,11 @@ $environmentNames = @(
     "GameNet__Agent__ProvisioningKey",
     "GameNet__Server__BaseUrl",
     "GAMENET_DESKTOP_SMOKE",
-    "GAMENET_UI_CULTURE"
+    "GAMENET_UI_CULTURE",
+    "GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS",
+    "GAMENET_PROTECTED_SETTINGS_FILE",
+    "GAMENET_BOOTSTRAP_SECRET",
+    "GameNet__Setup__BootstrapSecret"
 )
 $previousEnvironment = @{}
 foreach ($name in $environmentNames) {
@@ -64,13 +68,17 @@ try {
 
     $env:GAMENET_DATABASE_CONNECTION = $databaseConnection
     $env:ASPNETCORE_URLS = $serverUrl
-    $env:ASPNETCORE_ENVIRONMENT = "Production"
-    $env:DOTNET_ENVIRONMENT = "Production"
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
     Remove-Item Env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY -ErrorAction SilentlyContinue
+    Remove-Item Env:GAMENET_PROTECTED_SETTINGS_FILE -ErrorAction SilentlyContinue
+    Remove-Item Env:GAMENET_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    Remove-Item Env:GameNet__Setup__BootstrapSecret -ErrorAction SilentlyContinue
     Remove-Item Env:GameNet__Server__BaseUrl -ErrorAction SilentlyContinue
 
-    # Program.cs intentionally refuses to start in Production with authentication disabled.
-    # Use throwaway credentials so the smoke test exercises the real Production startup guard.
+    # This UI/runtime harness uses only throwaway Development credentials. The Production
+    # authentication-required policy is exercised directly by ProductionStartupPolicyTests.
     $env:GameNet__Authentication__Enabled = "true"
     $env:GameNet__Authentication__Issuer = "GameNet5.Foundation.DesktopSmoke"
     $env:GameNet__Authentication__Audience = "GameNet5.DesktopSmoke"

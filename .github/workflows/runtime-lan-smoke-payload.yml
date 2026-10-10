@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - "foundation/runtime-*"
+      - "integration/runtime-operator-v1"
     paths:
       - ".github/workflows/runtime-lan-smoke-payload.yml"
       - "GameNet.slnx"
@@ -18,6 +19,14 @@ on:
       - "scripts/configure-server-tls.ps1"
       - "scripts/trust-server-certificate.ps1"
       - "scripts/configure-runtime-endpoint.ps1"
+      - "scripts/write-protected-server-settings.ps1"
+      - "scripts/finalize-server-setup.ps1"
+      - "scripts/bootstrap-admin.ps1"
+      - "scripts/inspect-manager-runtime-state.ps1"
+      - "docs/operations/initial-admin-setup.md"
+      - "scripts/configure-agent-runtime-state.ps1"
+      - "scripts/provision-agent-enrollment.ps1"
+      - "docs/operations/agent-service-state.md"
       - "scripts/test-runtime-endpoint.ps1"
       - "scripts/modules/ServerTlsCertificate.psm1"
       - "docs/operations/runtime-endpoints.md"
@@ -41,7 +50,24 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Verify exact tested checkout SHA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expectedSha = if (-not [string]::IsNullOrWhiteSpace($env:GAMENET_PR_HEAD_SHA)) {
+            $env:GAMENET_PR_HEAD_SHA
+          }
+          else {
+            $env:GITHUB_SHA
+          }
+          $checkoutSha = ((& git rev-parse HEAD) -join "").Trim()
+          if ($LASTEXITCODE -ne 0 -or $checkoutSha -notmatch '^[0-9a-f]{40}$' -or $checkoutSha -ne $expectedSha) {
+            throw "Runtime payload checkout SHA '$checkoutSha' does not match the expected candidate SHA '$expectedSha'."
+          }
+          Write-Host "EXACT_TESTED_CHECKOUT_SHA=$checkoutSha"
 
       - name: Verify pinned .NET SDK
         shell: pwsh
@@ -130,6 +156,14 @@ jobs:
           Copy-Item -LiteralPath "scripts/configure-server-tls.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/trust-server-certificate.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/configure-runtime-endpoint.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/write-protected-server-settings.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/finalize-server-setup.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/bootstrap-admin.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/inspect-manager-runtime-state.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "docs/operations/initial-admin-setup.md" -Destination (Join-Path $toolsOutput "initial-admin-setup.md")
+          Copy-Item -LiteralPath "scripts/configure-agent-runtime-state.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/provision-agent-enrollment.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "docs/operations/agent-service-state.md" -Destination (Join-Path $toolsOutput "agent-service-state.md")
           Copy-Item -LiteralPath "scripts/test-runtime-endpoint.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
           Copy-Item -LiteralPath "docs/operations/runtime-endpoints.md" -Destination (Join-Path $toolsOutput "runtime-endpoints.md")
@@ -138,7 +172,15 @@ jobs:
             (Join-Path $serverOutput "GameNet.Server.exe"),
             (Join-Path $agentOutput "GameNet.Agent.exe"),
             (Join-Path $desktopOutput "GameNet.Manager.Desktop.exe"),
-            $migrationBundle
+            $migrationBundle,
+            (Join-Path $toolsOutput "configure-agent-runtime-state.ps1"),
+            (Join-Path $toolsOutput "provision-agent-enrollment.ps1"),
+            (Join-Path $toolsOutput "agent-service-state.md"),
+            (Join-Path $toolsOutput "write-protected-server-settings.ps1"),
+            (Join-Path $toolsOutput "finalize-server-setup.ps1"),
+            (Join-Path $toolsOutput "bootstrap-admin.ps1"),
+            (Join-Path $toolsOutput "inspect-manager-runtime-state.ps1"),
+            (Join-Path $toolsOutput "initial-admin-setup.md")
           )
           foreach ($file in $requiredFiles) {
             if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
@@ -158,6 +200,10 @@ jobs:
           - `Desktop\GameNet.Manager.Desktop.exe`
           - `Tools\GameNet.Migrations.exe` — an explicit EF migration bundle
           - TLS and endpoint configuration/check scripts under `Tools\`
+          - `Tools\write-protected-server-settings.ps1` for LocalMachine-DPAPI-protected setup settings
+          - `Tools\bootstrap-admin.ps1` and `Tools\finalize-server-setup.ps1` for first-Owner setup and post-bootstrap cleanup
+          - `Tools\inspect-manager-runtime-state.ps1` as a read-only preflight
+          - `Tools\initial-admin-setup.md`, `Tools\configure-agent-runtime-state.ps1`, `Tools\provision-agent-enrollment.ps1`, and the Agent Windows Service state/DACL runbook
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
           ## Safety boundary
@@ -168,17 +214,23 @@ jobs:
 
           ## Intended bounded smoke sequence
 
-          1. Verify the downloaded ZIP against the adjacent `SHA256SUMS.txt` file before extraction.
+          1. Download the GitHub Actions artifact archive and extract that outer archive to a temporary folder. It contains the inner `GameNet5-RuntimeLanSmoke-*.zip` and adjacent `SHA256SUMS.txt`; verify the inner ZIP against that checksum file **before** extracting the inner payload. The archive digest shown by GitHub is for the outer artifact; the checksum file is for the inner runtime payload.
           2. Extract the package into a temporary folder on the isolated test PCs. Keep the package's recorded `manifest.json` with the test notes.
-          3. Provision a disposable PostgreSQL database for this candidate. Apply schema changes only by explicitly running `Tools\GameNet.Migrations.exe --connection "<DISPOSABLE_TEST_DATABASE_CONNECTION>"`. Do not run this against any existing business database.
-          4. On the isolated Server PC, run elevated PowerShell from the extracted package root and follow `Tools\runtime-endpoints.md` to configure HTTPS. Record the Server IP/SAN and independently verify the printed 64-character public-certificate SHA-256 fingerprint. Copy only the public `.cer` file to client PCs.
-          5. On each isolated client PC, verify and trust the public certificate with `Tools\trust-server-certificate.ps1`; then configure its endpoint with `Tools\configure-runtime-endpoint.ps1`. Use the matching certificate SAN host/IP.
-          6. Run `Tools\test-runtime-endpoint.ps1 -Component Desktop` on the Desktop PC and `-Component Agent` on the Agent PC. Both checks use normal Windows TLS validation and require Server readiness to report `Ready`.
-          7. Record what was tested and what was not. A successful health request alone does **not** prove Agent enrollment, an authoritative lease, heartbeat/reconciliation, restart/reconnect, or private-key access under the real Windows service identity.
+          3. On the isolated Server PC, run `Tools\inspect-manager-runtime-state.ps1` first and review the read-only report. If the machine contains existing GameNet/Manager state or any unexpected service, certificate, ACL, or listener, stop; do not use this payload to repair or overwrite it. This workflow does not install/register Windows services.
+          4. Confirm that a reviewed test-only Server service registration exists on the disposable Server PC and is stopped, with the intended dedicated identity/SID. If it does not exist, stop and obtain an independently reviewed service-registration procedure; this payload is not a service installer. Do not experiment on a live Manager PC.
+          5. Provision a disposable PostgreSQL database for this candidate. Apply schema changes only by explicitly running `Tools\GameNet.Migrations.exe --connection "<DISPOSABLE_TEST_DATABASE_CONNECTION>"`. Never run this against an existing business database; use only throwaway credentials because process inspection may expose a command-line connection argument.
+          6. On the isolated Server PC, run elevated PowerShell from the extracted package root and follow `Tools\runtime-endpoints.md` to configure HTTPS using the dedicated GameNet Server service SID. Record the Server IP/SAN and independently verify the printed 64-character public-certificate SHA-256 fingerprint. Copy only the public `.cer` file to client PCs.
+          7. Run `Tools\write-protected-server-settings.ps1` elevated to create the protected setup settings, then run `Server\GameNet.Server.exe --provision-secrets` as the only argument from an elevated console. Use only disposable DB credentials and throwaway test secrets. These commands do not install the service or launch a migration automatically.
+          8. Start the already-reviewed test Server service and confirm readiness over HTTPS. On each isolated client PC, verify and trust the public certificate with `Tools\trust-server-certificate.ps1`; then configure its endpoint with `Tools\configure-runtime-endpoint.ps1`. Use the matching certificate SAN host/IP.
+          9. From a trusted test workstation, run `Tools\bootstrap-admin.ps1 -ServerBaseUrl "https://<SERVER-SAN-HOST>:<PORT>"`, create a throwaway Owner, and verify that Owner can sign in. Then run `Tools\finalize-server-setup.ps1 -ServerBaseUrl "https://<SAME-SERVER-SAN-HOST>:<PORT>"` elevated on the Server PC itself. Follow `Tools\initial-admin-setup.md`; never delete/edit the protected file manually. Schedule a controlled service restart and confirm readiness after finalization.
+          10. Run `Tools\test-runtime-endpoint.ps1 -Component Desktop` on the Desktop PC and `-Component Agent` on the Agent PC. Both checks use normal Windows TLS validation and require Server readiness to report `Ready`.
+          11. Record what was tested and what was not. A successful health request alone does **not** prove Agent enrollment, an authoritative lease, heartbeat/reconciliation, restart/reconnect, or private-key access under the real Windows service identity.
+
+          For an Agent Windows-service test, first register the service explicitly on the disposable Agent PC with the LocalService logon identity and leave it stopped. Follow `Tools\agent-service-state.md`, then run `Tools\configure-agent-runtime-state.ps1` elevated. Before starting the service, run `Tools\provision-agent-enrollment.ps1 -DeviceId "station-pc-01"` elevated on that same Agent PC. It securely prompts an authorized operator, issues a one-time token over HTTPS, stores it in the DPAPI-protected `Agent\enrollment-token.dpapi` file with a service-restricted DACL, and prints no token value. The Agent service then redeems that file at first start. Neither helper installs/registers the service.
 
           ## Explicit limitations
 
-          This payload is only the prerequisite build artifact. It does not yet provide a supported protected secret store or service-install flow. Do not install it on the live GameNet PCs or claim the LAN gate passed from CI alone. Before any service-based runtime test, the service identity and a safe, isolated way to provide throwaway test settings must be agreed and verified. Final Setup, service registration, repair, update, rollback and release certification remain later stages.
+          This payload includes the current protected Server secret-store implementation and setup scripts, but it does **not** install/register Windows services, choose a production PostgreSQL installation lifecycle, or certify actual service identities/DACLs/DPAPI/TLS/LAN behavior. It is not Setup or a production release. Do not install it on live GameNet PCs. Use only isolated test machines, an empty disposable database, and throwaway credentials/secrets. If service registration is not already available through a reviewed test-only procedure, stop rather than inventing or applying service changes on a live Manager PC. Final Setup, service registration, repair, update, rollback and release certification remain later stages.
           '@
           $readmePath = Join-Path $payloadRoot "LAN-SMOKE-README.md"
           [System.IO.File]::WriteAllText($readmePath, $readme.Replace("`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))

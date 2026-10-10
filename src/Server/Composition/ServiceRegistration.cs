@@ -43,6 +43,7 @@ public static class ServiceRegistration
         services.AddScoped<IAgentHealthProbeDispatcher, AgentHealthProbeDispatcher>();
         services.AddScoped<StationAgentHealthService>();
         services.AddScoped<IAgentCredentialService, AgentCredentialService>();
+        services.AddScoped<IAgentEnrollmentService, AgentEnrollmentService>();
         services.AddScoped<IIdentityRepository, EfIdentityRepository>();
         services.AddScoped<IdentityService>();
         services.AddScoped<IOperatorManagementRepository, EfOperatorManagementRepository>();
@@ -58,13 +59,10 @@ public static class ServiceRegistration
 
         services.AddDbContext<GameNetDbContext>((provider, db) =>
         {
-            var options = provider.GetRequiredService<IOptions<GameNetOptions>>().Value;
-            if (!string.IsNullOrWhiteSpace(options.DatabaseConnectionString))
-            {
-                db.UseNpgsql(
-                    options.DatabaseConnectionString,
-                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
-            }
+            var connection = provider.GetRequiredService<IDatabaseConnectionSecret>().ConnectionString;
+            db.UseNpgsql(
+                connection,
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
         });
 
         return services;
