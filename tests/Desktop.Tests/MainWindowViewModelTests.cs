@@ -50,6 +50,26 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Refresh_does_not_report_ready_when_health_is_healthy_but_readiness_is_not_ready()
+    {
+        var envelope = new ApiEnvelope<HealthResponse>(
+            new HealthResponse(
+                "GameNet 5 Server",
+                "5.0.0-test",
+                HealthStatuses.Healthy,
+                HealthStatuses.NotReady,
+                "desktop-test-correlation"),
+            "desktop-test-correlation");
+        var viewModel = new MainWindowViewModel(new FakeServerClient(envelope));
+
+        await viewModel.RefreshServerStatusAsync();
+
+        Assert.Equal("notready", viewModel.ServerStatusKind);
+        Assert.Equal("Status.NotReady", viewModel.ServerStatusText);
+        Assert.Equal("5.0.0-test", viewModel.ServerVersionText);
+    }
+
+    [Fact]
     public async Task Refresh_uses_a_stable_unreachable_state_without_exposing_exception_details()
     {
         var viewModel = new MainWindowViewModel(new FakeServerClient(
