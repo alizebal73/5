@@ -26,8 +26,16 @@ public sealed class AgentEnrollmentToken
     {
         if (id == Guid.Empty)
             throw new ArgumentException("Token id is required.", nameof(id));
-        if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128 || deviceId != deviceId.Trim())
-            throw new ArgumentException("DeviceId must contain 1-128 non-padded characters.", nameof(deviceId));
+        if (string.IsNullOrWhiteSpace(deviceId) ||
+            deviceId.Length > 128 ||
+            deviceId != deviceId.Trim() ||
+            deviceId.Any(character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')))
+        {
+            throw new ArgumentException(
+                "DeviceId must contain 1-128 ASCII letters, digits, dashes, underscores or dots.",
+                nameof(deviceId));
+        }
         if (string.IsNullOrWhiteSpace(tokenHash) || tokenHash.Length != 64 || tokenHash.Any(ch => !Uri.IsHexDigit(ch)))
             throw new ArgumentException("Token hash must be a SHA-256 hexadecimal digest.", nameof(tokenHash));
         if (issuedByOperatorId == Guid.Empty)
