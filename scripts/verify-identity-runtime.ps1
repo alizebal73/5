@@ -500,8 +500,22 @@ try {
     $stationEnrollmentToken = [string]$stationEnrollmentIssue.Json.token
     $stationEnrollmentTokenId = [string]$stationEnrollmentIssue.Json.tokenId
     try {
-        $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
-            [string]$stationEnrollmentIssue.Json.expiresAtUtc).ToUniversalTime()
+        # ConvertFrom-Json may already materialize ISO timestamps as DateTime. Do not
+        # cast that value to a culture-formatted string and parse it again: the CI runner
+        # uses a Persian calendar culture, which can shift a Gregorian year by 622 years.
+        $expiryValue = $stationEnrollmentIssue.Json.expiresAtUtc
+        if ($expiryValue -is [DateTimeOffset]) {
+            $stationEnrollmentExpiresAtUtc = $expiryValue.ToUniversalTime()
+        }
+        elseif ($expiryValue -is [DateTime]) {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::new($expiryValue.ToUniversalTime())
+        }
+        else {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
+                [string]$expiryValue,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+        }
     }
     catch {
         throw "Server returned an invalid expiry for the live Agent enrollment token."
