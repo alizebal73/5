@@ -19,6 +19,8 @@ Read-back of the active Rulesets confirmed:
 - Both currently report `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains to be considered. The current GitHub connection exposed read-only Ruleset access, so this audit did not change the rules.
 - The active `integration/runtime-operator-v1` ref is not protected. First make sure PR-targeted Quick Validation is green, then add a PR/status-check Ruleset if available. Until then, keep changes isolated and do not treat this ref as protected.
 
+Comparison snapshot (2026-10-10): `integration/runtime-operator-v1` is 122 commits ahead and 1 commit behind `foundation/runtime-final-v2`, with merge base `adb2159fb85564187718df8cbddcd3377e599c1c`. Its tree has product/runtime work and workflow changes; it is not a mirror of the Foundation ref. Do not rebase/merge the whole branch graph just to close this one-commit ancestry gap. Review the effective workflow delta explicitly before a merge. PR #23 itself is four commits ahead of its `feature/operator-identity-v1` base and currently has green exact-head Quick/Full Foundation runs.
+
 ### Open PR disposition policy
 
 PR inventory read-back lists #15, #17, #18, #20, #21, #23 and #24 as open Drafts. #23 and #24 are the active implementation path; #15/#17/#18/#20/#21 use older bases or preserve historical evidence/design. No old PR should be merged wholesale. Review each unique diff/evidence, port useful work to the active path, then close with a reason. Do not delete branches until the PR disposition and all unique evidence are resolved.
