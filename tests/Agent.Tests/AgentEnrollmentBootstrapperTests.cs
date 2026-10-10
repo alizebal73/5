@@ -49,7 +49,7 @@ public sealed class AgentEnrollmentBootstrapperTests
                 new SingleClientFactory(client),
                 store,
                 new AgentEnrollmentTokenStore(
-                    Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System),
+                    Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System, new TestHostEnvironment()),
                 new TestHostEnvironment(),
                 Options.Create(new AgentTransportOptions
                 {
@@ -98,7 +98,7 @@ public sealed class AgentEnrollmentBootstrapperTests
                 new SingleClientFactory(client),
                 store,
                 new AgentEnrollmentTokenStore(
-                    Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System),
+                    Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System, new TestHostEnvironment()),
                 new TestHostEnvironment(),
                 Options.Create(new AgentTransportOptions
                 {
