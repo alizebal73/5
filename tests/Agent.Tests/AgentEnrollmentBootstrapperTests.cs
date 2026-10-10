@@ -130,15 +130,17 @@ public sealed class AgentEnrollmentBootstrapperTests
             var handler = new StubHandler((_, _) =>
                 throw new InvalidOperationException("An HTTP request must not be sent without an enrollment token."));
             using var client = new HttpClient(handler);
+            var root = Path.Combine(Path.GetTempPath(), "gamenet-enrollment-test-" + Guid.NewGuid().ToString("N"));
+            var identityOptions = Options.Create(new AgentIdentityOptions { RootPath = root });
             var store = new AgentCredentialStore(
-                Options.Create(new AgentIdentityOptions
-                {
-                    RootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
-                }),
+                identityOptions,
                 Options.Create(new AgentTransportOptions()));
+            var tokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System);
             var bootstrapper = new AgentEnrollmentBootstrapper(
                 new SingleClientFactory(client),
                 store,
+                tokenStore,
+                new TestHostEnvironment(),
                 Options.Create(new AgentTransportOptions
                 {
                     ServerBaseUrl = "http://127.0.0.1:5080",
