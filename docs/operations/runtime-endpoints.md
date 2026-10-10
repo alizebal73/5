@@ -15,11 +15,11 @@ These files contain endpoints and certificate thumbprints, not passwords, provis
 
 Run an elevated PowerShell session on the Server PC. Replace the sample IPv4 address, port, and service account with the actual values for this installation:
 
-    .\scripts\configure-server-tls.ps1 -ServerIp "192.168.0.9" -DnsName "gamenet.local" -HttpsPort 5080 -ServiceAccount "NT AUTHORITY\NETWORK SERVICE"
+    .\scripts\configure-server-tls.ps1 -ServerIp "192.168.0.9" -DnsName "gamenet.local" -HttpsPort 5080 -ServiceAccount "NT SERVICE\GameNet 5 Server"
 
 This creates a machine certificate with a SAN for the provided IP and DNS name, places it in the LocalMachine certificate store, configures the Server endpoint and certificate thumbprint in ProgramData, and exports only the public .cer file for client trust. It also grants the configured Windows service identity access to the private key. The private key is not exported.
 
-The script prints two different identifiers. The 40-character Windows certificate-store thumbprint is used only by the Server to locate the certificate in LocalMachine\My. For client trust, record and independently verify the 64-character SHA-256 fingerprint of the exported public .cer file; do not use the SHA-1 thumbprint as the out-of-band integrity check. The script's service account must match the actual Windows account that runs GameNet 5 Server. When setup registers the service with a different account, pass that account explicitly. Restart the Server service after the configuration is in place.
+The script prints two different identifiers. The 40-character Windows certificate-store thumbprint is used only by the Server to locate the certificate in LocalMachine\My. For client trust, record and independently verify the 64-character SHA-256 fingerprint of the exported public .cer file; do not use the SHA-1 thumbprint as the out-of-band integrity check. The setup script and protected-settings runtime require the dedicated `NT SERVICE\GameNet 5 Server` service SID; a shared `NETWORK SERVICE` account is rejected. Verify both the registered Windows service identity and its service SID before executing this command. Restart the Server service after the configuration is in place.
 
 The configuration binds HTTPS to the selected server IP and port. Production startup refuses a non-loopback HTTP listener or an HTTPS listener without a valid certificate thumbprint.
 
