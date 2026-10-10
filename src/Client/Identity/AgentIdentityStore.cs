@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace GameNet.Agent.Identity;
@@ -8,7 +9,7 @@ public interface IAgentIdentityStore
     Task<GameNet.Agent.AgentIdentity> GetOrCreateAsync(CancellationToken cancellationToken = default);
 }
 
-public sealed class AgentIdentityStore(IOptions<AgentIdentityOptions> options) : IAgentIdentityStore
+public sealed class AgentIdentityStore(IOptions<AgentIdentityOptions> options, IHostEnvironment hostEnvironment) : IAgentIdentityStore
 {
     public async Task<GameNet.Agent.AgentIdentity> GetOrCreateAsync(CancellationToken cancellationToken = default)
     {
@@ -16,7 +17,10 @@ public sealed class AgentIdentityStore(IOptions<AgentIdentityOptions> options) :
             ? null
             : GameNet.Agent.AgentIdentity.FromDeviceId(options.Value.DeviceId).DeviceId;
         var root = options.Value.ResolveRootPath();
-        Directory.CreateDirectory(root);
+        if (hostEnvironment.IsProduction())
+            AgentStateAccessControl.ValidateProductionStateRoot(root);
+        else
+            Directory.CreateDirectory(root);
         var path = Path.Combine(root, "identity.json");
 
         if (File.Exists(path))
