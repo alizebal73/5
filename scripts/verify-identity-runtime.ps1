@@ -452,6 +452,11 @@ try {
     $managerToken = [string]$managerTokenResponse.Json.data.accessToken
     $managerHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken" }
 
+    $managerEnrollmentDenied = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $managerHeaders @{
+        deviceId = "ci-enrollment-denied-" + [Guid]::NewGuid().ToString("N")
+    }
+    Assert-Status $managerEnrollmentDenied 403 "Deny enrollment token issue without agents.enrollment.manage"
+
     $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
         "Idempotency-Key" = ("ci-escalate-" + [Guid]::NewGuid().ToString("N"))
