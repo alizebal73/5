@@ -12,6 +12,7 @@ on:
     branches:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
+      - "security/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
       - "scripts/verify-identity-runtime.ps1"
@@ -25,6 +26,9 @@ on:
       - "scripts/publish-deployment-payloads.ps1"
       - "scripts/verify.ps1"
       - "src/Server/Infrastructure/Configuration/**"
+      - "src/Server/Infrastructure/Security/**"
+      - "src/Server/Persistence/**"
+      - "src/Shared/Contracts/V1/Security/**"
       - "tests/Server.UnitTests/**"
       - "src/Client/**"
       - "src/Shared/Contracts/V1/Protocol/**"
