@@ -8,6 +8,12 @@ using System.Text.Json.Serialization;
 
 namespace GameNet.Server.Infrastructure.Security;
 
+internal enum ServerSecretProvisioningFailureCode
+{
+    ProvisioningRejected,
+    ProvisioningFailed
+}
+
 internal sealed record ServerSecretProvisioningAuditRecord(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("eventType")] string EventType,
@@ -31,11 +37,11 @@ internal static class ServerSecretProvisioningAuditLog
 
     internal static void RecordSucceeded(string operationId) => WriteRecord(operationId, "Succeeded", null);
 
-    internal static bool TryRecordFailed(string operationId, string failureCode)
+    internal static bool TryRecordFailed(string operationId, ServerSecretProvisioningFailureCode failureCode)
     {
         try
         {
-            WriteRecord(operationId, "Failed", failureCode);
+            WriteRecord(operationId, "Failed", failureCode.ToString());
             return true;
         }
         catch
@@ -51,6 +57,10 @@ internal static class ServerSecretProvisioningAuditLog
 
         if (!Guid.TryParseExact(operationId, "N", out _))
             throw new ServerSecretStoreException("The provisioning audit operation identifier is invalid.");
+        if (outcome is not ("Started" or "Succeeded" or "Failed") ||
+            (outcome == "Failed" && failureCode is not ("ProvisioningRejected" or "ProvisioningFailed")) ||
+            (outcome != "Failed" && failureCode is not null))
+            throw new ServerSecretStoreException("The provisioning audit event type is invalid.");
 
         try
         {

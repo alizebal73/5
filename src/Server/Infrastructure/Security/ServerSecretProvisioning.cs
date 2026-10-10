@@ -58,7 +58,7 @@ internal static class ServerSecretProvisioning
                 throw new ServerSecretStoreException(
                     "The protected store was created, but its completion audit record could not be written. Do not rerun provisioning; inspect the restricted audit directory.");
 
-            if (!ServerSecretProvisioningAuditLog.TryRecordFailed(operationId, "ProvisioningRejected"))
+            if (!ServerSecretProvisioningAuditLog.TryRecordFailed(operationId, ServerSecretProvisioningFailureCode.ProvisioningRejected))
                 throw new ServerSecretStoreException(
                     "Provisioning did not complete and its failure audit record could not be written. Inspect the restricted audit directory before retrying.");
             throw;
@@ -69,7 +69,7 @@ internal static class ServerSecretProvisioning
                 throw new ServerSecretStoreException(
                     "The protected store was created, but its completion audit record could not be written. Do not rerun provisioning; inspect the restricted audit directory.");
 
-            if (!ServerSecretProvisioningAuditLog.TryRecordFailed(operationId, "ProvisioningFailed"))
+            if (!ServerSecretProvisioningAuditLog.TryRecordFailed(operationId, ServerSecretProvisioningFailureCode.ProvisioningFailed))
                 throw new ServerSecretStoreException(
                     "Provisioning failed and its failure audit record could not be written. Inspect the restricted audit directory before retrying.");
 

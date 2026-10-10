@@ -278,9 +278,10 @@ internal static class DpapiServerSecretStore
         var systemRights = CombineRights(rules, systemSid);
         var adminRights = CombineRights(rules, administratorsSid);
         var serviceRights = CombineRights(rules, serviceSid);
+        var requiredServiceRights = isDirectory ? FileSystemRights.ReadAndExecute : FileSystemRights.Read;
         if ((systemRights & FileSystemRights.FullControl) != FileSystemRights.FullControl ||
             (adminRights & FileSystemRights.FullControl) != FileSystemRights.FullControl ||
-            (serviceRights & FileSystemRights.ReadAndExecute) != FileSystemRights.ReadAndExecute)
+            (serviceRights & requiredServiceRights) != requiredServiceRights)
             throw new ServerSecretStoreException("The protected Server secret-store ACL is missing a required access grant.");
 
         const FileSystemRights writeRights =
@@ -318,7 +319,7 @@ internal static class DpapiServerSecretStore
             FileSystemRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
             FileSystemRights.FullControl, AccessControlType.Allow));
-        security.AddAccessRule(new FileSystemAccessRule(serviceSid, FileSystemRights.ReadAndExecute, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(serviceSid, FileSystemRights.Read, AccessControlType.Allow));
         return security;
     }
 
