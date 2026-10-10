@@ -25,7 +25,7 @@ if (-not [string]::Equals($settingsPath, $expectedPath, [StringComparison]::Ordi
 }
 
 try { $serverUri = [Uri]::new($ServerBaseUrl, [UriKind]::Absolute) }
-catch { throw "ServerBaseUrl must be an absolute HTTPS URL, or HTTP loopback for local setup." }
+catch { throw "ServerBaseUrl must be an absolute HTTPS URL matching the local server.json listener." }
 if ($serverUri.Scheme -ne [Uri]::UriSchemeHttps) {
     throw "Use the exact HTTPS listener configured in server.json; remote HTTP is not accepted."
 }
