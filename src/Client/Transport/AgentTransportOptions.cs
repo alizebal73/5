@@ -8,6 +8,7 @@ public sealed class AgentTransportOptions
 
     public string ServerBaseUrl { get; init; } = string.Empty;
     public string BootstrapCredentialEnvironmentVariableName { get; init; } = "GAMENET_AGENT_BOOTSTRAP_SECRET";
+    public string EnrollmentTokenEnvironmentVariableName { get; init; } = "GAMENET_AGENT_ENROLLMENT_TOKEN";
     public int HeartbeatIntervalSeconds { get; init; } = 5;
     public int InitialRetrySeconds { get; init; } = 5;
 
@@ -17,6 +18,17 @@ public sealed class AgentTransportOptions
         {
             throw new InvalidOperationException(
                 "Agent ServerBaseUrl must be a root HTTPS origin, except for loopback development, without embedded credentials, query or fragment.");
+        }
+
+        if (string.IsNullOrWhiteSpace(BootstrapCredentialEnvironmentVariableName) ||
+            string.IsNullOrWhiteSpace(EnrollmentTokenEnvironmentVariableName) ||
+            string.Equals(
+                BootstrapCredentialEnvironmentVariableName,
+                EnrollmentTokenEnvironmentVariableName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Agent enrollment and legacy credential environment variable names must be non-empty and distinct.");
         }
 
         if (HeartbeatIntervalSeconds is < 1 or > 60)
