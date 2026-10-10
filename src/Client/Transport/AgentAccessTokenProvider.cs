@@ -9,6 +9,7 @@ namespace GameNet.Agent.Transport;
 public sealed class AgentAccessTokenProvider(
     IHttpClientFactory httpClientFactory,
     IAgentCredentialStore credentialStore,
+    IAgentEnrollmentBootstrapper enrollmentBootstrapper,
     IOptions<AgentTransportOptions> options,
     TimeProvider timeProvider) : IAgentAccessTokenProvider, IDisposable
 {
@@ -30,7 +31,17 @@ public sealed class AgentAccessTokenProvider(
                 return cachedToken;
             }
 
-            var secret = await credentialStore.GetOrBootstrapAsync(cancellationToken);
+            var secret = await credentialStore.TryLoadAsync(cancellationToken);
+            if (secret is null)
+            {
+                // New installations redeem the operator-issued one-time enrollment
+                // token once, persist the returned per-device secret, then use the
+                // normal token endpoint for all routine authentication thereafter.
+                secret = await enrollmentBootstrapper.EnrollIfConfiguredAsync(
+                    deviceId, cancellationToken);
+                secret ??= await credentialStore.GetOrBootstrapAsync(cancellationToken);
+            }
+
             var client = httpClientFactory.CreateClient("GameNetAgentCredentialClient");
             var endpoint = $"{options.Value.ServerBaseUrl.TrimEnd('/')}/api/v1/agent/auth/token";
 
@@ -44,8 +55,10 @@ public sealed class AgentAccessTokenProvider(
 
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new InvalidOperationException($"Agent token request failed with HTTP {(int)response.StatusCode}: {body}");
+                // Do not echo response bodies into exceptions: error bodies may be
+                // captured by service diagnostics and must never expose credentials.
+                throw new InvalidOperationException(
+                    $"Agent token request failed with HTTP {(int)response.StatusCode}.");
             }
 
             var token = await response.Content.ReadFromJsonAsync<AgentTokenResponse>(
