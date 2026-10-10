@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GameNet.Agent.Identity;
 using GameNet.Shared.Contracts.V1.Security;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace GameNet.Agent.Transport;
@@ -14,13 +15,15 @@ public interface IAgentEnrollmentBootstrapper
 }
 
 /// <summary>
-/// Redeems the one-time operator-issued enrollment token on a first Agent start.
-/// The token is read only from the Agent service process environment and is cleared
-/// only after the issued per-device credential has been durably protected on disk.
+/// Redeems a short-lived operator-issued token during first start. Production reads
+/// the token only from a DPAPI LocalMachine file protected by a restrictive DACL;
+/// process environment tokens are allowed only for Development/certification.
 /// </summary>
 public sealed class AgentEnrollmentBootstrapper(
     IHttpClientFactory httpClientFactory,
     IAgentCredentialStore credentialStore,
+    IAgentEnrollmentTokenStore enrollmentTokenStore,
+    IHostEnvironment hostEnvironment,
     IOptions<AgentTransportOptions> options) : IAgentEnrollmentBootstrapper
 {
     public async Task<string?> EnrollIfConfiguredAsync(
@@ -30,10 +33,21 @@ public sealed class AgentEnrollmentBootstrapper(
         if (string.IsNullOrWhiteSpace(deviceId))
             throw new ArgumentException("Agent DeviceId is required.", nameof(deviceId));
 
-        var variableName = options.Value.EnrollmentTokenEnvironmentVariableName;
-        var enrollmentToken = Environment.GetEnvironmentVariable(variableName);
-        if (string.IsNullOrWhiteSpace(enrollmentToken))
-            return null;
+        var protectedToken = await enrollmentTokenStore.TryLoadAsync(deviceId, cancellationToken);
+        var enrollmentToken = protectedToken?.Token;
+        if (enrollmentToken is null)
+        {
+            // Machine/service environment blocks are not a safe secret handoff for a
+            // LocalService Windows service. Keep this seam only for Development/CI.
+            if (hostEnvironment.IsProduction())
+                throw new InvalidOperationException(
+                    "Production Agent first start requires a DPAPI-protected enrollment token file; environment-variable enrollment is disabled.");
+
+            var variableName = options.Value.EnrollmentTokenEnvironmentVariableName;
+            enrollmentToken = Environment.GetEnvironmentVariable(variableName);
+            if (string.IsNullOrWhiteSpace(enrollmentToken))
+                return null;
+        }
         if (!IsEnrollmentToken(enrollmentToken))
             throw new InvalidOperationException(
                 "Agent enrollment token has an invalid format; replace it with a newly issued token.");
@@ -64,8 +78,15 @@ public sealed class AgentEnrollmentBootstrapper(
 
         // Persist before deleting the one-time token. A disk/DPAPI failure must not
         // consume the only bootstrap material needed to complete first enrollment.
+        // The Server consumes the token transactionally. Persist the resulting
+        // per-device credential before deleting the only local copy of the bootstrap token.
         await credentialStore.SaveAsync(issued.Secret, cancellationToken);
-        Environment.SetEnvironmentVariable(variableName, null, EnvironmentVariableTarget.Process);
+        if (protectedToken is not null)
+            await enrollmentTokenStore.DeleteAsync(cancellationToken);
+        Environment.SetEnvironmentVariable(
+            options.Value.EnrollmentTokenEnvironmentVariableName,
+            null,
+            EnvironmentVariableTarget.Process);
         return issued.Secret;
     }
 
