@@ -10,6 +10,7 @@
 - main: b9288471f2047570eaf8d0d6552cf87bc0ddc214، protected=true. تا تصمیم انتشار دست‌نخورده بماند.
 - Runtime/operator integration: integration/runtime-operator-v1 در SHA 55a340305f9eba3bc8f9a1ce65fb37bedbae7580. Quick Validation [#38041093148](https://github.com/alizebal73/5/actions/runs/38041093148) و Full Foundation [#38041093167](https://github.com/alizebal73/5/actions/runs/38041093167) روی همین SHA موفق‌اند. PR [#23](https://github.com/alizebal73/5/pull/23) هنوز Draft است و ادغام نشده.
 - اولین استخراج UI: branch refactor/desktop-view-boundaries-v1 در SHA 9a058043ca8ba69f2b0bd23777263063ee681c92. Quick Validation [#38041986482](https://github.com/alizebal73/5/actions/runs/38041986482) و Full Foundation [#38041986502](https://github.com/alizebal73/5/actions/runs/38041986502) روی همین SHA موفق‌اند. PR [#24](https://github.com/alizebal73/5/pull/24) هنوز Draft است و ادغام نشده.
+- این دفتر زنده در Draft PR [#25](https://github.com/alizebal73/5/pull/25) پیشنهاد شده است؛ CI روی هر به‌روزرسانی PR باید دقیقاً روی آخرین SHA موفق شود.
 - گواهی خودکار بالا اثبات نصب Windows Service یا تست تازهٔ LAN روی همین SHA نیست. گزارش دستی قبلی [PR #17](https://github.com/alizebal73/5/pull/17) روی کاندید قدیمی‌تر و با اجرای تعاملی processها نوشته شده؛ آن را نباید با آزمون جاری Service-backed یکی دانست.
 
 ## Active gap register
@@ -52,6 +53,7 @@
 
 | PR / branch | وضعیت و تصمیم فعلی |
 |---|---|
+| #25 — docs/engineering-readiness-audit-v1 | Draft فعال؛ این PR همین register و هماهنگی مستندات/CI را پیشنهاد می‌کند. باید Quick Validation روی آخرین SHA موفق شود؛ ادغام نشده است. |
 | #23 — integration/runtime-operator-v1 | Draft فعال؛ Quick و Full Foundation روی SHA 55a340... سبز. ادغام هنوز نیازمند بازبینی ancestry/diff و gate سرویس/شبکه است. |
 | #24 — refactor/desktop-view-boundaries-v1 | Draft فعال؛ Quick و Full Foundation روی SHA 9a058... سبز. هنوز ادغام نشده؛ گام اول جداسازی UI است، نه پایان معماری. |
 | #15 — fix/programdata-endpoints-v1 | Draft قدیمی به مقصد Foundation؛ به‌عنوان منبع مقایسه نگه دارید. تغییر TLS آن را بدون مقایسه با مدل فعلی certificate-store merge نکنید. |
