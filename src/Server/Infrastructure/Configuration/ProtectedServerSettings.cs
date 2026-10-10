@@ -127,10 +127,6 @@ public static class ProtectedServerSettings
 
             if (!bool.TryParse(result["GameNet:Authentication:Enabled"], out var enabled) || !enabled)
                 throw new InvalidOperationException("Protected Server settings must enable authentication.");
-            if (result["GameNet:Authentication:SigningKey"]!.Length < 32)
-                throw new InvalidOperationException("Protected Server authentication signing key must contain at least 32 characters.");
-            if (result["GameNet:Agent:ProvisioningKey"]!.Length < 32)
-                throw new InvalidOperationException("Protected Server Agent provisioning key must contain at least 32 characters.");
 
             return result;
         }
