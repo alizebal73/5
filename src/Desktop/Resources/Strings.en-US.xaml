@@ -20,7 +20,7 @@
   <system:String x:Key="Nav.Approvals">Approvals</system:String>
   <system:String x:Key="Nav.BackupRecovery">Backup and Recovery</system:String>
   <system:String x:Key="Nav.Audit">Audit</system:String>
-  <system:String x:Key="Nav.Diagnostics">Diagnostics</system>
+  <system:String x:Key="Nav.Diagnostics">Diagnostics</system:String>
 
   <system:String x:Key="Home.Greeting">Welcome to GameNet</system:String>
   <system:String x:Key="Home.Description">Review your GameNet status and server connection from one place.</system:String>
@@ -41,7 +41,7 @@
   <system:String x:Key="Common.Unknown">Unknown</system:String>
   <system:String x:Key="Common.NotChecked">Not checked yet</system:String>
   <system:String x:Key="Section.InDevelopment">This section is still in development</system:String>
-  <system:String x:Key="Section.Description">Real information and operations require the corresponding server API and access controls to be implemented and tested. This page does not generate demo data.</system:String>
+  <system:String x:Key="Section.Description">Real information and operations require the corresponding server API and access controls to be implemented and tested. This page does not invent operational metrics.</system:String>
   <system:String x:Key="Section.BackToOverview">Back to overview</system:String>
   <system:String x:Key="Footer.Baseline">Initial build · Server connection and health</system:String>
 </ResourceDictionary>
