@@ -1,9 +1,16 @@
 using GameNet.Agent;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
+using GameNet.Shared.Runtime;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+AgentRuntimeConfiguration.AddProgramDataConfiguration(
+    builder.Configuration,
+    builder.Services,
+    GameNetRuntimePaths.AgentConfigurationFileName);
 
 builder.Services.AddWindowsService(options => options.ServiceName = "GameNet 5 Agent");
 builder.Services.AddSingleton(TimeProvider.System);

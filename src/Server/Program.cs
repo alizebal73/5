@@ -20,6 +20,8 @@ var hostArguments = args
     .ToArray();
 var builder = WebApplication.CreateBuilder(hostArguments);
 
+ServerTlsHostConfiguration.AddProgramDataConfiguration(builder);
+
 var databaseConnection = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
 if (!string.IsNullOrWhiteSpace(databaseConnection) &&
     string.IsNullOrWhiteSpace(builder.Configuration["GameNet:DatabaseConnectionString"]))
@@ -32,6 +34,7 @@ var protectedSettingsEnabled =
     bool.TryParse(builder.Configuration["GameNet:ProtectedSettings:Enabled"], out var enableProtectedFile) &&
     enableProtectedFile;
 ProtectedServerSettings.LoadInto(builder.Configuration, protectedSettingsEnabled);
+ServerTlsHostConfiguration.ConfigureListeners(builder);
 
 var bootstrapSecret = Environment.GetEnvironmentVariable("GAMENET_BOOTSTRAP_SECRET");
 if (!string.IsNullOrWhiteSpace(bootstrapSecret) &&

@@ -19,11 +19,11 @@ public sealed class ProtectedServerSettingsTests
         try
         {
             var signingKeyBytes = Encoding.UTF8.GetBytes(settings["GameNet:Authentication:SigningKey"]!);
-            var certificatePasswordBytes = Encoding.UTF8.GetBytes(settings["Kestrel:Endpoints:Https:Certificate:Password"]!);
+            var certificateThumbprintBytes = Encoding.UTF8.GetBytes(settings["GameNet:ServerTls:CertificateThumbprint"]!);
             Assert.False(ContainsSequence(encrypted, signingKeyBytes));
-            Assert.False(ContainsSequence(encrypted, certificatePasswordBytes));
+            Assert.False(ContainsSequence(encrypted, certificateThumbprintBytes));
             CryptographicOperations.ZeroMemory(signingKeyBytes);
-            CryptographicOperations.ZeroMemory(certificatePasswordBytes);
+            CryptographicOperations.ZeroMemory(certificateThumbprintBytes);
             File.WriteAllBytes(path, encrypted);
 
             var loaded = ProtectedServerSettings.Read(path);
@@ -44,11 +44,11 @@ public sealed class ProtectedServerSettingsTests
     }
 
     [Fact]
-    public void Protected_settings_reject_relative_tls_certificate_paths()
+    public void Protected_settings_reject_invalid_tls_certificate_thumbprints()
     {
         var path = Path.Combine(Path.GetTempPath(), "gamenet-server-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
         var settings = CreateValidSettings();
-        settings["Kestrel:Endpoints:Https:Certificate:Path"] = "server.pfx";
+        settings["GameNet:ServerTls:CertificateThumbprint"] = "not-a-thumbprint";
         var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
         var encrypted = Protect(clear);
         try
@@ -147,7 +147,6 @@ public sealed class ProtectedServerSettingsTests
         ["GameNet:Authentication:SigningKey"] = new string('s', 48),
         ["GameNet:Agent:ProvisioningKey"] = new string('p', 48),
         ["GameNet:Setup:BootstrapSecret"] = new string('b', 48),
-        ["Kestrel:Endpoints:Https:Certificate:Path"] = Path.Combine(Path.GetTempPath(), "gamenet-server.pfx"),
-        ["Kestrel:Endpoints:Https:Certificate:Password"] = new string('c', 48)
+        ["GameNet:ServerTls:CertificateThumbprint"] = new string('a', 40)
     };
 }

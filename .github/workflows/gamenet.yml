@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - "feature/operator-identity-v1"
+      - "integration/runtime-operator-v1"
     paths-ignore:
       - "**/*.md"
   # Always run on PRs to main so a future required status check cannot be skipped by path filters.

@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - "feature/operator-identity-v1"
+      - "integration/runtime-operator-v1"
     paths:
       - ".github/workflows/foundation-certification.yml"
       - "scripts/verify-identity-runtime.ps1"

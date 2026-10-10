@@ -4,33 +4,37 @@ Set-StrictMode -Version Latest
 function Test-GameNetServerTlsCertificateProfile {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
-        [Parameter(Mandatory)][System.Net.IPAddress]$ServerAddress
+        [Parameter(Mandatory = $true)]
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [Parameter(Mandatory = $true)]
+        [System.Net.IPAddress]$ServerAddress,
+        [Parameter(Mandatory = $true)]
+        [string]$DnsName
     )
 
     $sanExtension = @($Certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.17" } | Select-Object -First 1)[0]
-    if ($null -eq $sanExtension -or
-        $sanExtension.Format($true) -notmatch [regex]::Escape($ServerAddress.ToString())) {
-        throw "Server TLS certificate SAN does not match the requested IP address."
+    if ($null -eq $sanExtension) {
+        throw "Server TLS certificate is missing its Subject Alternative Name extension."
+    }
+    $sanText = $sanExtension.Format($true)
+    if ($sanText -notmatch [regex]::Escape($ServerAddress.ToString()) -or $sanText -notmatch [regex]::Escape($DnsName)) {
+        throw "Server TLS certificate SAN does not match both the requested Server IP address and DNS name."
     }
 
-    $ekuExtension = @($Certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.37" } | Select-Object -First 1)[0]
+    $ekuExtensions = @($Certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.37" })
     $hasServerAuthentication = $false
-    if ($null -ne $ekuExtension) {
-        $ekuOids = ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExtension).EnhancedKeyUsages
-        foreach ($oid in $ekuOids) {
-            if ($oid.Value -eq "1.3.6.1.5.5.7.3.1") {
-                $hasServerAuthentication = $true
+    foreach ($ekuExtension in $ekuExtensions) {
+        if ($ekuExtension -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]) {
+            foreach ($oid in $ekuExtension.EnhancedKeyUsages) {
+                if ($oid.Value -eq "1.3.6.1.5.5.7.3.1") { $hasServerAuthentication = $true }
             }
         }
     }
-
     if (-not $hasServerAuthentication) {
         throw "Server TLS certificate is missing the Server Authentication EKU."
     }
 
-    if ($Certificate.NotBefore.ToUniversalTime() -gt [DateTime]::UtcNow.AddMinutes(5) -or
-        $Certificate.NotAfter.ToUniversalTime() -le [DateTime]::UtcNow.AddDays(1)) {
+    if ($Certificate.NotBefore.ToUniversalTime() -gt [DateTime]::UtcNow.AddMinutes(5) -or $Certificate.NotAfter.ToUniversalTime() -le [DateTime]::UtcNow.AddDays(1)) {
         throw "Server TLS certificate validity period is missing or too short."
     }
 }
@@ -38,113 +42,71 @@ function Test-GameNetServerTlsCertificateProfile {
 function New-GameNetServerTlsCertificate {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][System.Net.IPAddress]$ServerAddress,
-        [Parameter(Mandatory)][string]$PfxPath,
-        [Parameter(Mandatory)][string]$PublicCertificatePath,
-        [Parameter(Mandatory)][System.Security.SecureString]$Password,
-        [Parameter()][ValidateSet("Cert:\CurrentUser\My", "Cert:\LocalMachine\My")][string]$CertificateStoreLocation = "Cert:\LocalMachine\My"
+        [Parameter(Mandatory = $true)]
+        [System.Net.IPAddress]$ServerAddress,
+        [Parameter(Mandatory = $true)]
+        [string]$DnsName,
+        [Parameter(Mandatory = $true)]
+        [string]$PublicCertificatePath,
+        [Parameter()]
+        [ValidateSet("Cert:\CurrentUser\My", "Cert:\LocalMachine\My")]
+        [string]$CertificateStoreLocation = "Cert:\LocalMachine\My"
     )
 
     if ($ServerAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
         throw "The Server TLS certificate address must be IPv4."
     }
-    if ($Password.Length -lt 32) {
-        throw "The Server TLS PFX password must contain at least 32 characters."
+    if ([string]::IsNullOrWhiteSpace($DnsName) -or [Uri]::CheckHostName($DnsName) -ne [UriHostNameType]::Dns) {
+        throw "DnsName must be a valid DNS host name without a scheme, path or port."
     }
 
-    $pfxFullPath = [System.IO.Path]::GetFullPath($PfxPath)
     $publicFullPath = [System.IO.Path]::GetFullPath($PublicCertificatePath)
-    if ([string]::Equals($pfxFullPath, $publicFullPath, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "The private PFX and public certificate must use different file paths."
+    if (Test-Path -LiteralPath $publicFullPath) {
+        throw "The public certificate output already exists. Refusing to overwrite existing certificate material."
     }
-    if ((Test-Path -LiteralPath $pfxFullPath) -or (Test-Path -LiteralPath $publicFullPath)) {
-        throw "Server TLS certificate output already exists. Refusing to overwrite existing certificate material."
-    }
-
-    $pfxDirectory = Split-Path -Parent $pfxFullPath
-    $publicDirectory = Split-Path -Parent $publicFullPath
-    New-Item -ItemType Directory -Force -Path $pfxDirectory,$publicDirectory | Out-Null
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $publicFullPath) | Out-Null
 
     $certificate = $null
     $publicCertificate = $null
-    $pfxCertificate = $null
-    $plainPassword = $null
-    $pfxCreated = $false
-    $publicCreated = $false
+    $createdCertificate = $false
+    $createdPublicCertificate = $false
     try {
-        $certificateArguments = @{
-            Type = "SSLServerAuthentication"
-            Subject = "CN=GameNet Server"
-            TextExtension = @("2.5.29.17={text}IPAddress=$($ServerAddress.ToString())")
-            KeyAlgorithm = "RSA"
-            KeyLength = 3072
-            HashAlgorithm = "SHA256"
-            KeyExportPolicy = "Exportable"
-            CertStoreLocation = $CertificateStoreLocation
-            NotAfter = (Get-Date).AddYears(2)
-        }
-        $certificate = New-SelfSignedCertificate @certificateArguments
-
+        $certificate = New-SelfSignedCertificate -Subject "CN=$DnsName" -CertStoreLocation $CertificateStoreLocation -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy NonExportable -KeyUsage DigitalSignature,KeyEncipherment -Type Custom -TextExtension @("2.5.29.17={text}DNS=$DnsName&IPAddress=$($ServerAddress.IPAddressToString)","2.5.29.37={text}1.3.6.1.5.5.7.3.1") -NotAfter (Get-Date).AddYears(3)
         if ($null -eq $certificate -or -not $certificate.HasPrivateKey) {
             throw "Could not create a Server TLS certificate with a private key."
         }
-        Test-GameNetServerTlsCertificateProfile -Certificate $certificate -ServerAddress $ServerAddress
+        $createdCertificate = $true
+        Test-GameNetServerTlsCertificateProfile -Certificate $certificate -ServerAddress $ServerAddress -DnsName $DnsName
 
-        $pfxCreated = $true
-        Export-PfxCertificate -Cert $certificate -FilePath $pfxFullPath -Password $Password | Out-Null
-        $publicCreated = $true
         Export-Certificate -Cert $certificate -FilePath $publicFullPath -Type CERT | Out-Null
-
-        if (-not (Test-Path -LiteralPath $pfxFullPath -PathType Leaf) -or
-            (Get-Item -LiteralPath $pfxFullPath).Length -lt 1024) {
-            throw "Server TLS private certificate export is missing or unexpectedly small."
-        }
-
+        $createdPublicCertificate = $true
         $publicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($publicFullPath)
         if ($publicCertificate.HasPrivateKey -or $publicCertificate.Thumbprint -ne $certificate.Thumbprint) {
-            throw "The public certificate export does not match the generated certificate or unexpectedly includes a private key."
+            throw "The exported public certificate does not match the generated certificate or unexpectedly contains a private key."
         }
-        Test-GameNetServerTlsCertificateProfile -Certificate $publicCertificate -ServerAddress $ServerAddress
-
-        $plainPassword = ([System.Net.NetworkCredential]::new("", $Password)).Password
-        $pfxCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-            $pfxFullPath,
-            $plainPassword,
-            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
-        if (-not $pfxCertificate.HasPrivateKey -or $pfxCertificate.Thumbprint -ne $certificate.Thumbprint) {
-            throw "The exported private PFX could not be reopened or did not match the generated certificate."
-        }
-        Test-GameNetServerTlsCertificateProfile -Certificate $pfxCertificate -ServerAddress $ServerAddress
+        Test-GameNetServerTlsCertificateProfile -Certificate $publicCertificate -ServerAddress $ServerAddress -DnsName $DnsName
 
         return [pscustomobject]@{
             Thumbprint = $certificate.Thumbprint
             ExpiresUtc = $certificate.NotAfter.ToUniversalTime().ToString("O")
             Sha256Fingerprint = (Get-FileHash -LiteralPath $publicFullPath -Algorithm SHA256).Hash.ToUpperInvariant()
-            PfxPath = $pfxFullPath
             PublicCertificatePath = $publicFullPath
+            CertificateStoreLocation = $CertificateStoreLocation
         }
     }
     catch {
-        if ($pfxCreated -and (Test-Path -LiteralPath $pfxFullPath)) {
-            Remove-Item -LiteralPath $pfxFullPath -Force -ErrorAction SilentlyContinue
-        }
-        if ($publicCreated -and (Test-Path -LiteralPath $publicFullPath)) {
+        if ($createdPublicCertificate -and (Test-Path -LiteralPath $publicFullPath -PathType Leaf)) {
             Remove-Item -LiteralPath $publicFullPath -Force -ErrorAction SilentlyContinue
+        }
+        if ($createdCertificate -and $null -ne $certificate) {
+            Remove-Item -LiteralPath (Join-Path $CertificateStoreLocation $certificate.Thumbprint) -Force -ErrorAction SilentlyContinue
         }
         throw
     }
     finally {
-        if ($null -ne $certificate) {
-            $storeCertificatePath = Join-Path $CertificateStoreLocation $certificate.Thumbprint
-            if (Test-Path -LiteralPath $storeCertificatePath) {
-                Remove-Item -LiteralPath $storeCertificatePath -Force -ErrorAction SilentlyContinue
-            }
-        }
-        if ($null -ne $pfxCertificate) { $pfxCertificate.Dispose() }
         if ($null -ne $publicCertificate) { $publicCertificate.Dispose() }
         if ($null -ne $certificate) { $certificate.Dispose() }
-        $plainPassword = $null
     }
 }
 
-Export-ModuleMember -Function New-GameNetServerTlsCertificate
+Export-ModuleMember -Function Test-GameNetServerTlsCertificateProfile, New-GameNetServerTlsCertificate

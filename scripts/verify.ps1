@@ -14,6 +14,7 @@ function Invoke-Checked {
 & "$PSScriptRoot/check-placeholders.ps1"
 & "$PSScriptRoot/check-work-item-docs.ps1"
 & "$PSScriptRoot/verify-server-tls-certificate.ps1"
+& "$PSScriptRoot/verify-trust-server-certificate.ps1"
 & "$PSScriptRoot/publish-deployment-payloads.ps1" -ValidateOnly
 
 $dotnetPath = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"

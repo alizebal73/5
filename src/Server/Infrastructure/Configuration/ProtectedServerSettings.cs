@@ -18,8 +18,7 @@ public static class ProtectedServerSettings
         "GameNet:Authentication:SigningKey",
         "GameNet:Agent:ProvisioningKey",
         "GameNet:Setup:BootstrapSecret",
-        "Kestrel:Endpoints:Https:Certificate:Path",
-        "Kestrel:Endpoints:Https:Certificate:Password"
+        "GameNet:ServerTls:CertificateThumbprint"
     };
 
     public static string GetDefaultPath() =>
@@ -104,14 +103,11 @@ public static class ProtectedServerSettings
             RequireNonBlank(result, "GameNet:Authentication:Audience");
             RequireNonBlank(result, "GameNet:Authentication:SigningKey");
             RequireNonBlank(result, "GameNet:Agent:ProvisioningKey");
-            RequireNonBlank(result, "Kestrel:Endpoints:Https:Certificate:Path");
-            RequireNonBlank(result, "Kestrel:Endpoints:Https:Certificate:Password");
-
-            var certificatePath = result["Kestrel:Endpoints:Https:Certificate:Path"]!;
-            if (!Path.IsPathFullyQualified(certificatePath))
-                throw new InvalidOperationException("Protected Server TLS certificate path must be absolute.");
-            if (result["Kestrel:Endpoints:Https:Certificate:Password"]!.Length < 32)
-                throw new InvalidOperationException("Protected Server TLS certificate password must contain at least 32 characters.");
+            RequireNonBlank(result, "GameNet:ServerTls:CertificateThumbprint");
+            var thumbprint = result["GameNet:ServerTls:CertificateThumbprint"]!.Replace(" ", string.Empty, StringComparison.Ordinal);
+            if (thumbprint.Length != 40 || thumbprint.Any(character => !Uri.IsHexDigit(character)))
+                throw new InvalidOperationException("Protected Server TLS certificate thumbprint must be exactly 40 hexadecimal characters.");
+            result["GameNet:ServerTls:CertificateThumbprint"] = thumbprint.ToUpperInvariant();
 
             if (!bool.TryParse(result["GameNet:Authentication:Enabled"], out var enabled) || !enabled)
                 throw new InvalidOperationException("Protected Server settings must enable authentication.");
