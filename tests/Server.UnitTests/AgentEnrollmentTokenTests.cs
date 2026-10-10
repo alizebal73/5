@@ -78,6 +78,22 @@ public sealed class AgentEnrollmentTokenTests
             Assert.True(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'));
     }
 
+    [Theory]
+    [InlineData("bad/device")]
+    [InlineData("bad device")]
+    [InlineData("bad:device")]
+    public void Enrollment_token_rejects_DeviceIds_outside_the_Agent_protocol(string deviceId)
+    {
+        var now = DateTimeOffset.Parse("2026-10-10T12:00:00Z");
+        Assert.Throws<ArgumentException>(() => AgentEnrollmentToken.Create(
+            Guid.NewGuid(),
+            deviceId,
+            new string('A', 64),
+            Guid.NewGuid(),
+            now,
+            now.AddMinutes(15)));
+    }
+
     private static AgentEnrollmentToken CreateToken(DateTimeOffset now) =>
         AgentEnrollmentToken.Create(
             Guid.NewGuid(),
