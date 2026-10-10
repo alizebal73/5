@@ -44,13 +44,13 @@ public static class AgentCredentialRoutes
                 IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
+                context.Response.Headers.CacheControl = "no-store";
                 var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
                 {
                     var issued = await credentials.ProvisionAsync(request, cancellationToken);
-                    context.Response.Headers.CacheControl = "no-store";
                     return Results.Ok(issued);
                 }
                 catch (AgentCredentialException ex)
@@ -67,13 +67,13 @@ public static class AgentCredentialRoutes
                 IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
+                context.Response.Headers.CacheControl = "no-store";
                 var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
                 {
                     var issued = await credentials.RotateAsync(request, cancellationToken);
-                    context.Response.Headers.CacheControl = "no-store";
                     return Results.Ok(issued);
                 }
                 catch (AgentCredentialException ex)
@@ -90,6 +90,7 @@ public static class AgentCredentialRoutes
                 IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
+                context.Response.Headers.CacheControl = "no-store";
                 var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
@@ -116,12 +117,24 @@ public static class AgentCredentialRoutes
         if (string.IsNullOrWhiteSpace(supplied))
             return Results.Unauthorized();
 
-        var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
-        var suppliedBytes = Encoding.UTF8.GetBytes(supplied);
+        byte[]? expectedBytes = null;
+        byte[]? suppliedBytes = null;
+        try
+        {
+            expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
+            suppliedBytes = Encoding.UTF8.GetBytes(supplied);
 
-        return expectedBytes.Length == suppliedBytes.Length &&
-               CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
-            ? null
-            : Results.Unauthorized();
+            return expectedBytes.Length == suppliedBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
+                ? null
+                : Results.Unauthorized();
+        }
+        finally
+        {
+            if (expectedBytes is not null)
+                CryptographicOperations.ZeroMemory(expectedBytes);
+            if (suppliedBytes is not null)
+                CryptographicOperations.ZeroMemory(suppliedBytes);
+        }
     }
 }
