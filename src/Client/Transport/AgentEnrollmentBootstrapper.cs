@@ -34,6 +34,9 @@ public sealed class AgentEnrollmentBootstrapper(
         var enrollmentToken = Environment.GetEnvironmentVariable(variableName);
         if (string.IsNullOrWhiteSpace(enrollmentToken))
             return null;
+        if (!IsEnrollmentToken(enrollmentToken))
+            throw new InvalidOperationException(
+                "Agent enrollment token has an invalid format; replace it with a newly issued token.");
 
         var endpoint = $"{options.Value.ServerBaseUrl.TrimEnd('/')}/api/v1/agent/enrollment/redeem";
         var client = httpClientFactory.CreateClient("GameNetAgentCredentialClient");
@@ -66,7 +69,13 @@ public sealed class AgentEnrollmentBootstrapper(
         return issued.Secret;
     }
 
-    private static bool IsCredentialSecret(string secret) =>
+    private static bool IsEnrollmentToken(string token) =>
+        token.Length == 43 &&
+        token.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+
+    private static bool IsCredentialSecret(string? secret) =>
+        !string.IsNullOrWhiteSpace(secret) &&
         secret.Length == 43 &&
         secret.All(character =>
             char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
