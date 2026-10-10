@@ -120,6 +120,13 @@ public sealed class AgentEnrollmentService(
                     .Where(x => x.DeviceId == command.DeviceId && x.RedeemedAtUtc != null)
                     .OrderByDescending(x => x.RedeemedAtUtc)
                     .FirstOrDefaultAsync(ct);
+                var hasEnrollmentHistory = await dbContext.AgentEnrollmentTokens
+                    .AnyAsync(x => x.DeviceId == command.DeviceId, ct);
+
+                // Recovery is not a way to create a new DeviceId or bypass normal issuance.
+                // There must be a persisted enrollment-token record for this exact device.
+                if (!hasEnrollmentHistory)
+                    throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
 
                 // Never use recovery to undo a credential that has authenticated,
                 // even if it was subsequently revoked. This also permits replacing an
