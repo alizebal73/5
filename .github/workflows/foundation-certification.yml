@@ -34,7 +34,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          foreach ($file in Get-ChildItem .\\scripts -Recurse -File -Filter *.ps1) {
+          foreach ($file in Get-ChildItem .\scripts -Recurse -File -Filter *.ps1) {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
@@ -46,27 +46,27 @@ jobs:
       - name: Canonical verification
         timeout-minutes: 15
         shell: pwsh
-        run: .\\scripts\\verify.ps1
+        run: .\scripts\verify.ps1
 
       - name: PostgreSQL certification
         timeout-minutes: 15
         shell: pwsh
-        run: .\\scripts\\verify-postgresql.ps1
+        run: .\scripts\verify-postgresql.ps1
 
       - name: Backup and isolated restore certification
         timeout-minutes: 10
         shell: pwsh
-        run: .\\scripts\\verify-backup-restore.ps1
+        run: .\scripts\verify-backup-restore.ps1
 
       - name: Desktop runtime certification
         timeout-minutes: 10
         shell: pwsh
-        run: .\\scripts\\verify-desktop-runtime.ps1
+        run: .\scripts\verify-desktop-runtime.ps1
 
       - name: Agent runtime certification
         timeout-minutes: 15
         shell: pwsh
-        run: .\\scripts\\verify-agent-runtime.ps1
+        run: .\scripts\verify-agent-runtime.ps1
 
       - name: Upload failure diagnostics
         if: failure()
@@ -85,7 +85,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          New-Item -ItemType Directory -Force -Path .\\artifacts\\foundation | Out-Null
+          New-Item -ItemType Directory -Force -Path .\artifacts\foundation | Out-Null
           @(
             "testedCheckoutSha=$(git rev-parse HEAD)"
             "githubSha=$env:GITHUB_SHA"
@@ -97,7 +97,7 @@ jobs:
             "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
             "result=FULL_FOUNDATION_CERTIFICATION_PASSED"
             "gates=PowerShellParser,CanonicalBuildAndTests,PostgreSQLCleanMigrationConcurrency,BackupIsolatedRestore,DesktopRuntime,AgentAuthLeaseHeartbeatFencingReconnect"
-          ) | Set-Content -LiteralPath .\\artifacts\\foundation\\foundation-evidence.txt -Encoding utf8
+          ) | Set-Content -LiteralPath .\artifacts\foundation\foundation-evidence.txt -Encoding utf8
 
       - name: Upload evidence
         timeout-minutes: 5

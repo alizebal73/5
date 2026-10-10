@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          foreach ($file in Get-ChildItem .\\scripts -Recurse -File -Filter *.ps1) {
+          foreach ($file in Get-ChildItem .\scripts -Recurse -File -Filter *.ps1) {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
@@ -49,4 +49,4 @@ jobs:
       - name: Canonical build and tests
         timeout-minutes: 15
         shell: pwsh
-        run: .\\scripts\\verify.ps1
+        run: .\scripts\verify.ps1
