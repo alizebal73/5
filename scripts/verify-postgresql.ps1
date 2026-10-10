@@ -244,13 +244,34 @@ try {
             Start-Sleep -Milliseconds 250
         }
 
-        if ($migrationProcess.ExitCode -ne 0) {
-            throw "Server --migrate-only failed against the isolated clean PostgreSQL database (exit code $($migrationProcess.ExitCode))."
+        # WaitForExit flushes process completion before inspecting redirected output.
+        $migrationProcess.WaitForExit()
+        $migrationExitCode = $migrationProcess.ExitCode
+        $migrationProcess.Dispose()
+        $migrationProcess = $null
+
+        if ($migrationExitCode -ne 0) {
+            throw "Server --migrate-only failed against the isolated clean PostgreSQL database (exit code $migrationExitCode)."
         }
-        $migrationOutput = if (Test-Path -LiteralPath $migrationStdout) {
-            [System.IO.File]::ReadAllText($migrationStdout)
+
+        # Windows runners may briefly retain a redirected-output file handle after process exit.
+        # Retry only sharing/IO failures within a bounded window; do not treat an unreadable log as success.
+        $migrationOutput = ""
+        if (Test-Path -LiteralPath $migrationStdout -PathType Leaf) {
+            $migrationOutputDeadline = [DateTime]::UtcNow.AddSeconds(15)
+            while ($true) {
+                try {
+                    $migrationOutput = [System.IO.File]::ReadAllText($migrationStdout)
+                    break
+                }
+                catch [System.IO.IOException] {
+                    if ([DateTime]::UtcNow -ge $migrationOutputDeadline) {
+                        throw "Server --migrate-only exited, but its stdout log remained locked for 15 seconds."
+                    }
+                    Start-Sleep -Milliseconds 100
+                }
+            }
         }
-        else { "" }
         if ($migrationOutput -notmatch "GameNet database schema is current\.") {
             throw "Server --migrate-only exited successfully without confirming that the schema is current."
         }
