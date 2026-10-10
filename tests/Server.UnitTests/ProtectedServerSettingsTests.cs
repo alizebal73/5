@@ -1,4 +1,6 @@
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using GameNet.Server.Infrastructure.Configuration;
@@ -151,6 +153,63 @@ public sealed class ProtectedServerSettingsTests
         var configuration = new ConfigurationManager();
         Assert.Throws<FileNotFoundException>(() =>
             ProtectedServerSettings.LoadInto(configuration, enableDefaultProtectedFile: true, explicitFilePath: path));
+    }
+
+    [Fact]
+    public void Protected_settings_accept_only_restricted_service_specific_file_acl()
+    {
+        var serviceSid = new SecurityIdentifier("S-1-5-80-1010101-2020202-3030303-4040404-5050505");
+        var systemSid = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        var administratorsSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+
+        var valid = new[]
+        {
+            new FileSystemAccessRule(systemSid, FileSystemRights.FullControl, AccessControlType.Allow),
+            new FileSystemAccessRule(administratorsSid, FileSystemRights.FullControl, AccessControlType.Allow),
+            new FileSystemAccessRule(serviceSid, FileSystemRights.Read, AccessControlType.Allow)
+        };
+        ProtectedServerSettings.ValidateAccessRules(valid, isDirectory: false, serviceSid);
+
+        var overlyBroad = valid.Append(new FileSystemAccessRule(
+            new SecurityIdentifier(WellKnownSidType.NetworkServiceSid, null),
+            FileSystemRights.Read,
+            AccessControlType.Allow));
+        Assert.Throws<InvalidOperationException>(
+            () => ProtectedServerSettings.ValidateAccessRules(overlyBroad, isDirectory: false, serviceSid));
+
+        var serviceCanWrite = new[]
+        {
+            new FileSystemAccessRule(systemSid, FileSystemRights.FullControl, AccessControlType.Allow),
+            new FileSystemAccessRule(administratorsSid, FileSystemRights.FullControl, AccessControlType.Allow),
+            new FileSystemAccessRule(serviceSid, FileSystemRights.Read | FileSystemRights.WriteData, AccessControlType.Allow)
+        };
+        Assert.Throws<InvalidOperationException>(
+            () => ProtectedServerSettings.ValidateAccessRules(serviceCanWrite, isDirectory: false, serviceSid));
+    }
+
+    [Fact]
+    public void Protected_settings_directory_allows_only_non_writable_read_access_for_users()
+    {
+        var serviceSid = new SecurityIdentifier("S-1-5-80-1010101-2020202-3030303-4040404-5050505");
+        var systemSid = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        var administratorsSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+        var usersSid = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+
+        var valid = new[]
+        {
+            new FileSystemAccessRule(systemSid, FileSystemRights.FullControl, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow),
+            new FileSystemAccessRule(administratorsSid, FileSystemRights.FullControl, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow),
+            new FileSystemAccessRule(usersSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow),
+            new FileSystemAccessRule(serviceSid, FileSystemRights.ReadAndExecute, AccessControlType.Allow)
+        };
+        ProtectedServerSettings.ValidateAccessRules(valid, isDirectory: true, serviceSid);
+
+        var usersCanWrite = valid.Append(new FileSystemAccessRule(
+            usersSid,
+            FileSystemRights.WriteData,
+            AccessControlType.Allow));
+        Assert.Throws<InvalidOperationException>(
+            () => ProtectedServerSettings.ValidateAccessRules(usersCanWrite, isDirectory: true, serviceSid));
     }
 
     private static byte[] Protect(byte[] clear)
