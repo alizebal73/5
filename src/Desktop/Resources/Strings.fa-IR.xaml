@@ -3,4 +3,45 @@
                   xmlns:system="clr-namespace:System;assembly=mscorlib">
   <system:String x:Key="App.Title">مدیریت گیم‌نت ۵</system:String>
   <system:String x:Key="App.Welcome">مدیریت مرکزی گیم‌نت</system:String>
+
+  <system:String x:Key="Nav.Workspace">محیط کاری</system:String>
+  <system:String x:Key="Nav.Overview">نمای کلی</system:String>
+  <system:String x:Key="Nav.Stations">ایستگاه‌ها</system:String>
+  <system:String x:Key="Nav.Customers">مشتریان</system:String>
+  <system:String x:Key="Nav.Sessions">سانس‌ها</system:String>
+  <system:String x:Key="Nav.Billing">صورتحساب</system:String>
+  <system:String x:Key="Nav.Wallet">کیف پول و بدهی</system:String>
+  <system:String x:Key="Nav.Inventory">انبار</system:String>
+  <system:String x:Key="Nav.Buffet">بوفه</system:String>
+  <system:String x:Key="Nav.Vip">اشتراک ویژه</system:String>
+  <system:String x:Key="Nav.Reports">گزارش‌ها</system:String>
+  <system:String x:Key="Nav.Agents">Agentها و اتصال</system:String>
+  <system:String x:Key="Nav.Settings">تنظیمات</system:String>
+  <system:String x:Key="Nav.Approvals">تأیید عملیات</system:String>
+  <system:String x:Key="Nav.BackupRecovery">پشتیبان و بازیابی</system:String>
+  <system:String x:Key="Nav.Audit">سوابق و ممیزی</system:String>
+  <system:String x:Key="Nav.Diagnostics">عیب‌یابی</system:String>
+
+  <system:String x:Key="Home.Greeting">سلام، خوش آمدی</system:String>
+  <system:String x:Key="Home.Description">وضعیت گیم‌نت و اتصال سرور را از این صفحه بررسی کن.</system:String>
+  <system:String x:Key="Home.ServerConnection">اتصال به سرور</system:String>
+  <system:String x:Key="Home.ServerDescription">این وضعیت از پاسخ واقعی API سرور خوانده می‌شود.</system:String>
+  <system:String x:Key="Home.ServerVersion">نسخه سرور</system:String>
+  <system:String x:Key="Home.LastChecked">آخرین بررسی</system:String>
+  <system:String x:Key="Home.Refresh">بررسی دوباره</system:String>
+  <system:String x:Key="Home.ScopeTitle">وضعیت نسخه فعلی</system:String>
+  <system:String x:Key="Home.ScopeDescription">پوسته اصلی و بررسی اتصال سرور فعال است. بخش‌های عملیاتی به APIهای واقعی متصل خواهند شد.</system:String>
+  <system:String x:Key="Home.NoFakeData">برای ایستگاه‌ها، مشتریان یا درآمد عدد ساختگی نشان نمی‌دهیم. این اطلاعات پس از پیاده‌سازی و آزمایش سرویس مربوطه نمایش داده می‌شوند.</system:String>
+
+  <system:String x:Key="Status.Checking">در حال بررسی سرور...</system:String>
+  <system:String x:Key="Status.Ready">سرور آماده است</system:String>
+  <system:String x:Key="Status.NotReady">سرور پاسخ می‌دهد اما آماده نیست</system:String>
+  <system:String x:Key="Status.Unreachable">اتصال به سرور برقرار نشد</system:String>
+
+  <system:String x:Key="Common.Unknown">نامشخص</system:String>
+  <system:String x:Key="Common.NotChecked">هنوز بررسی نشده</system:String>
+  <system:String x:Key="Section.InDevelopment">این بخش هنوز در حال پیاده‌سازی است</system:String>
+  <system:String x:Key="Section.Description">برای نمایش و مدیریت اطلاعات واقعی، API سمت سرور و کنترل دسترسی این بخش باید پیاده‌سازی و آزمایش شود. در این صفحه داده نمایشی تولید نمی‌شود.</system:String>
+  <system:String x:Key="Section.BackToOverview">بازگشت به نمای کلی</system:String>
+  <system:String x:Key="Footer.Baseline">نسخه اولیه · اتصال و سلامت سرور</system:String>
 </ResourceDictionary>

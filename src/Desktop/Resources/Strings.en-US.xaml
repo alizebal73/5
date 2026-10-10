@@ -3,4 +3,45 @@
                   xmlns:system="clr-namespace:System;assembly=mscorlib">
   <system:String x:Key="App.Title">GameNet Manager 5</system:String>
   <system:String x:Key="App.Welcome">Central GameNet management</system:String>
+
+  <system:String x:Key="Nav.Workspace">WORKSPACE</system:String>
+  <system:String x:Key="Nav.Overview">Overview</system:String>
+  <system:String x:Key="Nav.Stations">Stations</system:String>
+  <system:String x:Key="Nav.Customers">Customers</system:String>
+  <system:String x:Key="Nav.Sessions">Sessions</system:String>
+  <system:String x:Key="Nav.Billing">Billing</system:String>
+  <system:String x:Key="Nav.Wallet">Wallet and Debt</system:String>
+  <system:String x:Key="Nav.Inventory">Inventory</system:String>
+  <system:String x:Key="Nav.Buffet">Buffet</system:String>
+  <system:String x:Key="Nav.Vip">VIP</system:String>
+  <system:String x:Key="Nav.Reports">Reports</system:String>
+  <system:String x:Key="Nav.Agents">Agents and Connection</system:String>
+  <system:String x:Key="Nav.Settings">Settings</system:String>
+  <system:String x:Key="Nav.Approvals">Approvals</system:String>
+  <system:String x:Key="Nav.BackupRecovery">Backup and Recovery</system:String>
+  <system:String x:Key="Nav.Audit">Audit</system:String>
+  <system:String x:Key="Nav.Diagnostics">Diagnostics</system>
+
+  <system:String x:Key="Home.Greeting">Welcome to GameNet</system:String>
+  <system:String x:Key="Home.Description">Review your GameNet status and server connection from one place.</system:String>
+  <system:String x:Key="Home.ServerConnection">Server connection</system:String>
+  <system:String x:Key="Home.ServerDescription">This status is read from the real server API response.</system:String>
+  <system:String x:Key="Home.ServerVersion">Server version</system:String>
+  <system:String x:Key="Home.LastChecked">Last checked</system:String>
+  <system:String x:Key="Home.Refresh">Check again</system:String>
+  <system:String x:Key="Home.ScopeTitle">Current build status</system:String>
+  <system:String x:Key="Home.ScopeDescription">The application shell and server connection check are active. Operational sections will be connected to real APIs.</system:String>
+  <system:String x:Key="Home.NoFakeData">We do not display invented station, customer, or revenue numbers. Those appear after the relevant service is implemented and tested.</system:String>
+
+  <system:String x:Key="Status.Checking">Checking server...</system:String>
+  <system:String x:Key="Status.Ready">Server is ready</system:String>
+  <system:String x:Key="Status.NotReady">Server responds but is not ready</system:String>
+  <system:String x:Key="Status.Unreachable">Could not connect to the server</system:String>
+
+  <system:String x:Key="Common.Unknown">Unknown</system:String>
+  <system:String x:Key="Common.NotChecked">Not checked yet</system:String>
+  <system:String x:Key="Section.InDevelopment">This section is still in development</system:String>
+  <system:String x:Key="Section.Description">Real information and operations require the corresponding server API and access controls to be implemented and tested. This page does not generate demo data.</system:String>
+  <system:String x:Key="Section.BackToOverview">Back to overview</system:String>
+  <system:String x:Key="Footer.Baseline">Initial build · Server connection and health</system:String>
 </ResourceDictionary>

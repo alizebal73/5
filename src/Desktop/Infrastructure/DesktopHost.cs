@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http.Headers;
+using System.Windows;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Shell;
 using GameNet.Shared.Runtime;
@@ -38,6 +39,10 @@ public static class DesktopHost
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
 
+        builder.Services.AddSingleton<MainWindowViewModel>(provider =>
+            new MainWindowViewModel(
+                provider.GetRequiredService<IGameNetServerClient>(),
+                resourceKey => Application.Current?.TryFindResource(resourceKey)?.ToString() ?? resourceKey));
         builder.Services.AddSingleton<MainWindow>();
         return builder.Build();
     }
