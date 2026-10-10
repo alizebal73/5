@@ -205,6 +205,29 @@ public sealed class ServerSecretBootstrapTests
         Assert.DoesNotContain("do-not-echo", exception.Message);
     }
 
+
+    [Fact]
+    public void Provisioning_audit_record_contains_only_non_secret_metadata()
+    {
+        var record = new ServerSecretProvisioningAuditRecord(
+            1,
+            "ServerSecretStore.Provision",
+            "a4c5dc67bd1b4a30a695730d7f7ab777",
+            DateTimeOffset.UnixEpoch,
+            "Started",
+            "S-1-5-18",
+            "NT AUTHORITY\\SYSTEM",
+            null);
+
+        var json = record.ToJsonLine();
+        Assert.Contains("\"operationId\"", json);
+        Assert.Contains("\"actorSid\"", json);
+        Assert.DoesNotContain("ConnectionString", json);
+        Assert.DoesNotContain("SigningKey", json);
+        Assert.DoesNotContain("ProvisioningKey", json);
+        Assert.DoesNotContain("Password", json);
+    }
+
     private static ServerSecretMaterial CreateMaterial() => ServerSecretMaterial.Create(
         "Host=127.0.0.1;Database=gamenet_test;Username=test", CreateKey(), CreateKey());
 
