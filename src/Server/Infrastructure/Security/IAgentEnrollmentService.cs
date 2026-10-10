@@ -8,10 +8,21 @@ public sealed record AgentEnrollmentIssueCommand(
     string CorrelationId,
     string Source);
 
+public sealed record AgentEnrollmentRecoverCommand(
+    string DeviceId,
+    string Reason,
+    Guid IssuedByOperatorId,
+    string CorrelationId,
+    string Source);
+
 public interface IAgentEnrollmentService
 {
     Task<AgentEnrollmentIssueResponse> IssueAsync(
         AgentEnrollmentIssueCommand command,
+        CancellationToken cancellationToken = default);
+
+    Task<AgentEnrollmentIssueResponse> RecoverAsync(
+        AgentEnrollmentRecoverCommand command,
         CancellationToken cancellationToken = default);
 
     Task<AgentCredentialSecretResponse?> RedeemAsync(
