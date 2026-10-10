@@ -158,7 +158,6 @@ internal static class DpapiServerSecretStore
         var directorySecurity = CreateDirectorySecurity(serviceSid);
         var fileSecurity = CreateFileSecurity(serviceSid);
         var tempPath = Path.Combine(directory, ".server-secrets-" + Guid.NewGuid().ToString("N") + ".tmp");
-        byte[]? plaintext = null;
         byte[]? protectedBytes = null;
 
         try
