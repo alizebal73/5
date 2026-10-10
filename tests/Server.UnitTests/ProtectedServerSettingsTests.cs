@@ -1,6 +1,7 @@
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using GameNet.Server.Infrastructure.Configuration;
@@ -156,6 +157,7 @@ public sealed class ProtectedServerSettingsTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void Protected_settings_accept_only_restricted_service_specific_file_acl()
     {
         var serviceSid = new SecurityIdentifier("S-1-5-80-1010101-2020202-3030303-4040404-5050505");
@@ -188,6 +190,7 @@ public sealed class ProtectedServerSettingsTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void Protected_settings_directory_allows_only_non_writable_read_access_for_users()
     {
         var serviceSid = new SecurityIdentifier("S-1-5-80-1010101-2020202-3030303-4040404-5050505");
