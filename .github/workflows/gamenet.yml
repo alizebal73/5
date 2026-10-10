@@ -7,13 +7,16 @@ on:
     branches:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
+      - "docs/engineering-readiness-audit-v1"
     paths-ignore:
       - "**/*.md"
-  # Always run on PRs to main so a future required status check cannot be skipped by path filters.
+  # Run the fast lane on protected main and the active review targets; never rely on a push-only green check for a PR.
   # Foundation-targeted PRs are handled by the full certification workflow.
   pull_request:
     branches:
       - main
+      - "integration/runtime-operator-v1"
+      - "feature/operator-identity-v1"
 
 concurrency:
   group: gamenet-quick-validation-${{ github.event.pull_request.number || github.ref }}

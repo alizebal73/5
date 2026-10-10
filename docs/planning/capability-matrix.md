@@ -45,10 +45,13 @@
 - هر دکمهٔ عملیاتی باید backend واقعی، مجوز Server، رفتار خطا و آزمون داشته باشد؛ mock، success ساختگی و placeholder در production ممنوع‌اند.
 - فارسی RTL و واحد تومان در کل مسیر UI/گزارش سازگارند؛ محاسبات زمان UTC/business-timezone را از هم جدا می‌کنند.
 
-## وضعیت اجرا در snapshot بررسی‌شده
+## وضعیت جاری پیاده‌سازی — 2026-10-10
 
-- **Foundation:** قواعد معماری و زیرساخت پایه وجود دارند و بعضی گیت‌ها روی SHAهای مشخص موفق شده‌اند؛ این موضوع گواهی کل شاخهٔ تجاری یا release نیست.
-- **Identity و Stations:** کد نامزد پیاده‌سازی در Repo 5 وجود دارد؛ گواهی کامل آخرین SHA و پوشش end-to-end قبل از اتکا الزامی است.
-- **Customers، Sessions، Tariffs، Billing، Wallet، Inventory، Buffet، VIP، Games، Reports، Shift و Approvals:** در snapshot بررسی‌شده ماژول‌های محصولی مستقل/کامل دیده نمی‌شوند؛ در این جدول requirement هستند، نه قابلیت اعلام‌شدهٔ آماده.
-- **Installer/update و تست فیزیکی:** برای اعلام آمادگی استفادهٔ واقعی هنوز باید گیت‌های release و اجرای ۲–۳ PC سپس مقیاس هدف عبور کنند.
+- **Foundation reference:** آخرین stable-checkpoint ثبت‌شده برای SHA دقیق c3a8ba482548e963479fbdf8538be62c4d15acfe است. Tip فعلی Foundation branch برابر be29687e637b709158a30204bb9213bfa4813950 است و باید روی همان SHA مجدداً full certification شود؛ این دو status یکی نیستند.
+- **Runtime / Identity / Stations:** integration/runtime-operator-v1 روی SHA 55a340305f9eba3bc8f9a1ce65fb37bedbae7580 از Quick Validation و Full Foundation عبور کرده است؛ PR #23 Draft است و physical Windows-Service/LAN gate هنوز باز است.
+- **Desktop UI boundary:** PR #24 اولین استخراج StationBoardView را روی SHA 9a058043ca8ba69f2b0bd23777263063ee681c92 با Quick و Full Foundation سبز کرده است؛ ادغام نشده و جداسازی timer/Login/Shell/command permissions و UI interaction tests باقی‌اند.
+- **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift, Approvals:** نیازمندی‌های محصولی‌اند؛ در snapshot یکپارچهٔ جاری ماژول‌های کامل و تأییدشدهٔ آن‌ها وجود ندارد. تا عبور cross-PC Foundation runtime gate نباید با دکمه/صفحهٔ نمایشی به‌عنوان قابلیت آماده عرضه شوند.
+- **Setup/update/repair/rollback:** خروجی ZIP با manifest با Setup.exe/MSI برابر نیست. Windows Service commissioning، انتخاب مدل PostgreSQL provisioning، دو-PC install/restart/reconnect و Release gate هنوز باز هستند.
+- **Steam/GamingAccounts:** خارج از اجرای فعلی و Deferred است تا requirement محصولی و مدل integration مجاز/پشتیبانی‌شده به‌صورت روشن تأیید شود؛ branch آزمایشی قدیمی مجوز پیاده‌سازی خودکار نیست.
 
+مبنای مرجع وضعیت و ترتیب: [Engineering Readiness Register](engineering-readiness-register.md). اجرای موفق روی SHA قبلی، وضعیت candidate فعلی یا Release را خودکار گواهی نمی‌کند.

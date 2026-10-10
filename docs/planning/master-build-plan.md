@@ -13,6 +13,21 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
+## Current execution sequence lock — 2026-10-10
+
+The live risk/state list is [Engineering Readiness Register](engineering-readiness-register.md). This section supersedes older "current step" statements below where dates/status conflict; dated evidence remains as history.
+
+1. Keep main and foundation/runtime-final-v2 unchanged. The last recorded stable-checkpoint certificate is exact-SHA evidence, not a blanket certificate for a later branch tip.
+2. Complete review of PR #23 (Runtime/operator integration) and PR #24 (first StationBoardView extraction) through their own exact-SHA gates. Both heads have passed Quick Validation and Full Foundation; neither is merged. Passing CI does not certify Windows Service identity or the physical LAN.
+3. Finish the small Desktop boundary sequence before growing the UI: extract the station workspace, move periodic Agent health lifecycle out of MainWindow, extract login/password-change views, then use a shell navigation/content host. Add binding/permission/locale smoke tests at each step; defer full visual redesign until the data/API contracts and shell boundaries are stable.
+4. Resolve protected-settings bootstrap-secret cleanup, Agent service identity/DPAPI persistence, certificate rotation/recovery requirements, and the explicit PostgreSQL provisioning model.
+5. Pass the cross-PC Foundation runtime gate on one exact SHA using the intended Windows service identities and a disposable database. Include normal HTTPS validation, unique Agent enrollment, lease/heartbeat, restart/reconnect and recovery evidence. Do not start new PC-control or customer/billing vertical slices before this gate.
+6. Deliver business features as small vertical slices. Each slice must define its requirement ID, domain invariant, server permission, transaction/idempotency/concurrency rules, audit, failure/recovery, API/UI behavior, and tests before implementation.
+7. Keep installer/updater/repair/rollback as later release-boundary work, but mandatory before production release. A self-contained ZIP is not a Setup.exe/MSI, and CI/loopback is not a physical-install certificate.
+
+Current UI boundary work is an early architecture-hardening slice; it does not replace Stage 14's final design system. Avoid mixing a theme/layout overhaul with TLS, service identity or business-domain changes in one commit.
+
+
 ## Work item readiness and closure (mandatory)
 
 - [Definition of Ready](docs/planning/definition-of-ready.md) is the entry gate for every feature/bug slice; [Definition of Done](docs/planning/definition-of-done.md) is the closure gate.

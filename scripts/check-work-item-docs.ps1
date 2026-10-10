@@ -34,6 +34,7 @@ $tracePath = "docs/planning/requirements-traceability.md"
 $matrixPath = "docs/planning/capability-matrix.md"
 $logPath = "docs/development/bug-fix-log.md"
 $planPath = "docs/planning/master-build-plan.md"
+$readinessPath = "docs/planning/engineering-readiness-register.md"
 
 $ready = Get-RequiredText $readyPath
 $done = Get-RequiredText $donePath
@@ -44,6 +45,7 @@ $trace = Get-RequiredText $tracePath
 $matrix = Get-RequiredText $matrixPath
 $log = Get-RequiredText $logPath
 $plan = Get-RequiredText $planPath
+$readiness = Get-RequiredText $readinessPath
 
 Assert-RequiredTerms $readyPath $ready @(
     "## اطلاعات پایه",
@@ -110,6 +112,15 @@ Assert-RequiredTerms $planPath $plan @(
     "docs/planning/definition-of-ready.md",
     "docs/planning/definition-of-done.md",
     "docs/development/bug-fix-process.md"
+)
+
+Assert-RequiredTerms $readinessPath $readiness @(
+    "## Current verified baseline",
+    "## Active gap register",
+    "## Ordered execution route",
+    "## Branch and PR disposition",
+    "## Stage closure rules",
+    "## Explicit non-goals"
 )
 
 $idMatches = [regex]::Matches($trace, '(?m)^\|\s*(REQ-[A-Z0-9-]+)\s*\|')

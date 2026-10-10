@@ -1,5 +1,15 @@
 # GameNet 5 Installability Integration Audit — 2026-10-09
 
+## Current reconciliation — 2026-10-10
+
+This update supersedes the old "Current verified state" and the dated findings below where they describe the pre-integration implementation. The original audit evidence is retained as history. Current engineering status is maintained in [Engineering Readiness Register](../planning/engineering-readiness-register.md).
+
+- The current Runtime/operator integration candidate is integration/runtime-operator-v1 at SHA 55a340305f9eba3bc8f9a1ce65fb37bedbae7580. Quick Validation #38041093148 and Full Foundation #38041093167 passed on that exact SHA.
+- TLS configuration in this candidate has moved from the earlier PFX/path/password design to a Windows LocalMachine certificate-store lookup by thumbprint. The canonical design is a non-exportable private key in LocalMachine\\My, public-only .cer export, independent 64-character SHA-256 fingerprint before client trust, and normal platform chain/time/SAN validation. Do not copy the prior PFX design back into the active branch.
+- Server/Desktop/Agent now have ProgramData runtime-configuration paths and fail-closed remote URL policy. Automated runtime tests do not prove that the actual Windows service identity can read its settings/private key or that a separately installed Agent can persist/unprotect its credential after service restart.
+- The historical LAN smoke in PR #17 used the older candidate and interactive processes, not the current candidate under Windows Services. It is evidence of a bounded historical network smoke, not current-SHA service commissioning.
+- **Still open:** local removal of the one-time BootstrapSecret after Owner creation; actual Server/Agent service accounts and ACL/DPAPI identity match; certificate rotation/recovery; explicit PostgreSQL provisioning model; service-backed LAN health/login/enrollment/lease/heartbeat/restart/reconnect; idempotent Setup/repair/update/rollback and uninstall data preservation. Do not run install/cleanup scripts blindly on the existing Manager PC.
+
 ## Current verified state — 2026-10-09, SHA `553dc80f6f553b0e793b7cbb2b82ba9136b116c0`
 
 - Production Server HTTPS listener configuration and certificate material generation were implemented and CI-certified at parent SHA `7ab5108b342c74d88faf87ba6303a1c08ac9de9b`; this means the packaged Server knows how to bind HTTPS when provisioned with protected settings. It does **not** establish that Desktop/Agent have trusted the certificate or that LAN traffic has been exercised.
