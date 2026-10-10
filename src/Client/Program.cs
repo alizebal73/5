@@ -23,6 +23,8 @@ builder.Services
         try
         {
             _ = options.ResolveRootPath();
+            if (!string.IsNullOrWhiteSpace(options.DeviceId))
+                _ = AgentIdentity.FromDeviceId(options.DeviceId);
             return true;
         }
         catch (InvalidOperationException)
