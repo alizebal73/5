@@ -77,11 +77,18 @@ public static class AgentEnrollmentRoutes
                 CancellationToken cancellationToken) =>
             {
                 context.Response.Headers.CacheControl = "no-store";
-                var credential = await enrollment.RedeemAsync(
-                    request,
-                    CorrelationIdMiddleware.GetCurrent(context),
-                    cancellationToken);
-                return credential is null ? Results.Unauthorized() : Results.Ok(credential);
+                try
+                {
+                    var credential = await enrollment.RedeemAsync(
+                        request,
+                        CorrelationIdMiddleware.GetCurrent(context),
+                        cancellationToken);
+                    return credential is null ? Results.Unauthorized() : Results.Ok(credential);
+                }
+                catch (AgentCredentialException exception)
+                {
+                    return Failure(context, exception);
+                }
             })
             .AllowAnonymous();
     }
