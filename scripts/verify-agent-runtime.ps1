@@ -127,6 +127,7 @@ $envNames = @(
     "ASPNETCORE_ENVIRONMENT",
     "DOTNET_ENVIRONMENT",
     "GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY",
+    "GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS",
     "GameNet__Authentication__Enabled",
     "GameNet__Authentication__Issuer",
     "GameNet__Authentication__Audience",
@@ -163,6 +164,7 @@ $pgBase = $null
 try {
     $env:ASPNETCORE_ENVIRONMENT = "Development"
     $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
     Remove-Item Env:ASPNETCORE_URLS -ErrorAction SilentlyContinue
     Remove-Item Env:GameNet__AgentIdentity__RootPath -ErrorAction SilentlyContinue
     Remove-Item Env:GameNet__AgentTransport__ServerBaseUrl -ErrorAction SilentlyContinue

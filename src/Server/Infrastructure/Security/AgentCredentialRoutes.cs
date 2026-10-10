@@ -27,7 +27,6 @@ public static class AgentCredentialRoutes
             {
                 if (!options.Value.Authentication.Enabled)
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-
                 if (!await credentials.AuthenticateAsync(request.DeviceId, request.Secret, cancellationToken))
                     return Results.Unauthorized();
 
@@ -41,10 +40,10 @@ public static class AgentCredentialRoutes
                 HttpContext context,
                 AgentCredentialProvisionRequest request,
                 IAgentCredentialService credentials,
-                IOptions<GameNetOptions> options,
+                IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
-                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
@@ -64,10 +63,10 @@ public static class AgentCredentialRoutes
                 HttpContext context,
                 AgentCredentialRotateRequest request,
                 IAgentCredentialService credentials,
-                IOptions<GameNetOptions> options,
+                IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
-                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
@@ -87,10 +86,10 @@ public static class AgentCredentialRoutes
                 HttpContext context,
                 AgentCredentialRevokeRequest request,
                 IAgentCredentialService credentials,
-                IOptions<GameNetOptions> options,
+                IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
-                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
@@ -110,18 +109,14 @@ public static class AgentCredentialRoutes
             new ApiError(exception.Code, "The Agent credential operation was rejected."),
             CorrelationIdMiddleware.GetCurrent(context)));
 
-    private static IResult? ValidateProvisioningKey(HttpContext context, string? expectedKey)
+    private static IResult? ValidateProvisioningKey(HttpContext context, string expectedKey)
     {
-        if (string.IsNullOrWhiteSpace(expectedKey))
-            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-
         var supplied = context.Request.Headers[ProvisioningHeader].ToString();
         if (string.IsNullOrWhiteSpace(supplied))
             return Results.Unauthorized();
 
         var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
         var suppliedBytes = Encoding.UTF8.GetBytes(supplied);
-
         return expectedBytes.Length == suppliedBytes.Length &&
                CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
             ? null

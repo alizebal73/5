@@ -9,7 +9,7 @@ Desktop and Agent endpoints are installed configuration, not source-code constan
 - Agent: %ProgramData%\GameNet Manager\Config\agent.json
 - Agent identity and protected credential state: %ProgramData%\GameNet Manager\Agent
 
-These files contain endpoints and certificate thumbprints, not passwords, provisioning secrets, or signing keys. Environment variables remain explicit higher-priority overrides for diagnostics and certification.
+These files contain endpoints and certificate thumbprints, not passwords, provisioning secrets, or signing keys. Non-secret runtime settings may use the documented environment/configuration precedence for diagnostics and certification. In Production, PostgreSQL connection credentials, the JWT signing key, and the Agent provisioning key are loaded only from the protected Server secret store; attempts to supply these secrets through environment variables, ordinary configuration files, or command-line arguments are rejected. The unprotected environment-based secret seam is restricted to Development with an explicit test opt-in and is not a deployment method.
 
 ## 1. Configure HTTPS on the Server
 
