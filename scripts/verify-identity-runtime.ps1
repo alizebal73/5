@@ -153,6 +153,10 @@ try {
     Remove-Item Env:GAMENET_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
     Remove-Item Env:GameNet__Setup__BootstrapSecret -ErrorAction SilentlyContinue
 
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' ("*$currentSid`:(OI)(CI)(F)") | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not restrict the isolated Identity test directory ACL." }
+
     try {
         Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop
     } catch {
