@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
@@ -25,7 +27,8 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
 
         try
         {
-            Environment.SetEnvironmentVariable(variable, enrollmentToken);
+            Environment.SetEnvironmentVariable(variable, null);
+            await WriteProtectedEnrollmentTokenAsync(root, "station-pc-01", enrollmentToken);
             var transportOptions = Options.Create(new AgentTransportOptions
             {
                 ServerBaseUrl = "http://127.0.0.1:5080",
@@ -91,12 +94,39 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
             Assert.Equal(first, second);
             Assert.Equal(2, calls); // one enrollment redemption plus one normal access-token request
             Assert.Null(Environment.GetEnvironmentVariable(variable));
+            Assert.False(File.Exists(Path.Combine(root, AgentEnrollmentTokenStore.FileName)));
             Assert.Equal(credentialSecret, await credentialStore.TryLoadAsync());
         }
         finally
         {
             Environment.SetEnvironmentVariable(variable, previous);
             try { Directory.Delete(root, recursive: true); } catch (DirectoryNotFoundException) { }
+        }
+    }
+
+    private static async Task WriteProtectedEnrollmentTokenAsync(string root, string deviceId, string token)
+    {
+        Directory.CreateDirectory(root);
+        var clear = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            formatVersion = 1,
+            deviceId,
+            token,
+            expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
+        var entropy = Encoding.UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + deviceId);
+        byte[]? protectedBytes = null;
+        try
+        {
+            protectedBytes = ProtectedData.Protect(clear, entropy, DataProtectionScope.LocalMachine);
+            await File.WriteAllBytesAsync(Path.Combine(root, AgentEnrollmentTokenStore.FileName), protectedBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+            CryptographicOperations.ZeroMemory(entropy);
+            if (protectedBytes is not null)
+                CryptographicOperations.ZeroMemory(protectedBytes);
         }
     }
 
