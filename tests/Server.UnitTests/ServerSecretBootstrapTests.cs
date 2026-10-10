@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text;
 using GameNet.Server.Infrastructure.Security;
@@ -114,6 +115,7 @@ public sealed class ServerSecretBootstrapTests
 
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void Protected_secret_payload_round_trips_without_persisting_plaintext()
     {
         if (!OperatingSystem.IsWindows())
@@ -141,6 +143,7 @@ public sealed class ServerSecretBootstrapTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void Corrupt_protected_payload_fails_closed_without_echoing_data()
     {
         if (!OperatingSystem.IsWindows())
@@ -160,6 +163,7 @@ public sealed class ServerSecretBootstrapTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void Missing_secret_store_fails_closed_without_creating_files()
     {
         if (!OperatingSystem.IsWindows())
@@ -182,6 +186,7 @@ public sealed class ServerSecretBootstrapTests
     }
 
     [Fact]
+    [SupportedOSPlatform("windows")]
     public void Unsupported_payload_version_is_rejected_without_echoing_payload()
     {
         if (!OperatingSystem.IsWindows())
