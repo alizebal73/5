@@ -16,7 +16,7 @@ public sealed class AgentEnrollmentBootstrapperTests
     {
         var root = Path.Combine(Path.GetTempPath(), "gamenet-enrollment-test-" + Guid.NewGuid().ToString("N"));
         const string variable = "GAMENET_TEST_AGENT_ENROLLMENT_TOKEN";
-        const string enrollmentToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcdefghi";
+        const string enrollmentToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcde";
         const string secret = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ABCDE";
         var previous = Environment.GetEnvironmentVariable(variable);
 
@@ -73,7 +73,7 @@ public sealed class AgentEnrollmentBootstrapperTests
     {
         var root = Path.Combine(Path.GetTempPath(), "gamenet-enrollment-test-" + Guid.NewGuid().ToString("N"));
         const string variable = "GAMENET_TEST_AGENT_ENROLLMENT_TOKEN_MISMATCH";
-        const string enrollmentToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcdefghi";
+        const string enrollmentToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcde";
         const string secret = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ABCDE";
         var previous = Environment.GetEnvironmentVariable(variable);
 
