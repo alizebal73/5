@@ -57,8 +57,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 var runtimeOptions = app.Services.GetRequiredService<IOptions<GameNetOptions>>().Value;
-if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
-    throw new InvalidOperationException("Production authentication must be enabled.");
+ProductionStartupPolicy.EnsureAuthenticationEnabled(
+    app.Environment.EnvironmentName,
+    runtimeOptions.Authentication.Enabled);
 
 if (migrateOnly)
 {

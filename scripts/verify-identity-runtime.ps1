@@ -25,7 +25,9 @@ $envNames = @(
     "GameNet__AgentTransport__ServerBaseUrl",
     "GAMENET_AGENT_BOOTSTRAP_SECRET",
     "GAMENET_BOOTSTRAP_SECRET",
-    "GameNet__Setup__BootstrapSecret"
+    "GameNet__Setup__BootstrapSecret",
+    "GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS",
+    "GAMENET_PROTECTED_SETTINGS_FILE"
 )
 $oldEnvironment = @{}
 foreach ($name in $envNames) {
@@ -114,6 +116,7 @@ $agentErrorLog = Join-Path $root "agent.err"
 $agentProcess = $null
 $serverLog = Join-Path $root "server.log"
 $serverErrorLog = Join-Path $root "server.err"
+$protectedSettingsPath = Join-Path $root "server-secrets.bin"
 $diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
 $runToken = [Guid]::NewGuid().ToString("N")
 $server = $null
@@ -136,15 +139,42 @@ try {
     # migrated PostgreSQL database. Never fall back to the machine-level database.
     $env:GameNet__DatabaseConnectionString = $env:GAMENET_DATABASE_CONNECTION
     $env:ASPNETCORE_URLS = $serverUrl
-    $env:ASPNETCORE_ENVIRONMENT = "Production"
-    $env:DOTNET_ENVIRONMENT = "Production"
+    # This integration smoke uses the explicit Development-only secret seam. Production's
+    # rejection of environment-based secrets is covered by ServerSecretBootstrapTests.
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
+    $env:GAMENET_PROTECTED_SETTINGS_FILE = $protectedSettingsPath
     $env:GameNet__Authentication__Enabled = "true"
     $env:GameNet__Authentication__Issuer = "GameNet5.Identity.RuntimeCertification"
     $env:GameNet__Authentication__Audience = "GameNet5.Identity.RuntimeCertification.Client"
     $env:GameNet__Authentication__SigningKey = $signingKey
     $env:GameNet__Agent__ProvisioningKey = $provisioningKey
-    $env:GAMENET_BOOTSTRAP_SECRET = $bootstrapSecret
-    $env:GameNet__Setup__BootstrapSecret = $bootstrapSecret
+    Remove-Item Env:GAMENET_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    Remove-Item Env:GameNet__Setup__BootstrapSecret -ErrorAction SilentlyContinue
+
+    try {
+        Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop
+    } catch {
+        Add-Type -AssemblyName System.Security -ErrorAction Stop
+    }
+    $setupSettings = [ordered]@{
+        "GameNet:Authentication:Enabled" = "true"
+        "GameNet:Authentication:Issuer" = "GameNet5.Identity.RuntimeCertification"
+        "GameNet:Authentication:Audience" = "GameNet5.Identity.RuntimeCertification.Client"
+        "GameNet:Setup:BootstrapSecret" = $bootstrapSecret
+        "GameNet:ServerTls:CertificateThumbprint" = ("A" * 40)
+    }
+    $clearSetupBytes = [Text.Encoding]::UTF8.GetBytes(($setupSettings | ConvertTo-Json -Compress))
+    $protectedSetupBytes = [Security.Cryptography.ProtectedData]::Protect(
+        $clearSetupBytes, $null, [Security.Cryptography.DataProtectionScope]::LocalMachine)
+    try {
+        [IO.File]::WriteAllBytes($protectedSettingsPath, $protectedSetupBytes)
+    }
+    finally {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearSetupBytes)
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedSetupBytes)
+    }
 
     $startArguments = @{
         FilePath = $dotnetPath
