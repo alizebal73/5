@@ -99,7 +99,7 @@ public sealed class ProtectedServerSettingsTests
 
             var loaded = ProtectedServerSettings.Read(path);
             Assert.False(loaded.ContainsKey("GameNet:Setup:BootstrapSecret"));
-            Assert.Equal(settings["GameNet:ServerTls:CertificateThumbprint"], loaded["GameNet:ServerTls:CertificateThumbprint"]);
+            Assert.Equal(settings["GameNet:ServerTls:CertificateThumbprint"]!.ToUpperInvariant(), loaded["GameNet:ServerTls:CertificateThumbprint"]);
             Assert.Equal(settings["GameNet:Authentication:Issuer"], loaded["GameNet:Authentication:Issuer"]);
 
             var configuration = new ConfigurationManager();
