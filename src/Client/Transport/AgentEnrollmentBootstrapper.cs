@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using GameNet.Agent.Identity;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.Extensions.Options;
 
