@@ -42,6 +42,22 @@ The token file's DACL is inheritance-protected and grants read access only to SY
 
 At first start, the Agent reads the DPAPI file, redeems the token over HTTPS, writes the returned per-device credential using DPAPI CurrentUser under the actual LocalService identity, and deletes the token file only after the credential has been saved successfully. In Production, an environment-only `GAMENET_AGENT_ENROLLMENT_TOKEN` is rejected; the environment seam remains for Development/CI only. Do not manually copy token text into service environment settings.
 
+## Recovery after server redemption but local credential persistence fails
+
+A one-time token cannot be redeemed again after the Server commits it. The Agent intentionally keeps the local protected token file if it cannot save the returned credential, but that retained token is no longer redeemable. Do not repeatedly restart the service or manually edit/delete protected files.
+
+1. Keep the Agent service stopped and verify that `agent.json`, `identity.json`, the credential file, and the protected token file all belong to the intended DeviceId. Never use recovery to move an identity to another station.
+2. Run the same provisioning helper with the explicit recovery switch and a reason, for example:
+
+       .\scripts\provision-agent-enrollment.ps1 -DeviceId "station-pc-01" -Recover -RecoveryReason "Credential could not be persisted after token redemption"
+
+   The helper requires an elevated session and exact DeviceId confirmation. It authenticates the operator over HTTPS and calls the dedicated recovery endpoint; it does not print the token.
+3. The Server permits this recovery only when the existing credential was created by a recorded enrollment redemption and has never authenticated. The operation atomically revokes that unused credential and any pending token, then issues a new short-lived token. A credential that has already authenticated is not revoked by this recovery endpoint; the request returns a conflict and must go through a separately reviewed rotation procedure.
+4. The helper atomically replaces the protected token file, verifies its ACL, and removes the old local credential only after the replacement token is safely committed. Start the service only after the helper reports success, then verify enrollment, credential persistence, token-file deletion, authentication, and heartbeat.
+5. If the recovery handoff fails, keep the service stopped and review the state before retrying. The helper attempts to revoke the newly issued pending token when it cannot commit the local handoff. A second explicit recovery can be performed after confirming the on-disk state.
+
+Recovery is an auditable, intentionally destructive operation for a never-authenticated enrollment credential. It is not a general-purpose credential rotation command and must not be used to reset an Agent that is already connected or has authenticated successfully.
+
 After provisioning, start the Windows service and verify successful enrollment, credential persistence, token-file deletion, normal reauthentication after a controlled service restart, and heartbeat/lease recovery. DPAPI CurrentUser data created by an interactive user is not evidence that the LocalService service can decrypt it.
 
 ## Limitations
