@@ -59,6 +59,11 @@ public sealed class AgentEnrollmentService(
                         "Expired"));
                 }
 
+                // Clear the partial unique pending-device index before inserting its replacement.
+                // This flush remains inside the same serializable transaction; failure rolls back both steps.
+                if (pending.Count > 0)
+                    await dbContext.SaveChangesAsync(ct);
+
                 var tokenText = AgentCredentialSecretMaterial.Generate();
                 var tokenId = Guid.NewGuid();
                 var expiresAt = now.Add(TokenLifetime);
