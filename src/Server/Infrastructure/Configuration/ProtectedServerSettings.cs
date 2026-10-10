@@ -291,7 +291,7 @@ public static class ProtectedServerSettings
 
             RequireNonBlank(result, "GameNet:Authentication:Issuer");
             RequireNonBlank(result, "GameNet:Authentication:Audience");
-            RequireNonBlank(result, "GameNet:Setup:BootstrapSecret");
+            ValidateOptionalBootstrapSecret(result);
             RequireNonBlank(result, "GameNet:ServerTls:CertificateThumbprint");
 
             // Legacy files may still have these duplicated secret values; the runtime loader filters them out.
@@ -317,6 +317,17 @@ public static class ProtectedServerSettings
         {
             CryptographicOperations.ZeroMemory(clearBytes);
         }
+    }
+
+    private static void ValidateOptionalBootstrapSecret(IReadOnlyDictionary<string, string?> settings)
+    {
+        const string key = "GameNet:Setup:BootstrapSecret";
+        if (!settings.TryGetValue(key, out var value))
+            return;
+
+        var byteCount = System.Text.Encoding.UTF8.GetByteCount(value ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(value) || byteCount is < 32 or > 2048)
+            throw new InvalidOperationException("Protected Server bootstrap secret is invalid.");
     }
 
     private static void ValidateLegacySecretIfPresent(
