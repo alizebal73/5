@@ -311,6 +311,13 @@ foreach ($path in @(
     $managerRoot,
     $configDirectory,
     $serverConfigPath,
+    (Join-Path $managerRoot "Server"),
+    (Join-Path (Join-Path $managerRoot "Server") "Data"),
+    (Join-Path $managerRoot "Backups"),
+    (Join-Path $managerRoot "Agent"),
+    (Join-Path $managerRoot "Logs"),
+    (Join-Path $managerRoot "State"),
+    (Join-Path $managerRoot "Updates"),
     $secretsDirectory,
     $secretStorePath,
     $auditDirectory
