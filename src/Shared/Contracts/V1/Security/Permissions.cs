@@ -17,4 +17,5 @@ public static class Permissions
     public const string IdentityUsersWrite = "identity.users.write";
     public const string IdentityUsersPasswordReset = "identity.users.password-reset";
     public const string IdentityRolesManage = "identity.roles.manage";
+    public const string AgentEnrollmentManage = "agents.enrollment.manage";
 }
