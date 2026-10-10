@@ -94,10 +94,7 @@ if ([string]::IsNullOrWhiteSpace($connection)) { throw "GAMENET_DATABASE_CONNECT
 $root = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-agent-cert-" + [Guid]::NewGuid().ToString("N"))
 $identityRoot = Join-Path $root "identity"
 $identityRoot2 = Join-Path $root "identity-2"
-$serverConfigurationRoot = Join-Path $root "server-config"
-$agentConfigurationRoot = Join-Path $root "agent-config"
-$agent2ConfigurationRoot = Join-Path $root "agent2-config"
-New-Item -ItemType Directory -Force -Path $identityRoot,$identityRoot2,$serverConfigurationRoot,$agentConfigurationRoot,$agent2ConfigurationRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $identityRoot,$identityRoot2 | Out-Null
 
 $deviceId = "cert-" + [Guid]::NewGuid().ToString("N")
 $identityJson = @{ DeviceId = $deviceId } | ConvertTo-Json
@@ -105,28 +102,10 @@ $identityJson | Set-Content -LiteralPath (Join-Path $identityRoot "identity.json
 $identityJson | Set-Content -LiteralPath (Join-Path $identityRoot2 "identity.json") -Encoding utf8
 
 $serverUrl = "http://127.0.0.1:5095"
-
-function Write-JsonConfiguration([string]$Path, [object]$Value) {
-    $json = ($Value | ConvertTo-Json -Depth 12) + [Environment]::NewLine
-    [System.IO.File]::WriteAllText($Path, $json, [System.Text.UTF8Encoding]::new($false))
-}
-
-function Write-AgentRuntimeConfiguration([string]$ConfigurationRoot, [string]$StateRoot, [string]$BaseUrl) {
-    $configuration = [ordered]@{
-        GameNet = [ordered]@{
-            AgentTransport = [ordered]@{ ServerBaseUrl = $BaseUrl }
-            AgentIdentity = [ordered]@{ RootPath = $StateRoot }
-        }
-    }
-    Write-JsonConfiguration (Join-Path $ConfigurationRoot "agent.json") $configuration
-}
 $signingKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $envNames = @(
     "ASPNETCORE_URLS",
-    "ASPNETCORE_ENVIRONMENT",
-    "DOTNET_ENVIRONMENT",
-    "GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY",
     "GameNet__Authentication__Enabled",
     "GameNet__Authentication__Issuer",
     "GameNet__Authentication__Audience",
@@ -161,15 +140,7 @@ $oldPgSslMode = $null
 $pgBase = $null
 
 try {
-    $env:ASPNETCORE_ENVIRONMENT = "Development"
-    $env:DOTNET_ENVIRONMENT = "Development"
-    Remove-Item Env:ASPNETCORE_URLS -ErrorAction SilentlyContinue
-    Remove-Item Env:GameNet__AgentIdentity__RootPath -ErrorAction SilentlyContinue
-    Remove-Item Env:GameNet__AgentTransport__ServerBaseUrl -ErrorAction SilentlyContinue
-
-    $serverConfiguration = [ordered]@{ urls = $serverUrl }
-    Write-JsonConfiguration (Join-Path $serverConfigurationRoot "server.json") $serverConfiguration
-    $env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY = $serverConfigurationRoot
+    $env:ASPNETCORE_URLS = $serverUrl
     $env:GameNet__Authentication__Enabled = "true"
     $env:GameNet__Authentication__Issuer = "GameNet5.Foundation.Certification"
     $env:GameNet__Authentication__Audience = "GameNet5.Agent"
@@ -201,8 +172,8 @@ try {
     $issued = Invoke-RestMethod -Method Post -Uri "$serverUrl/api/v1/agent/credentials/provision" -Headers $headers -ContentType "application/json" -Body $body
     $secret = $issued.secret
 
-    Write-AgentRuntimeConfiguration $agentConfigurationRoot $identityRoot $serverUrl
-    $env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY = $agentConfigurationRoot
+    $env:GameNet__AgentIdentity__RootPath = $identityRoot
+    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
     $env:GAMENET_AGENT_BOOTSTRAP_SECRET = $secret
 
     $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentErr -PassThru
@@ -219,8 +190,72 @@ try {
     }
     if ([string]::IsNullOrWhiteSpace($leaseConnectionId)) { throw "Agent did not acquire an authoritative lease. See $agentLog." }
 
-    Write-AgentRuntimeConfiguration $agent2ConfigurationRoot $identityRoot2 $serverUrl
-    $env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY = $agent2ConfigurationRoot
+    $healthQuery = @"
+SELECT CASE
+  WHEN last_heartbeat_at_utc IS NOT NULL
+   AND last_heartbeat_at_utc >= NOW() - INTERVAL '20 seconds'
+   AND last_heartbeat_at_utc <= NOW() + INTERVAL '2 seconds'
+   AND NULLIF(agent_version, '') IS NOT NULL
+   AND NULLIF(station_state, '') IS NOT NULL
+  THEN 'fresh'
+  ELSE 'stale'
+END
+FROM agent_connection_leases
+WHERE device_id = '$deviceId';
+"@
+    $heartbeatHealthy = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        $health = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $healthQuery 2>$null) -join ""
+        if ($LASTEXITCODE -eq 0 -and $health.Trim() -eq "fresh") {
+            $heartbeatHealthy = $true
+            break
+        }
+    }
+    if (-not $heartbeatHealthy) { throw "Agent lease exists, but Server-observed heartbeat/version/state did not become fresh. See $agentLog." }
+
+    $heartbeatTimeQuery = "SELECT last_heartbeat_at_utc::text FROM agent_connection_leases WHERE device_id = '$deviceId';"
+    $heartbeatBefore = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
+    Start-Sleep -Seconds 6
+    $heartbeatAfter = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
+    if ([string]::IsNullOrWhiteSpace($heartbeatBefore) -or [string]::IsNullOrWhiteSpace($heartbeatAfter) -or $heartbeatBefore.Trim() -eq $heartbeatAfter.Trim()) {
+        throw "Agent heartbeat timestamp did not advance while the Agent remained connected. See $agentLog."
+    }
+
+    $healthFieldsQuery = "SELECT COALESCE(agent_version,'') || '|' || COALESCE(station_state,'') FROM agent_connection_leases WHERE device_id = '$deviceId';"
+    $healthFields = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $healthFieldsQuery 2>$null) -join ""
+    if ($healthFields -notmatch '^.+\|Ready$') {
+        throw "Agent version or reported station state is missing or invalid: $healthFields"
+    }
+    # Expire only the disposable certification Agent's lease while its local SignalR connection remains alive.
+    # The next server heartbeat must be rejected, then the Agent must reacquire a fresh lease and resume health reporting.
+    $leaseTokenQuery = "SELECT lease_token FROM agent_connection_leases WHERE device_id = '$deviceId';"
+    $leaseTokenBefore = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $leaseTokenQuery 2>$null) -join ""
+    $expireLeaseQuery = "UPDATE agent_connection_leases SET lease_expires_at_utc = NOW() - INTERVAL '1 second' WHERE device_id = '$deviceId';"
+    [void](& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $expireLeaseQuery 2>$null)
+    $expireExitCode = $LASTEXITCODE
+    if ($expireExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($leaseTokenBefore.Trim())) {
+        throw "Could not prepare the disposable expired-lease recovery scenario."
+    }
+
+    $leaseRecovered = $false
+    $recoveryQuery = "SELECT COALESCE(lease_token,'') || '|' || CASE WHEN lease_expires_at_utc > NOW() AND last_heartbeat_at_utc >= NOW() - INTERVAL '20 seconds' THEN 'fresh' ELSE 'stale' END FROM agent_connection_leases WHERE device_id = '$deviceId';"
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Seconds 1
+        $recovery = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $recoveryQuery 2>$null) -join ""
+        $recoveryExitCode = $LASTEXITCODE
+        $parts = $recovery.Trim() -split '\|', 2
+        if ($recoveryExitCode -eq 0 -and $parts.Count -eq 2 -and
+            $parts[0] -ne $leaseTokenBefore.Trim() -and $parts[1] -eq "fresh") {
+            $leaseRecovered = $true
+            break
+        }
+    }
+    if (-not $leaseRecovered) {
+        throw "Agent did not reacquire its lease and resume fresh heartbeats after the Server rejected an expired lease. See $agentLog."
+    }
+
+    $env:GameNet__AgentIdentity__RootPath = $identityRoot2
     $agent2 = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agent2Log -RedirectStandardError $agent2Err -PassThru
     Start-Sleep -Seconds 8
 
@@ -228,6 +263,11 @@ try {
     $afterSecond = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $query 2>$null) -join ""
     if ($afterSecond.Trim() -ne $leaseConnectionId) {
         throw "Agent fencing failed: a second connection replaced the authoritative lease."
+    }
+
+    $authoritativeHeartbeat = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
+    if ([string]::IsNullOrWhiteSpace($authoritativeHeartbeat.Trim())) {
+        throw "A competing Agent cleared or invalidated the authoritative heartbeat."
     }
 
     Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue
@@ -242,7 +282,7 @@ try {
         throw "Agent lease was not released by the owning connection."
     }
 
-    $env:GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY = $agentConfigurationRoot
+    $env:GameNet__AgentIdentity__RootPath = $identityRoot
     $agent = Start-Process -FilePath $dotnet -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -RedirectStandardOutput $agentLog -RedirectStandardError $agentErr -PassThru
 
     $reconnected = $false
@@ -264,19 +304,9 @@ catch {
     throw
 }
 finally {
-    # dotnet run owns child host processes which can keep redirected log files locked.
-    # Terminate each certification process tree before collecting failure diagnostics.
-    foreach ($processToStop in @($agent, $agent2, $server)) {
-        if ($null -eq $processToStop) { continue }
-        try {
-            & (Join-Path $env:SystemRoot "System32\taskkill.exe") /PID $processToStop.Id /T /F 2>$null | Out-Null
-        }
-        catch {
-            # Continue cleanup and preserve the original certification failure.
-        }
-        try { $processToStop.WaitForExit(5000) | Out-Null } catch {}
-        try { $processToStop.Dispose() } catch {}
-    }
+    if ($agent) { Stop-Process -Id $agent.Id -Force -ErrorAction SilentlyContinue }
+    if ($agent2) { Stop-Process -Id $agent2.Id -Force -ErrorAction SilentlyContinue }
+    if ($server) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
 
     foreach ($name in $envNames) {
         $previous = $old[$name]
@@ -304,13 +334,7 @@ finally {
 
         foreach ($entry in $logFiles) {
             if (-not (Test-Path -LiteralPath $entry.Path -PathType Leaf)) { continue }
-            try {
-                $content = [System.IO.File]::ReadAllText($entry.Path)
-            }
-            catch {
-                # Diagnostic collection must never hide the original Agent/runtime failure.
-                $content = "DIAGNOSTIC_READ_FAILURE path=$($entry.Name) message=$($_.Exception.Message)"
-            }
+            $content = [System.IO.File]::ReadAllText($entry.Path)
             $content = [Regex]::Replace($content, '(?i)(password|pwd|signingkey|provisioningkey|access_token|refresh_token|client_secret|token|GAMENET_AGENT_BOOTSTRAP_SECRET)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
             $content = [Regex]::Replace($content, '(?i)("(?:secret|access_token|accessToken|refresh_token|client_secret|token|authorization)"\s*:\s*")[^"]*(")', '$1<redacted>$2')
             $content = [Regex]::Replace($content, '(?i)(Bearer\s+)[A-Za-z0-9._~+/\-=]+', '$1<redacted>')
@@ -327,7 +351,6 @@ finally {
                 ForEach-Object { Join-Path $diagnosticRoot ('agent-runtime-' + $runToken + '-' + $_.Name) } |
                 Where-Object { Test-Path -LiteralPath $_ }
         )
-        Write-Host "Agent runtime failed (redacted summary): $safeFailure"
         $diagnosticPath = Join-Path $diagnosticRoot ("agent-runtime-diagnostic-" + $runToken + ".txt")
         @(
             "commit=$((git rev-parse HEAD 2>$null))"
