@@ -134,6 +134,13 @@ $basicToken = $null
 $managerPassword = $null
 $managerToken = $null
 $accessToken = $null
+$stationEnrollmentToken = $null
+$stationEnrollmentTokenId = $null
+$stationEnrollmentExpiresAtUtc = $null
+$enrollmentPayload = $null
+$clearEnrollmentBytes = $null
+$enrollmentEntropy = $null
+$protectedEnrollmentBytes = $null
 
 try {
     # This runs only while verify-postgresql.ps1 points this process to a brand-new,
@@ -378,14 +385,28 @@ try {
     Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
 
     $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
-    $provisionHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
-    }
-    $provisionedAgent = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/provision" $provisionHeaders @{
+    $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
         deviceId = $stationDeviceId
     }
-    Assert-Status $provisionedAgent 200 "Provision Agent credential for station binding"
+    Assert-Status $stationEnrollmentIssue 200 "Issue single-use enrollment token for the live Runtime Agent"
+    if ($stationEnrollmentIssue.CacheControl -notmatch "no-store") {
+        throw "Live Agent enrollment-token response must be no-store."
+    }
+    $stationEnrollmentToken = [string]$stationEnrollmentIssue.Json.token
+    $stationEnrollmentTokenId = [string]$stationEnrollmentIssue.Json.tokenId
+    try {
+        $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
+            [string]$stationEnrollmentIssue.Json.expiresAtUtc).ToUniversalTime()
+    }
+    catch {
+        throw "Server returned an invalid expiry for the live Agent enrollment token."
+    }
+    if ([string]::IsNullOrWhiteSpace($stationEnrollmentTokenId) -or
+        $stationEnrollmentToken -notmatch '^[A-Za-z0-9_-]{43}$' -or
+        $stationEnrollmentExpiresAtUtc -le [DateTimeOffset]::UtcNow -or
+        $stationEnrollmentExpiresAtUtc -gt [DateTimeOffset]::UtcNow.AddMinutes(16)) {
+        throw "Server returned an invalid one-time enrollment token for the live Runtime Agent."
+    }
 
     $bindHeaders = @{
         "X-GameNet-Contract" = "v1"
@@ -403,12 +424,47 @@ try {
         throw "Station binding or server-derived offline state was incorrect before Agent connection."
     }
 
-    # Exercise a real Server-to-Agent command against this isolated runtime Server.
+    # Exercise the complete first-start enrollment path for the real Runtime Agent.
+    # This temporary DPAPI handoff does not certify the installed LocalService Windows-service boundary.
     New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
     @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
+
+    $enrollmentPayload = [ordered]@{
+        formatVersion = 1
+        deviceId = $stationDeviceId
+        token = $stationEnrollmentToken
+        expiresAtUtc = $stationEnrollmentExpiresAtUtc.ToString("O")
+    }
+    $clearEnrollmentBytes = [Text.Encoding]::UTF8.GetBytes(($enrollmentPayload | ConvertTo-Json -Compress))
+    $enrollmentEntropy = [Text.Encoding]::UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + $stationDeviceId)
+    try {
+        $protectedEnrollmentBytes = [Security.Cryptography.ProtectedData]::Protect(
+            $clearEnrollmentBytes,
+            $enrollmentEntropy,
+            [Security.Cryptography.DataProtectionScope]::LocalMachine)
+        [IO.File]::WriteAllBytes(
+            (Join-Path $agentIdentityRoot "enrollment-token.dpapi"),
+            $protectedEnrollmentBytes)
+    }
+    finally {
+        if ($null -ne $clearEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+            $clearEnrollmentBytes = $null
+        }
+        if ($null -ne $enrollmentEntropy) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+            $enrollmentEntropy = $null
+        }
+        if ($null -ne $protectedEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+            $protectedEnrollmentBytes = $null
+        }
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
     $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
     $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
-    $env:GAMENET_AGENT_BOOTSTRAP_SECRET = [string]$provisionedAgent.Json.secret
+    Remove-Item Env:GAMENET_AGENT_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
     $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
 
     $agentOnline = $false
@@ -419,7 +475,13 @@ try {
         $liveStation = @($liveStations.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
         if ($liveStation -and $liveStation.agentOnline -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$liveStation.lastHeartbeatAtUtc)) { $agentOnline = $true; break }
     }
-    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat." }
+    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat after one-time enrollment." }
+    if (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "enrollment-token.dpapi") -PathType Leaf) {
+        throw "The Agent did not remove its consumed enrollment-token file after saving the credential."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "credential.bin") -PathType Leaf)) {
+        throw "The Agent did not persist its per-device DPAPI credential after enrollment."
+    }
 
     $healthProbe = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
     Assert-Status $healthProbe 200 "Dispatch safe Agent health-probe command"
@@ -739,7 +801,7 @@ finally {
     else {
         $stdout = Read-DiagnosticText $serverLog
         $stderr = Read-DiagnosticText $serverErrorLog
-        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken)) {
+        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken, $stationEnrollmentToken)) {
             if (-not [string]::IsNullOrWhiteSpace([string]$secretValue)) {
                 $stdout = $stdout.Replace([string]$secretValue, "<redacted>")
                 $stderr = $stderr.Replace([string]$secretValue, "<redacted>")
@@ -768,4 +830,15 @@ finally {
     foreach ($name in $envNames) {
         [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name], "Process")
     }
+    if ($null -ne $clearEnrollmentBytes) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+    }
+    if ($null -ne $enrollmentEntropy) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+    }
+    if ($null -ne $protectedEnrollmentBytes) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
 }
