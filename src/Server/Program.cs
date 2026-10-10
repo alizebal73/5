@@ -79,6 +79,7 @@ if (migrateOnly)
 }
 
 app.MapAgentCredentialRoutes();
+app.MapAgentEnrollmentRoutes();
 app.MapIdentityEndpoints();
 app.MapOperatorManagementEndpoints();
 app.MapStationEndpoints();
