@@ -1,7 +1,4 @@
-using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using GameNet.Agent.Transport;
@@ -56,9 +53,6 @@ public sealed class AgentEnrollmentTokenStore(
         if (!File.Exists(path))
             return null;
         RejectReparsePoint(path, expectedDirectory: false);
-        if (hostEnvironment.IsProduction())
-            ValidateExactAcl(path, isDirectory: false, ExpectedTokenFileRights());
-
         var info = new FileInfo(path);
         if (info.Length is <= 0 or > MaximumProtectedFileSize)
             throw new InvalidOperationException("Protected Agent enrollment token file size is invalid.");
@@ -122,8 +116,6 @@ public sealed class AgentEnrollmentTokenStore(
 
         RejectReparsePoint(root, expectedDirectory: true);
         RejectReparsePoint(path, expectedDirectory: false);
-        if (hostEnvironment.IsProduction())
-            ValidateExactAcl(path, isDirectory: false, ExpectedTokenFileRights());
         File.Delete(path);
         return Task.CompletedTask;
     }
@@ -135,88 +127,9 @@ public sealed class AgentEnrollmentTokenStore(
     {
         if (!hostEnvironment.IsProduction())
             return;
-        if (!OperatingSystem.IsWindows())
-            throw new InvalidOperationException("Production Agent token storage is supported only on Windows.");
-
-        var common = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        var managerRoot = Path.GetFullPath(Path.Combine(common, "GameNet Manager"));
-        var configDirectory = Path.Combine(managerRoot, "Config");
-        var canonicalRoot = Path.Combine(managerRoot, "Agent");
-        if (!string.Equals(Path.GetFullPath(root), Path.GetFullPath(canonicalRoot), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Production Agent token storage must use the canonical ProgramData Agent directory.");
-
-        foreach (var path in new[] { managerRoot, configDirectory, canonicalRoot })
-        {
-            if (!Directory.Exists(path))
-                throw new DirectoryNotFoundException("The protected Agent state directory is missing; run the reviewed Agent state-provisioning helper first.");
-            RejectReparsePoint(path, expectedDirectory: true);
-        }
-
-        var agentServiceSid = (SecurityIdentifier)new NTAccount("NT SERVICE", "GameNet 5 Agent")
-            .Translate(typeof(SecurityIdentifier));
-        ValidateExactAcl(managerRoot, isDirectory: true, ExpectedParentDirectoryRights(agentServiceSid.Value));
-        ValidateExactAcl(configDirectory, isDirectory: true, ExpectedParentDirectoryRights(agentServiceSid.Value));
-        ValidateExactAcl(canonicalRoot, isDirectory: true, ExpectedAgentStateDirectoryRights(agentServiceSid.Value));
+        AgentStateAccessControl.ValidateProductionStateRoot(root);
+        AgentStateAccessControl.ValidateEnrollmentTokenFile(root, tokenPath);
     }
-
-    [SupportedOSPlatform("windows")]
-    private static void ValidateExactAcl(
-        string path,
-        bool isDirectory,
-        IReadOnlyDictionary<string, FileSystemRights> expectedRights)
-    {
-        FileSystemSecurity acl = isDirectory
-            ? new DirectoryInfo(path).GetAccessControl(AccessControlSections.Access)
-            : new FileInfo(path).GetAccessControl(AccessControlSections.Access);
-        if (!acl.AreAccessRulesProtected)
-            throw new InvalidOperationException("Protected Agent token ACL inheritance must be disabled.");
-
-        var rules = acl.GetAccessRules(true, false, typeof(SecurityIdentifier))
-            .Cast<FileSystemAccessRule>().ToArray();
-        if (rules.Length != expectedRights.Count ||
-            rules.Any(rule =>
-                rule.AccessControlType != AccessControlType.Allow ||
-                rule.IdentityReference is not SecurityIdentifier sid ||
-                !expectedRights.TryGetValue(sid.Value, out var rights) ||
-                rule.FileSystemRights != rights))
-        {
-            throw new InvalidOperationException("Protected Agent token ACL contains an unapproved principal or permission.");
-        }
-        foreach (var sid in expectedRights.Keys)
-        {
-            if (rules.Count(rule => rule.IdentityReference.Value == sid) != 1)
-                throw new InvalidOperationException("Protected Agent token ACL is missing a required principal.");
-        }
-    }
-
-    [SupportedOSPlatform("windows")]
-    private static IReadOnlyDictionary<string, FileSystemRights> ExpectedParentDirectoryRights(string agentSid) =>
-        new Dictionary<string, FileSystemRights>(StringComparer.Ordinal)
-        {
-            ["S-1-5-18"] = FileSystemRights.FullControl,
-            ["S-1-5-32-544"] = FileSystemRights.FullControl,
-            ["S-1-5-32-545"] = FileSystemRights.ReadAndExecute,
-            [agentSid] = FileSystemRights.ReadAndExecute
-        };
-
-    [SupportedOSPlatform("windows")]
-    private static IReadOnlyDictionary<string, FileSystemRights> ExpectedAgentStateDirectoryRights(string agentSid) =>
-        new Dictionary<string, FileSystemRights>(StringComparer.Ordinal)
-        {
-            ["S-1-5-18"] = FileSystemRights.FullControl,
-            ["S-1-5-32-544"] = FileSystemRights.FullControl,
-            [agentSid] = FileSystemRights.Modify
-        };
-
-    [SupportedOSPlatform("windows")]
-    private static IReadOnlyDictionary<string, FileSystemRights> ExpectedTokenFileRights() =>
-        new Dictionary<string, FileSystemRights>(StringComparer.Ordinal)
-        {
-            ["S-1-5-18"] = FileSystemRights.FullControl,
-            ["S-1-5-32-544"] = FileSystemRights.FullControl,
-            [((SecurityIdentifier)new NTAccount("NT SERVICE", "GameNet 5 Agent")
-                .Translate(typeof(SecurityIdentifier))).Value] = FileSystemRights.Read
-        };
 
     private static void RejectReparsePoint(string path, bool expectedDirectory)
     {
