@@ -12,4 +12,24 @@ internal static class ProductionStartupPolicy
             throw new InvalidOperationException("Production authentication must be enabled.");
         }
     }
+
+    internal static void EnsureProtectedSettingsEnabled(string environmentName, bool protectedSettingsEnabled)
+    {
+        if (string.Equals(environmentName, Environments.Production, StringComparison.OrdinalIgnoreCase) &&
+            !protectedSettingsEnabled)
+        {
+            throw new InvalidOperationException(
+                "Production requires DPAPI-protected Server settings to be enabled.");
+        }
+    }
+
+    internal static void EnsureProtectedSettingsPathOverrideAllowed(string environmentName, string? pathOverride)
+    {
+        if (string.Equals(environmentName, Environments.Production, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(pathOverride))
+        {
+            throw new InvalidOperationException(
+                "Production protected Server settings must use the canonical ProgramData path.");
+        }
+    }
 }
