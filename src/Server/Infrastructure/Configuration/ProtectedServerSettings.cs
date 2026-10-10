@@ -110,12 +110,16 @@ public static class ProtectedServerSettings
                     throw new InvalidOperationException($"Protected Server settings contain a duplicate key: {pair.Key}.");
             }
 
-            RequireNonBlank(result, "GameNet:DatabaseConnectionString");
             RequireNonBlank(result, "GameNet:Authentication:Issuer");
             RequireNonBlank(result, "GameNet:Authentication:Audience");
-            RequireNonBlank(result, "GameNet:Authentication:SigningKey");
-            RequireNonBlank(result, "GameNet:Agent:ProvisioningKey");
+            RequireNonBlank(result, "GameNet:Setup:BootstrapSecret");
             RequireNonBlank(result, "GameNet:ServerTls:CertificateThumbprint");
+
+            // Legacy files may still have these duplicated secret values; the runtime loader filters them out.
+            // New setup files must not store the deployment secrets here.
+            ValidateLegacySecretIfPresent(result, "GameNet:DatabaseConnectionString", minimumLength: 1);
+            ValidateLegacySecretIfPresent(result, "GameNet:Authentication:SigningKey", minimumLength: 32);
+            ValidateLegacySecretIfPresent(result, "GameNet:Agent:ProvisioningKey", minimumLength: 32);
             var thumbprint = result["GameNet:ServerTls:CertificateThumbprint"]!.Replace(" ", string.Empty, StringComparison.Ordinal);
             if (thumbprint.Length != 40 || thumbprint.Any(character => !Uri.IsHexDigit(character)))
                 throw new InvalidOperationException("Protected Server TLS certificate thumbprint must be exactly 40 hexadecimal characters.");
@@ -138,6 +142,17 @@ public static class ProtectedServerSettings
         {
             CryptographicOperations.ZeroMemory(clearBytes);
         }
+    }
+
+    private static void ValidateLegacySecretIfPresent(
+        IReadOnlyDictionary<string, string?> settings,
+        string key,
+        int minimumLength)
+    {
+        if (!settings.TryGetValue(key, out var value))
+            return;
+        if (string.IsNullOrWhiteSpace(value) || value.Length < minimumLength)
+            throw new InvalidOperationException($"Legacy protected Server setting '{key}' is invalid.");
     }
 
     private static void RequireNonBlank(

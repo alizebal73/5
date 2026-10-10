@@ -48,6 +48,41 @@ public sealed class ProtectedServerSettingsTests
     }
 
     [Fact]
+    public void Protected_setup_settings_can_omit_runtime_deployment_secrets()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "gamenet-server-setup-" + Guid.NewGuid().ToString("N") + ".bin");
+        var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["GameNet:Authentication:Enabled"] = "true",
+            ["GameNet:Authentication:Issuer"] = "GameNet.Tests",
+            ["GameNet:Authentication:Audience"] = "GameNet.Tests.Client",
+            ["GameNet:Setup:BootstrapSecret"] = new string('b', 48),
+            ["GameNet:ServerTls:CertificateThumbprint"] = new string('a', 40)
+        };
+        var clear = JsonSerializer.SerializeToUtf8Bytes(settings);
+        var encrypted = Protect(clear);
+        try
+        {
+            File.WriteAllBytes(path, encrypted);
+            var configuration = new ConfigurationManager();
+            ProtectedServerSettings.LoadInto(configuration, enableDefaultProtectedFile: false, explicitFilePath: path);
+
+            Assert.Equal("true", configuration["GameNet:Authentication:Enabled"]);
+            Assert.Equal("GameNet.Tests", configuration["GameNet:Authentication:Issuer"]);
+            Assert.Equal(settings["GameNet:Setup:BootstrapSecret"], configuration["GameNet:Setup:BootstrapSecret"]);
+            Assert.Null(configuration["GameNet:DatabaseConnectionString"]);
+            Assert.Null(configuration["GameNet:Authentication:SigningKey"]);
+            Assert.Null(configuration["GameNet:Agent:ProvisioningKey"]);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+            CryptographicOperations.ZeroMemory(encrypted);
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Protected_settings_reject_invalid_tls_certificate_thumbprints()
     {
         var path = Path.Combine(Path.GetTempPath(), "gamenet-server-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
