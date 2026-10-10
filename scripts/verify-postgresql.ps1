@@ -199,10 +199,16 @@ try {
     $previousDotnetEnvironment = [Environment]::GetEnvironmentVariable("DOTNET_ENVIRONMENT", "Process")
     $previousConfigConnection = [Environment]::GetEnvironmentVariable("GameNet__DatabaseConnectionString", "Process")
     $previousAuthEnabled = [Environment]::GetEnvironmentVariable("GameNet__Authentication__Enabled", "Process")
+    $previousSigningKey = [Environment]::GetEnvironmentVariable("GameNet__Authentication__SigningKey", "Process")
+    $previousProvisioningKey = [Environment]::GetEnvironmentVariable("GameNet__Agent__ProvisioningKey", "Process")
+    $previousSecretTestOptIn = [Environment]::GetEnvironmentVariable("GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS", "Process")
     $previousProtectedPath = [Environment]::GetEnvironmentVariable("GAMENET_PROTECTED_SETTINGS_FILE", "Process")
     try {
         $env:GameNet__DatabaseConnectionString = $env:GAMENET_DATABASE_CONNECTION
         $env:GameNet__Authentication__Enabled = "false"
+        $env:GameNet__Authentication__SigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+        $env:GameNet__Agent__ProvisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+        $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
         $env:ASPNETCORE_ENVIRONMENT = "Development"
         $env:DOTNET_ENVIRONMENT = "Development"
         Remove-Item Env:GAMENET_PROTECTED_SETTINGS_FILE -ErrorAction SilentlyContinue
@@ -255,6 +261,9 @@ try {
     finally {
         if ($null -eq $previousConfigConnection) { Remove-Item Env:GameNet__DatabaseConnectionString -ErrorAction SilentlyContinue } else { $env:GameNet__DatabaseConnectionString = $previousConfigConnection }
         if ($null -eq $previousAuthEnabled) { Remove-Item Env:GameNet__Authentication__Enabled -ErrorAction SilentlyContinue } else { $env:GameNet__Authentication__Enabled = $previousAuthEnabled }
+        if ($null -eq $previousSigningKey) { Remove-Item Env:GameNet__Authentication__SigningKey -ErrorAction SilentlyContinue } else { $env:GameNet__Authentication__SigningKey = $previousSigningKey }
+        if ($null -eq $previousProvisioningKey) { Remove-Item Env:GameNet__Agent__ProvisioningKey -ErrorAction SilentlyContinue } else { $env:GameNet__Agent__ProvisioningKey = $previousProvisioningKey }
+        if ($null -eq $previousSecretTestOptIn) { Remove-Item Env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS -ErrorAction SilentlyContinue } else { $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = $previousSecretTestOptIn }
         if ($null -eq $previousAppEnvironment) { Remove-Item Env:ASPNETCORE_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:ASPNETCORE_ENVIRONMENT = $previousAppEnvironment }
         if ($null -eq $previousDotnetEnvironment) { Remove-Item Env:DOTNET_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:DOTNET_ENVIRONMENT = $previousDotnetEnvironment }
         if ($null -eq $previousProtectedPath) { Remove-Item Env:GAMENET_PROTECTED_SETTINGS_FILE -ErrorAction SilentlyContinue } else { $env:GAMENET_PROTECTED_SETTINGS_FILE = $previousProtectedPath }

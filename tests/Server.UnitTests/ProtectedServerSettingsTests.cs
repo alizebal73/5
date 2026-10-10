@@ -33,7 +33,11 @@ public sealed class ProtectedServerSettingsTests
 
             var configuration = new ConfigurationManager();
             ProtectedServerSettings.LoadInto(configuration, enableDefaultProtectedFile: false, explicitFilePath: path);
-            Assert.Equal(settings["GameNet:Agent:ProvisioningKey"], configuration["GameNet:Agent:ProvisioningKey"]);
+            Assert.Null(configuration["GameNet:DatabaseConnectionString"]);
+            Assert.Null(configuration["GameNet:Authentication:SigningKey"]);
+            Assert.Null(configuration["GameNet:Agent:ProvisioningKey"]);
+            Assert.Equal(settings["GameNet:Setup:BootstrapSecret"], configuration["GameNet:Setup:BootstrapSecret"]);
+            Assert.Equal(settings["GameNet:Authentication:Issuer"], configuration["GameNet:Authentication:Issuer"]);
         }
         finally
         {

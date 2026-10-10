@@ -47,6 +47,7 @@ internal static class ServerSecretBootstrap
         Func<ServerSecretMaterial> loadProtectedStore)
     {
         RejectSecretCommandLineArguments(commandLineArguments);
+        RejectBootstrapSecretOverrides(processEnvironment, commandLineArguments);
 
         var isDevelopment = string.Equals(
             environmentName,
@@ -67,6 +68,36 @@ internal static class ServerSecretBootstrap
         RejectSecretEnvironmentOverrides(processEnvironment);
         RejectSecretConfigurationValues(configuration);
         return loadProtectedStore();
+    }
+
+    private static void RejectBootstrapSecretOverrides(
+        IReadOnlyDictionary<string, string?> environment,
+        IReadOnlyList<string> arguments)
+    {
+        const string legacyEnvironmentKey = "GAMENET_BOOTSTRAP_SECRET";
+        const string protectedSettingsKey = "GameNet:Setup:BootstrapSecret";
+
+        foreach (var pair in environment)
+        {
+            var key = NormalizeEnvironmentKey(pair.Key);
+            if (!string.IsNullOrWhiteSpace(pair.Value) &&
+                (string.Equals(key, legacyEnvironmentKey, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(key, protectedSettingsKey, StringComparison.OrdinalIgnoreCase)))
+                throw new ServerSecretStoreException(
+                    "The initial Owner bootstrap secret must not be supplied through process environment.");
+        }
+
+        foreach (var argument in arguments)
+        {
+            var candidate = argument.TrimStart('-', '/');
+            var separator = candidate.IndexOf('=');
+            var key = (separator < 0 ? candidate : candidate[..separator])
+                .Replace("__", ":", StringComparison.Ordinal);
+            if (string.Equals(key, legacyEnvironmentKey, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, protectedSettingsKey, StringComparison.OrdinalIgnoreCase))
+                throw new ServerSecretStoreException(
+                    "The initial Owner bootstrap secret must not be supplied through command-line arguments.");
+        }
     }
 
     private static string? FindEnvironmentValue(
