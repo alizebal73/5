@@ -281,6 +281,42 @@ try {
     Assert-Status $raceRedeem1 200 "First enrollment redemption wins"
     $raceRedeem2 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
     Assert-Status $raceRedeem2 401 "Second enrollment redemption is rejected"
+    
+    # Two independent requests race to redeem one token; the database transaction must allow only one winner.
+    $parallelDeviceId = "ci-enrollment-parallel-" + [Guid]::NewGuid().ToString("N")
+    $parallelIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $parallelDeviceId }
+    Assert-Status $parallelIssue 200 "Issue token for concurrent redemption"
+    $parallelUri = "$serverUrl/api/v1/agent/enrollment/redeem"
+    $parallelBody = @{ deviceId = $parallelDeviceId; token = [string]$parallelIssue.Json.token } | ConvertTo-Json -Compress
+    $parallelScript = {
+        param($uri, $body)
+        try {
+            $response = Invoke-WebRequest -Method Post -Uri $uri -Headers @{ "X-GameNet-Contract" = "v1" } -ContentType "application/json" -Body $body -TimeoutSec 20 -SkipHttpErrorCheck
+            $json = $response.Content | ConvertFrom-Json -Depth 10
+            [pscustomobject]@{ StatusCode = [int]$response.StatusCode; Secret = [string]$json.secret }
+        }
+        catch {
+            [pscustomobject]@{ StatusCode = -1; Secret = "" }
+        }
+    }
+    $parallelJobs = @(
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+    )
+    try {
+        $parallelResults = @(Receive-Job -Job $parallelJobs -Wait)
+    }
+    finally {
+        Remove-Job -Job $parallelJobs -Force -ErrorAction SilentlyContinue
+    }
+    $parallelWinners = @($parallelResults | Where-Object { $_.StatusCode -eq 200 -and -not [string]::IsNullOrWhiteSpace($_.Secret) })
+    $parallelLosers = @($parallelResults | Where-Object { $_.StatusCode -eq 401 })
+    if ($parallelResults.Count -ne 2 -or $parallelWinners.Count -ne 1 -or $parallelLosers.Count -ne 1) {
+        throw "Concurrent enrollment redemption did not produce exactly one credential and one rejected request."
+    }
+    $parallelLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $parallelDeviceId; secret = [string]$parallelWinners[0].Secret }
+    Assert-Status $parallelLogin 200 "Authenticate Agent using the one credential created by concurrent redemption"
+
     # Station mutations must be idempotent and Station online state must not be inferred from credential existence.
     $stationCode = "CI-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
     $stationCreateKey = "ci-station-create-" + [Guid]::NewGuid().ToString("N")
@@ -486,6 +522,12 @@ try {
     Assert-Status $managerTokenResponse 200 "Login constrained role manager"
     $managerToken = [string]$managerTokenResponse.Json.data.accessToken
     $managerHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken" }
+
+    $managerEnrollmentDenied = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $managerHeaders @{
+        deviceId = "ci-enrollment-denied-" + [Guid]::NewGuid().ToString("N")
+    }
+    Assert-Status $managerEnrollmentDenied 403 "Deny enrollment token issue without agents.enrollment.manage"
+
 
     $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
