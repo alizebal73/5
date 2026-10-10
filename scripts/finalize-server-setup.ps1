@@ -26,12 +26,37 @@ if (-not [string]::Equals($settingsPath, $expectedPath, [StringComparison]::Ordi
 
 try { $serverUri = [Uri]::new($ServerBaseUrl, [UriKind]::Absolute) }
 catch { throw "ServerBaseUrl must be an absolute HTTPS URL, or HTTP loopback for local setup." }
-if ($serverUri.Scheme -ne [Uri]::UriSchemeHttps -and -not ($serverUri.Scheme -eq [Uri]::UriSchemeHttp -and $serverUri.IsLoopback)) {
-    throw "Refusing to verify setup state through remote HTTP."
+if ($serverUri.Scheme -ne [Uri]::UriSchemeHttps) {
+    throw "Use the exact HTTPS listener configured in server.json; remote HTTP is not accepted."
 }
 if (-not [string]::IsNullOrEmpty($serverUri.UserInfo) -or $serverUri.AbsolutePath -notin @("", "/") -or
     -not [string]::IsNullOrEmpty($serverUri.Query) -or -not [string]::IsNullOrEmpty($serverUri.Fragment)) {
     throw "ServerBaseUrl must be the server origin without credentials, path, query, or fragment."
+}
+
+$serverConfigurationPath = Join-Path $configDirectory "server.json"
+if (-not (Test-Path -LiteralPath $configDirectory -PathType Container) -or
+    -not (Test-Path -LiteralPath $serverConfigurationPath -PathType Leaf)) {
+    throw "The canonical Server configuration is unavailable. No settings were changed."
+}
+foreach ($candidate in @($managerRoot, $configDirectory, $serverConfigurationPath)) {
+    $item = Get-Item -LiteralPath $candidate -Force
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "The Server configuration path contains a reparse point. No settings were changed."
+    }
+}
+$serverConfiguration = Get-Content -LiteralPath $serverConfigurationPath -Raw | ConvertFrom-Json -AsHashtable
+$listenerText = [string]$serverConfiguration["urls"]
+$listenerUrls = @($listenerText -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+if ($listenerUrls.Count -ne 1) {
+    throw "server.json must declare exactly one HTTPS listener before setup can be finalized."
+}
+try { $listenerUri = [Uri]::new($listenerUrls[0], [UriKind]::Absolute) }
+catch { throw "The configured Server listener URL is invalid. No settings were changed." }
+if ($listenerUri.Scheme -ne [Uri]::UriSchemeHttps -or
+    -not [string]::Equals($listenerUri.Host, $serverUri.Host, [StringComparison]::OrdinalIgnoreCase) -or
+    $listenerUri.Port -ne $serverUri.Port) {
+    throw "ServerBaseUrl does not match the local server.json HTTPS listener. No settings were changed."
 }
 
 # Do not touch the file unless the installed service exists and its own API confirms
@@ -54,11 +79,12 @@ if ($status.data.required) {
 
 if (-not (Test-Path -LiteralPath $managerRoot -PathType Container) -or
     -not (Test-Path -LiteralPath $configDirectory -PathType Container) -or
+    -not (Test-Path -LiteralPath $serverConfigurationPath -PathType Leaf) -or
     -not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
     throw "The canonical protected settings path is unavailable. No file was changed."
 }
 
-foreach ($candidate in @($managerRoot, $configDirectory, $settingsPath)) {
+foreach ($candidate in @($managerRoot, $configDirectory, $serverConfigurationPath, $settingsPath)) {
     $item = Get-Item -LiteralPath $candidate -Force
     if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
         throw "The protected settings path contains a reparse point. No file was changed."
@@ -111,6 +137,35 @@ function Assert-RestrictedSettingsAcl([string]$Path) {
     }
 }
 
+function Assert-RestrictedDirectoryAcl([string]$Path) {
+    $acl = Get-Acl -LiteralPath $Path
+    if (-not $acl.AreAccessRulesProtected) {
+        throw "Protected Server directory ACL inheritance is enabled. No settings were changed."
+    }
+    $rules = @($acl.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier]))
+    if ($rules.Count -ne 4) {
+        throw "Protected Server directory ACL is not the expected restricted four-principal ACL. No settings were changed."
+    }
+    $usersSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-545")
+    $expected = [System.Collections.Generic.Dictionary[string, System.Security.AccessControl.FileSystemRights]]::new([StringComparer]::Ordinal)
+    $expected.Add($systemSid.Value, [System.Security.AccessControl.FileSystemRights]::FullControl)
+    $expected.Add($administratorsSid.Value, [System.Security.AccessControl.FileSystemRights]::FullControl)
+    $expected.Add($usersSid.Value, [System.Security.AccessControl.FileSystemRights]::ReadAndExecute)
+    $expected.Add($serviceSid.Value, [System.Security.AccessControl.FileSystemRights]::ReadAndExecute)
+    foreach ($rule in $rules) {
+        $sid = $rule.IdentityReference.Value
+        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow -or
+            -not $expected.ContainsKey($sid) -or
+            [int]$rule.FileSystemRights -ne [int]$expected[$sid]) {
+            throw "Protected Server directory ACL has an unexpected principal or permission. No settings were changed."
+        }
+        $expected.Remove($sid)
+    }
+    if ($expected.Count -ne 0) {
+        throw "Protected Server directory ACL is missing a required principal. No settings were changed."
+    }
+}
+
 function New-RestrictedSettingsAcl {
     $acl = [System.Security.AccessControl.FileSecurity]::new()
     $acl.SetAccessRuleProtection($true, $false)
@@ -132,6 +187,8 @@ function Clear-ByteArray([byte[]]$Bytes) {
     }
 }
 
+Assert-RestrictedDirectoryAcl $managerRoot
+Assert-RestrictedDirectoryAcl $configDirectory
 Assert-RestrictedSettingsAcl $settingsPath
 
 $encryptedBytes = $null
@@ -215,6 +272,25 @@ try {
     }
 
     Assert-RestrictedSettingsAcl $tempPath
+    # Verify the temporary DPAPI payload before replacing the original. Any failure here
+    # leaves the original settings file and its bootstrap secret untouched.
+    $verificationBytes = [System.IO.File]::ReadAllBytes($tempPath)
+    $verificationClearBytes = [System.Security.Cryptography.ProtectedData]::Unprotect(
+        $verificationBytes, $null, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)
+    $verifiedSettings = [System.Text.Encoding]::UTF8.GetString($verificationClearBytes) | ConvertFrom-Json -AsHashtable
+    if ($verifiedSettings.Contains("GameNet:Setup:BootstrapSecret") -or
+        $verifiedSettings["GameNet:Authentication:Enabled"] -ne $settings["GameNet:Authentication:Enabled"] -or
+        $verifiedSettings["GameNet:Authentication:Issuer"] -ne $settings["GameNet:Authentication:Issuer"] -or
+        $verifiedSettings["GameNet:Authentication:Audience"] -ne $settings["GameNet:Authentication:Audience"] -or
+        $verifiedSettings["GameNet:ServerTls:CertificateThumbprint"] -ne $settings["GameNet:ServerTls:CertificateThumbprint"]) {
+        throw "Temporary settings verification failed. The original file was not replaced."
+    }
+    $verifiedSettings = $null
+    Clear-ByteArray $verificationBytes
+    Clear-ByteArray $verificationClearBytes
+    $verificationBytes = $null
+    $verificationClearBytes = $null
+
     # Same-directory replacement is atomic on the supported local Windows filesystem.
     # No backup file is created because that would retain the old protected secret.
     [System.IO.File]::Replace($tempPath, $settingsPath, $null)
