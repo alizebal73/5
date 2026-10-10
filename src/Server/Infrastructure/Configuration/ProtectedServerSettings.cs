@@ -1,6 +1,7 @@
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 
@@ -88,6 +89,7 @@ public static class ProtectedServerSettings
         configuration.AddInMemoryCollection(runtimeSettings);
     }
 
+    [SupportedOSPlatform("windows")]
     internal static void ValidateAccessRules(
         IEnumerable<FileSystemAccessRule> accessRules,
         bool isDirectory,
@@ -185,6 +187,16 @@ public static class ProtectedServerSettings
 
             var serviceSid = (SecurityIdentifier)new NTAccount("NT SERVICE", "GameNet 5 Server")
                 .Translate(typeof(SecurityIdentifier));
+
+            var managerRootSecurity = new DirectoryInfo(managerRoot)
+                .GetAccessControl(AccessControlSections.Access);
+            if (!managerRootSecurity.AreAccessRulesProtected)
+                throw new InvalidOperationException("GameNet Manager root ACL inheritance must be disabled.");
+            ValidateAccessRules(
+                managerRootSecurity.GetAccessRules(true, false, typeof(SecurityIdentifier))
+                    .Cast<FileSystemAccessRule>(),
+                isDirectory: true,
+                serviceSid);
 
             var directorySecurity = new DirectoryInfo(directory)
                 .GetAccessControl(AccessControlSections.Access);
