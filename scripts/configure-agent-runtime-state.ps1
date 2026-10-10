@@ -37,8 +37,8 @@ function Assert-NotReparsePoint {
 $serverService = Get-CimInstance -ClassName Win32_Service |
     Where-Object { $_.Name -eq $serverServiceName -or $_.DisplayName -eq $serverServiceName } |
     Select-Object -First 1
-$serverMarkers = @($serverConfigPath, $serverSettingsPath, $serverSecretStorePath) |
-    Where-Object { Test-Path -LiteralPath $_ }
+$serverMarkers = @(@($serverConfigPath, $serverSettingsPath, $serverSecretStorePath) |
+    Where-Object { Test-Path -LiteralPath $_ })
 if ($null -ne $serverService -or $serverMarkers.Count -gt 0) {
     throw "This appears to be a Server/Manager machine. Run Agent state provisioning only on a dedicated Agent client; no ACLs were changed."
 }
@@ -190,7 +190,8 @@ function Assert-DirectoryAcl {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][System.Security.Principal.SecurityIdentifier[]]$AllowedSids,
-        [Parameter(Mandatory = $true)][hashtable[]]$RequiredRights
+        [Parameter(Mandatory = $true)][hashtable[]]$RequiredRights,
+        [bool]$ServiceSidMustBeReadOnly = $false
     )
 
     $acl = Get-Acl -LiteralPath $Path
@@ -204,10 +205,11 @@ function Assert-DirectoryAcl {
     if ($rules.Count -eq 0) {
         throw "The DACL on '$Path' contains no explicit access rules."
     }
+    $allowedValues = @($AllowedSids | ForEach-Object { $_.Value })
     foreach ($rule in $rules) {
         if ($rule.AccessControlType -ne $allow -or
             $rule.IdentityReference -isnot [System.Security.Principal.SecurityIdentifier] -or
-            $AllowedSids.Value -notcontains $rule.IdentityReference.Value) {
+            $allowedValues -notcontains $rule.IdentityReference.Value) {
             throw "The DACL on '$Path' contains an unapproved principal or ACE."
         }
     }
@@ -228,10 +230,14 @@ function Assert-DirectoryAcl {
         [System.Security.AccessControl.FileSystemRights]::CreateFiles -bor
         [System.Security.AccessControl.FileSystemRights]::CreateDirectories -bor
         [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
-    foreach ($sid in @($usersSid, $serviceSid)) {
+    $principalsToKeepReadOnly = @($usersSid)
+    if ($ServiceSidMustBeReadOnly) {
+        $principalsToKeepReadOnly += $serviceSid
+    }
+    foreach ($sid in $principalsToKeepReadOnly) {
         $actual = Get-CombinedRights -Rules $rules -Sid $sid
         if (([int]$actual -band [int]$writeRights) -ne 0) {
-            throw "The DACL on '$Path' grants write/ownership rights to ordinary users or the Agent service where not expected."
+            throw "The DACL on '$Path' grants write/ownership rights to a principal that must remain read-only."
         }
     }
 }
@@ -280,13 +286,13 @@ Assert-DirectoryAcl -Path $managerRoot -AllowedSids $rootAllowed -RequiredRights
     @{ Sid = $administratorsSid; Rights = $fullControl },
     @{ Sid = $usersSid; Rights = $readExecute },
     @{ Sid = $serviceSid; Rights = $readExecute }
-)
+) -ServiceSidMustBeReadOnly $true
 Assert-DirectoryAcl -Path $configDirectory -AllowedSids $rootAllowed -RequiredRights @(
     @{ Sid = $systemSid; Rights = $fullControl },
     @{ Sid = $administratorsSid; Rights = $fullControl },
     @{ Sid = $usersSid; Rights = $readExecute },
     @{ Sid = $serviceSid; Rights = $readExecute }
-)
+) -ServiceSidMustBeReadOnly $true
 Assert-DirectoryAcl -Path $agentStateRoot -AllowedSids $stateAllowed -RequiredRights @(
     @{ Sid = $systemSid; Rights = $fullControl },
     @{ Sid = $administratorsSid; Rights = $fullControl },
