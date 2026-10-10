@@ -67,6 +67,17 @@ public sealed class AgentEnrollmentTokenTests
         Assert.Throws<ArgumentException>(() => AgentCredentialSecretMaterial.HashEnrollmentToken(new string('=', 43)));
     }
 
+    [Fact]
+    public void Generated_enrollment_tokens_are_256_bit_unpadded_base64url()
+    {
+        var token = AgentCredentialSecretMaterial.Generate();
+
+        Assert.Equal(43, token.Length);
+        Assert.DoesNotContain("=", token);
+        Assert.All(token, character =>
+            Assert.True(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'));
+    }
+
     private static AgentEnrollmentToken CreateToken(DateTimeOffset now) =>
         AgentEnrollmentToken.Create(
             Guid.NewGuid(),
