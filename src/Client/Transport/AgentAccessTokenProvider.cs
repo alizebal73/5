@@ -32,15 +32,6 @@ public sealed class AgentAccessTokenProvider(
             }
 
             var secret = await credentialStore.TryLoadAsync(cancellationToken);
-            if (secret is not null)
-            {
-                // A paired installation never needs an enrollment token again.
-                Environment.SetEnvironmentVariable(
-                    options.Value.EnrollmentTokenEnvironmentVariableName,
-                    null,
-                    EnvironmentVariableTarget.Process);
-            }
-
             if (secret is null)
             {
                 // New installations redeem the operator-issued one-time enrollment
@@ -50,6 +41,17 @@ public sealed class AgentAccessTokenProvider(
                     deviceId, cancellationToken);
                 secret ??= await credentialStore.GetOrBootstrapAsync(cancellationToken);
             }
+
+            // Once a durable per-device credential is available, clear all bootstrap
+            // material from this process regardless of which compatible path supplied it.
+            Environment.SetEnvironmentVariable(
+                options.Value.EnrollmentTokenEnvironmentVariableName,
+                null,
+                EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable(
+                options.Value.BootstrapCredentialEnvironmentVariableName,
+                null,
+                EnvironmentVariableTarget.Process);
 
             var client = httpClientFactory.CreateClient("GameNetAgentCredentialClient");
             var endpoint = $"{options.Value.ServerBaseUrl.TrimEnd('/')}/api/v1/agent/auth/token";
