@@ -38,6 +38,35 @@ public static class AgentEnrollmentRoutes
             .RequireAuthorization("Operator")
             .RequireAuthorization(Permissions.AgentEnrollmentManage);
 
+        app.MapPost("/api/v1/agent/enrollment/recover",
+            async (
+                AgentEnrollmentRecoverRequest request,
+                IAgentEnrollmentService enrollment,
+                HttpContext context,
+                CancellationToken cancellationToken) =>
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                if (!TryGetOperatorId(context, out var operatorId))
+                    return Results.Unauthorized();
+
+                try
+                {
+                    var issued = await enrollment.RecoverAsync(new AgentEnrollmentRecoverCommand(
+                        request.DeviceId,
+                        request.Reason,
+                        operatorId,
+                        CorrelationIdMiddleware.GetCurrent(context),
+                        "Desktop"), cancellationToken);
+                    return Results.Ok(issued);
+                }
+                catch (AgentCredentialException exception)
+                {
+                    return Failure(context, exception);
+                }
+            })
+            .RequireAuthorization("Operator")
+            .RequireAuthorization(Permissions.AgentEnrollmentManage);
+
         app.MapPost("/api/v1/agent/enrollment-tokens/{tokenId:guid}/revoke",
             async (
                 Guid tokenId,
@@ -111,6 +140,7 @@ public static class AgentEnrollmentRoutes
             "agent.credential_exists" => (StatusCodes.Status409Conflict, "An active credential already exists for this device."),
             "agent.enrollment_token_pending" => (StatusCodes.Status409Conflict, "An unexpired enrollment token already exists for this device."),
             "agent.enrollment_conflict" => (StatusCodes.Status409Conflict, "The enrollment operation conflicted with another request."),
+            "agent.enrollment_recovery_not_safe" => (StatusCodes.Status409Conflict, "Enrollment recovery is not safe for the current Agent credential state."),
             _ => (StatusCodes.Status400BadRequest, "The enrollment operation was rejected.")
         };
 
