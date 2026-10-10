@@ -58,13 +58,10 @@ public static class ServiceRegistration
 
         services.AddDbContext<GameNetDbContext>((provider, db) =>
         {
-            var options = provider.GetRequiredService<IOptions<GameNetOptions>>().Value;
-            if (!string.IsNullOrWhiteSpace(options.DatabaseConnectionString))
-            {
-                db.UseNpgsql(
-                    options.DatabaseConnectionString,
-                    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
-            }
+            var connection = provider.GetRequiredService<IDatabaseConnectionSecret>().ConnectionString;
+            db.UseNpgsql(
+                connection,
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
         });
 
         return services;

@@ -9,6 +9,13 @@ public static class ProtectedServerSettings
     public const string PathEnvironmentVariableName = "GAMENET_PROTECTED_SETTINGS_FILE";
     public const string DefaultFileName = "server-secrets.bin";
 
+    private static readonly HashSet<string> RuntimeExcludedSecretKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "GameNet:DatabaseConnectionString",
+        "GameNet:Authentication:SigningKey",
+        "GameNet:Agent:ProvisioningKey"
+    };
+
     private static readonly HashSet<string> AllowedKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "GameNet:DatabaseConnectionString",
@@ -57,7 +64,12 @@ public static class ProtectedServerSettings
         }
 
         var settings = Read(path);
-        configuration.AddInMemoryCollection(settings);
+        // Legacy encrypted settings may still contain these values, but they are no longer runtime providers.
+        // ServerSecretBootstrap loads the canonical DACL-restricted secret store instead.
+        var runtimeSettings = settings
+            .Where(pair => !RuntimeExcludedSecretKeys.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        configuration.AddInMemoryCollection(runtimeSettings);
     }
 
     public static IReadOnlyDictionary<string, string?> Read(string path)

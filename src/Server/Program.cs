@@ -14,6 +14,17 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
+if (args.Any(argument => string.Equals(argument, "--provision-secrets", StringComparison.Ordinal)))
+{
+    if (args.Length != 1)
+        throw new InvalidOperationException("Run secret provisioning with --provision-secrets as the only argument.");
+    if (!OperatingSystem.IsWindows())
+        throw new ServerSecretStoreException("Server secret-store provisioning requires Windows.");
+
+    ServerSecretProvisioning.RunInteractive();
+    return;
+}
+
 var migrateOnly = args.Contains("--migrate-only", StringComparer.Ordinal);
 var hostArguments = args
     .Where(argument => !string.Equals(argument, "--migrate-only", StringComparison.Ordinal))
@@ -22,13 +33,6 @@ var builder = WebApplication.CreateBuilder(hostArguments);
 
 ServerTlsHostConfiguration.AddProgramDataConfiguration(builder);
 
-var databaseConnection = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
-if (!string.IsNullOrWhiteSpace(databaseConnection) &&
-    string.IsNullOrWhiteSpace(builder.Configuration["GameNet:DatabaseConnectionString"]))
-{
-    builder.Configuration["GameNet:DatabaseConnectionString"] = databaseConnection;
-}
-
 var protectedSettingsEnabled =
     builder.Environment.IsProduction() &&
     bool.TryParse(builder.Configuration["GameNet:ProtectedSettings:Enabled"], out var enableProtectedFile) &&
@@ -36,12 +40,10 @@ var protectedSettingsEnabled =
 ProtectedServerSettings.LoadInto(builder.Configuration, protectedSettingsEnabled);
 ServerTlsHostConfiguration.ConfigureListeners(builder);
 
-var bootstrapSecret = Environment.GetEnvironmentVariable("GAMENET_BOOTSTRAP_SECRET");
-if (!string.IsNullOrWhiteSpace(bootstrapSecret) &&
-    string.IsNullOrWhiteSpace(builder.Configuration["GameNet:Setup:BootstrapSecret"]))
-{
-    builder.Configuration["GameNet:Setup:BootstrapSecret"] = bootstrapSecret;
-}
+var serverSecrets = ServerSecretBootstrap.Load(builder.Environment, builder.Configuration, args);
+builder.Services.AddSingleton<IDatabaseConnectionSecret>(serverSecrets);
+builder.Services.AddSingleton<IJwtSigningKeySecret>(serverSecrets);
+builder.Services.AddSingleton<IAgentProvisioningKeySecret>(serverSecrets);
 
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
 builder.Services.AddGameNetServer();
