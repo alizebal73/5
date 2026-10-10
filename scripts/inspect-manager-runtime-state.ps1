@@ -255,11 +255,343 @@ foreach ($port in @(5080, 5432)) {
     }
 }
 
+Write-Section "PostgreSQL configuration and inbound firewall (read-only)"
+$postgresService = $null
+try {
+    $postgresService = Get-CimInstance -ClassName Win32_Service |
+        Where-Object { $_.Name -eq "postgresql-x64-17" } |
+        Select-Object -First 1
+}
+catch {
+    Write-Output "postgresServiceInspection=unavailable errorType=$($_.Exception.GetType().Name)"
+}
+
+$dataDirectory = $null
+if ($null -ne $postgresService) {
+    $dataMatch = [Regex]::Match([string]$postgresService.PathName, '(?i)(?:^|\s)-D\s+(?:"([^"]+)"|([^\s]+))')
+    if ($dataMatch.Success) {
+        $dataDirectory = if (-not [string]::IsNullOrWhiteSpace($dataMatch.Groups[1].Value)) {
+            $dataMatch.Groups[1].Value
+        }
+        else {
+            $dataMatch.Groups[2].Value
+        }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($dataDirectory)) {
+    $defaultDataDirectory = Join-Path $env:ProgramFiles "PostgreSQL\17\data"
+    if (Test-Path -LiteralPath $defaultDataDirectory -PathType Container) {
+        $dataDirectory = $defaultDataDirectory
+    }
+}
+
+$configFile = if (-not [string]::IsNullOrWhiteSpace($dataDirectory)) {
+    Join-Path $dataDirectory "postgresql.conf"
+}
+else { $null }
+$hbaFile = if (-not [string]::IsNullOrWhiteSpace($dataDirectory)) {
+    Join-Path $dataDirectory "pg_hba.conf"
+}
+else { $null }
+
+if ($null -eq $postgresService) {
+    Write-Output "postgresService=not-found"
+}
+else {
+    Write-Output "postgresServiceState=$($postgresService.State) startMode=$($postgresService.StartMode) logon=$($postgresService.StartName) pid=$($postgresService.ProcessId)"
+}
+if ([string]::IsNullOrWhiteSpace($dataDirectory)) {
+    Write-Output "postgresDataDirectory=not-resolved"
+}
+else {
+    Write-Output "postgresDataDirectory=$dataDirectory"
+    if (Test-Path -LiteralPath $configFile -PathType Leaf) {
+        $settings = @(Get-Content -LiteralPath $configFile | ForEach-Object {
+            if ($_ -match '^\s*(listen_addresses|port|hba_file)\s*=') { $_.Trim() }
+        })
+        if ($settings.Count -eq 0) {
+            Write-Output "postgresqlConfigSettings=not-found-in-main-file (included files may override settings)"
+        }
+        else {
+            foreach ($setting in $settings) {
+                # These are network/config-path settings only; no credentials are read or emitted.
+                Write-Output "postgresqlConfig=$setting"
+                if ($setting -match '(?i)^\s*hba_file\s*=\s*(.+?)\s*(?:#.*)?
+    Write-PathFacts -Path $path
+}
+
+Write-Section "Server endpoint/TLS configuration (non-secret fields only)"
+$config = $null
+$certificateThumbprint = $null
+if (-not (Test-Path -LiteralPath $serverConfigPath -PathType Leaf)) {
+    Write-Output "serverConfig=missing"
+}
+else {
+    try {
+        $config = Get-Content -LiteralPath $serverConfigPath -Raw | ConvertFrom-Json -AsHashtable
+        $urls = Get-MapValue -Map $config -Name "urls"
+        Write-Output "serverConfig=parsed"
+        Write-Output "configuredUrls=$urls"
+
+        $gameNet = Get-MapValue -Map $config -Name "GameNet"
+        $tls = Get-MapValue -Map $gameNet -Name "ServerTls"
+        $certificateThumbprint = Get-MapValue -Map $tls -Name "CertificateThumbprint"
+        if (-not [string]::IsNullOrWhiteSpace([string]$certificateThumbprint)) {
+            $certificateThumbprint = ([string]$certificateThumbprint -replace '\s', '').ToUpperInvariant()
+            Write-Output "configuredCertificateThumbprint=$certificateThumbprint"
+        }
+        else {
+            Write-Output "configuredCertificateThumbprint=missing"
+        }
+
+        $script:SensitiveConfigFindings.Clear()
+        Find-SensitiveConfigKeys -Node $config
+        if ($script:SensitiveConfigFindings.Count -eq 0) {
+            Write-Output "nonemptySensitiveNamedSettings=none"
+        }
+        else {
+            Write-Output "nonemptySensitiveNamedSettings=present; values redacted"
+            foreach ($finding in $script:SensitiveConfigFindings) {
+                Write-Output "  $finding"
+            }
+        }
+    }
+    catch {
+        Write-Output "serverConfig=parse-failed errorType=$($_.Exception.GetType().Name); contents were not printed."
+    }
+}
+
+Write-Section "Server certificate metadata"
+if ([string]$certificateThumbprint -match '^[0-9A-F]{40}$') {
+    $certificate = $null
+    try {
+        $certificate = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction Stop |
+            Where-Object { $_.Thumbprint -eq $certificateThumbprint } |
+            Select-Object -First 1
+    }
+    catch {
+        Write-Output "personalCertificateStore=unavailable errorType=$($_.Exception.GetType().Name)"
+    }
+
+    if ($null -eq $certificate) {
+        Write-Output "personalCertificate=not-found"
+    }
+    else {
+        Write-Output "personalCertificate=found thumbprint=$($certificate.Thumbprint)"
+        Write-Output "subject=$($certificate.Subject)"
+        Write-Output "hasPrivateKey=$($certificate.HasPrivateKey)"
+        Write-Output "notBeforeUtc=$($certificate.NotBefore.ToUniversalTime().ToString('O'))"
+        Write-Output "notAfterUtc=$($certificate.NotAfter.ToUniversalTime().ToString('O'))"
+        $san = $certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.17" } | Select-Object -First 1
+        if ($null -ne $san) {
+            Write-Output "subjectAlternativeNames=$($san.Format($false))"
+        }
+        else {
+            Write-Output "subjectAlternativeNames=missing"
+        }
+        Write-Output "privateKeyAccessUnderServiceToken=not-tested-by-this-read-only-script"
+    }
+
+    try {
+        $trustedCertificate = Get-ChildItem -Path Cert:\LocalMachine\Root -ErrorAction Stop |
+            Where-Object { $_.Thumbprint -eq $certificateThumbprint } |
+            Select-Object -First 1
+        Write-Output "sameThumbprintInLocalMachineRoot=$($null -ne $trustedCertificate)"
+    }
+    catch {
+        Write-Output "rootStoreInspection=unavailable errorType=$($_.Exception.GetType().Name)"
+    }
+}
+else {
+    Write-Output "certificateInspection=skipped (no valid SHA-1-format thumbprint configured; no certificate was modified)."
+}
+
+Write-Section "Interpretation"
+Write-Output "This report only gathers read-only observations and does not prove service-token DPAPI access or TLS private-key access."
+Write-Output "Do not run --provision-secrets or any TLS/configuration/cleanup script based on this report alone."
+Write-Output "Preserve this output with the exact branch/commit used for the planned isolated Windows service test."
+) {
+                    $configuredHba = $Matches[1].Trim().Trim('"').Trim("'")
+                    if (-not [string]::IsNullOrWhiteSpace($configuredHba)) {
+                        $hbaFile = if ([IO.Path]::IsPathRooted($configuredHba)) {
+                            $configuredHba
+                        }
+                        else {
+                            Join-Path $dataDirectory $configuredHba
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else {
+        Write-Output "postgresqlConfig=not-found"
+    }
+
+    if ($null -ne $hbaFile -and (Test-Path -LiteralPath $hbaFile -PathType Leaf)) {
+        Write-Output "pgHbaRulesBegin (database and role names redacted)"
+        $lineNumber = 0
+        foreach ($line in Get-Content -LiteralPath $hbaFile) {
+            $lineNumber++
+            $ruleText = ($line -replace '#.*
+    Write-PathFacts -Path $path
+}
+
+Write-Section "Server endpoint/TLS configuration (non-secret fields only)"
+$config = $null
+$certificateThumbprint = $null
+if (-not (Test-Path -LiteralPath $serverConfigPath -PathType Leaf)) {
+    Write-Output "serverConfig=missing"
+}
+else {
+    try {
+        $config = Get-Content -LiteralPath $serverConfigPath -Raw | ConvertFrom-Json -AsHashtable
+        $urls = Get-MapValue -Map $config -Name "urls"
+        Write-Output "serverConfig=parsed"
+        Write-Output "configuredUrls=$urls"
+
+        $gameNet = Get-MapValue -Map $config -Name "GameNet"
+        $tls = Get-MapValue -Map $gameNet -Name "ServerTls"
+        $certificateThumbprint = Get-MapValue -Map $tls -Name "CertificateThumbprint"
+        if (-not [string]::IsNullOrWhiteSpace([string]$certificateThumbprint)) {
+            $certificateThumbprint = ([string]$certificateThumbprint -replace '\s', '').ToUpperInvariant()
+            Write-Output "configuredCertificateThumbprint=$certificateThumbprint"
+        }
+        else {
+            Write-Output "configuredCertificateThumbprint=missing"
+        }
+
+        $script:SensitiveConfigFindings.Clear()
+        Find-SensitiveConfigKeys -Node $config
+        if ($script:SensitiveConfigFindings.Count -eq 0) {
+            Write-Output "nonemptySensitiveNamedSettings=none"
+        }
+        else {
+            Write-Output "nonemptySensitiveNamedSettings=present; values redacted"
+            foreach ($finding in $script:SensitiveConfigFindings) {
+                Write-Output "  $finding"
+            }
+        }
+    }
+    catch {
+        Write-Output "serverConfig=parse-failed errorType=$($_.Exception.GetType().Name); contents were not printed."
+    }
+}
+
+Write-Section "Server certificate metadata"
+if ([string]$certificateThumbprint -match '^[0-9A-F]{40}$') {
+    $certificate = $null
+    try {
+        $certificate = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction Stop |
+            Where-Object { $_.Thumbprint -eq $certificateThumbprint } |
+            Select-Object -First 1
+    }
+    catch {
+        Write-Output "personalCertificateStore=unavailable errorType=$($_.Exception.GetType().Name)"
+    }
+
+    if ($null -eq $certificate) {
+        Write-Output "personalCertificate=not-found"
+    }
+    else {
+        Write-Output "personalCertificate=found thumbprint=$($certificate.Thumbprint)"
+        Write-Output "subject=$($certificate.Subject)"
+        Write-Output "hasPrivateKey=$($certificate.HasPrivateKey)"
+        Write-Output "notBeforeUtc=$($certificate.NotBefore.ToUniversalTime().ToString('O'))"
+        Write-Output "notAfterUtc=$($certificate.NotAfter.ToUniversalTime().ToString('O'))"
+        $san = $certificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.17" } | Select-Object -First 1
+        if ($null -ne $san) {
+            Write-Output "subjectAlternativeNames=$($san.Format($false))"
+        }
+        else {
+            Write-Output "subjectAlternativeNames=missing"
+        }
+        Write-Output "privateKeyAccessUnderServiceToken=not-tested-by-this-read-only-script"
+    }
+
+    try {
+        $trustedCertificate = Get-ChildItem -Path Cert:\LocalMachine\Root -ErrorAction Stop |
+            Where-Object { $_.Thumbprint -eq $certificateThumbprint } |
+            Select-Object -First 1
+        Write-Output "sameThumbprintInLocalMachineRoot=$($null -ne $trustedCertificate)"
+    }
+    catch {
+        Write-Output "rootStoreInspection=unavailable errorType=$($_.Exception.GetType().Name)"
+    }
+}
+else {
+    Write-Output "certificateInspection=skipped (no valid SHA-1-format thumbprint configured; no certificate was modified)."
+}
+
+Write-Section "Interpretation"
+Write-Output "This report only gathers read-only observations and does not prove service-token DPAPI access or TLS private-key access."
+Write-Output "Do not run --provision-secrets or any TLS/configuration/cleanup script based on this report alone."
+Write-Output "Preserve this output with the exact branch/commit used for the planned isolated Windows service test."
+, '').Trim()
+            if ([string]::IsNullOrWhiteSpace($ruleText)) { continue }
+            $tokens = @($ruleText -split '\s+')
+            $ruleType = $tokens[0]
+            $address = "-"
+            $method = "unparsed"
+            if ($ruleType -like "host*") {
+                if ($tokens.Count -ge 5) {
+                    $address = $tokens[3]
+                    $method = $tokens[4]
+                }
+            }
+            elseif ($ruleType -eq "local") {
+                if ($tokens.Count -ge 4) { $method = $tokens[3] }
+            }
+            else {
+                # Do not print configuration directives or any values from them.
+                $method = if ($ruleType -like "include*") { "include-directive" } else { "unparsed" }
+            }
+            Write-Output "pgHbaRuleLine=$lineNumber type=$ruleType address=$address authMethod=$method database=<redacted> role=<redacted>"
+        }
+        Write-Output "pgHbaRulesEnd"
+    }
+    else {
+        Write-Output "pgHbaFile=not-found-at-resolved-path"
+    }
+}
+
+try {
+    $inboundRules = @(Get-NetFirewallRule -PolicyStore ActiveStore -Enabled True -Direction Inbound)
+    $matchingRules = 0
+    foreach ($rule in $inboundRules) {
+        try {
+            $portFilter = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+            $localPorts = @($portFilter.LocalPort | ForEach-Object { [string]$_ })
+            $relevantPorts = @($localPorts | Where-Object { $_ -in @("5432", "5080", "Any") })
+            if ($relevantPorts.Count -eq 0) { continue }
+            $addressFilter = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+            Write-Output "firewallRule=$($rule.DisplayName) enabled=$($rule.Enabled) action=$($rule.Action) profile=$($rule.Profile) protocol=$($portFilter.Protocol) localPort=$($portFilter.LocalPort -join ',') localAddress=$($addressFilter.LocalAddress -join ',') remoteAddress=$($addressFilter.RemoteAddress -join ',')"
+            $matchingRules++
+        }
+        catch {
+            # A single rule that cannot be inspected must not hide the remaining rules.
+        }
+    }
+    if ($matchingRules -eq 0) {
+        Write-Output "inboundFirewallRulesForPorts5080Or5432=none-found-or-inspection-unavailable"
+    }
+}
+catch {
+    Write-Output "inboundFirewallInspection=unavailable errorType=$($_.Exception.GetType().Name)"
+}
+
 Write-Section "ProgramData path metadata and access rules"
 foreach ($path in @(
     $managerRoot,
     $configDirectory,
     $serverConfigPath,
+    (Join-Path $managerRoot "Server"),
+    (Join-Path (Join-Path $managerRoot "Server") "Data"),
+    (Join-Path $managerRoot "Backups"),
+    (Join-Path $managerRoot "Agent"),
+    (Join-Path $managerRoot "Logs"),
+    (Join-Path $managerRoot "State"),
+    (Join-Path $managerRoot "Updates"),
     $secretsDirectory,
     $secretStorePath,
     $auditDirectory
