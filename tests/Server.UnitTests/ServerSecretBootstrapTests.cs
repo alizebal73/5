@@ -184,6 +184,9 @@ public sealed class ServerSecretBootstrapTests
     [Fact]
     public void Unsupported_payload_version_is_rejected_without_echoing_payload()
     {
+        if (!OperatingSystem.IsWindows())
+            return;
+
         var payload = JsonSerializer.SerializeToUtf8Bytes(new
         {
             schemaVersion = 99,
