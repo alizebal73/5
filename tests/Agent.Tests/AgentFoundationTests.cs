@@ -3,6 +3,8 @@ using GameNet.Agent;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 namespace GameNet.Agent.Tests;
 public sealed class AgentFoundationTests
 {
@@ -67,8 +69,8 @@ public sealed class AgentFoundationTests
         try
         {
             var options = Options.Create(new AgentIdentityOptions { RootPath = root });
-            var first = await new AgentIdentityStore(options).GetOrCreateAsync();
-            var recreated = await new AgentIdentityStore(options).GetOrCreateAsync();
+            var first = await new AgentIdentityStore(options, new TestHostEnvironment()).GetOrCreateAsync();
+            var recreated = await new AgentIdentityStore(options, new TestHostEnvironment()).GetOrCreateAsync();
 
             Assert.Equal(first.DeviceId, recreated.DeviceId);
             Assert.Equal(32, first.DeviceId.Length);
@@ -90,10 +92,10 @@ public sealed class AgentFoundationTests
                 RootPath = root,
                 DeviceId = "station-pc-01"
             });
-            var first = await new AgentIdentityStore(firstOptions).GetOrCreateAsync();
+            var first = await new AgentIdentityStore(firstOptions, new TestHostEnvironment()).GetOrCreateAsync();
             Assert.Equal("station-pc-01", first.DeviceId);
 
-            var recreated = await new AgentIdentityStore(firstOptions).GetOrCreateAsync();
+            var recreated = await new AgentIdentityStore(firstOptions, new TestHostEnvironment()).GetOrCreateAsync();
             Assert.Equal(first.DeviceId, recreated.DeviceId);
 
             var mismatch = Options.Create(new AgentIdentityOptions
@@ -102,7 +104,7 @@ public sealed class AgentFoundationTests
                 DeviceId = "station-pc-02"
             });
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => new AgentIdentityStore(mismatch).GetOrCreateAsync());
+                () => new AgentIdentityStore(mismatch, new TestHostEnvironment()).GetOrCreateAsync());
         }
         finally
         {
@@ -150,5 +152,12 @@ public sealed class AgentFoundationTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "GameNet.Agent.Tests";
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
