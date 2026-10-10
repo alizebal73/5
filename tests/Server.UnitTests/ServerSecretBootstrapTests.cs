@@ -183,8 +183,14 @@ public sealed class ServerSecretBootstrapTests
     [Fact]
     public void Unsupported_payload_version_is_rejected_without_echoing_payload()
     {
-        var payload = Encoding.UTF8.GetBytes(
-            "{\\"schemaVersion\\":99,\\"generationId\\":\\"a4c5dc67bd1b4a30a695730d7f7ab777\\",\\"databaseConnectionString\\":\\"do-not-echo\\",\\"jwtSigningKeyBase64\\":\\"bad\\",\\"agentProvisioningKeyBase64\\":\\"bad\\"}");
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            schemaVersion = 99,
+            generationId = "a4c5dc67bd1b4a30a695730d7f7ab777",
+            databaseConnectionString = "do-not-echo",
+            jwtSigningKeyBase64 = "bad",
+            agentProvisioningKeyBase64 = "bad"
+        });
         var exception = Assert.Throws<ServerSecretStoreException>(
             () => DpapiServerSecretStore.ParsePayload(payload));
         Assert.DoesNotContain("do-not-echo", exception.Message);
