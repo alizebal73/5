@@ -155,12 +155,97 @@ public sealed class AgentEnrollmentBootstrapperTests
         }
     }
 
+    [Fact]
+    public async Task Retains_protected_token_when_server_redeems_but_local_credential_persistence_fails()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "gamenet-enrollment-persist-failure-" + Guid.NewGuid().ToString("N"));
+        const string enrollmentToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcde";
+        const string secret = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ABCDE";
+
+        try
+        {
+            await WriteProtectedEnrollmentTokenAsync(root, "pc-recovery-01", enrollmentToken);
+            var identityOptions = Options.Create(new AgentIdentityOptions { RootPath = root });
+            var tokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System, new TestHostEnvironment());
+            var handler = new StubHandler(async (request, cancellationToken) =>
+            {
+                Assert.Equal("/api/v1/agent/enrollment/redeem", request.RequestUri!.AbsolutePath);
+                var redeem = await request.Content!.ReadFromJsonAsync<AgentEnrollmentRedeemRequest>(
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken);
+                Assert.Equal("pc-recovery-01", redeem!.DeviceId);
+                Assert.Equal(enrollmentToken, redeem.Token);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AgentCredentialSecretResponse(
+                        Guid.NewGuid(), "pc-recovery-01", secret, DateTimeOffset.UtcNow))
+                };
+            });
+            using var client = new HttpClient(handler);
+            var bootstrapper = new AgentEnrollmentBootstrapper(
+                new SingleClientFactory(client),
+                new FailingCredentialStore(),
+                tokenStore,
+                new TestHostEnvironment(),
+                Options.Create(new AgentTransportOptions { ServerBaseUrl = "https://gamenet.invalid" }));
+
+            await Assert.ThrowsAsync<IOException>(
+                () => bootstrapper.EnrollIfConfiguredAsync("pc-recovery-01"));
+
+            Assert.True(File.Exists(Path.Combine(root, AgentEnrollmentTokenStore.FileName)));
+            var retained = await tokenStore.TryLoadAsync("pc-recovery-01");
+            Assert.NotNull(retained);
+            Assert.Equal(enrollmentToken, retained!.Token);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch (DirectoryNotFoundException) { }
+        }
+    }
+
+    private static async Task WriteProtectedEnrollmentTokenAsync(string root, string deviceId, string token)
+    {
+        Directory.CreateDirectory(root);
+        var clear = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            formatVersion = 1,
+            deviceId,
+            token,
+            expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
+        var entropy = Encoding.UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + deviceId);
+        byte[]? protectedBytes = null;
+        try
+        {
+            protectedBytes = ProtectedData.Protect(clear, entropy, DataProtectionScope.LocalMachine);
+            await File.WriteAllBytesAsync(Path.Combine(root, AgentEnrollmentTokenStore.FileName), protectedBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(clear);
+            CryptographicOperations.ZeroMemory(entropy);
+            if (protectedBytes is not null)
+                CryptographicOperations.ZeroMemory(protectedBytes);
+        }
+    }
+
     private sealed class TestHostEnvironment : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = Environments.Development;
         public string ApplicationName { get; set; } = "GameNet.Agent.Tests";
         public string ContentRootPath { get; set; } = Path.GetTempPath();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class FailingCredentialStore : IAgentCredentialStore
+    {
+        public Task<string?> TryLoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
+
+        public Task<string> GetOrBootstrapAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Not used by this failure-path test.");
+
+        public Task SaveAsync(string secret, CancellationToken cancellationToken = default) =>
+            Task.FromException(new IOException("Simulated credential persistence failure."));
     }
 
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
