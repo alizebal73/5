@@ -37,6 +37,12 @@ var protectedSettingsEnabled =
     builder.Environment.IsProduction() &&
     bool.TryParse(builder.Configuration["GameNet:ProtectedSettings:Enabled"], out var enableProtectedFile) &&
     enableProtectedFile;
+ProductionStartupPolicy.EnsureProtectedSettingsEnabled(
+    builder.Environment.EnvironmentName,
+    protectedSettingsEnabled);
+ProductionStartupPolicy.EnsureProtectedSettingsPathOverrideAllowed(
+    builder.Environment.EnvironmentName,
+    Environment.GetEnvironmentVariable(ProtectedServerSettings.PathEnvironmentVariableName));
 ProtectedServerSettings.LoadInto(builder.Configuration, protectedSettingsEnabled);
 ServerTlsHostConfiguration.ConfigureListeners(builder);
 
