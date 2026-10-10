@@ -117,7 +117,8 @@ try {
 
         $sc = Join-Path $env:SystemRoot "System32\sc.exe"
         if (Test-Path -LiteralPath $sc -PathType Leaf) {
-            $sidTypeOutput = (& $sc qsidtype $service.Name 2>&1 | Out-String)
+            $actualServiceName = [string]$service.Name
+            $sidTypeOutput = (& $sc qsidtype $actualServiceName 2>&1 | Out-String)
             $sidTypeExit = $LASTEXITCODE
             if ($sidTypeExit -eq 0 -and $sidTypeOutput -match "SERVICE_SID_TYPE:\s*(\w+)") {
                 $sidType = $Matches[1]
@@ -128,7 +129,7 @@ try {
                 Add-PreflightCheck -Name "Server service SID type" -Status "WARN" -Details "Could not confirm that the service SID is enabled."
             }
 
-            $sidOutput = (& $sc showsid $service.Name 2>&1 | Out-String)
+            $sidOutput = (& $sc showsid $actualServiceName 2>&1 | Out-String)
             $sidExit = $LASTEXITCODE
             if ($sidExit -eq 0 -and $sidOutput -match "SERVICE SID:\s*(S-1-5-80-(?:\d+-?)+)") {
                 Add-PreflightCheck -Name "Server service SID" -Status "INFO" -Details $Matches[1]
