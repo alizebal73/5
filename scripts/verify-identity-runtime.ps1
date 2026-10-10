@@ -311,6 +311,24 @@ try {
     }
     Assert-ErrorCode $usedCredentialRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery of an already-used Agent credential"
 
+    $credentialRevocationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
+    }
+    $revokeUsedCredential = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/revoke" $credentialRevocationHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI checks that normal revocation is not bypassed by enrollment recovery."
+    }
+    Assert-Status $revokeUsedCredential 200 "Revoke previously authenticated Agent credential"
+    if ($revokeUsedCredential.Json.revoked -ne $true) {
+        throw "The previously authenticated Agent credential was not revoked for the recovery-boundary test."
+    }
+    $revokedCredentialRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI must not use enrollment recovery to undo ordinary credential revocation."
+    }
+    Assert-ErrorCode $revokedCredentialRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery after ordinary Agent credential revocation"
+
     # Simulate the failure window where the Server committed redemption but the Agent
     # failed to persist the returned secret. An operator can recover only while that
     # credential has never authenticated; the old secret must be revoked atomically.
