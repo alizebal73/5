@@ -15,7 +15,8 @@ $configDirectory = Join-Path $managerRoot "Config"
 $agentStateRoot = Join-Path $managerRoot "Agent"
 $serverSettingsPath = Join-Path $configDirectory "server-secrets.bin"
 $serverConfigPath = Join-Path $configDirectory "server.json"
-$serverSecretStorePath = Join-Path (Join-Path $managerRoot "Secrets") "server-secrets.v1.dpapi"
+$serverSecretDirectory = Join-Path $managerRoot "Secrets"
+$serverSecretStorePath = Join-Path $serverSecretDirectory "server-secrets.v1.dpapi"
 $agentServiceName = "GameNet 5 Agent"
 $serverServiceName = "GameNet 5 Server"
 
@@ -37,7 +38,7 @@ function Assert-NotReparsePoint {
 $serverService = Get-CimInstance -ClassName Win32_Service |
     Where-Object { $_.Name -eq $serverServiceName -or $_.DisplayName -eq $serverServiceName } |
     Select-Object -First 1
-$serverMarkers = @(@($serverConfigPath, $serverSettingsPath, $serverSecretStorePath) |
+$serverMarkers = @(@($serverConfigPath, $serverSettingsPath, $serverSecretDirectory, $serverSecretStorePath) |
     Where-Object { Test-Path -LiteralPath $_ })
 if ($null -ne $serverService -or $serverMarkers.Count -gt 0) {
     throw "This appears to be a Server/Manager machine. Run Agent state provisioning only on a dedicated Agent client; no ACLs were changed."
