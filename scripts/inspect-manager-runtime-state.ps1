@@ -255,68 +255,30 @@ foreach ($port in @(5080, 5432)) {
     }
 }
 
-Write-Section "PostgreSQL configuration and inbound firewall (read-only)"
-$postgresService = $null
-try {
-    $postgresService = Get-CimInstance -ClassName Win32_Service |
-        Where-Object { $_.Name -eq "postgresql-x64-17" } |
-        Select-Object -First 1
+Write-Section 'PostgreSQL network configuration (read-only)'
+$pgService = Get-CimInstance -ClassName Win32_Service | Where-Object { $_.Name -eq 'postgresql-x64-17' } | Select-Object -First 1
+$pgData = $null
+if ($null -ne $pgService) {
+    $dataMatch = [Regex]::Match([string]$pgService.PathName, '(?i)(?:^|\s)-D\s+(?:"([^"]+)"|([^\s]+))')
+    if ($dataMatch.Success) { if (-not [string]::IsNullOrWhiteSpace($dataMatch.Groups[1].Value)) { $pgData = $dataMatch.Groups[1].Value } else { $pgData = $dataMatch.Groups[2].Value } }
+    Write-Output ('postgresServiceState=' + $pgService.State + ' startMode=' + $pgService.StartMode + ' logon=' + $pgService.StartName + ' pid=' + $pgService.ProcessId)
 }
-catch {
-    Write-Output "postgresServiceInspection=unavailable errorType=$($_.Exception.GetType().Name)"
-}
-
-$dataDirectory = $null
-if ($null -ne $postgresService) {
-    $dataMatch = [Regex]::Match([string]$postgresService.PathName, '(?i)(?:^|\s)-D\s+(?:"([^"]+)"|([^\s]+))')
-    if ($dataMatch.Success) {
-        $dataDirectory = if (-not [string]::IsNullOrWhiteSpace($dataMatch.Groups[1].Value)) {
-            $dataMatch.Groups[1].Value
-        }
-        else {
-            $dataMatch.Groups[2].Value
-        }
-    }
-}
-if ([string]::IsNullOrWhiteSpace($dataDirectory)) {
-    $defaultDataDirectory = Join-Path $env:ProgramFiles "PostgreSQL\17\data"
-    if (Test-Path -LiteralPath $defaultDataDirectory -PathType Container) {
-        $dataDirectory = $defaultDataDirectory
-    }
-}
-
-$configFile = if (-not [string]::IsNullOrWhiteSpace($dataDirectory)) {
-    Join-Path $dataDirectory "postgresql.conf"
-}
-else { $null }
-$hbaFile = if (-not [string]::IsNullOrWhiteSpace($dataDirectory)) {
-    Join-Path $dataDirectory "pg_hba.conf"
-}
-else { $null }
-
-if ($null -eq $postgresService) {
-    Write-Output "postgresService=not-found"
-}
-else {
-    Write-Output "postgresServiceState=$($postgresService.State) startMode=$($postgresService.StartMode) logon=$($postgresService.StartName) pid=$($postgresService.ProcessId)"
-}
-if ([string]::IsNullOrWhiteSpace($dataDirectory)) {
-    Write-Output "postgresDataDirectory=not-resolved"
-}
-else {
-    Write-Output "postgresDataDirectory=$dataDirectory"
-    if (Test-Path -LiteralPath $configFile -PathType Leaf) {
-        $settings = @(Get-Content -LiteralPath $configFile | ForEach-Object {
-            if ($_ -match '^\s*(listen_addresses|port|hba_file)\s*=') { $_.Trim() }
-        })
-        if ($settings.Count -eq 0) {
-            Write-Output "postgresqlConfigSettings=not-found-in-main-file (included files may override settings)"
-        }
-        else {
-            foreach ($setting in $settings) {
-                # These are network/config-path settings only; no credentials are read or emitted.
-                Write-Output "postgresqlConfig=$setting"
-                if ($setting -match '(?i)^\s*hba_file\s*=\s*(.+?)\s*(?:#.*)?
+if ([string]::IsNullOrWhiteSpace($pgData)) { $pgData = Join-Path $env:ProgramFiles 'PostgreSQL\17\data' }
+$pgConfig = Join-Path $pgData 'postgresql.conf'
+$pgHba = Join-Path $pgData 'pg_hba.conf'
+if (Test-Path -LiteralPath $pgConfig -PathType Leaf) {
+    $configLines = @(Get-Content -LiteralPath $pgConfig)
+    foreach ($line in $configLines) { if ($line -match '^\s*(listen_addresses|port|hba_file)\s*=') { Write-Output ('postgresqlConfig=' + $line.Trim()) } }
+    $hbaSetting = $configLines | Where-Object { $_ -match '^\s*hba_file\s*=' } | Select-Object -Last 1
+    if ($hbaSetting -match '^\s*hba_file\s*=\s*(.+?)\s*(?:#.*)?
+foreach ($path in @(
+    $managerRoot,
+    $configDirectory,
+    $serverConfigPath,
+    $secretsDirectory,
+    $secretStorePath,
+    $auditDirectory
+)) {
     Write-PathFacts -Path $path
 }
 
@@ -411,29 +373,23 @@ Write-Output "This report only gathers read-only observations and does not prove
 Write-Output "Do not run --provision-secrets or any TLS/configuration/cleanup script based on this report alone."
 Write-Output "Preserve this output with the exact branch/commit used for the planned isolated Windows service test."
 ) {
-                    $configuredHba = $Matches[1].Trim().Trim('"').Trim("'")
-                    if (-not [string]::IsNullOrWhiteSpace($configuredHba)) {
-                        $hbaFile = if ([IO.Path]::IsPathRooted($configuredHba)) {
-                            $configuredHba
-                        }
-                        else {
-                            Join-Path $dataDirectory $configuredHba
-                        }
-                    }
-                }
-            }
-        }
+        $configuredHba = $Matches[1].Trim().Trim('"').Trim("'")
+        if (-not [string]::IsNullOrWhiteSpace($configuredHba)) { if ([IO.Path]::IsPathRooted($configuredHba)) { $pgHba = $configuredHba } else { $pgHba = Join-Path $pgData $configuredHba } }
     }
-    else {
-        Write-Output "postgresqlConfig=not-found"
-    }
-
-    if ($null -ne $hbaFile -and (Test-Path -LiteralPath $hbaFile -PathType Leaf)) {
-        Write-Output "pgHbaRulesBegin (database and role names redacted)"
-        $lineNumber = 0
-        foreach ($line in Get-Content -LiteralPath $hbaFile) {
-            $lineNumber++
-            $ruleText = ($line -replace '#.*
+} else { Write-Output ('postgresqlConfig=not-found path=' + $pgConfig) }
+if (Test-Path -LiteralPath $pgHba -PathType Leaf) {
+    Write-Output 'pgHbaRulesBegin (database and role names redacted)'
+    $lineNumber = 0
+    foreach ($line in Get-Content -LiteralPath $pgHba) {
+        $lineNumber++; $ruleText = ($line -replace '#.*
+foreach ($path in @(
+    $managerRoot,
+    $configDirectory,
+    $serverConfigPath,
+    $secretsDirectory,
+    $secretStorePath,
+    $auditDirectory
+)) {
     Write-PathFacts -Path $path
 }
 
@@ -527,71 +483,37 @@ Write-Section "Interpretation"
 Write-Output "This report only gathers read-only observations and does not prove service-token DPAPI access or TLS private-key access."
 Write-Output "Do not run --provision-secrets or any TLS/configuration/cleanup script based on this report alone."
 Write-Output "Preserve this output with the exact branch/commit used for the planned isolated Windows service test."
-, '').Trim()
-            if ([string]::IsNullOrWhiteSpace($ruleText)) { continue }
-            $tokens = @($ruleText -split '\s+')
-            $ruleType = $tokens[0]
-            $address = "-"
-            $method = "unparsed"
-            if ($ruleType -like "host*") {
-                if ($tokens.Count -ge 5) {
-                    $address = $tokens[3]
-                    $method = $tokens[4]
-                }
-            }
-            elseif ($ruleType -eq "local") {
-                if ($tokens.Count -ge 4) { $method = $tokens[3] }
-            }
-            else {
-                # Do not print configuration directives or any values from them.
-                $method = if ($ruleType -like "include*") { "include-directive" } else { "unparsed" }
-            }
-            Write-Output "pgHbaRuleLine=$lineNumber type=$ruleType address=$address authMethod=$method database=<redacted> role=<redacted>"
-        }
-        Write-Output "pgHbaRulesEnd"
+, '').Trim(); if ([string]::IsNullOrWhiteSpace($ruleText)) { continue }
+        $tokens = @($ruleText -split '\s+'); $kind = $tokens[0]; $address = '-'; $method = 'unparsed'
+        if ($kind -like 'host*' -and $tokens.Count -ge 5) { $address = $tokens[3]; $method = $tokens[4] }
+        elseif ($kind -eq 'local' -and $tokens.Count -ge 4) { $method = $tokens[3] }
+        elseif ($kind -like 'include*') { $method = 'include-directive' }
+        Write-Output ('pgHbaRuleLine=' + $lineNumber + ' type=' + $kind + ' address=' + $address + ' authMethod=' + $method + ' database=<redacted> role=<redacted>')
     }
-    else {
-        Write-Output "pgHbaFile=not-found-at-resolved-path"
-    }
-}
+    Write-Output 'pgHbaRulesEnd'
+} else { Write-Output ('pgHbaFile=not-found path=' + $pgHba) }
 
+Write-Section 'Enabled inbound firewall rules for ports 5080 and 5432'
 try {
-    $inboundRules = @(Get-NetFirewallRule -PolicyStore ActiveStore -Enabled True -Direction Inbound)
-    $matchingRules = 0
-    foreach ($rule in $inboundRules) {
+    $fwCount = 0
+    foreach ($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -Enabled True -Direction Inbound)) {
         try {
-            $portFilter = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
-            $localPorts = @($portFilter.LocalPort | ForEach-Object { [string]$_ })
-            $relevantPorts = @($localPorts | Where-Object { $_ -in @("5432", "5080", "Any") })
-            if ($relevantPorts.Count -eq 0) { continue }
-            $addressFilter = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
-            Write-Output "firewallRule=$($rule.DisplayName) enabled=$($rule.Enabled) action=$($rule.Action) profile=$($rule.Profile) protocol=$($portFilter.Protocol) localPort=$($portFilter.LocalPort -join ',') localAddress=$($addressFilter.LocalAddress -join ',') remoteAddress=$($addressFilter.RemoteAddress -join ',')"
-            $matchingRules++
-        }
-        catch {
-            # A single rule that cannot be inspected must not hide the remaining rules.
-        }
+            $pf = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+            $ports = @($pf.LocalPort | ForEach-Object { [string]$_ })
+            if (@($ports | Where-Object { $_ -in @('5080', '5432', 'Any') }).Count -eq 0) { continue }
+            $af = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+            Write-Output ('firewallRule=' + $rule.DisplayName + ' action=' + $rule.Action + ' profile=' + $rule.Profile + ' protocol=' + $pf.Protocol + ' localPort=' + ($pf.LocalPort -join ',') + ' localAddress=' + ($af.LocalAddress -join ',') + ' remoteAddress=' + ($af.RemoteAddress -join ','))
+            $fwCount++
+        } catch { }
     }
-    if ($matchingRules -eq 0) {
-        Write-Output "inboundFirewallRulesForPorts5080Or5432=none-found-or-inspection-unavailable"
-    }
-}
-catch {
-    Write-Output "inboundFirewallInspection=unavailable errorType=$($_.Exception.GetType().Name)"
-}
+    if ($fwCount -eq 0) { Write-Output 'inboundRulesForPorts5080Or5432=none-found-or-unavailable' }
+} catch { Write-Output ('firewallInspection=unavailable errorType=' + $_.Exception.GetType().Name) }
 
 Write-Section "ProgramData path metadata and access rules"
 foreach ($path in @(
     $managerRoot,
     $configDirectory,
     $serverConfigPath,
-    (Join-Path $managerRoot "Server"),
-    (Join-Path (Join-Path $managerRoot "Server") "Data"),
-    (Join-Path $managerRoot "Backups"),
-    (Join-Path $managerRoot "Agent"),
-    (Join-Path $managerRoot "Logs"),
-    (Join-Path $managerRoot "State"),
-    (Join-Path $managerRoot "Updates"),
     $secretsDirectory,
     $secretStorePath,
     $auditDirectory
