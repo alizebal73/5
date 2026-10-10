@@ -10,6 +10,7 @@ public sealed class AgentAccessTokenProvider(
     IHttpClientFactory httpClientFactory,
     IAgentCredentialStore credentialStore,
     IAgentEnrollmentBootstrapper enrollmentBootstrapper,
+    IAgentEnrollmentTokenStore enrollmentTokenStore,
     IOptions<AgentTransportOptions> options,
     TimeProvider timeProvider) : IAgentAccessTokenProvider, IDisposable
 {
@@ -41,6 +42,10 @@ public sealed class AgentAccessTokenProvider(
                     deviceId, cancellationToken);
                 secret ??= await credentialStore.GetOrBootstrapAsync(cancellationToken);
             }
+
+            // A saved credential is now authoritative. Clean any protected first-start
+            // token left behind if an earlier delete failed after the credential was saved.
+            await enrollmentTokenStore.DeleteAsync(cancellationToken);
 
             // Once a durable per-device credential is available, clear all bootstrap
             // material from this process regardless of which compatible path supplied it.
