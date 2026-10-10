@@ -158,6 +158,60 @@ public sealed class AgentEnrollmentBootstrapperTests
     }
 
     [Fact]
+    public async Task Keeps_protected_token_until_saved_credential_authenticates()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "gamenet-enrollment-auth-pending-" + Guid.NewGuid().ToString("N"));
+        const string deviceId = "pc-auth-pending-01";
+        const string enrollmentToken = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_abcde";
+        const string secret = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ABCDE";
+        const string variable = "GAMENET_TEST_AGENT_ENROLLMENT_AUTH_PENDING";
+        var previous = Environment.GetEnvironmentVariable(variable);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+            await WriteProtectedEnrollmentTokenAsync(root, deviceId, enrollmentToken);
+            var identityOptions = Options.Create(new AgentIdentityOptions { RootPath = root, DeviceId = deviceId });
+            var transportOptions = Options.Create(new AgentTransportOptions
+            {
+                ServerBaseUrl = "https://gamenet.invalid",
+                EnrollmentTokenEnvironmentVariableName = variable
+            });
+            var credentialStore = new AgentCredentialStore(identityOptions, transportOptions);
+            var tokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System, new TestHostEnvironment());
+            var handler = new StubHandler(async (request, cancellationToken) =>
+            {
+                Assert.Equal("/api/v1/agent/enrollment/redeem", request.RequestUri!.AbsolutePath);
+                var redeem = await request.Content!.ReadFromJsonAsync<AgentEnrollmentRedeemRequest>(
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken);
+                Assert.Equal(deviceId, redeem!.DeviceId);
+                Assert.Equal(enrollmentToken, redeem.Token);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AgentCredentialSecretResponse(
+                        Guid.NewGuid(), deviceId, secret, DateTimeOffset.UtcNow))
+                };
+            });
+
+            using var client = new HttpClient(handler);
+            var bootstrapper = new AgentEnrollmentBootstrapper(
+                new SingleClientFactory(client), credentialStore, tokenStore,
+                new TestHostEnvironment(), transportOptions);
+
+            var result = await bootstrapper.EnrollIfConfiguredAsync(deviceId);
+
+            Assert.Equal(secret, result);
+            Assert.Equal(secret, await credentialStore.TryLoadAsync());
+            Assert.True(File.Exists(Path.Combine(root, AgentEnrollmentTokenStore.FileName)));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, previous);
+            try { Directory.Delete(root, recursive: true); } catch (DirectoryNotFoundException) { }
+        }
+    }
+
+    [Fact]
     public async Task Retains_protected_token_when_server_redeems_but_local_credential_persistence_fails()
     {
         var root = Path.Combine(Path.GetTempPath(), "gamenet-enrollment-persist-failure-" + Guid.NewGuid().ToString("N"));
