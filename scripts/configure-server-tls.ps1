@@ -36,7 +36,8 @@ if ([string]::IsNullOrWhiteSpace($DnsName) -or [Uri]::CheckHostName($DnsName) -n
 }
 
 $common = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
-$configDirectory = Join-Path (Join-Path $common "GameNet Manager") "Config"
+$managerRoot = Join-Path $common "GameNet Manager"
+$configDirectory = Join-Path $managerRoot "Config"
 $serverConfigPath = Join-Path $configDirectory "server.json"
 $publicPath = [System.IO.Path]::GetFullPath($PublicCertificatePath)
 if (Test-Path -LiteralPath (Join-Path $configDirectory "server-secrets.bin")) {
@@ -135,8 +136,19 @@ try {
     $rootStore.Dispose()
     $rootStore = $null
 
+    # Protect the parent directory as well as Config. An untrusted principal must not be
+    # able to rename/replace Config even when Config itself has a restrictive DACL.
+    $rootAcl = [System.Security.AccessControl.DirectorySecurity]::new()
+    $rootAcl.SetAccessRuleProtection($true, $false)
+    $rootInheritance = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $rootAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new("S-1-5-18"), [System.Security.AccessControl.FileSystemRights]::FullControl, $rootInheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+    $rootAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544"), [System.Security.AccessControl.FileSystemRights]::FullControl, $rootInheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+    $rootAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-545"), [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, $rootInheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+    $rootAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($ServiceAccount, [System.Security.AccessControl.FileSystemRights]::ReadAndExecute, $rootInheritance, [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+    Set-Acl -LiteralPath $managerRoot -AclObject $rootAcl
+
     # Replace inherited ACLs on the runtime configuration directory. Settings are readable,
-    # but not writable, by ordinary users; only the configured Server service account gets read.
+    # but not writable, by ordinary users; only the dedicated Server service SID gets read.
     $acl = [System.Security.AccessControl.DirectorySecurity]::new()
     $acl.SetAccessRuleProtection($true, $false)
     $inheritance = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
