@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - "foundation/runtime-*"
+      - "integration/runtime-operator-v1"
     paths:
       - ".github/workflows/runtime-lan-smoke-payload.yml"
       - "GameNet.slnx"
@@ -18,6 +19,8 @@ on:
       - "scripts/configure-server-tls.ps1"
       - "scripts/trust-server-certificate.ps1"
       - "scripts/configure-runtime-endpoint.ps1"
+      - "scripts/configure-agent-runtime-state.ps1"
+      - "docs/operations/agent-service-state.md"
       - "scripts/test-runtime-endpoint.ps1"
       - "scripts/modules/ServerTlsCertificate.psm1"
       - "docs/operations/runtime-endpoints.md"
@@ -130,6 +133,8 @@ jobs:
           Copy-Item -LiteralPath "scripts/configure-server-tls.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/trust-server-certificate.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/configure-runtime-endpoint.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/configure-agent-runtime-state.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "docs/operations/agent-service-state.md" -Destination (Join-Path $toolsOutput "agent-service-state.md")
           Copy-Item -LiteralPath "scripts/test-runtime-endpoint.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
           Copy-Item -LiteralPath "docs/operations/runtime-endpoints.md" -Destination (Join-Path $toolsOutput "runtime-endpoints.md")
@@ -138,7 +143,9 @@ jobs:
             (Join-Path $serverOutput "GameNet.Server.exe"),
             (Join-Path $agentOutput "GameNet.Agent.exe"),
             (Join-Path $desktopOutput "GameNet.Manager.Desktop.exe"),
-            $migrationBundle
+            $migrationBundle,
+            (Join-Path $toolsOutput "configure-agent-runtime-state.ps1"),
+            (Join-Path $toolsOutput "agent-service-state.md")
           )
           foreach ($file in $requiredFiles) {
             if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
@@ -158,6 +165,7 @@ jobs:
           - `Desktop\GameNet.Manager.Desktop.exe`
           - `Tools\GameNet.Migrations.exe` — an explicit EF migration bundle
           - TLS and endpoint configuration/check scripts under `Tools\`
+          - `Tools\configure-agent-runtime-state.ps1` and the Agent Windows Service state/DACL runbook
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
           ## Safety boundary
@@ -175,6 +183,8 @@ jobs:
           5. On each isolated client PC, verify and trust the public certificate with `Tools\trust-server-certificate.ps1`; then configure its endpoint with `Tools\configure-runtime-endpoint.ps1`. Use the matching certificate SAN host/IP.
           6. Run `Tools\test-runtime-endpoint.ps1 -Component Desktop` on the Desktop PC and `-Component Agent` on the Agent PC. Both checks use normal Windows TLS validation and require Server readiness to report `Ready`.
           7. Record what was tested and what was not. A successful health request alone does **not** prove Agent enrollment, an authoritative lease, heartbeat/reconciliation, restart/reconnect, or private-key access under the real Windows service identity.
+
+          For an Agent Windows-service test, first register the service explicitly on the disposable Agent PC with the LocalService logon identity and leave it stopped. Follow `Tools\agent-service-state.md`, then run `Tools\configure-agent-runtime-state.ps1` elevated before starting the service. This helper does not install/register the service and refuses to alter a machine with the Server service or Server-secret markers.
 
           ## Explicit limitations
 
