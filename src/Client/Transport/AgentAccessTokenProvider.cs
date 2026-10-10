@@ -32,6 +32,15 @@ public sealed class AgentAccessTokenProvider(
             }
 
             var secret = await credentialStore.TryLoadAsync(cancellationToken);
+            if (secret is not null)
+            {
+                // A paired installation never needs an enrollment token again.
+                Environment.SetEnvironmentVariable(
+                    options.Value.EnrollmentTokenEnvironmentVariableName,
+                    null,
+                    EnvironmentVariableTarget.Process);
+            }
+
             if (secret is null)
             {
                 // New installations redeem the operator-issued one-time enrollment
