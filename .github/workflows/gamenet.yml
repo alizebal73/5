@@ -7,6 +7,7 @@ on:
     branches:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
+      - "security/**"
     paths-ignore:
       - "**/*.md"
   # Always run on PRs to main so a future required status check cannot be skipped by path filters.
@@ -14,6 +15,7 @@ on:
   pull_request:
     branches:
       - main
+      - "integration/runtime-operator-v1"
 
 concurrency:
   group: gamenet-quick-validation-${{ github.event.pull_request.number || github.ref }}
