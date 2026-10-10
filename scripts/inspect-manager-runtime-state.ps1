@@ -289,21 +289,31 @@ if (Test-Path -LiteralPath $pgHba -PathType Leaf) {
     Write-Output 'pgHbaRulesEnd'
 } else { Write-Output ('pgHbaFile=not-found path=' + $pgHba) }
 
-Write-Section 'Enabled inbound firewall rules for ports 5080 and 5432'
+Write-Section 'Relevant enabled inbound firewall rules (read-only)'
 try {
     $fwCount = 0
     foreach ($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -Enabled True -Direction Inbound)) {
         try {
             $pf = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
             $ports = @($pf.LocalPort | ForEach-Object { [string]$_ })
-            if (@($ports | Where-Object { $_ -in @('5080', '5432', 'Any') }).Count -eq 0) { continue }
+            $explicitPortMatch = @($ports | Where-Object { $_ -in @('5080', '5432') }).Count -gt 0
+            $gameNetRule = $rule.DisplayName -match '(?i)game\s*net|gamenet|postgres'
+            if (-not $explicitPortMatch -and -not ($gameNetRule -and @($ports | Where-Object { $_ -eq 'Any' }).Count -gt 0)) { continue }
+
             $af = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
-            Write-Output ('firewallRule=' + $rule.DisplayName + ' action=' + $rule.Action + ' profile=' + $rule.Profile + ' protocol=' + $pf.Protocol + ' localPort=' + ($pf.LocalPort -join ',') + ' localAddress=' + ($af.LocalAddress -join ',') + ' remoteAddress=' + ($af.RemoteAddress -join ','))
+            $appPath = 'not-resolved'
+            try {
+                $appFilter = Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+                if (-not [string]::IsNullOrWhiteSpace([string]$appFilter.Program)) { $appPath = [string]$appFilter.Program }
+            } catch { }
+
+            $scope = if ($explicitPortMatch) { 'explicit-port-match' } else { 'GameNet-program-rule-with-any-port-filter' }
+            Write-Output ('firewallRule=' + $rule.DisplayName + ' scope=' + $scope + ' program=' + $appPath + ' action=' + $rule.Action + ' profile=' + $rule.Profile + ' protocol=' + $pf.Protocol + ' localPort=' + ($pf.LocalPort -join ',') + ' localAddress=' + ($af.LocalAddress -join ',') + ' remoteAddress=' + ($af.RemoteAddress -join ','))
             $fwCount++
         } catch { }
     }
-    if ($fwCount -eq 0) { Write-Output 'inboundRulesForPorts5080Or5432=none-found-or-unavailable' }
-} catch { Write-Output ('firewallInspection=unavailable errorType=' + $_.Exception.GetType().Name) }
+    if ($fwCount -eq 0) { Write-Output 'relevantInboundFirewallRules=none-found-or-inspection-unavailable' }
+} catch { Write-Output ('inboundFirewallInspection=unavailable errorType=' + $_.Exception.GetType().Name) }
 
 Write-Section "ProgramData path metadata and access rules"
 
