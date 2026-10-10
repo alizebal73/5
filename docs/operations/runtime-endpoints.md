@@ -39,7 +39,11 @@ Run elevated PowerShell on each client PC, using the exact host or IP present in
     .\scripts\test-runtime-endpoint.ps1 -Component Desktop
     .\scripts\test-runtime-endpoint.ps1 -Component Agent
 
-If a computer only needs one component, use -Component Desktop or -Component Agent. Restart the Desktop app and the Agent Windows service to load the files.
+If a computer only needs one component, use -Component Desktop or -Component Agent. On each dedicated Agent client, before starting the Agent Windows service, run the elevated state-provisioning helper described in [Agent Windows Service State Provisioning](agent-service-state.md):
+
+    .\scripts\configure-agent-runtime-state.ps1
+
+That helper requires the registered Agent service to be stopped and running as NT AUTHORITY\LocalService. It enables the dedicated Agent service SID, protects the ProgramData state directory, and verifies its DACL. Do not run it on a Server/Manager machine. Restart the Agent service after service-SID configuration; do not substitute an interactive Agent process for the service test.
 
 The endpoint helper accepts HTTPS for network hosts. Plain HTTP is accepted only for loopback development/certification. Foundation runtime harnesses use the explicit GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY test seam only with Development environment markers; it is rejected when either host environment is Production. This lets CI prove that Server, Desktop, and Agent consume their JSON configuration without writing to real machine ProgramData. URLs containing user information, query strings, fragments, or application paths are rejected. Neither HttpClient nor SignalR has a certificate-validation bypass.
 
