@@ -222,9 +222,9 @@ try {
     Write-Host "Start the already-registered Agent service only in the isolated test environment."
 }
 catch {
-    $message = $_.Exception.Message
-    if ($message -match 'Operator username is invalid|Operator password is invalid|requires Windows|service|path|DeviceId|agent.json|HTTPS|permission|enrollment response|already declares|Existing Agent') { throw $message }
-    throw "Secure Agent enrollment-token provisioning failed. No token value was written to console output."
+    # Do not echo unexpected exception details: HTTP/service errors can contain request
+    # or response fragments. Preflight failures above this block remain specific.
+    throw "Secure Agent enrollment-token provisioning failed. No token value was written to console output. Review the endpoint, service, ACL and operator permission, then retry."
 }
 finally {
     if (-not $tokenCommitted -and $null -ne $tokenId -and $null -ne $accessToken) {
@@ -236,6 +236,13 @@ finally {
         catch { }
     }
     if (-not $tokenCommitted -and (Test-Path -LiteralPath $tokenPath -PathType Leaf)) { Remove-Item -LiteralPath $tokenPath -Force -ErrorAction SilentlyContinue }
+    if (-not [string]::IsNullOrWhiteSpace($accessToken)) {
+        try {
+            $logoutHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken" }
+            Invoke-RestMethod -Method Post -Uri "$baseUrl/api/v1/auth/logout" -Headers $logoutHeaders -TimeoutSec 10 | Out-Null
+        }
+        catch { }
+    }
     if ($securePassword) { $securePassword.Dispose() }
     $password = $null
     $accessToken = $null
