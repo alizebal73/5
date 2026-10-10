@@ -76,10 +76,10 @@ public sealed class AgentEnrollmentBootstrapper(
                 "Server returned an invalid Agent enrollment response; the enrollment token has been retained for safe recovery.");
         }
 
-        // Persist before deleting the one-time token. A disk/DPAPI failure must not
-        // consume the only bootstrap material needed to complete first enrollment.
-        // The Server consumes the token transactionally. Persist the resulting
-        // per-device credential before deleting the only local copy of the bootstrap token.
+        // The Server has already consumed this one-time token. Persist the resulting
+        // per-device credential before deleting the local copy; if persistence fails,
+        // retain the protected file for the explicit operator recovery procedure. The
+        // same token cannot be redeemed again after a committed Server redemption.
         await credentialStore.SaveAsync(issued.Secret, cancellationToken);
         if (protectedToken is not null)
             await enrollmentTokenStore.DeleteAsync(cancellationToken);
