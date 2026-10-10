@@ -4,6 +4,8 @@ using System.Text.Json;
 using GameNet.Agent.Identity;
 using GameNet.Agent.Transport;
 using GameNet.Shared.Contracts.V1.Security;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -46,6 +48,9 @@ public sealed class AgentEnrollmentBootstrapperTests
             var bootstrapper = new AgentEnrollmentBootstrapper(
                 new SingleClientFactory(client),
                 store,
+                new AgentEnrollmentTokenStore(
+                    Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System),
+                new TestHostEnvironment(),
                 Options.Create(new AgentTransportOptions
                 {
                     ServerBaseUrl = "http://127.0.0.1:5080",
@@ -92,6 +97,9 @@ public sealed class AgentEnrollmentBootstrapperTests
             var bootstrapper = new AgentEnrollmentBootstrapper(
                 new SingleClientFactory(client),
                 store,
+                new AgentEnrollmentTokenStore(
+                    Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System),
+                new TestHostEnvironment(),
                 Options.Create(new AgentTransportOptions
                 {
                     ServerBaseUrl = "http://127.0.0.1:5080",
@@ -143,6 +151,14 @@ public sealed class AgentEnrollmentBootstrapperTests
         {
             Environment.SetEnvironmentVariable(variable, previous);
         }
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "GameNet.Agent.Tests";
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
