@@ -68,11 +68,11 @@ public sealed class AgentCredentialService(
 
             var now = clock.UtcNow;
             current.Revoke(now);
-            var secret = GenerateSecret();
+            var secret = AgentCredentialSecretMaterial.Generate();
             var replacement = new AgentCredential
             {
                 DeviceId = request.DeviceId,
-                SecretHash = HashSecret(secret),
+                SecretHash = AgentCredentialSecretMaterial.Hash(secret),
                 CreatedAtUtc = now
             };
             dbContext.AgentCredentials.Add(replacement);
@@ -132,10 +132,24 @@ public sealed class AgentCredentialService(
                 .Where(x => x.DeviceId == deviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
 
-            var valid = credential is not null &&
-                CryptographicOperations.FixedTimeEquals(
-                    Convert.FromHexString(credential.SecretHash),
-                    Convert.FromHexString(HashSecret(secret)));
+            var valid = false;
+            byte[]? storedHash = null;
+            byte[]? suppliedHash = null;
+            try
+            {
+                if (credential is not null)
+                {
+                    storedHash = Convert.FromHexString(credential.SecretHash);
+                    suppliedHash = Convert.FromHexString(AgentCredentialSecretMaterial.Hash(secret));
+                    valid = storedHash.Length == suppliedHash.Length &&
+                            CryptographicOperations.FixedTimeEquals(storedHash, suppliedHash);
+                }
+            }
+            finally
+            {
+                if (storedHash is not null) CryptographicOperations.ZeroMemory(storedHash);
+                if (suppliedHash is not null) CryptographicOperations.ZeroMemory(suppliedHash);
+            }
 
             if (!valid)
             {
