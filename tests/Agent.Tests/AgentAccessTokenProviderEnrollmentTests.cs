@@ -40,7 +40,7 @@ public sealed class AgentAccessTokenProviderEnrollmentTests
                 DeviceId = "station-pc-01"
             });
             var credentialStore = new AgentCredentialStore(identityOptions, transportOptions);
-            var enrollmentTokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System);
+            var enrollmentTokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System, new TestHostEnvironment());
 
             var handler = new StubHandler(async (request, cancellationToken) =>
             {
