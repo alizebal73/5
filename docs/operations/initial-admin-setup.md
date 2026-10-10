@@ -21,12 +21,22 @@ The first owner is created through the Server; no desktop-local administrator, d
    ```
 
 6. Enter the same Owner bootstrap secret that was entered in step 3, followed by the chosen Owner password. The management script prompts securely, sends the secret only in the protected HTTPS request header, and does not write the values to disk.
+7. Confirm that the Owner can sign in, then perform the local finalization step in the section below.
 
 **Current acceptance limit:** this sequence is the intended code path, not a certification of the installed service. The real Windows service identity, effective ACLs, DPAPI access after restart, and TLS private-key access still require isolated Windows-service/LAN tests. Do not run provisioning on a live Manager PC until its read-only preflight has been reviewed.
 
-## Bootstrap cleanup still open
+## Finalize setup and remove the bootstrap secret
 
-After confirming that the Owner can sign in, the setup secret remains inside the protected settings file today. A supported, atomic post-bootstrap removal step that preserves the other settings and ACLs has not yet been implemented. Until it is implemented and tested, do not claim the installation is fully hardened and do not delete or rewrite the protected settings file manually.
+After the new Owner has successfully signed in, run the following from an elevated PowerShell session **on the GameNet Server machine itself** (not from the management workstation):
+
+```powershell
+.\scripts\finalize-server-setup.ps1 -ServerBaseUrl "https://gamenet-server.example"
+```
+
+The script fails closed unless the Server service exists and the Server's bootstrap-status endpoint confirms that the initial Owner already exists. It accepts only the canonical ProgramData settings file, rejects reparse points or an unexpected file ACL, decrypts and validates the existing DPAPI settings, removes only `GameNet:Setup:BootstrapSecret`, writes a new LocalMachine-DPAPI payload to a same-directory temporary file with the restricted DACL applied at creation, flushes it, and atomically replaces the original without a backup copy. It then decrypts the replacement and verifies the remaining setup settings and ACL. If preconditions fail, it does not change the original file. The script does not restart the service automatically; schedule a controlled service restart and verify HTTPS readiness afterward.
+
+Do not manually delete or rewrite the protected settings file. A successful script run is code-path evidence only; it does not substitute for validating the actual installed service, DPAPI restart behavior, TLS private-key access, and HTTPS/LAN behavior on an isolated Windows test environment.
+
 
 The bootstrap endpoint uses a constant-time secret comparison and a PostgreSQL transaction-scoped advisory lock. It verifies inside the transaction that no operator exists, so concurrent requests cannot create multiple first owners. The setup secret is separate from the Owner password and the Agent provisioning key.
 
