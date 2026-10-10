@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using GameNet.Agent.Identity;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -9,6 +11,14 @@ namespace GameNet.Agent.Tests;
 
 public sealed class AgentEnrollmentTokenStoreTests
 {
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "GameNet.Agent.Tests";
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
     [Fact]
     public async Task Loads_machine_protected_token_for_the_matching_device_then_deletes_it()
     {
@@ -35,7 +45,7 @@ public sealed class AgentEnrollmentTokenStoreTests
             protectedBytes = ProtectedData.Protect(clear, entropy, DataProtectionScope.LocalMachine);
             await File.WriteAllBytesAsync(path, protectedBytes);
             var store = new AgentEnrollmentTokenStore(
-                Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System);
+                Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System, new TestHostEnvironment());
 
             var loaded = await store.TryLoadAsync(deviceId);
 
@@ -84,7 +94,7 @@ public sealed class AgentEnrollmentTokenStoreTests
             protectedBytes = ProtectedData.Protect(clear, entropy, DataProtectionScope.LocalMachine);
             await File.WriteAllBytesAsync(path, protectedBytes);
             var store = new AgentEnrollmentTokenStore(
-                Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System);
+                Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System, new TestHostEnvironment());
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.TryLoadAsync(otherDeviceId));
             Assert.True(File.Exists(path));
@@ -124,7 +134,7 @@ public sealed class AgentEnrollmentTokenStoreTests
             protectedBytes = ProtectedData.Protect(clear, entropy, DataProtectionScope.LocalMachine);
             await File.WriteAllBytesAsync(path, protectedBytes);
             var store = new AgentEnrollmentTokenStore(
-                Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System);
+                Options.Create(new AgentIdentityOptions { RootPath = root }), TimeProvider.System, new TestHostEnvironment());
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.TryLoadAsync(deviceId));
             Assert.True(File.Exists(path));
