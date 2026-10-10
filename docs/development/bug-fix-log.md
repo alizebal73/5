@@ -535,3 +535,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression coverage: the canonical PowerShell parser gate must pass on the updated script. CI parsing alone does not prove effective Windows ACL behavior; a dedicated Windows setup/service test remains required.
 - Verification: code committed as `20884b151f6c8dc78c643a5c1eceb3cc6c101a99`; Quick Validation for this updated script and the resulting exact PR head is pending.
 - Rollback: revert only this file-creation ACL change if the Windows/API verification identifies an incompatibility. Never restore create-then-tighten ACL ordering for the DPAPI-protected bootstrap file.
+
+
+## 2026-10-10 — Enforce protected setup settings at Production startup
+
+- Finding: the Server computed `protectedSettingsEnabled` from configuration but did not reject a Production configuration where the flag was missing or false. It also honored `GAMENET_PROTECTED_SETTINGS_FILE` in Production, allowing a noncanonical DPAPI settings-file path even though the deployment contract specifies the ACL-restricted ProgramData location.
+- Risk: Production could start without loading the expected protected setup settings, or use an explicitly supplied alternate path. That weakened the fail-closed boundary for the initial Owner bootstrap secret.
+- Fix: add Production startup policy guards requiring `GameNet:ProtectedSettings:Enabled=true` and rejecting the protected-settings path override in Production. Non-Production test hosts retain the explicit path seam.
+- Regression coverage: added policy tests for Production rejection, valid Production settings, and Development test-path compatibility.
+- Verification: code changes are on `security/server-secret-store-active-v1`; the final post-change Quick Validation must pass before this correction is accepted. Physical service identity, effective ACL, DPAPI restart and TLS private-key checks remain unverified.
+- Rollback: revert only the new Production policy enforcement and its tests if a supported Production configuration proves incompatible. Do not restore an unguarded alternate settings path or permit Production startup without protected settings.
