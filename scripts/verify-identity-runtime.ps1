@@ -916,6 +916,32 @@ finally {
     }
     Assert-Status $recoveredLogin 200 "Authenticate the recovered Agent credential"
 
+    # Refresh an unredeemed/expired enrollment token only when this DeviceId
+    # has no history of successful credential authentication.
+    $pendingRecoveryDeviceId = "ci-enrollment-pending-recovery-" + [Guid]::NewGuid().ToString("N")
+    $pendingOriginalIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+    }
+    Assert-Status $pendingOriginalIssue 200 "Issue original unredeemed token for recovery test"
+    $pendingReplacementIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        reason = "CI verifies refresh of a pending or expired token before any credential has authenticated."
+    }
+    Assert-Status $pendingReplacementIssue 200 "Replace unredeemed enrollment token with an explicit recovery request"
+    if ($pendingReplacementIssue.CacheControl -notmatch "no-store") {
+        throw "Pending-token recovery response must be no-store."
+    }
+    $rejectedOldPendingToken = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        token = [string]$pendingOriginalIssue.Json.token
+    }
+    Assert-Status $rejectedOldPendingToken 401 "Reject previous pending enrollment token after recovery"
+    $acceptedReplacementToken = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        token = [string]$pendingReplacementIssue.Json.token
+    }
+    Assert-Status $acceptedReplacementToken 200 "Accept replacement token created through bounded pending-token recovery"
+
     $revokedDeviceId = "ci-enrollment-revoked-" + [Guid]::NewGuid().ToString("N")
     $revocableIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $revokedDeviceId }
     Assert-Status $revocableIssue 200 "Issue token for revocation test"
