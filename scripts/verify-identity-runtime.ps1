@@ -536,22 +536,6 @@ try {
             $stationEnrollmentSecondsRemaining)
     }
 
-    $bindHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $boundStation = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/agent" $bindHeaders @{
-        deviceId = $stationDeviceId
-        expectedVersion = 1
-    }
-    Assert-Status $boundStation 200 "Bind provisioned Agent to station"
-    if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
-        $boundStation.Json.data.agentOnline -ne $false -or
-        $boundStation.Json.data.version -ne 2) {
-        throw "Station binding or server-derived offline state was incorrect before Agent connection."
-    }
-
     # Exercise the complete first-start enrollment path for the real Runtime Agent.
     # This temporary DPAPI handoff does not certify the installed LocalService Windows-service boundary.
     New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
@@ -594,6 +578,43 @@ try {
     $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
     Remove-Item Env:GAMENET_AGENT_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
     $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
+    $agentEnrollmentPersisted = $false
+    $agentTokenPath = Join-Path $agentIdentityRoot "enrollment-token.dpapi"
+    $agentCredentialPath = Join-Path $agentIdentityRoot "credential.bin"
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if ($agentProcess.HasExited) {
+            throw "The Runtime Agent exited before completing one-time enrollment (exitCode=$($agentProcess.ExitCode))."
+        }
+        if (-not (Test-Path -LiteralPath $agentTokenPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $agentCredentialPath -PathType Leaf)) {
+            $agentEnrollmentPersisted = $true
+            break
+        }
+    }
+    if (-not $agentEnrollmentPersisted) {
+        throw "The Runtime Agent did not redeem the enrollment token and persist its credential within 30 seconds."
+    }
+
+    # Bind only after token redemption has created the server-side Agent credential.
+    # The Agent may authenticate/heartbeat between persistence and this request, so
+    # accept the server's current online snapshot and verify the station/device/version.
+    $bindHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $boundStation = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/agent" $bindHeaders @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-Status $boundStation 200 "Bind enrolled Agent to station"
+    if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
+        $boundStation.Json.data.version -ne 2 -or
+        $null -eq $boundStation.Json.data.agentOnline) {
+        throw "Station binding or server-derived online state was incorrect after Agent enrollment."
+    }
+
 
     $agentOnline = $false
     for ($attempt = 1; $attempt -le 30; $attempt++) {
