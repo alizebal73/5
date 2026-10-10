@@ -50,7 +50,24 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Verify exact tested checkout SHA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expectedSha = if (-not [string]::IsNullOrWhiteSpace($env:GAMENET_PR_HEAD_SHA)) {
+            $env:GAMENET_PR_HEAD_SHA
+          }
+          else {
+            $env:GITHUB_SHA
+          }
+          $checkoutSha = ((& git rev-parse HEAD) -join "").Trim()
+          if ($LASTEXITCODE -ne 0 -or $checkoutSha -notmatch '^[0-9a-f]{40}$' -or $checkoutSha -ne $expectedSha) {
+            throw "Runtime payload checkout SHA '$checkoutSha' does not match the expected candidate SHA '$expectedSha'."
+          }
+          Write-Host "EXACT_TESTED_CHECKOUT_SHA=$checkoutSha"
 
       - name: Verify pinned .NET SDK
         shell: pwsh
