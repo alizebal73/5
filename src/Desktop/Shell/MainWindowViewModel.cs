@@ -47,8 +47,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ]);
 
         NavigationItems[0].IsSelected = true;
-        NavigateCommand = new RelayCommand(parameter => NavigateTo(parameter as string ?? string.Empty));
-        RefreshServerCommand = new RelayCommand(
+        NavigateCommand = new RelayAction(parameter => NavigateTo(parameter as string ?? string.Empty));
+        RefreshServerCommand = new RelayAction(
             _ => _ = RefreshServerStatusAsync(),
             _ => !IsRefreshingServer);
 
@@ -61,9 +61,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public ObservableCollection<NavigationItemViewModel> NavigationItems { get; }
 
-    public RelayCommand NavigateCommand { get; }
+    public RelayAction NavigateCommand { get; }
 
-    public RelayCommand RefreshServerCommand { get; }
+    public RelayAction RefreshServerCommand { get; }
 
     public string ActiveSectionKey =>
         NavigationItems.FirstOrDefault(item => item.IsSelected)?.Key ?? "overview";
@@ -226,12 +226,12 @@ public sealed class NavigationItemViewModel : INotifyPropertyChanged
     }
 }
 
-public sealed class RelayCommand : ICommand
+public sealed class RelayAction : ICommand
 {
     private readonly Action<object?> execute;
     private readonly Predicate<object?>? canExecute;
 
-    public RelayCommand(Action<object?> execute, Predicate<object?>? canExecute = null)
+    public RelayAction(Action<object?> execute, Predicate<object?>? canExecute = null)
     {
         this.execute = execute ?? throw new ArgumentNullException(nameof(execute));
         this.canExecute = canExecute;
