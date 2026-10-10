@@ -194,7 +194,7 @@ jobs:
 
           ## Intended bounded smoke sequence
 
-          1. Verify the downloaded ZIP against the adjacent `SHA256SUMS.txt` file before extraction.
+          1. Download the GitHub Actions artifact archive and extract that outer archive to a temporary folder. It contains the inner `GameNet5-RuntimeLanSmoke-*.zip` and adjacent `SHA256SUMS.txt`; verify the inner ZIP against that checksum file **before** extracting the inner payload. The archive digest shown by GitHub is for the outer artifact; the checksum file is for the inner runtime payload.
           2. Extract the package into a temporary folder on the isolated test PCs. Keep the package's recorded `manifest.json` with the test notes.
           3. On the isolated Server PC, run `Tools\inspect-manager-runtime-state.ps1` first and review the read-only report. If the machine contains existing GameNet/Manager state or any unexpected service, certificate, ACL, or listener, stop; do not use this payload to repair or overwrite it. This workflow does not install/register Windows services.
           4. Confirm that a reviewed test-only Server service registration exists on the disposable Server PC and is stopped, with the intended dedicated identity/SID. If it does not exist, stop and obtain an independently reviewed service-registration procedure; this payload is not a service installer. Do not experiment on a live Manager PC.
