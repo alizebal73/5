@@ -178,6 +178,10 @@ public static class ProtectedServerSettings
 
             RejectReparsePoint(directory, isDirectory: true);
             RejectReparsePoint(fullPath, isDirectory: false);
+            var managerRoot = Path.GetDirectoryName(directory);
+            if (string.IsNullOrWhiteSpace(managerRoot))
+                throw new InvalidOperationException("Protected Server settings parent path is invalid.");
+            RejectReparsePoint(managerRoot, isDirectory: true);
 
             var serviceSid = (SecurityIdentifier)new NTAccount("NT SERVICE", "GameNet 5 Server")
                 .Translate(typeof(SecurityIdentifier));
