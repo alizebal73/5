@@ -135,7 +135,7 @@ public sealed class AgentEnrollmentBootstrapperTests
             var store = new AgentCredentialStore(
                 identityOptions,
                 Options.Create(new AgentTransportOptions()));
-            var tokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System);
+            var tokenStore = new AgentEnrollmentTokenStore(identityOptions, TimeProvider.System, new TestHostEnvironment());
             var bootstrapper = new AgentEnrollmentBootstrapper(
                 new SingleClientFactory(client),
                 store,
