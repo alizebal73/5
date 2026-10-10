@@ -33,7 +33,7 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("Nav.Stations", viewModel.ActiveSectionTitle);
         Assert.False(viewModel.IsOverview);
         Assert.True(viewModel.IsSectionPlaceholder);
-        Assert.Single(viewModel.NavigationItems.Where(item => item.IsSelected));
+        Assert.Single(viewModel.NavigationItems, item => item.IsSelected);
     }
 
     [Fact]
