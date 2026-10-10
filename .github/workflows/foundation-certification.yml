@@ -15,6 +15,9 @@ on:
       - "security/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
+      - ".github/workflows/runtime-lan-smoke-payload.yml"
+      - "scripts/configure-agent-runtime-state.ps1"
+      - "docs/operations/agent-service-state.md"
       - "scripts/verify-identity-runtime.ps1"
       - "scripts/verify-postgresql.ps1"
       - "scripts/verify-backup-restore.ps1"
