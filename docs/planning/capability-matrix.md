@@ -51,6 +51,7 @@
 - **Runtime / Identity / Stations:** integration/runtime-operator-v1 روی SHA 55a340305f9eba3bc8f9a1ce65fb37bedbae7580 از Quick Validation و Full Foundation عبور کرده است؛ PR #23 Draft است و physical Windows-Service/LAN gate هنوز باز است.
 - **Desktop UI boundary:** PR #24 اولین استخراج StationBoardView را روی SHA 9a058043ca8ba69f2b0bd23777263063ee681c92 با Quick و Full Foundation سبز کرده است؛ ادغام نشده و جداسازی timer/Login/Shell/command permissions و UI interaction tests باقی‌اند.
 - **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift, Approvals:** نیازمندی‌های محصولی‌اند؛ در snapshot یکپارچهٔ جاری ماژول‌های کامل و تأییدشدهٔ آن‌ها وجود ندارد. تا عبور cross-PC Foundation runtime gate نباید با دکمه/صفحهٔ نمایشی به‌عنوان قابلیت آماده عرضه شوند.
+- **Protected Server secret lifecycle:** ADR-0002/PR #18 هنوز Proposed و پیاده‌سازی PR #20 هنوز Draft/stacked است؛ production secret store یا Windows-service secret access را کامل فرض نکنید.
 - **Setup/update/repair/rollback:** خروجی ZIP با manifest با Setup.exe/MSI برابر نیست. Windows Service commissioning، انتخاب مدل PostgreSQL provisioning، دو-PC install/restart/reconnect و Release gate هنوز باز هستند.
 - **Steam/GamingAccounts:** خارج از اجرای فعلی و Deferred است تا requirement محصولی و مدل integration مجاز/پشتیبانی‌شده به‌صورت روشن تأیید شود؛ branch آزمایشی قدیمی مجوز پیاده‌سازی خودکار نیست.
 
