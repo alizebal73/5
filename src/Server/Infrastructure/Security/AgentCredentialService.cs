@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Transactions;
@@ -30,11 +29,11 @@ public sealed class AgentCredentialService(
                 throw new AgentCredentialException("agent.credential_exists");
 
             var now = clock.UtcNow;
-            var secret = GenerateSecret();
+            var secret = AgentCredentialSecretMaterial.Generate();
             var entity = new AgentCredential
             {
                 DeviceId = request.DeviceId,
-                SecretHash = HashSecret(secret),
+                SecretHash = AgentCredentialSecretMaterial.Hash(secret),
                 CreatedAtUtc = now
             };
 
@@ -69,11 +68,11 @@ public sealed class AgentCredentialService(
 
             var now = clock.UtcNow;
             current.Revoke(now);
-            var secret = GenerateSecret();
+            var secret = AgentCredentialSecretMaterial.Generate();
             var replacement = new AgentCredential
             {
                 DeviceId = request.DeviceId,
-                SecretHash = HashSecret(secret),
+                SecretHash = AgentCredentialSecretMaterial.Hash(secret),
                 CreatedAtUtc = now
             };
             dbContext.AgentCredentials.Add(replacement);
@@ -133,10 +132,24 @@ public sealed class AgentCredentialService(
                 .Where(x => x.DeviceId == deviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
 
-            var valid = credential is not null &&
-                CryptographicOperations.FixedTimeEquals(
-                    Convert.FromHexString(credential.SecretHash),
-                    Convert.FromHexString(HashSecret(secret)));
+            var valid = false;
+            byte[]? storedHash = null;
+            byte[]? suppliedHash = null;
+            try
+            {
+                if (credential is not null)
+                {
+                    storedHash = Convert.FromHexString(credential.SecretHash);
+                    suppliedHash = Convert.FromHexString(AgentCredentialSecretMaterial.Hash(secret));
+                    valid = storedHash.Length == suppliedHash.Length &&
+                            CryptographicOperations.FixedTimeEquals(storedHash, suppliedHash);
+                }
+            }
+            finally
+            {
+                if (storedHash is not null) CryptographicOperations.ZeroMemory(storedHash);
+                if (suppliedHash is not null) CryptographicOperations.ZeroMemory(suppliedHash);
+            }
 
             if (!valid)
             {
@@ -164,12 +177,4 @@ public sealed class AgentCredentialService(
             throw new ArgumentException("DeviceId must be 1-128 non-whitespace characters.", nameof(deviceId));
     }
 
-    private static string GenerateSecret() =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-
-    private static string HashSecret(string secret) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret)));
 }

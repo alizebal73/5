@@ -12,14 +12,23 @@ public sealed class AgentIdentityStore(IOptions<AgentIdentityOptions> options) :
 {
     public async Task<GameNet.Agent.AgentIdentity> GetOrCreateAsync(CancellationToken cancellationToken = default)
     {
+        var configuredDeviceId = string.IsNullOrWhiteSpace(options.Value.DeviceId)
+            ? null
+            : GameNet.Agent.AgentIdentity.FromDeviceId(options.Value.DeviceId).DeviceId;
         var root = options.Value.ResolveRootPath();
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "identity.json");
 
         if (File.Exists(path))
-            return await ReadExistingAsync(path, cancellationToken);
+        {
+            var existing = await ReadExistingAsync(path, cancellationToken);
+            EnsureConfiguredIdentityMatches(existing, configuredDeviceId);
+            return existing;
+        }
 
-        var identity = GameNet.Agent.AgentIdentity.FromDeviceId(Guid.NewGuid().ToString("N"));
+        var identity = configuredDeviceId is null
+            ? GameNet.Agent.AgentIdentity.FromDeviceId(Guid.NewGuid().ToString("N"))
+            : GameNet.Agent.AgentIdentity.FromDeviceId(configuredDeviceId);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -39,13 +48,28 @@ public sealed class AgentIdentityStore(IOptions<AgentIdentityOptions> options) :
             }
             catch (IOException) when (File.Exists(path))
             {
-                // Another Agent process won the first-start race. Keep its stable identity.
-                return await ReadExistingAsync(path, cancellationToken);
+                // Another Agent process won the first-start race. Keep its stable identity,
+                // but fail closed if a configured enrollment identity disagrees.
+                var existing = await ReadExistingAsync(path, cancellationToken);
+                EnsureConfiguredIdentityMatches(existing, configuredDeviceId);
+                return existing;
             }
         }
         finally
         {
             try { File.Delete(temp); } catch (IOException) { }
+        }
+    }
+
+    private static void EnsureConfiguredIdentityMatches(
+        GameNet.Agent.AgentIdentity existing,
+        string? configuredDeviceId)
+    {
+        if (configuredDeviceId is not null &&
+            !string.Equals(existing.DeviceId, configuredDeviceId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Configured Agent DeviceId does not match the persisted identity. Refusing to change identity automatically.");
         }
     }
 

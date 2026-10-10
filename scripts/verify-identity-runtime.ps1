@@ -72,6 +72,7 @@ function Invoke-IdentityRequest(
 
     return [pscustomobject]@{
         StatusCode = [int]$response.StatusCode
+        CacheControl = [string]$response.Headers['Cache-Control']
         Json = $json
     }
 }
@@ -270,6 +271,85 @@ try {
     $current = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $operatorHeaders
     Assert-Status $current 200 "Authenticated current-operator request"
     if ($current.Json.data.username -ne $username) { throw "The current-operator endpoint returned the wrong identity." }
+
+    # Enrollment tokens are issued only through operator permission and redeemed exactly once.
+    $enrollmentDeviceId = "ci-enrollment-" + [Guid]::NewGuid().ToString("N")
+    $enrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $enrollmentDeviceId }
+    Assert-Status $enrollmentIssue 200 "Authorized operator issues an Agent enrollment token"
+    $enrollmentToken = [string]$enrollmentIssue.Json.token
+    $enrollmentTokenId = [string]$enrollmentIssue.Json.tokenId
+    if ([string]::IsNullOrWhiteSpace($enrollmentTokenId) -or $enrollmentToken.Length -ne 43) {
+        throw "Enrollment issue did not return a valid one-time token."
+    }
+    if ($enrollmentIssue.CacheControl -notmatch "no-store") { throw "Enrollment token response must be no-store." }
+
+    $enrollmentRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentRedeem 200 "Agent redeems its enrollment token"
+    $enrolledSecret = [string]$enrollmentRedeem.Json.secret
+    if ([string]::IsNullOrWhiteSpace($enrolledSecret) -or $enrollmentRedeem.Json.deviceId -ne $enrollmentDeviceId) {
+        throw "Enrollment redemption did not return the expected DeviceId and fresh credential."
+    }
+    if ($enrollmentRedeem.CacheControl -notmatch "no-store") { throw "Enrollment credential response must be no-store." }
+
+    $enrollmentReplay = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentReplay 401 "Reject replay of a redeemed enrollment token"
+
+    $enrolledAgentLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $enrollmentDeviceId; secret = $enrolledSecret }
+    Assert-Status $enrolledAgentLogin 200 "Authenticate Agent with the credential created by enrollment"
+    if ([string]::IsNullOrWhiteSpace([string]$enrolledAgentLogin.Json.accessToken)) { throw "The enrolled Agent credential could not obtain an access token." }
+
+    $revokedDeviceId = "ci-enrollment-revoked-" + [Guid]::NewGuid().ToString("N")
+    $revocableIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $revokedDeviceId }
+    Assert-Status $revocableIssue 200 "Issue token for revocation test"
+    $revocation = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens/$($revocableIssue.Json.tokenId)/revoke" $operatorHeaders @{ reason = "CI enrollment revocation test" }
+    Assert-Status $revocation 200 "Authorized operator revokes unused enrollment token"
+    if ($revocation.Json.revoked -ne $true) { throw "Enrollment token revocation was not confirmed." }
+    $revokedRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $revokedDeviceId; token = [string]$revocableIssue.Json.token }
+    Assert-Status $revokedRedeem 401 "Reject redemption of revoked enrollment token"
+
+    # A competing request cannot redeem the same token twice; the follow-up request must be rejected.
+    $raceDeviceId = "ci-enrollment-race-" + [Guid]::NewGuid().ToString("N")
+    $raceIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $raceDeviceId }
+    Assert-Status $raceIssue 200 "Issue token for single-use verification"
+    $raceRedeem1 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem1 200 "First enrollment redemption wins"
+    $raceRedeem2 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem2 401 "Second enrollment redemption is rejected"
+    
+    # Two independent requests race to redeem one token; the database transaction must allow only one winner.
+    $parallelDeviceId = "ci-enrollment-parallel-" + [Guid]::NewGuid().ToString("N")
+    $parallelIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $parallelDeviceId }
+    Assert-Status $parallelIssue 200 "Issue token for concurrent redemption"
+    $parallelUri = "$serverUrl/api/v1/agent/enrollment/redeem"
+    $parallelBody = @{ deviceId = $parallelDeviceId; token = [string]$parallelIssue.Json.token } | ConvertTo-Json -Compress
+    $parallelScript = {
+        param($uri, $body)
+        try {
+            $response = Invoke-WebRequest -Method Post -Uri $uri -Headers @{ "X-GameNet-Contract" = "v1" } -ContentType "application/json" -Body $body -TimeoutSec 20 -SkipHttpErrorCheck
+            $json = $response.Content | ConvertFrom-Json -Depth 10
+            [pscustomobject]@{ StatusCode = [int]$response.StatusCode; Secret = [string]$json.secret }
+        }
+        catch {
+            [pscustomobject]@{ StatusCode = -1; Secret = "" }
+        }
+    }
+    $parallelJobs = @(
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+    )
+    try {
+        $parallelResults = @(Receive-Job -Job $parallelJobs -Wait)
+    }
+    finally {
+        Remove-Job -Job $parallelJobs -Force -ErrorAction SilentlyContinue
+    }
+    $parallelWinners = @($parallelResults | Where-Object { $_.StatusCode -eq 200 -and -not [string]::IsNullOrWhiteSpace($_.Secret) })
+    $parallelLosers = @($parallelResults | Where-Object { $_.StatusCode -eq 401 })
+    if ($parallelResults.Count -ne 2 -or $parallelWinners.Count -ne 1 -or $parallelLosers.Count -ne 1) {
+        throw "Concurrent enrollment redemption did not produce exactly one credential and one rejected request."
+    }
+    $parallelLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $parallelDeviceId; secret = [string]$parallelWinners[0].Secret }
+    Assert-Status $parallelLogin 200 "Authenticate Agent using the one credential created by concurrent redemption"
 
     # Station mutations must be idempotent and Station online state must not be inferred from credential existence.
     $stationCode = "CI-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
@@ -476,6 +556,12 @@ try {
     Assert-Status $managerTokenResponse 200 "Login constrained role manager"
     $managerToken = [string]$managerTokenResponse.Json.data.accessToken
     $managerHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken" }
+
+    $managerEnrollmentDenied = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $managerHeaders @{
+        deviceId = "ci-enrollment-denied-" + [Guid]::NewGuid().ToString("N")
+    }
+    Assert-Status $managerEnrollmentDenied 403 "Deny enrollment token issue without agents.enrollment.manage"
+
 
     $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"

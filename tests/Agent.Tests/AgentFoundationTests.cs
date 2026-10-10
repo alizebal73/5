@@ -80,6 +80,37 @@ public sealed class AgentFoundationTests
     }
 
     [Fact]
+    public async Task Agent_identity_store_honors_preassigned_device_id_and_rejects_mismatch()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "gamenet-agent-preassigned-identity-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var firstOptions = Options.Create(new AgentIdentityOptions
+            {
+                RootPath = root,
+                DeviceId = "station-pc-01"
+            });
+            var first = await new AgentIdentityStore(firstOptions).GetOrCreateAsync();
+            Assert.Equal("station-pc-01", first.DeviceId);
+
+            var recreated = await new AgentIdentityStore(firstOptions).GetOrCreateAsync();
+            Assert.Equal(first.DeviceId, recreated.DeviceId);
+
+            var mismatch = Options.Create(new AgentIdentityOptions
+            {
+                RootPath = root,
+                DeviceId = "station-pc-02"
+            });
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => new AgentIdentityStore(mismatch).GetOrCreateAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Agent_credential_round_trip_survives_store_recreation()
     {
         var root = Path.Combine(
