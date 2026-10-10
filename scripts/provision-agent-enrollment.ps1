@@ -89,17 +89,15 @@ if ($LASTEXITCODE -ne 0 -or $sidOutput -notmatch 'SERVICE_SID_TYPE:\s*UNRESTRICT
 $systemSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-18")
 $administratorsSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544")
 $usersSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-545")
-$expectedParentAcl = @{
-    $systemSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
-    $administratorsSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
-    $usersSid.Value = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
-    $agentServiceSid.Value = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
-}
-$expectedStateAcl = @{
-    $systemSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
-    $administratorsSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
-    $agentServiceSid.Value = [System.Security.AccessControl.FileSystemRights]::Modify
-}
+$expectedParentAcl = @{}
+$expectedParentAcl[$systemSid.Value] = [System.Security.AccessControl.FileSystemRights]::FullControl
+$expectedParentAcl[$administratorsSid.Value] = [System.Security.AccessControl.FileSystemRights]::FullControl
+$expectedParentAcl[$usersSid.Value] = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+$expectedParentAcl[$agentServiceSid.Value] = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+$expectedStateAcl = @{}
+$expectedStateAcl[$systemSid.Value] = [System.Security.AccessControl.FileSystemRights]::FullControl
+$expectedStateAcl[$administratorsSid.Value] = [System.Security.AccessControl.FileSystemRights]::FullControl
+$expectedStateAcl[$agentServiceSid.Value] = [System.Security.AccessControl.FileSystemRights]::Modify
 Assert-ExactDacl $managerRoot $expectedParentAcl
 Assert-ExactDacl $configDirectory $expectedParentAcl
 Assert-ExactDacl $agentStateRoot $expectedStateAcl
@@ -196,11 +194,10 @@ try {
     try { $stream.Write($protectedBytes, 0, $protectedBytes.Length); $stream.Flush($true) }
     finally { $stream.Dispose() }
 
-    $expectedTokenAcl = @{
-        $systemSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
-        $administratorsSid.Value = [System.Security.AccessControl.FileSystemRights]::FullControl
-        $agentServiceSid.Value = [System.Security.AccessControl.FileSystemRights]::Read
-    }
+    $expectedTokenAcl = @{}
+    $expectedTokenAcl[$systemSid.Value] = [System.Security.AccessControl.FileSystemRights]::FullControl
+    $expectedTokenAcl[$administratorsSid.Value] = [System.Security.AccessControl.FileSystemRights]::FullControl
+    $expectedTokenAcl[$agentServiceSid.Value] = [System.Security.AccessControl.FileSystemRights]::Read
     Assert-ExactDacl $tempPath $expectedTokenAcl
     $verificationBytes = [System.IO.File]::ReadAllBytes($tempPath)
     $verificationClearBytes = [System.Security.Cryptography.ProtectedData]::Unprotect($verificationBytes, $entropy, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)
