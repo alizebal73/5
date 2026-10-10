@@ -108,3 +108,19 @@ Historical blocker before the final read-back: `protect-main` lacked a `required
 ## Security branch validation lane — 2026-10-10
 
 The PR-ready change in `.github/workflows/gamenet.yml` adds `security/**` to the Quick Validation push lane. Once PR #25 is merged, new commits on isolated security branches will receive the fast build/test gate, and pull requests targeting `integration/runtime-operator-v1` receive Quick Validation. Until then, do not interpret the absence of a run on PR #27 as a passing result.
+
+
+## Security runtime/enrollment integration audit — 2026-10-11
+
+Read-back on the active branches and security PRs confirms the protected references are unchanged: `main` remains `b9288471f2047570eaf8d0d6552cf87bc0ddc214` (protected), and `foundation/runtime-final-v2` remains `be29687e637b709158a30204bb9213bfa4813950` (protected). `integration/runtime-operator-v1` remains `55a340305f9eba3bc8f9a1ce65fb37bedbae7580` and is not protected.
+
+The ancestry/diff audit against that integration ref found:
+- PR #29 validation candidate: 168 commits ahead, 0 behind, 67 changed files.
+- Source PR #27: 50 commits ahead, 0 behind, 34 changed files.
+- Source PR #28: 82 commits ahead, 0 behind, 40 changed files.
+- PR #27's 34 changed paths are all present in #29; 39 of #28's 40 paths are present in #29. The source PRs overlap on six paths: workflow files, runtime endpoint docs, the identity runtime verifier, Server service registration and Server Program. #28's one non-carried file is `src/Server/InternalTestAccess.cs`; the combined tree uses `src/Server/Properties/AssemblyInfo.cs` for test visibility and the combined Foundation run passed on its previous exact head.
+- Do not merge #27, #28 or #29 wholesale. Preserve all three Drafts for source and validation traceability.
+
+A bounded delivery candidate is now open as Draft [PR #30](https://github.com/alizebal73/5/pull/30), branch `security/runtime-enrollment-delivery-v1`, head `f4387584d6c14fb55cbfca20521e221ea2462a4f`, directly parented to integration SHA `55a340305f9eba3bc8f9a1ce65fb37bedbae7580`. Comparison confirms it is exactly one commit ahead / zero behind with the same 67-file functional diff; it uses the audited candidate tree without importing the 168-commit history. Its exact-head Quick Validation, Full Foundation and Runtime payload checks are pending at this snapshot. It is not approved to merge until all three exact-head checks pass and the diff is reviewed.
+
+No merge or deletion was performed. Installed Windows Service/DPAPI identity and physical LAN evidence remain explicitly unverified in this pass.
