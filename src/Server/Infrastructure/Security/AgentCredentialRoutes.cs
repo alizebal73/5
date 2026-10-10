@@ -25,6 +25,7 @@ public static class AgentCredentialRoutes
                 HttpResponse response,
                 CancellationToken cancellationToken) =>
             {
+                response.Headers.CacheControl = "no-store";
                 if (!options.Value.Authentication.Enabled)
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 
@@ -32,7 +33,6 @@ public static class AgentCredentialRoutes
                     return Results.Unauthorized();
 
                 var token = tokenIssuer.Issue(request.DeviceId);
-                response.Headers.CacheControl = "no-store";
                 return Results.Ok(token);
             }).AllowAnonymous();
 
