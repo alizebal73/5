@@ -70,6 +70,7 @@ function Invoke-IdentityRequest(
 
     return [pscustomobject]@{
         StatusCode = [int]$response.StatusCode
+        CacheControl = [string]$response.Headers['Cache-Control']
         Json = $json
     }
 }
@@ -237,6 +238,49 @@ try {
     Assert-Status $current 200 "Authenticated current-operator request"
     if ($current.Json.data.username -ne $username) { throw "The current-operator endpoint returned the wrong identity." }
 
+    # Enrollment tokens are issued only through operator permission and redeemed exactly once.
+    $enrollmentDeviceId = "ci-enrollment-" + [Guid]::NewGuid().ToString("N")
+    $enrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $enrollmentDeviceId }
+    Assert-Status $enrollmentIssue 200 "Authorized operator issues an Agent enrollment token"
+    $enrollmentToken = [string]$enrollmentIssue.Json.token
+    $enrollmentTokenId = [string]$enrollmentIssue.Json.tokenId
+    if ([string]::IsNullOrWhiteSpace($enrollmentTokenId) -or $enrollmentToken.Length -ne 43) {
+        throw "Enrollment issue did not return a valid one-time token."
+    }
+    if ($enrollmentIssue.CacheControl -notmatch "no-store") { throw "Enrollment token response must be no-store." }
+
+    $enrollmentRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentRedeem 200 "Agent redeems its enrollment token"
+    $enrolledSecret = [string]$enrollmentRedeem.Json.secret
+    if ([string]::IsNullOrWhiteSpace($enrolledSecret) -or $enrollmentRedeem.Json.deviceId -ne $enrollmentDeviceId) {
+        throw "Enrollment redemption did not return the expected DeviceId and fresh credential."
+    }
+    if ($enrollmentRedeem.CacheControl -notmatch "no-store") { throw "Enrollment credential response must be no-store." }
+
+    $enrollmentReplay = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentReplay 401 "Reject replay of a redeemed enrollment token"
+
+    $enrolledAgentLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $enrollmentDeviceId; secret = $enrolledSecret }
+    Assert-Status $enrolledAgentLogin 200 "Authenticate Agent with the credential created by enrollment"
+    if ([string]::IsNullOrWhiteSpace([string]$enrolledAgentLogin.Json.accessToken)) { throw "The enrolled Agent credential could not obtain an access token." }
+
+    $revokedDeviceId = "ci-enrollment-revoked-" + [Guid]::NewGuid().ToString("N")
+    $revocableIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $revokedDeviceId }
+    Assert-Status $revocableIssue 200 "Issue token for revocation test"
+    $revocation = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens/$($revocableIssue.Json.tokenId)/revoke" $operatorHeaders @{ reason = "CI enrollment revocation test" }
+    Assert-Status $revocation 200 "Authorized operator revokes unused enrollment token"
+    if ($revocation.Json.revoked -ne $true) { throw "Enrollment token revocation was not confirmed." }
+    $revokedRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $revokedDeviceId; token = [string]$revocableIssue.Json.token }
+    Assert-Status $revokedRedeem 401 "Reject redemption of revoked enrollment token"
+
+    # A competing request cannot redeem the same token twice; the follow-up request must be rejected.
+    $raceDeviceId = "ci-enrollment-race-" + [Guid]::NewGuid().ToString("N")
+    $raceIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $raceDeviceId }
+    Assert-Status $raceIssue 200 "Issue token for single-use verification"
+    $raceRedeem1 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem1 200 "First enrollment redemption wins"
+    $raceRedeem2 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem2 401 "Second enrollment redemption is rejected"
     # Station mutations must be idempotent and Station online state must not be inferred from credential existence.
     $stationCode = "CI-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
     $stationCreateKey = "ci-station-create-" + [Guid]::NewGuid().ToString("N")
