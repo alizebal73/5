@@ -160,11 +160,41 @@ try {
 
     $directory = Split-Path -Parent $fullDestination
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
-    $stream = [System.IO.File]::Open(
-        $fullDestination,
+
+    # Apply the final protected DACL during file creation. LocalMachine DPAPI is
+    # machine-scoped, so creating the ciphertext with inherited Users-read access
+    # and tightening the ACL only afterwards would expose a short read window.
+    $systemSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-18")
+    $administratorsSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544")
+    $serviceSid = ([System.Security.Principal.NTAccount]::new($ServiceAccount)).Translate(
+        [System.Security.Principal.SecurityIdentifier])
+    if ($serviceSid.Value -eq $systemSid.Value -or $serviceSid.Value -eq $administratorsSid.Value) {
+        throw "The configured Server service account must be distinct from SYSTEM and local Administrators."
+    }
+
+    $fileSecurity = [System.Security.AccessControl.FileSecurity]::new()
+    $fileSecurity.SetAccessRuleProtection($true, $false)
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $systemSid,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $administratorsSid,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $serviceSid,
+        [System.Security.AccessControl.FileSystemRights]::Read,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+
+    $stream = [System.IO.FileSystemAclExtensions]::Create(
+        [System.IO.FileInfo]::new($fullDestination),
         [System.IO.FileMode]::CreateNew,
-        [System.IO.FileAccess]::Write,
-        [System.IO.FileShare]::None)
+        ([System.Security.AccessControl.FileSystemRights]::WriteData -bor [System.Security.AccessControl.FileSystemRights]::ReadAttributes),
+        [System.IO.FileShare]::None,
+        4096,
+        [System.IO.FileOptions]::WriteThrough,
+        $fileSecurity)
     $settingsFileCreated = $true
     try {
         $stream.Write($protectedBytes, 0, $protectedBytes.Length)
