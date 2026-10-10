@@ -58,6 +58,7 @@ builder.Services
 builder.Services.AddHttpClient("GameNetAgentCredentialClient");
 builder.Services.AddSingleton<IAgentIdentityStore, AgentIdentityStore>();
 builder.Services.AddSingleton<IAgentCredentialStore, AgentCredentialStore>();
+builder.Services.AddSingleton<IAgentEnrollmentTokenStore, AgentEnrollmentTokenStore>();
 builder.Services.AddSingleton<IAgentEnrollmentBootstrapper, AgentEnrollmentBootstrapper>();
 builder.Services.AddSingleton<IAgentAccessTokenProvider, AgentAccessTokenProvider>();
 builder.Services.AddSingleton<IAgentTransport, SignalRAgentTransport>();
