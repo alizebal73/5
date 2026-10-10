@@ -43,10 +43,6 @@ public sealed class AgentAccessTokenProvider(
                 secret ??= await credentialStore.GetOrBootstrapAsync(cancellationToken);
             }
 
-            // A saved credential is now authoritative. Clean any protected first-start
-            // token left behind if an earlier delete failed after the credential was saved.
-            await enrollmentTokenStore.DeleteAsync(cancellationToken);
-
             // Once a durable per-device credential is available, clear all bootstrap
             // material from this process regardless of which compatible path supplied it.
             Environment.SetEnvironmentVariable(
@@ -76,6 +72,11 @@ public sealed class AgentAccessTokenProvider(
                 throw new InvalidOperationException(
                     $"Agent token request failed with HTTP {(int)response.StatusCode}.");
             }
+
+            // Retire leftover enrollment material only after the current credential
+            // has authenticated successfully. On 401, a pending file may be the only
+            // route to recover from a prior credential-persistence failure.
+            await enrollmentTokenStore.DeleteAsync(cancellationToken);
 
             var token = await response.Content.ReadFromJsonAsync<AgentTokenResponse>(
                 new JsonSerializerOptions(JsonSerializerDefaults.Web),
