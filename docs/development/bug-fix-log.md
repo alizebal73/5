@@ -554,3 +554,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Scope limit: these changes are hygiene hardening only. The provision/rotate/revoke routes still rely on the shared protected provisioning key; the independently authenticated management issue-token flow with atomic single-use redemption remains a separate required slice.
 - Verification: Quick Validation for this code change and the resulting current PR head is pending; prior CI success does not certify this commit.
 - Rollback: revert only the buffer-clearing and cache-policy changes if a verified compatibility issue arises; do not weaken the fixed-time key comparison.
+
+
+## 2026-10-10 — Restore the documented read-only Manager preflight
+
+- Finding: `docs/operations/initial-admin-setup.md` required a read-only preflight from `scripts/inspect-manager-runtime-state.ps1`, but that script did not exist in the active integration target. An operator could not produce the promised evidence before making setup changes.
+- Fix: add the read-only preflight. It reports Server service state/logon account, service SID type and SID, public listener settings, certificate metadata, listener presence, and ACL entries for ProgramData settings/secrets paths and the TLS machine private-key file. It intentionally withholds the raw service command line and never opens/decrypts the protected secret payloads.
+- Safety boundary: the script is observational only. Its report is evidence for human review, not proof of effective service permissions, DPAPI restart access or an HTTPS handshake; provisioning remains a separate explicit step.
+- Verification: the canonical PowerShell parser gate and Release build/tests on the final current PR head are required; prior CI runs do not cover this new script.
+- Rollback: remove this script only if a supported Windows environment demonstrates a concrete compatibility issue; otherwise preserve the read-only preflight and correct it without adding machine-changing behavior.
