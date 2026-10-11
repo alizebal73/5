@@ -15,6 +15,8 @@ on:
       - "security/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
+      - ".github/workflows/foundation-runtime.yml"
+      - "scripts/check-ci-runner-policy.ps1"
       - ".github/workflows/runtime-lan-smoke-payload.yml"
       - "scripts/configure-agent-runtime-state.ps1"
       - "docs/operations/agent-service-state.md"
