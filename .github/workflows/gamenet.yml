@@ -36,6 +36,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: PowerShell parser gate
         timeout-minutes: 5
@@ -68,6 +72,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: Publish versioned self-contained payloads
         shell: pwsh

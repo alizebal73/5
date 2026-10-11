@@ -13,10 +13,15 @@ permissions:
 
 jobs:
   postgres:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: PowerShell parser gate
         shell: pwsh
@@ -31,6 +36,51 @@ jobs:
             }
           }
 
+      - name: Prepare disposable PostgreSQL diagnostic database
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $serviceName = "postgresql-x64-17"
+          $service = Get-Service -Name $serviceName -ErrorAction Stop
+          if ($service.Status -ne "Running") {
+            Set-Service -Name $serviceName -StartupType Manual
+            Start-Service -Name $serviceName
+          }
+          $psql = Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe"
+          $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+          if (-not (Test-Path -LiteralPath $psql -PathType Leaf)) {
+            throw "PostgreSQL 17 client was not found on the hosted Windows image."
+          }
+          # Disposable password scoped to this ephemeral hosted VM.
+          $env:PGPASSWORD = "root"
+          Write-Output "::add-mask::root"
+          & $psql --host=127.0.0.1 --port=5432 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 --command="CREATE DATABASE gamenet_postgres_diagnostic;"
+          if ($LASTEXITCODE -ne 0) {
+            $exists = (& $psql --host=127.0.0.1 --port=5432 --username=postgres --dbname=postgres --tuples-only --no-align --command="SELECT 1 FROM pg_database WHERE datname = 'gamenet_postgres_diagnostic';" 2>&1) -join ""
+            if ($LASTEXITCODE -ne 0 -or $exists.Trim() -ne "1") {
+              throw "Could not create the disposable PostgreSQL diagnostic database."
+            }
+          }
+          $connection = "Host=127.0.0.1;Port=5432;Database=gamenet_postgres_diagnostic;Username=postgres;Password=root;Include Error Detail=true;Pooling=false"
+          Write-Output "::add-mask::$connection"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "GAMENET_DATABASE_CONNECTION=$connection"
+          $env:GAMENET_DATABASE_CONNECTION = $connection
+          & $dotnet tool restore
+          if ($LASTEXITCODE -ne 0) { throw "Could not restore the local dotnet-ef tool." }
+          & $dotnet ef database update --configuration Release --project src/Server/GameNet.Server.csproj --startup-project src/Server/GameNet.Server.csproj --context GameNet.Server.Persistence.GameNetDbContext
+          if ($LASTEXITCODE -ne 0) { throw "Could not initialize the disposable diagnostic database with repository migrations." }
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+
       - name: PostgreSQL Foundation lane
         shell: pwsh
         run: .\scripts\verify-postgresql.ps1
+ 
+      - name: Stop disposable PostgreSQL service
+        if: always()
+        shell: pwsh
+        run: |
+          $service = Get-Service -Name "postgresql-x64-17" -ErrorAction SilentlyContinue
+          if ($null -ne $service -and $service.Status -eq "Running") {
+            Stop-Service -Name "postgresql-x64-17" -Force
+          }
