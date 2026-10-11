@@ -9,6 +9,7 @@ on:
       - "security/**"
     paths:
       - ".github/workflows/foundation-runtime.yml"
+      - ".github/workflows/foundation-certification.yml"
       - "scripts/check-ci-runner-policy.ps1"
       - "scripts/verify-postgresql.ps1"
 
