@@ -11,11 +11,11 @@ A checkpoint is stable only when restore/build/tests, architecture guards, Postg
 
 ## Active Integration / CI candidate — separate from Stable Foundation
 
-- Draft, unmerged review: [PR #31](https://github.com/alizebal73/5/pull/31), targeting integration/runtime-operator-v1.
-- Latest exact-SHA candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186); all five passed on the same SHA.
-- Earlier candidates `991152b...`, `3fef98d...` and `77507f4...` remain historical evidence and do not supersede the latest exact-SHA result.
-- integration/runtime-operator-v1 currently has no active Ruleset. Green CI does not make the branch protected.
-- The local self-hosted Runner is retained and not selected by current workflow jobs; GitHub-side Runner access policy remains open. This candidate is not an installer, Production release or physical-LAN certification.
+- Draft, unmerged review: [PR #31](https://github.com/alizebal73/5/pull/31), current verified head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`, targeting Integration. Quick PR #38138211044, Full Foundation #38138208159 and Runtime Payload #38138211061 passed on that head. The preceding code-bearing candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push #38137818156 and PostgreSQL diagnostic #38137818186 as well as its other three gates.
+- Separate Foundation maintenance review: [PR #32](https://github.com/alizebal73/5/pull/32), head `6e21a42891592ba1c7d75300549cf26068b21c27`; Full Foundation passed in [run #38139128433](https://github.com/alizebal73/5/actions/runs/38139128433). It remains Draft/unmerged and does not make the base Foundation SHA independently certified.
+- Integration now has active Ruleset [`protect-integration-runtime` #24879997](https://github.com/alizebal73/5/rules/24879997); required check is `quick-validation`.
+- The personal Runner remains registered by owner decision until GameNet completion; removal is deferred to [Issue #33](https://github.com/alizebal73/5/issues/33). Settings-level runner-group restrictions are not asserted as verified. Some older open branches still contain self-hosted workflow definitions.
+- These candidates are not installers, production releases or physical-LAN certification.
 
 ## Policy
 

@@ -2,29 +2,30 @@
 
 این سند، دفتر زندهٔ ریسک‌ها و ترتیب اجرای کار است. تاریخ snapshot: 2026-10-11. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ آن‌ها را به ترتیب اجرایی و وضعیت واقعی وصل می‌کند. هر ادعای Done باید به commit، آزمون و مدرک همان SHA متصل باشد.
 
-## Current verified baseline — 2026-10-11
+## Current verified baseline — 2026-10-11 (refreshed after GitHub Settings read-back)
 
 - Repository: `alizebal73/5`, public.
-- `main` is protected and unchanged at `b9288471f2047570eaf8d0d6552cf87bc0ddc214`.
-- `foundation/runtime-final-v2` is protected at `be29687e637b709158a30204bb9213bfa4813950`. Stable Checkpoint certifies only `c3a8ba482548e963479fbdf8538be62c4d15acfe`; the newer branch tip has no established exact-tip run in the current record.
-- `integration/runtime-operator-v1` remains at `82d90178c0011c65eef76bd32cc33318d5bbd91c` and is NOT protected by any active Ruleset.
-- PR #31 candidate is `d02192a43722efc1f49bf84fd24af911b3ece7e9`, 14 commits ahead / 0 behind its Integration base. It remains Draft/open/unmerged. Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) all passed on the same exact SHA.
-- All four tracked workflows select GitHub-hosted `windows-2025`; `scripts/check-ci-runner-policy.ps1` is defence in depth, not a security boundary. The self-hosted Runner was retained/untouched and no current workflow selects it. GitHub Settings-level Runner/runner-group restrictions remain unverified; keep the local Runner offline during untrusted PR evaluation.
-- ADR-0002 is Accepted as the implementation contract only. Real installed-service identity, effective ACL/DPAPI after restart, TLS private-key access, bootstrap finalization, actual Agent credential persistence and physical LAN acceptance remain open.
-- PR #30 is already merged to Integration as `e1626d7d1f2e62601329604b8823787f2c9597b6`; PRs #27/#28/#29 are closed source-history/evidence only and are not merge candidates. Do not modify `main` or Foundation directly.
-- The [Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) is the mandatory handoff checklist from hosted CI to physical acceptance and then commercial slices.
+- `main`: protected, unchanged at `b9288471f2047570eaf8d0d6552cf87bc0ddc214`.
+- `foundation/runtime-final-v2`: protected, unchanged at `be29687e637b709158a30204bb9213bfa4813950`. Stable Checkpoint still certifies only `c3a8ba482548e963479fbdf8538be62c4d15acfe`; no exact-tip Foundation run has been established for the base SHA itself.
+- `integration/runtime-operator-v1`: unchanged at `82d90178c0011c65eef76bd32cc33318d5bbd91c`; now protected by active Ruleset `protect-integration-runtime` ID `24879997`, read back with PR requirement, conversation resolution, `quick-validation`, deletion/force-push prevention, Squash-only and empty bypass list.
+- PR #31: `security/runner-and-stage1-stabilization-v1`, current verified head before this documentation refresh `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`, Draft/open/unmerged. Quick PR #38138211044, Full Foundation #38138208159 and Runtime Payload #38138211061 passed on that head. Its immediately preceding code-bearing candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` also passed Quick push #38137818156 and PostgreSQL diagnostic #38137818186, along with the other three gates listed in the handoff gate.
+- PR #32: `security/foundation-hosted-runner-isolation-v1`, head `6e21a42891592ba1c7d75300549cf26068b21c27`, Draft/open/unmerged. Full Foundation passed in [run #38139128433](https://github.com/alizebal73/5/actions/runs/38139128433). The protected Foundation base remains unchanged.
+- The personal self-hosted Runner is intentionally retained per owner decision until GameNet is complete; it appeared as `Idle` in repository Runner settings. Issue #33 tracks deferred cleanup. PR #31/#32 candidate workflows use hosted `windows-2025`, but older open feature PRs can still contain self-hosted workflow definitions; this repository-level fact is not described as solved by the in-repo guard.
+- Operational acceptance remains open: installed Windows Service identity/effective ACL, DPAPI after restart, TLS private-key access, bootstrap finalization, Agent enrollment/replay/revocation/restart, and physical LAN tests are not proven by hosted CI.
+- PR #30 remains merged to Integration at `e1626d7d1f2e62601329604b8823787f2c9597b6`; PR #27/#28/#29 are closed source-history/evidence only. Keep `main` and Foundation unchanged outside reviewed maintenance PRs.
+- The [Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) remains the mandatory handoff from hosted CI to real-Windows acceptance and commercial work.
 
 ## Current priority gaps — 2026-10-11
 
 | ID | Priority | Current status | Closure criterion |
 |---|---|---|---|
-| C-01 | P0 | Hosted Quick push, Quick PR, Full Foundation, Payload and PostgreSQL diagnostic all pass on exact candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9`. | Keep evidence linked and rerun applicable gates on every later source/workflow change. |
-| C-02 | P0 | GitHub Settings-level Runner/repository/runner-group access restrictions have not been applied/read back. | Verify/restrict access; keep local Runner offline during untrusted PR evaluation until read-back is complete. |
-| C-03 | P0 before shared merges | Integration has no active Ruleset. | Create/read back a Ruleset requiring PR, observed `quick-validation` and conversation resolution. |
-| C-04 | P0 before commercial slices | ADR-0002 implementation contract and hosted tests exist; operational acceptance is open. | Pass isolated real-Windows Server/Agent service, ACL/DPAPI, TLS, bootstrap, enrollment/replay/restart and physical-LAN protocol. |
-| C-05 | P1 before describing Foundation ref as current-certified | Foundation branch tip `be29687...` is newer than stable-certified `c3a8ba...`; no exact-tip result is established here. | Run Full Foundation against the exact Foundation tip in GitHub and capture evidence, without direct-pushing a fix to Foundation. |
-| C-06 | P0 before any slice relying on Outbox delivery | Outbox append/claim/published-state exist; no hosted delivery worker, retry/final-failure policy or idempotent consumer is present. | Implement/certify these semantics before any slice that uses asynchronous publication, especially Session-to-Agent command dispatch. |
-| C-07 | P1 | Some live docs used stale baselines and Stage 1/Gate A wording. | Keep statuses synchronized with exact GitHub read-back; the canonical pre-stage gate is checked by `scripts/check-work-item-docs.ps1`. |
+| C-01 | P0 | PR #31's latest verified head passed Quick PR, Full Foundation and Runtime Payload; the immediately preceding source-identical candidate also passed Quick push and PostgreSQL diagnostic. | Keep evidence tied to exact SHAs and rerun applicable gates when source/workflow content changes. |
+| C-02 | Deferred by owner | Personal Runner remains registered by explicit decision; access scoping was not read back as restricted. | Remove the Runner after GameNet completion and confirm it no longer appears in repository/organization Runner settings; avoid third-party/untrusted workloads on it while retained. |
+| C-03 | Done | Active Integration Ruleset ID `24879997` was read back with the exact target and required `quick-validation` gate. | Keep the Ruleset active and verify its required check whenever workflow names change. |
+| C-04 | P0 before commercial slices | Hosted runtime tests are green, but actual installed-service and physical-LAN acceptance is open. | Pass the isolated Windows Server/Agent service, ACL/DPAPI, TLS, bootstrap, enrollment/replay/restart and LAN protocol with evidence. |
+| C-05 | P1 before calling Foundation tip the current certified checkpoint | `foundation/runtime-final-v2` tip `be29687e637b709158a30204bb9213bfa4813950` differs from the exact stable-certified SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`. | Obtain a successful Full Foundation run that explicitly tests the exact base tip, without direct-pushing a fix to Foundation. |
+| C-06 | P0 before any slice that depends on Outbox delivery | Outbox append/leased claim/published marker exist; a delivery worker, retry/final-failure policy, event consumer and idempotency proof do not. | Implement and certify those behaviors before asynchronous/external delivery is required, especially Session-to-Agent. |
+| C-07 | P1 | Historical snapshots intentionally preserve old facts; all live sections must match current read-back. | Keep the live status blocks synced and let the canonical docs validator pass on the review candidate. |
 
 ## Historical baseline snapshot (2026-10-10; superseded by current read-back)
 

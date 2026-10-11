@@ -12,17 +12,22 @@ Status: **CERTIFIED — historical exact SHA only; not certification of the curr
 
 ## Current Integration CI candidate — 2026-10-11 (not a Foundation stable checkpoint)
 
-PR #31 remains Draft/unmerged. Latest candidate SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186); all passed on the same exact SHA. This is an Integration/CI candidate, not a new Foundation stable checkpoint. Hosted CI does not prove installed Windows Service identity, effective ACL/DPAPI after restart, TLS private-key access under the real service, or physical two-PC LAN behavior.
+PR #31 remains Draft/unmerged and targets Integration. Its last verified head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044), Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) and Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061). The immediately preceding code-bearing candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186).
 
-## Current candidate gates (PR #31 head only; not the historical Foundation certificate)
+PR #32 is a distinct Foundation maintenance candidate at head `6e21a42891592ba1c7d75300549cf26068b21c27`; Full Foundation passed in [run #38139128433](https://github.com/alizebal73/5/actions/runs/38139128433). This validates the PR candidate workflow tree, not an independent certificate for Foundation base tip `be29687e637b709158a30204bb9213bfa4813950`.
 
-| Gate | Exact run | Result |
-|---|---|---|
-| Quick push | [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156) | Passed |
-| Quick PR | [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693) | Passed |
-| Full Foundation | [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157) | Passed |
-| Runtime Payload | [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) | Passed |
-| PostgreSQL Diagnostic | [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) | Passed |
+Integration is now protected by active Ruleset [`protect-integration-runtime` #24879997](https://github.com/alizebal73/5/rules/24879997). The personal Runner remains registered by owner decision and is scheduled for removal after GameNet completion; actual Runner-group access restrictions are not certified. Hosted CI does not prove installed Windows Service identity, effective ACL/DPAPI, TLS key access under the service or physical two-PC LAN behavior.
+
+## Current candidate gates
+
+| Candidate | Gate | Exact run | Result |
+|---|---|---|---|
+| PR #31 head `7a8475bf...` | Quick PR | [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044) | Passed |
+| PR #31 head `7a8475bf...` | Full Foundation | [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) | Passed |
+| PR #31 head `7a8475bf...` | Runtime Payload | [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) | Passed |
+| PR #31 previous source candidate `d02192a...` | Quick push | [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156) | Passed |
+| PR #31 previous source candidate `d02192a...` | PostgreSQL diagnostic | [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) | Passed |
+| PR #32 head `6e21a428...` | Full Foundation | [#38139128433](https://github.com/alizebal73/5/actions/runs/38139128433) | Passed |
 
 ## Historical certified Foundation gates
 

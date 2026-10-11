@@ -1,23 +1,18 @@
 # GameNet 5 — برنامه تثبیت CI و بستن Foundation
 تاریخ ثبت: 2026-10-11
 
-## تصمیم اجرایی فعلی
-- معماری محصول از صفر بازنویسی نمی‌شود؛ تغییرها کوچک، قابل بازبینی و مبتنی بر شاخهٔ مرجع خواهند بود.
-- Runner خودمیزبان کاربر از سیستم حذف یا دوباره نصب نمی‌شود؛ این تغییرات آن را هدف نمی‌گیرند.
-- تصمیم CI فعلی: هر چهار Workflow روی GitHub-hosted windows-2025 اجرا می‌شوند. Runner شخصی حذف، بازنصب یا دست‌کاری نشده و هیچ Workflow فعلی آن را انتخاب نمی‌کند.
-- مرز امنیتی باز: guard داخل مخزن فقط دفاع در عمق است؛ دسترسی Runner/runner-group باید جداگانه در GitHub Settings محدود شود. تا تأیید، Runner محلی هنگام بررسی/اجرای PR غیرقابل‌اعتماد offline بماند.
-- تغییر هیچ‌یک از `main` و `foundation/runtime-final-v2` مجاز نیست مگر در PR نگهداری جداگانه، با دلیل و گواهی مستقل.
+## تصمیم اجرایی فعلی (بازخوانی 2026-10-11)
+- معماری محصول از صفر بازنویسی نمی‌شود؛ تغییرها کوچک و در PRهای جدا، با مدرک روی SHA دقیق انجام می‌شوند.
+- Ruleset شاخهٔ `integration/runtime-operator-v1` ساخته و تأیید شده است: `protect-integration-runtime`، ID `24879997`، وضعیت Active و check اجباری `quick-validation`.
+- Runner شخصی کاربر طبق تصمیم صریح او تا پایان ساخت GameNet نگه داشته می‌شود؛ در Settings با وضعیت `Idle` دیده شد. پس از تکمیل برنامه، پاک‌سازی آن پیگیری می‌شود. دسترسی Runner-group به‌عنوان محدودشده تأیید نشده؛ کاندیدهای PR #31 و #32 از `windows-2025` استفاده می‌کنند، اما این گزاره را به شاخه‌های قدیمی/باز تعمیم نده.
+- هیچ تغییری مستقیم روی `main` یا `foundation/runtime-final-v2` انجام نمی‌شود؛ PR #31 و #32 باز و Draft می‌مانند تا بازبینی شوند.
 
-## آخرین گواهی روی کاندید دقیق — 2026-10-11
+## آخرین شواهد دقیق — 2026-10-11
+- PR #31 head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`: Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044)، Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159)، Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) موفق شدند.
+- کاندید کد پیشین `d02192a43722efc1f49bf84fd24af911b3ece7e9` هر پنج گیت Quick push، Quick PR، Full Foundation، Runtime Payload و PostgreSQL diagnostic را با موفقیت گذراند؛ SHA و لینک‌ها در handoff gate ثبت شده‌اند. از اجرای آن پنج‌گانه به‌اشتباه ادعا نکن که هر run روی SHA `7a8475b...` بوده است.
+- PR #32، head `6e21a42891592ba1c7d75300549cf26068b21c27`: Full Foundation [#38139128433](https://github.com/alizebal73/5/actions/runs/38139128433) موفق شد؛ Foundation مرجع تغییر نکرده است.
 
-روی SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` هر پنج مسیر موفق شدند:
-- Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156)
-- Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693)
-- Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157)
-- Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491)
-- PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186)
-
-این گواهی مربوط به کاندید PR #31 است، نه نوک Integration یا Stable Foundation. PR هنوز Draft و ادغام‌نشده است.
+این شواهد CI خودکارند؛ جایگزین آزمون واقعی سرویس ویندوز، ACL/DPAPI، کلید TLS، Bootstrap، Agent و LAN نمی‌شوند.
 
 ## شواهد Runner
 - آزمون GitHub-hosted Windows با SDK دقیق .NET `10.0.401`، PowerShell parser و `scripts/verify.ps1` موفق شد: [Run #38130781617](https://github.com/alizebal73/5/actions/runs/38130781617)، SHA `c80c4dc9bf4050f706f1eb710a57f67201bede79`.

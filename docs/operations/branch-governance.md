@@ -1,28 +1,29 @@
 # GameNet 5 — Branch governance
 
-## Current GitHub read-back — 2026-10-11 (authoritative snapshot)
+## Current GitHub read-back — 2026-10-11 (refreshed authoritative snapshot)
 
-All data below is based on current GitHub read-back. Ruleset reads are available; the current connection does not provide administrative Ruleset or runner-group writes.
+GitHub read-back confirms that Integration protection is now active. Ruleset and Runner-group administration are distinct: the Ruleset is confirmed; Runner access scope has not been read back as restricted and is intentionally deferred per owner decision.
 
 | Ref | Observed SHA | Protected | Intended use |
 |---|---|---:|---|
-| main | b9288471f2047570eaf8d0d6552cf87bc0ddc214 | yes | Keep unchanged. |
-| foundation/runtime-final-v2 | be29687e637b709158a30204bb9213bfa4813950 | yes | Protected Foundation reference; current tip differs from the certified SHA recorded below. |
-| integration/runtime-operator-v1 | 82d90178c0011c65eef76bd32cc33318d5bbd91c | **no** | Active Integration branch; no active Ruleset targets it. |
-| security/runner-and-stage1-stabilization-v1 | PR #31 head | no | Draft review branch only. |
+| `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | yes | Keep unchanged. |
+| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Protected Foundation reference; exact stable certificate remains historical SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`. |
+| `integration/runtime-operator-v1` | `82d90178c0011c65eef76bd32cc33318d5bbd91c` | yes | Active Integration branch; Ruleset `protect-integration-runtime` targets this exact ref. |
+| `security/runner-and-stage1-stabilization-v1` | `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` (last verified head) | no | PR #31 Draft review candidate only. |
+| `security/foundation-hosted-runner-isolation-v1` | `6e21a42891592ba1c7d75300549cf26068b21c27` | no | PR #32 Draft Foundation maintenance candidate only. |
 
 Active Rulesets read-back:
-- protect-main (24783754) targets refs/heads/main; PR, conversation resolution and quick-validation are required. strict up-to-date checks are false and no independent approvals are required.
-- protect-foundation-runtime (24784035) targets refs/heads/foundation/runtime-*; PR, conversation resolution and foundation are required. strict up-to-date checks are false and no independent approvals are required.
-- No active Ruleset targets integration/runtime-operator-v1. Do not call Integration protected until a Ruleset is created in GitHub Settings and read back.
+- `protect-main` (ID `24783754`) targets `refs/heads/main`; requires pull request, conversation resolution and `quick-validation`.
+- `protect-foundation-runtime` (ID `24784035`) targets `refs/heads/foundation/runtime-*`; requires pull request, conversation resolution and `foundation`.
+- `protect-integration-runtime` (ID `24879997`) targets exactly `refs/heads/integration/runtime-operator-v1`; requires pull request, conversation resolution and `quick-validation`, prevents deletion/force-push (non-fast-forward), allows Squash only and has no bypass actor.
 
 ## CI Runner policy — 2026-10-11
 
-PR #31 moves all four tracked Workflow jobs to GitHub-hosted windows-2025 and adds scripts/check-ci-runner-policy.ps1 as a defence-in-depth assignment guard. The user's self-hosted Runner has not been deleted, reinstalled or modified; no current Workflow selects it. The PostgreSQL diagnostic lane creates a disposable database inside its ephemeral hosted VM.
+PR #31's candidate workflow set and PR #32's Foundation workflow set use GitHub-hosted `windows-2025`, each with the in-repository runner-policy guard. Full Foundation passed on PR #31 head's run #38138208159 and PR #32's run #38139128433. The guard is defense in depth, not a security boundary.
 
-The in-repository guard is not a security boundary because an untrusted PR can attempt to modify the workflow or guard itself. GitHub-side Runner/runner-group restrictions could not be changed through the current connection. Keep the local Runner offline during evaluation of untrusted PRs until Settings-level access is verified. Use it only later for separately reviewed trusted physical acceptance.
+The personal self-hosted Runner remains registered per owner decision (repository Settings displayed `Server self-hosted Windows X64 — Idle`). The owner intends to remove it after GameNet development is complete. Runner-group restrictions have not been verified; old open feature branches may still carry self-hosted workflow definitions, so do not claim the entire repository history or all open PRs has been migrated. Avoid third-party/untrusted execution on the personal Runner wherever practical. This deferred item is tracked in [Issue #33](https://github.com/alizebal73/5/issues/33).
 
-PR #31 remains Draft/unmerged. Latest candidate SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186). All five passed on the same exact SHA. Earlier candidates remain historical evidence, not current-head certification.
+PR #31 remains Draft/unmerged. Its last verified head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044), Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) and Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061). The preceding code-bearing SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed the five-run set (Quick push, Quick PR, Full Foundation, Payload, PostgreSQL diagnostic). PR #32 remains Draft/unmerged; its Full Foundation run #38139128433 passed after fixing the EF tool invocation within the isolated concurrency worker.
 
 Older records below are preserved as historical audit trail and do not override the current snapshot above.
 
@@ -40,7 +41,7 @@ The Repository Rulesets endpoint returned an empty list at audit time. The admin
 
 ## Required policy
 
-The exact current hosted-CI candidate and blockers before physical acceptance are tracked in [Pre-Windows and Pre-Commercial Readiness Gate](../planning/pre-commercial-readiness-gate.md). The open Ruleset and GitHub-side Runner permissions are administrator actions and remain unverified; no source-level guard is a substitute.
+The exact current hosted-CI candidate and blockers before physical acceptance are tracked in [Pre-Windows and Pre-Commercial Readiness Gate](../planning/pre-commercial-readiness-gate.md). Integration Ruleset administration is complete and read back. Runner-group access is still unverified and intentionally deferred until GameNet completion by owner decision; no source-level guard is a substitute.
 
 ### `main`
 
