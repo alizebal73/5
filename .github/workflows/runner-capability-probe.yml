@@ -1,0 +1,68 @@
+name: GitHub-hosted Windows Runner Capability Probe
+
+on:
+  push:
+    branches:
+      - "chore/github-hosted-runner-probe"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-hosted-runner-probe
+  cancel-in-progress: true
+
+jobs:
+  hosted-windows-quick-validation:
+    name: hosted-windows-quick-validation
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Identify hosted runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          "RUNNER_OS=$env:RUNNER_OS"
+          "RUNNER_NAME=$env:RUNNER_NAME"
+          "IMAGEOS=$env:ImageOS"
+          if ($env:RUNNER_OS -ne "Windows") {
+            throw "Expected a GitHub-hosted Windows runner."
+          }
+
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Confirm pinned SDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = (dotnet --version).Trim()
+          "DOTNET_SDK=$actual"
+          if ($LASTEXITCODE -ne 0 -or $actual -ne "10.0.401") {
+            throw "Expected .NET SDK 10.0.401; found '$actual'."
+          }
+
+      - name: PowerShell parser gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($file in Get-ChildItem .\scripts -Recurse -File | Where-Object { $_.Extension -in @(".ps1", ".psm1") }) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              $errors | Format-List ErrorId, Message, Extent
+              throw "PowerShell syntax error in $($file.FullName)."
+            }
+          }
+
+      - name: Canonical quick validation
+        shell: pwsh
+        run: .\scripts\verify.ps1
