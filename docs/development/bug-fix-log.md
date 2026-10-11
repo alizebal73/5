@@ -577,3 +577,25 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
 - Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
 - Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
+
+
+## 2026-10-12 — Enforce operator permissions in Station Board commands and visibility
+
+- Finding: the Server already checked `stations.read` and `stations.operate`, but `LoginViewModel` ignored `CurrentOperatorResponse.Permissions`. The Station Board exposed refresh/mutations/probe commands mainly by busy/selection state, leaving a misleading UI and making accidental unauthorized API calls more likely.
+- Root cause: authorization was enforced at the Server boundary but its effective permission snapshot was not wired into the Desktop's command policy. `AsyncUiAction.Execute` invokes the delegate even when `CanExecute` is false, so a CanExecute-only gate would be insufficient.
+- Fix: inject a permission predicate into `StationBoardViewModel`; require StationsRead for listing/probing and both StationsRead + StationsOperate for mutation commands. Guard refresh/create/probe/mutation handlers themselves before making network calls. Consume the current operator's Server-returned permissions during login, clear permissions immediately on logout/login failure, refresh CanExecute state, and clear cached station data when read permission is absent/revoked. The XAML hides the station workspace without read access, disables creation/field editing without operate permission, and shows localized fa-IR/en-US denial text.
+- Authority boundary: these are UX and request-avoidance controls only. The Server's existing permission checks remain authoritative; no client-side value can grant a Server capability.
+- Regression coverage: add Desktop tests for no-read blocking without an HTTP request, read-only operator command matrix, operate permission, direct `ICommand.Execute` bypass attempts, permission-revocation cache clearing/CanExecute notification, and Login/Logout permission lifecycle.
+- Verification status: **pending exact-HEAD Quick Validation and Full Foundation**. The current candidate must pass WPF build, resource/XAML parse, all Desktop tests and Full Foundation on one fixed SHA. Physical station UI / LAN acceptance remains separate.
+- Rollback: revert the permission-provider/command guards/XAML/resource/test slice together only if automated validation shows an incompatible contract. Do not remove Server authorization as a workaround.
+
+
+## 2026-10-12 — Enforce operator permissions in Station Board commands and visibility
+
+- Finding: the Server already checked `stations.read` and `stations.operate`, but `LoginViewModel` ignored `CurrentOperatorResponse.Permissions`. The Station Board exposed refresh/mutations/probe commands mainly by busy/selection state, increasing the chance of unauthorized API attempts and presenting operations the current role could not perform.
+- Root cause: effective permissions were not wired from the authenticated Server response into Desktop command state. `AsyncUiAction.Execute` invokes its delegate even if `CanExecute` is false, so a CanExecute-only guard would be incomplete.
+- Fix: inject an authoritative-permission predicate into `StationBoardViewModel`; require StationsRead for listing/health probe and StationsRead + StationsOperate for changes. Guard Refresh/Create/Probe/Mutate handlers before any HTTP request. Consume CurrentOperator permissions at login, clear them at login start/failure/logout, update CanExecute notifications, clear cached rows when read access is absent and show localized permission-denied UI. Add a generation fence so a list response that started before logout/permission revocation cannot repopulate cached stations or report success afterward.
+- Authority boundary: these are UX and request-avoidance controls only. Existing Server authorization checks remain authoritative; no client state grants Server capability.
+- Regression coverage: add Desktop tests for no-read blocking with zero HTTP requests, read-only vs operate commands, direct `ICommand.Execute` bypass, login/logout permission lifecycle, CanExecute notification/cache clearing on revocation, and a delayed response completing after permission loss.
+- Verification status: **pending exact-HEAD Quick Validation and Full Foundation**. The candidate must pass WPF build, XAML/resources validation, all Desktop tests and Full Foundation on the same exact SHA. Physical station UI/LAN acceptance remains separate.
+- Rollback: revert the permission-provider/command guards/XAML/resource/test slice together only if automated validation shows an incompatibility. Do not remove Server-side authorization as a workaround.

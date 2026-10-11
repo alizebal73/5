@@ -43,4 +43,5 @@
   <system:String x:Key="Station.AgentState">Reported state</system:String>
   <system:String x:Key="Station.HealthProbe">Check Agent health</system:String>
   <system:String x:Key="Station.StatusAdmin">Administrative status</system:String>
+  <system:String x:Key="Station.ReadPermissionRequired">You need the Stations Read permission to view this workspace.</system:String>
 </ResourceDictionary>

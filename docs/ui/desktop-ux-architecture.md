@@ -126,3 +126,21 @@ Optimistic UI is allowed only when it cannot contradict an authoritative invaria
 - Views remain presentation.
 - ViewModels coordinate UI state, commands and API calls.
 - Domain/application tests remain outside the WPF project.
+
+
+## Permission-aware station workspace
+
+The Desktop consumes only the effective permission snapshot returned by the Server for the authenticated operator. `stations.read` is required to display or refresh the station list and request a read-only Agent health probe; `stations.operate` together with `stations.read` is required for station creation, rename, Agent binding and administrative status changes.
+
+Command `CanExecute`, edit-field enabled state and workspace visibility must all reflect the same permission policy. Handlers still re-check permission immediately before an HTTP operation because a caller can invoke `ICommand.Execute` directly without consulting `CanExecute`. Permission loss/log out clears the cached station list and disables its commands. The UI must display a localized permission-denied message rather than a blank or falsely successful workspace.
+
+These controls are not a security boundary: the Server continues to authenticate and authorize every request independently. The UI permission snapshot is a usability cache; after permission changes, re-authentication or a refreshed authoritative snapshot is needed for presentation to update.
+
+
+## Permission-aware station workspace
+
+The Desktop consumes only the effective permission snapshot returned by the Server for the authenticated operator. `stations.read` is required to view/refresh stations and request a read-only Agent health probe; `stations.operate` together with `stations.read` is required for station creation, rename, Agent binding and administrative status changes.
+
+Command `CanExecute`, edit-field enabled state and workspace visibility must reflect the same policy. Handlers still re-check authorization immediately before each HTTP operation because a caller may invoke `ICommand.Execute` without consulting `CanExecute`. Logout/permission changes clear the local list and fence older in-flight list responses so a late result cannot restore cached station data after access is lost. Present a localized permission-denied state instead of a blank workspace or false success.
+
+These controls are not a security boundary: the Server authenticates and authorizes every request independently. The Desktop's permission snapshot is a usability cache. If an operator's role changes while logged in, the UI must refresh the authoritative snapshot or require re-authentication; the Server must never rely on the client cache.
