@@ -143,19 +143,43 @@ jobs:
             "--output", $desktopOutput
           )
 
-          # The migration bundle is an explicit, separate operation. It does not
-          # connect to or mutate any database during package creation.
-          Invoke-DotNet @("tool", "restore")
-          $migrationBundle = Join-Path $toolsOutput "GameNet.Migrations.exe"
-          Invoke-DotNet @(
-            "ef", "migrations", "bundle",
-            "--project", "src/Server/GameNet.Server.csproj",
-            "--startup-project", "src/Server/GameNet.Server.csproj",
-            "--context", "GameNet.Server.Persistence.GameNetDbContext",
-            "--configuration", "Release",
-            "--self-contained", "--target-runtime", "win-x64",
-            "--output", $migrationBundle
-          )
+          # EF design-time construction requires a connection string. Never inherit a
+          # Runner Machine connection (which could target real data) into a bundle.
+          # This intentionally unusable placeholder is local to bundle generation only.
+          $previousConnection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
+          $previousAspNetCoreEnvironment = [Environment]::GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Process")
+          $previousDotNetEnvironment = [Environment]::GetEnvironmentVariable("DOTNET_ENVIRONMENT", "Process")
+          try {
+            $env:GAMENET_DATABASE_CONNECTION = "Host=127.0.0.1;Port=1;Database=gamenet_design_time_only;Username=gamenet_design_time;Pooling=false"
+            $env:ASPNETCORE_ENVIRONMENT = "Production"
+            $env:DOTNET_ENVIRONMENT = "Production"
+
+            Invoke-DotNet @("tool", "restore")
+            $migrationBundle = Join-Path $toolsOutput "GameNet.Migrations.exe"
+            Invoke-DotNet @(
+              "ef", "migrations", "bundle",
+              "--project", "src/Server/GameNet.Server.csproj",
+              "--startup-project", "src/Server/GameNet.Server.csproj",
+              "--context", "GameNet.Server.Persistence.GameNetDbContext",
+              "--configuration", "Release",
+              "--self-contained", "--target-runtime", "win-x64",
+              "--output", $migrationBundle
+            )
+
+            # This is a non-mutating startup check. Packaging must never apply migrations.
+            $bundleHelp = @(& $migrationBundle --help 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+              throw "The migration bundle failed its non-mutating --help smoke test."
+            }
+            if (($bundleHelp -join [Environment]::NewLine) -notmatch "(?i)--connection") {
+              throw "The migration bundle does not advertise its explicit --connection override."
+            }
+          }
+          finally {
+            if ([string]::IsNullOrEmpty($previousConnection)) { Remove-Item Env:GAMENET_DATABASE_CONNECTION -ErrorAction SilentlyContinue } else { $env:GAMENET_DATABASE_CONNECTION = $previousConnection }
+            if ([string]::IsNullOrEmpty($previousAspNetCoreEnvironment)) { Remove-Item Env:ASPNETCORE_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:ASPNETCORE_ENVIRONMENT = $previousAspNetCoreEnvironment }
+            if ([string]::IsNullOrEmpty($previousDotNetEnvironment)) { Remove-Item Env:DOTNET_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:DOTNET_ENVIRONMENT = $previousDotNetEnvironment }
+          }
 
           Copy-Item -LiteralPath "scripts/configure-server-tls.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/trust-server-certificate.ps1" -Destination $toolsOutput
@@ -170,7 +194,14 @@ jobs:
           Copy-Item -LiteralPath "docs/operations/agent-service-state.md" -Destination (Join-Path $toolsOutput "agent-service-state.md")
           Copy-Item -LiteralPath "scripts/test-runtime-endpoint.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
-          Copy-Item -LiteralPath "docs/operations/runtime-endpoints.md" -Destination (Join-Path $toolsOutput "runtime-endpoints.md")
+          # The source runbook uses source-tree paths; rewrite them for the extracted payload layout.
+          $runtimeEndpoints = Get-Content -LiteralPath "docs/operations/runtime-endpoints.md" -Raw
+          $runtimeEndpoints = $runtimeEndpoints.Replace('.\scripts\', '.\Tools\')
+          if ($runtimeEndpoints -match '(?im)^\s*\.\s*\\scripts\\') {
+            throw "Packaged runtime-endpoints.md still contains a source-tree script command."
+          }
+          $runtimeEndpointsPath = Join-Path $toolsOutput "runtime-endpoints.md"
+          [System.IO.File]::WriteAllText($runtimeEndpointsPath, $runtimeEndpoints, [System.Text.UTF8Encoding]::new($false))
 
           $requiredFiles = @(
             (Join-Path $serverOutput "GameNet.Server.exe"),
@@ -184,6 +215,7 @@ jobs:
             (Join-Path $toolsOutput "finalize-server-setup.ps1"),
             (Join-Path $toolsOutput "bootstrap-admin.ps1"),
             (Join-Path $toolsOutput "inspect-manager-runtime-state.ps1"),
+            (Join-Path $toolsOutput "runtime-endpoints.md"),
             (Join-Path $toolsOutput "initial-admin-setup.md")
           )
           foreach ($file in $requiredFiles) {
