@@ -6,24 +6,24 @@
 
 - مخزن فعال: `alizebal73/5`.
 - پایهٔ فنی مرجع/نامزد: `foundation/runtime-final-v2`. گواهی Foundation فقط برای SHA دقیق اجراشده معتبر است؛ تغییرات بعدی تا اجرای دوبارهٔ دروازه‌های لازم، خودبه‌خود تأیید نیستند.
-- شاخهٔ مرجع انتشار: `foundation/runtime-final-v2` (نامزد پایه، نه مقصد ادغام مستقیم featureها). شاخهٔ فعال Runtime/operator در snapshot جاری `integration/runtime-operator-v1` با SHA `55a340305f9eba3bc8f9a1ce65fb37bedbae7580` است؛ PR #23 هنوز Draft است. شاخهٔ UI `refactor/desktop-view-boundaries-v1` با SHA `9a058043ca8ba69f2b0bd23777263063ee681c92` و PR #24 نیز Draft و ادغام‌نشده است. `main` دست‌نخورده می‌ماند.
+- شاخهٔ مرجع انتشار: `foundation/runtime-final-v2` (نامزد پایه، نه مقصد ادغام مستقیم featureها). شاخهٔ فعال Runtime/operator یعنی `integration/runtime-operator-v1` روی SHA فعلی `362513ad812aebef4ad22420f9b905d79490219d` است؛ کد PR #40 ادغام شده و PR #41 فقط اسناد را به‌روز کرده است. PR #23 جهت ادغام معکوس به شاخهٔ قدیمی `feature/operator-identity-v1` دارد و مسیر فعال تحویل نیست. PR #24 یک برش مستقل UI و هنوز Draft است. `main` دست‌نخورده می‌ماند. مرجع تصمیم‌های اجرایی و PRهای باز: [کنترل اجرای فعال](../operations/active-execution-control.md).
 - دفتر نقص‌ها: `docs/development/bug-fix-log.md`. هر نقص باید علت ریشه‌ای، مالک لایه، اصلاح، آزمون بازگشتی، SHA و نتیجه داشته باشد.
 - اصل کار: هر بار یک نقص یا یک برش قابلیت کوچک؛ علت‌یابی قبل از اصلاح؛ آزمون واقعی؛ ثبت مدرک؛ سپس مرحلهٔ بعد.
 - کیفیت پایه: Server مرجع قواعد تجاری است؛ PostgreSQL مرجع پایدار داده است؛ Desktop و Agent مستقیماً به دیتابیس وصل نمی‌شوند؛ پول/موجودی مبتنی بر ledger هستند؛ تغییرات حساس تراکنشی، قابل حسابرسی و در برابر تکرار/رقابت ایمن‌اند.
 
 ## وضعیت اجرایی جاری — 2026-10-12 (پس از ادغام)
 
-این بخش وضعیت زنده را پس از ادغام مرحلهٔ اول ثبت می‌کند؛ statusهای قدیمی پایین‌تر تاریخچه‌اند.
+این بخش فقط وضعیت زنده را ثبت می‌کند؛ جزئیات ترتیب کار و جلوگیری از تکرار در [کنترل اجرای فعال](../operations/active-execution-control.md) نگهداری می‌شود.
 
-- مخزن فعال `alizebal73/5` است. `main` روی `b9288471f2047570eaf8d0d6552cf87bc0ddc214` و `foundation/runtime-final-v2` روی `be29687e637b709158a30204bb9213bfa4813950` مانده‌اند؛ هر دو محافظت‌شده و در مرحلهٔ اول دست‌نخورده‌اند.
-- شاخهٔ محافظت‌شدهٔ `integration/runtime-operator-v1` اکنون روی SHA ادغام `58717adc6c1553ef21221c3d484f093494ba1ae7` است.
-- PR #40 با روش Squash ادغام شد؛ head آزموده‌شدهٔ آن `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` بود. روی همان head، [Quick Validation #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116)، [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187) و [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104) همگی موفق شدند.
-- آزمون پس از ادغام نیز کامل موفق است: [Quick Validation #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) و [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446) روی SHA `58717adc...` سبز هستند.
-- PRهای منبع #35–#39 بعد از ثبت توضیح و انتقال شواهد به #40، به‌عنوان superseded بسته شدند؛ شاخه‌هایشان حذف نشده‌اند. PRهای #15، #31 و #32 به علت هم‌پوشانی Workflowها مستقل و Draft می‌مانند تا تغییراتشان جداگانه ممیزی شود.
-- اجرای Full Foundation و Runtime payload در این مسیر از Runner شخصی Windows استفاده کرد؛ این شواهد به معنی انتقال به hosted runner نیست. Runtime ZIP نصاب Setup.exe/MSI نیست.
-- **مرحلهٔ اول یکپارچه‌سازی کد تمام شده است.** مانع بعدی، گواهی دقیق tip فعلی Foundation و سپس پذیرش فیزیکی Server/Agent تحت Windows Service است: هویت واقعی سرویس، ACL مؤثر، DPAPI/TLS پس از restart، Enrollment/replay، Lease/Heartbeat و اتصال LAN با دو رایانهٔ آزمایشی و دیتابیس دورریختنی.
-- پیش از هر اقدام روی Manager موجود باید گزارش خواندنی `inspect-manager-runtime-state.ps1` بازبینی شود. هیچ provisioning، پاک‌سازی ACL یا تغییر TLS روی آن ماشین در این مرحله انجام نشده است.
-- آزمون تعاملی WPF برای fa-IR/RTL و en-US/LTR، focus/keyboard/navigation، و نصب تجاری/Update/Rollback همچنان بازند؛ این موارد با CI یا payload تأیید نمی‌شوند.
+- `main` روی `b9288471f2047570eaf8d0d6552cf87bc0ddc214` و `foundation/runtime-final-v2` روی `be29687e637b709158a30204bb9213bfa4813950` هستند؛ هر دو محافظت‌شده و دست‌نخورده‌اند.
+- `integration/runtime-operator-v1` روی SHA فعلی `362513ad812aebef4ad22420f9b905d79490219d` است. PR #40 کد را در SHA `58717adc6c1553ef21221c3d484f093494ba1ae7` ادغام کرد؛ سپس PR #41 فقط اسناد را به‌روز کرد.
+- شواهد کد روی candidate `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd`: [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116)، [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187)، [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104) همگی موفق‌اند. پس از ادغام کد نیز [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) و [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446) روی SHA `58717adc...` موفق شدند.
+- پس از به‌روزرسانی اسناد، [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088) روی candidate اسناد و [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202) روی tip فعلی Integration موفق شدند. چون PR #41 فقط اسناد را تغییر داده، موفقیت Full Foundation قبلی برای درخت کد حفظ است؛ ادعا نمی‌کنیم که Full Foundation دقیقاً روی SHA سندمحور `362513...` اجرا شده است.
+- **مرحلهٔ اول یکپارچه‌سازی کد بسته است و نباید دوباره باز شود.** گواهی دقیق tip فعلی Foundation یک گیت مستقل است: اجرای workflow `foundation-certification` از طریق `workflow_dispatch` روی `be29687...` ثبت نشده و باید جداگانه انجام شود. آخرین گواهی پایدار ثبت‌شده به SHA تاریخی `c3a8ba482548e963479fbdf8538be62c4d15acfe` تعلق دارد.
+- PRهای #15، #31 و #32 به تغییرات Runner/Workflow هم‌پوشان‌اند؛ اول #32 برای Foundation بررسی شود، بعد #31 برای Integration تطبیق داده شود؛ بخش کد endpoint/TLS در #15 باید جدا بررسی شود. هیچ‌کدام را بدون تطبیق diff یک‌جا ادغام نکنید.
+- گیت پذیرش واقعی Runtime همچنان باز است: گزارش خواندنی `scripts/inspect-manager-runtime-state.ps1` ابتدا بررسی شود؛ سپس روی PCهای آزمایشی ایزوله و دیتابیس دورریختنی، Service identity، ACL، DPAPI/TLS پس از restart، replay/revoke، lease/heartbeat و reconnect LAN آزموده شوند. تغییر Manager واقعی بدون preflight/تأیید انجام نشده است.
+- آزمون تعاملی WPF برای RTL/LTR، focus/keyboard/navigation، وضعیت‌های permission/offline/loading/error و همچنین نصاب، Update/Rollback، امضای انتشار و pilot در گیت‌های جدا باقی‌اند.
+- برای وضعیت تمام PRهای پیش‌نویس، ترتیب گیت‌ها و قواعد جلوگیری از تکرار به [کنترل اجرای فعال](../operations/active-execution-control.md) رجوع کنید؛ SHA یا آزمون تاریخی را به‌جای شواهد SHA جاری گزارش نکنید.
 
 ### نقطهٔ آغاز ثبت‌شده
 
