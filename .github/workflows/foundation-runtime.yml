@@ -3,6 +3,14 @@ name: foundation-postgresql-diagnostic
 on:
   # PostgreSQL-focused diagnostic lane only; this is not full Foundation certification.
   workflow_dispatch:
+  # Exercise the hosted diagnostic when its runner/setup contract changes on the hardening branch.
+  push:
+    branches:
+      - "security/**"
+    paths:
+      - ".github/workflows/foundation-runtime.yml"
+      - "scripts/check-ci-runner-policy.ps1"
+      - "scripts/verify-postgresql.ps1"
 
 concurrency:
   group: foundation-runtime-certification

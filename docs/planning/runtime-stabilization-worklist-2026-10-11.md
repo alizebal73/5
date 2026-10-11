@@ -33,10 +33,10 @@
 - [ ] PR #31 پس از CI سبز روی آخرین SHA، بازبینی diff و رسیدگی به دسترسی Runner و Ruleset شاخه Integration بررسی شود؛ ادغام خودکار ممنوع است.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
-- [ ] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
+- [x] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
 - [ ] برای integration/runtime-operator-v1 Ruleset واقعی PR + quick-validation + حل مکالمات بسازیم و read-back کنیم؛ فعلاً protected نیست و ابزار فعلی اجازهٔ نوشتن Ruleset ندارد.
 - [ ] وضعیت PRهای باز و بسته را تعیین تکلیف کنیم؛ PRهای #27/#28/#29 شاخهٔ ادغام نیستند و نباید دوباره ادغام شوند. PR #30 قبلاً ادغام شده است.
-- [ ] برای هر گیت، SHA دقیقِ checkout و لینک Run را ثبت کنیم؛ مدرک SHA قدیمی به نوک جدید شاخه نسبت داده نشود.
+- [x] برای هر گیت، SHA دقیقِ checkout و لینک Run را ثبت کنیم؛ مدرک SHA قدیمی به نوک جدید شاخه نسبت داده نشود.
 
 ### P1 — قرارداد و پذیرش امنیت Runtime
 - [x] ADR-0002 به‌عنوان قرارداد پیاده‌سازی Secret Store/Enrollment پذیرفته شد؛ پذیرش عملی Windows Service/DPAPI/ACL/TLS/LAN همچنان باز است.
