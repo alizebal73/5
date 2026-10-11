@@ -39,10 +39,12 @@ This gate does not claim that real Windows Service ACL/DPAPI, TLS private-key ac
 
 ## Required physical acceptance protocol
 
+The portable payload now includes scripts/register-test-runtime-service.ps1 and a dedicated runbook. The test-only helper verifies the package manifest and SHA-256 of its own file and the selected executable, refuses known existing GameNet services/state, registers only a Manual/Demand Start Server or Agent service with the role-specific account and Service SID, and never starts it. CI validates this package contract; that does not count as physical service acceptance.
+
 Run only on isolated test Windows machines with a disposable PostgreSQL database and throwaway credentials. Never test against a live Manager database.
 
 1. Run `scripts/inspect-manager-runtime-state.ps1` read-only on the intended Manager machine and review its report before provisioning or cleanup.
-2. Record exact source SHA, payload SHA-256, Windows build, PostgreSQL version, Server/Agent service accounts and Service SIDs, endpoint, port and public-certificate fingerprint.
+2. From the verified payload, register Server and Agent on separate test PCs with Tools\\register-test-runtime-service.ps1, passing -TestOnly -PreflightReviewed only after reviewing the read-only preflight. Confirm the registration output shows Manual/Demand Start and Stopped. Record exact source SHA, payload SHA-256, Windows build, PostgreSQL version, service accounts and Service SIDs, endpoint, port and public-certificate fingerprint.
 3. Install/register Server and Agent as intended Windows services; prove effective file/directory DACLs and that unauthorized principals cannot read/write protected files.
 4. Provision the Server secret store once; restart the actual service and prove DPAPI loading, TLS private-key access, HTTPS readiness and fail-closed behavior for missing/corrupt/ACL-invalid state.
 5. Complete Owner bootstrap and finalization; prove the temporary bootstrap secret is absent afterward and the service remains ready after restart.

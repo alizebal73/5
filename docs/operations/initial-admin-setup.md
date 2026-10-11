@@ -10,18 +10,19 @@ The first owner is created through the Server; no desktop-local administrator, d
 
 ## Required safe order
 
-1. Configure and verify the Server TLS endpoint. Confirm that the Server Windows service is registered with its intended logon identity and dedicated service SID.
-2. Before provisioning anything on an existing Manager PC, capture and review the read-only report from `scripts/inspect-manager-runtime-state.ps1`. Do not run secret provisioning, TLS setup, cleanup, ACL changes, or service changes until the observed service identity, certificate state, ProgramData ACLs and listener bindings have been reviewed.
-3. Run `scripts/write-protected-server-settings.ps1` from an elevated PowerShell session to create the non-secret setup settings and temporary Owner bootstrap secret. It refuses to overwrite an existing settings file.
-4. Only after the service identity has been confirmed and the store/ACL design approved, run the built Server executable with `--provision-secrets` from an elevated console. This command must run alone as the only argument; enter the PostgreSQL connection string only at its hidden prompt. It refuses to overwrite an existing store.
-5. Start the Server and confirm health/readiness over HTTPS. From a trusted management workstation run:
+1. For isolated Runtime LAN testing only, use the test-only procedure in test-runtime-service-registration.md. Register the Server as NT SERVICE\GameNet 5 Server and leave it stopped; the helper refuses to reuse known GameNet state or replace an existing service. This does not replace a product installer.
+2. Configure and verify the Server TLS endpoint. Confirm that the Server Windows service is registered with its intended logon identity and dedicated service SID.
+3. Before provisioning anything on an existing Manager PC, capture and review the read-only report from `scripts/inspect-manager-runtime-state.ps1`. Do not run secret provisioning, TLS setup, cleanup, ACL changes, or service changes until the observed service identity, certificate state, ProgramData ACLs and listener bindings have been reviewed.
+4. Run `scripts/write-protected-server-settings.ps1` from an elevated PowerShell session to create the non-secret setup settings and temporary Owner bootstrap secret. It refuses to overwrite an existing settings file.
+5. Only after the service identity has been confirmed and the store/ACL design approved, run the built Server executable with `--provision-secrets` from an elevated console. This command must run alone as the only argument; enter the PostgreSQL connection string only at its hidden prompt. It refuses to overwrite an existing store.
+6. Start the Server and confirm health/readiness over HTTPS. From a trusted management workstation run:
 
    ```powershell
    .\scripts\bootstrap-admin.ps1 -ServerBaseUrl "https://gamenet-server.example"
    ```
 
-6. Enter the same Owner bootstrap secret that was entered in step 3, followed by the chosen Owner password. The management script prompts securely, sends the secret only in the protected HTTPS request header, and does not write the values to disk.
-7. Confirm that the Owner can sign in, then perform the local finalization step in the section below.
+7. Enter the same Owner bootstrap secret that was entered in step 3, followed by the chosen Owner password. The management script prompts securely, sends the secret only in the protected HTTPS request header, and does not write the values to disk.
+8. Confirm that the Owner can sign in, then perform the local finalization step in the section below.
 
 **Current acceptance limit:** this sequence is the intended code path, not a certification of the installed service. The real Windows service identity, effective ACLs, DPAPI access after restart, and TLS private-key access still require isolated Windows-service/LAN tests. Do not run provisioning on a live Manager PC until its read-only preflight has been reviewed.
 

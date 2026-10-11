@@ -16,6 +16,8 @@ The directory must be prepared for the actual Agent Windows service identity bef
 
 ## Setup sequence on the Agent client
 
+For isolated Runtime LAN testing, see the test-only procedure in test-runtime-service-registration.md. In the portable payload, explicitly run Tools\register-test-runtime-service.ps1 with -Component Agent -PayloadRoot $PWD -TestOnly -PreflightReviewed only after reviewing the read-only preflight. The helper leaves the service stopped and uses NT AUTHORITY\LocalService; it is not the product installer.
+
 After the service is registered but stopped, run the endpoint configuration appropriate to this machine:
 
     .\scripts\configure-runtime-endpoint.ps1 -ServerBaseUrl "https://192.168.0.9:5080" -Component Agent

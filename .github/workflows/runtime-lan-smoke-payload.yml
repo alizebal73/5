@@ -217,6 +217,8 @@ jobs:
           Copy-Item -LiteralPath "scripts/finalize-server-setup.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/bootstrap-admin.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/inspect-manager-runtime-state.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/register-test-runtime-service.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "docs/operations/test-runtime-service-registration.md" -Destination (Join-Path $toolsOutput "test-runtime-service-registration.md")
           Copy-Item -LiteralPath "docs/operations/initial-admin-setup.md" -Destination (Join-Path $toolsOutput "initial-admin-setup.md")
           Copy-Item -LiteralPath "scripts/configure-agent-runtime-state.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/provision-agent-enrollment.ps1" -Destination $toolsOutput
@@ -237,6 +239,8 @@ jobs:
             (Join-Path $toolsOutput "finalize-server-setup.ps1"),
             (Join-Path $toolsOutput "bootstrap-admin.ps1"),
             (Join-Path $toolsOutput "inspect-manager-runtime-state.ps1"),
+            (Join-Path $toolsOutput "register-test-runtime-service.ps1"),
+            (Join-Path $toolsOutput "test-runtime-service-registration.md"),
             (Join-Path $toolsOutput "initial-admin-setup.md")
           )
           foreach ($file in $requiredFiles) {
@@ -248,7 +252,7 @@ jobs:
           $readme = @'
           # GameNet 5 — temporary Runtime LAN Smoke payload
 
-          **This is NOT Setup and is NOT a production release.** It is a portable, self-contained Windows x64 payload built from one exact candidate checkout. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
+          **This is NOT Setup and is NOT a production release.** It is a portable, self-contained Windows x64 payload built from one exact candidate checkout. It does not automatically register services, install PostgreSQL, create production secrets, or enable update/repair/rollback. The explicitly invoked test-only registration helper never starts a service and is not an installer.
 
           ## Included
 
@@ -260,6 +264,7 @@ jobs:
           - `Tools\write-protected-server-settings.ps1` for LocalMachine-DPAPI-protected setup settings
           - `Tools\bootstrap-admin.ps1` and `Tools\finalize-server-setup.ps1` for first-Owner setup and post-bootstrap cleanup
           - `Tools\inspect-manager-runtime-state.ps1` as a read-only preflight
+          - `Tools\register-test-runtime-service.ps1` and its dedicated test-only registration runbook; it never starts a service
           - `Tools\initial-admin-setup.md`, `Tools\configure-agent-runtime-state.ps1`, `Tools\provision-agent-enrollment.ps1`, and the Agent Windows Service state/DACL runbook
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
@@ -273,8 +278,8 @@ jobs:
 
           1. Download the GitHub Actions artifact archive and extract that outer archive to a temporary folder. It contains the inner `GameNet5-RuntimeLanSmoke-*.zip` and adjacent `SHA256SUMS.txt`; verify the inner ZIP against that checksum file **before** extracting the inner payload. The archive digest shown by GitHub is for the outer artifact; the checksum file is for the inner runtime payload.
           2. Extract the package into a temporary folder on the isolated test PCs. Keep the package's recorded `manifest.json` with the test notes.
-          3. On the isolated Server PC, run `Tools\inspect-manager-runtime-state.ps1` first and review the read-only report. If the machine contains existing GameNet/Manager state or any unexpected service, certificate, ACL, or listener, stop; do not use this payload to repair or overwrite it. This workflow does not install/register Windows services.
-          4. Confirm that a reviewed test-only Server service registration exists on the disposable Server PC and is stopped, with the intended dedicated identity/SID. If it does not exist, stop and obtain an independently reviewed service-registration procedure; this payload is not a service installer. Do not experiment on a live Manager PC.
+          3. On the isolated Server PC, run `Tools\inspect-manager-runtime-state.ps1` first and review the read-only report. On the separate Agent PC, run `Tools\inspect-manager-runtime-state.ps1 -ServiceName "GameNet 5 Agent"`. If either report shows unexpected services, existing GameNet state, certificates, ACLs or listeners, stop; do not use this payload to repair or overwrite it.
+          4. From elevated PowerShell at the extracted payload root, on the Server PC run `Tools\register-test-runtime-service.ps1 -Component Server -PayloadRoot $PWD -TestOnly -PreflightReviewed`. On the separate Agent PC run the same helper with `-Component Agent`. It verifies the package manifest and executable hashes, registers only the role-specific service with Manual/Demand Start, verifies the dedicated service SID and leaves it stopped. It refuses to replace an existing GameNet service or reuse known ProgramData runtime markers. See `Tools\test-runtime-service-registration.md`.
           5. Provision a disposable PostgreSQL database for this candidate. Apply schema changes only by explicitly running `Tools\GameNet.Migrations.exe --connection "<DISPOSABLE_TEST_DATABASE_CONNECTION>"`. Never run this against an existing business database; use only throwaway credentials because process inspection may expose a command-line connection argument.
           6. On the isolated Server PC, run elevated PowerShell from the extracted package root and follow `Tools\runtime-endpoints.md` to configure HTTPS using the dedicated GameNet Server service SID. Record the Server IP/SAN and independently verify the printed 64-character public-certificate SHA-256 fingerprint. Copy only the public `.cer` file to client PCs.
           7. Run `Tools\write-protected-server-settings.ps1` elevated to create the protected setup settings, then run `Server\GameNet.Server.exe --provision-secrets` as the only argument from an elevated console. Use only disposable DB credentials and throwaway test secrets. These commands do not install the service or launch a migration automatically.
@@ -342,6 +347,13 @@ jobs:
             ($manifest | ConvertTo-Json -Depth 12) + [Environment]::NewLine,
             [System.Text.UTF8Encoding]::new($false)
           )
+
+          # Validate the packaged helper against the manifest. ValidateOnly never
+          # queries or changes Windows services on the hosted runner.
+          $serviceRegistrationScript = Join-Path $toolsOutput "register-test-runtime-service.ps1"
+          foreach ($component in @("Server", "Agent")) {
+            & $serviceRegistrationScript -Component $component -PayloadRoot $payloadRoot -TestOnly -ValidateOnly | Out-Null
+          }
 
           $shortSha = $checkoutSha.Substring(0, 12)
           $packageName = "GameNet5-RuntimeLanSmoke-$shortSha.zip"
