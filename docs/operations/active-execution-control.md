@@ -30,21 +30,22 @@ Evidence:
 
 ## 3. Single active queue
 
-### Gate F — Recertify the current Foundation tip
+### Gate F — Foundation exact-tip certification — CLOSED for the recorded SHA
 
-- Target recorded at the last read-back: `be29687e637b709158a30204bb9213bfa4813950` on `foundation/runtime-final-v2`. Re-read the live branch head immediately before dispatch; if it changed, use the actual current tip and record it.
+- The prior read-back target was `be29687e637b709158a30204bb9213bfa4813950`. After PR #32, Foundation tip `71ef6534331e6ba5a8a460fd5b8846fe40e8567a` passed exact-SHA Full Foundation [run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053); this is the latest certified Foundation checkpoint in this record. Read the live branch head before each future dispatch or merge.
 - PR [#32](https://github.com/alizebal73/5/pull/32) is now merged to Foundation at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`. Its push-triggered [Full Foundation run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) **succeeded** on that exact SHA. The new Foundation tip `71ef6534331e6ba5a8a460fd5b8846fe40e8567a` is now the latest certified checkpoint; its uploaded evidence is [artifact 11718566832](https://github.com/alizebal73/5/actions/runs/38182502053). Future protected Foundation pushes should automatically run the same gate. Because the workflow now runs on each `foundation/runtime-*` push, future protected-branch merges should automatically certify their resulting exact tip.
-- If it passes, update the active certification marker to that exact SHA. If it fails, fix only the observed root cause, add/retain the regression, and rerun the relevant gate; do not repeat unrelated completed work.
+- For future Foundation changes, advance the Stable Checkpoint only after the resulting exact branch tip passes Full Foundation. On failure, fix only the observed root cause, add/retain the regression and rerun the relevant gate; do not repeat unrelated completed work.
 - A successful run on a PR candidate or on Integration is not evidence that this exact Foundation SHA was certified.
 
-### Gate R — Choose and stabilize one CI runner policy
+### Gate R — Hosted Windows CI standardization — CLOSED for Foundation and Integration
 
-Foundation runner migration is complete in PR #32; the exact post-merge Full Foundation run is Gate F and remains in progress. Do not merge PR #15 or #31 wholesale, and do not change overlapping workflow files concurrently.
+Both automation branches now use GitHub-hosted `windows-2025`; this gate is closed for the exact commits and evidence below. It does not certify installed Windows Services, real LAN behavior or visual UI acceptance. Do not merge PR #15 wholesale or reopen superseded runner work.
 
-1. [PR #32](https://github.com/alizebal73/5/pull/32) has been merged to the protected Foundation branch after exact-head Full Foundation passed on its PR candidate. It now uses `windows-2025`, enforces a runner-policy guard, and triggers Full Foundation on pushes. The post-merge certification [run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) succeeded on SHA `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; Foundation gate F is closed for this exact tip.
-2. After the Foundation run finishes, reconcile [PR #31](https://github.com/alizebal73/5/pull/31) against the already-merged runner policy. Its base is stale and workflow diffs overlap; port only unique, needed Integration workflow changes onto the then-current Integration tip and run exact-head Quick + Full Foundation, or close #31 as superseded with source branch retained.
-3. Review [PR #15](https://github.com/alizebal73/5/pull/15) separately: its ProgramData/TLS runtime code is not the same work item as runner migration. Separate runtime-source changes from overlapping workflow changes before proposing a merge.
-4. Evidence for a runner change must identify the exact SHA, actual runner image/type, the PostgreSQL isolation boundary and Full Foundation outcome. Success on a self-hosted runner must never be reported as hosted-runner certification.
+1. [PR #32](https://github.com/alizebal73/5/pull/32) moved Foundation automation to `windows-2025`, added the runner-policy guard, isolated PostgreSQL to the disposable runner VM and added push-triggered exact-tip certification. Foundation SHA `71ef6534331e6ba5a8a460fd5b8846fe40e8567a` passed [Full Foundation #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053).
+2. [PR #44](https://github.com/alizebal73/5/pull/44) moved Integration Quick Validation, Full Foundation and Runtime payload to `windows-2025`. Exact candidate `92de1b1fb6002165fc91c7f66b4ecec1c969c0ff` passed [Quick push #38183164928](https://github.com/alizebal73/5/actions/runs/38183164928), [Quick PR #38183167294](https://github.com/alizebal73/5/actions/runs/38183167294), [Full Foundation #38183164941](https://github.com/alizebal73/5/actions/runs/38183164941) and [Runtime payload #38183167300](https://github.com/alizebal73/5/actions/runs/38183167300). The merged Integration SHA `161b4cbbbe16cd3fd4046f174a1c09380139c67b` then passed [post-merge Quick #38183458461](https://github.com/alizebal73/5/actions/runs/38183458461) and [post-merge Full Foundation #38183458486](https://github.com/alizebal73/5/actions/runs/38183458486).
+3. [PR #31](https://github.com/alizebal73/5/pull/31) was closed as superseded for overlapping runner/workflow changes; its branch was retained because it contains separate test-only service-registration tooling/runbook work. Do not merge it; re-cut only the unique helper as a focused PR when Physical Runtime acceptance becomes the active gate.
+4. [PR #15](https://github.com/alizebal73/5/pull/15) remains separate: its ProgramData/TLS runtime source is not runner migration. Split and compare source changes before any future merge.
+5. Every runner claim must identify exact SHA, actual runner type, disposable-DB boundary and run result. A status result for another SHA does not certify this SHA.
 
 ### Gate P — Physical Runtime acceptance (not executable from GitHub CI alone)
 
@@ -71,8 +72,9 @@ Installer/setup, PostgreSQL install/upgrade/repair/uninstall, staged update/roll
 | [#21](https://github.com/alizebal73/5/pull/21) | Initial Desktop operator shell | Keep Draft only if it has unique UI behavior absent from Integration; compare exact XAML/ViewModel/tests before any merge. Do not use an old base as the integration target. |
 | [#23](https://github.com/alizebal73/5/pull/23) | Integration branch proposed back into old `feature/operator-identity-v1` base | Closed as obsolete without merging; source branch retained. Do not reopen or merge backwards without a new, explicit requirement. |
 | [#24](https://github.com/alizebal73/5/pull/24) | StationBoard view extraction | Keep Draft as a later focused UI refactor; rebase/retarget to the current Integration tip only after the runtime acceptance priority is cleared and exact-head gates pass. |
-| [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Base is stale; #32 is merged. After Gate F, compare exact diff, port only unique needed Integration runner changes to a fresh current-base branch, or close as superseded with evidence and retain source branch. |
-| [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; PR candidate passed Full Foundation on exact head `4fb20dc...`. Post-merge Full Foundation [#38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) succeeded on the merged SHA; Gate F is closed for that tip. |
+| [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Closed without merging after #44 superseded overlapping workflow changes; source branch retained for a later focused extraction of the test-only service-registration helper and runbook. |
+| [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; exact post-merge Full Foundation #38182502053 passed. |
+| [#44](https://github.com/alizebal73/5/pull/44) | Integration hosted-Windows CI standardization and safe test-payload migration-bundle build | Merged at `161b4cbbbe16cd3fd4046f174a1c09380139c67b`; candidate Quick push/PR, Full Foundation and Runtime payload passed; post-merge Quick #38183458461 and Full Foundation #38183458486 passed on the exact merge SHA. |
 
 Closed source PRs #35–#39 remain superseded by #40; their source branches were retained. Do not reopen them or merge their branches separately without a newly demonstrated, unique defect.
 
@@ -91,6 +93,6 @@ Closed source PRs #35–#39 remain superseded by #40; their source branches were
 - Runtime-code acceptance SHA, timestamped branch read-back and live branch refs read at action time are kept separate. Static documentation must never claim its own commit SHA is the permanently current Integration head.
 - Stage 1 remains closed and its evidence links are stable.
 - The current Foundation-tip certification is one explicit action, not a recurring broad review.
-- Runner migration has a specified order (#32 Foundation first, then #31 Integration reconciliation); runtime endpoint/TLS source work (#15) is separate.
-- The nine open drafts have explicit dispositions instead of silently blocking stage progress.
+- Hosted Windows runner migration is complete for both Foundation (#32) and Integration (#44); #31 is closed as superseded with its unique service-helper work retained on the source branch. Runtime endpoint/TLS source work (#15) remains separate.
+- The six remaining open Draft PRs (#15, #17, #18, #20, #21 and #24) each have an explicit later-gate disposition; #31 is closed as superseded and #32/#44 are merged.
 - Future progress reports state only what changed, which exact SHA was tested, which gate is now closed, and the one next action.
