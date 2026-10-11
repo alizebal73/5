@@ -12,22 +12,22 @@ Status: **CERTIFIED — historical exact SHA only; not certification of the curr
 
 ## Current Integration CI candidate — 2026-10-11 (not a Foundation stable checkpoint)
 
-PR #31 remains Draft/unmerged and targets Integration. Its current exact head `20ba74902fe620f00c58d047427c9f7d12c890f0` passed Quick push [#38144956137](https://github.com/alizebal73/5/actions/runs/38144956137), Quick PR [#38144959579](https://github.com/alizebal73/5/actions/runs/38144959579), Full Foundation [#38144956092](https://github.com/alizebal73/5/actions/runs/38144956092), Runtime Payload push [#38144956122](https://github.com/alizebal73/5/actions/runs/38144956122) and Runtime Payload PR [#38144959504](https://github.com/alizebal73/5/actions/runs/38144959504). The payload includes a hash-verified, test-only Service registration helper validated in non-mutating mode; this does not certify a physical service or LAN test.
+PR #31 remains Draft/unmerged and targets Integration. Its current exact head e5caceb11968512fb91b5f808cbd4afd24be22ad passed Quick push [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096), Quick PR [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180), Full Foundation [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115), Runtime Payload push [#38146060239](https://github.com/alizebal73/5/actions/runs/38146060239) and Runtime Payload PR [#38146064208](https://github.com/alizebal73/5/actions/runs/38146064208). The payload includes a hash-verified test-only Server/Agent service-registration helper validated only in non-mutating -ValidateOnly mode; this does not certify a physical service or LAN test.
 
-PR #32 is a separate Foundation workflow maintenance candidate at `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9`; Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It remains Draft/unmerged and does not certify the Foundation base SHA. Ruleset [`protect-integration-runtime` #24879997](https://github.com/alizebal73/5/rules/24879997) is active.
+PR #32 is a separate Foundation workflow maintenance candidate at 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9; Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It remains Draft/unmerged and does not certify the Foundation base SHA. Ruleset protect-integration-runtime ID 24879997 is active.
 
-The historical Stable Checkpoint remains exactly `c3a8ba482548e963479fbdf8538be62c4d15acfe`; no new Foundation checkpoint is declared until a successful run certifies the exact resulting Foundation tip after reviewed maintenance.
+The historical Stable Checkpoint remains exactly c3a8ba482548e963479fbdf8538be62c4d15acfe; no new Foundation checkpoint is declared until a successful run certifies the exact resulting Foundation tip after reviewed maintenance.
 
 ## Current candidate gates
 
 | Candidate | Gate | Exact run | Result |
 |---|---|---|---|
-| PR #31 head `20ba74902fe620f00c58d047427c9f7d12c890f0` | Quick push | [#38144956137](https://github.com/alizebal73/5/actions/runs/38144956137) | Passed |
-| PR #31 head `20ba74902fe620f00c58d047427c9f7d12c890f0` | Quick PR | [#38144959579](https://github.com/alizebal73/5/actions/runs/38144959579) | Passed |
-| PR #31 head `20ba74902fe620f00c58d047427c9f7d12c890f0` | Full Foundation | [#38144956092](https://github.com/alizebal73/5/actions/runs/38144956092) | Passed |
-| PR #31 head `20ba74902fe620f00c58d047427c9f7d12c890f0` | Runtime payload push | [#38144956122](https://github.com/alizebal73/5/actions/runs/38144956122) | Passed |
-| PR #31 head `20ba74902fe620f00c58d047427c9f7d12c890f0` | Runtime payload PR | [#38144959504](https://github.com/alizebal73/5/actions/runs/38144959504) | Passed |
-| PR #32 head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9` | Full Foundation | [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) | Passed |
+| PR #31 head e5caceb... | Quick push | [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096) | Passed |
+| PR #31 head e5caceb... | Quick PR | [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180) | Passed |
+| PR #31 head e5caceb... | Full Foundation | [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115) | Passed |
+| PR #31 head e5caceb... | Runtime payload push | [#38146060239](https://github.com/alizebal73/5/actions/runs/38146060239) | Passed |
+| PR #31 head e5caceb... | Runtime payload PR | [#38146064208](https://github.com/alizebal73/5/actions/runs/38146064208) | Passed |
+| PR #32 head 4fb20dc... | Full Foundation | [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) | Passed |
 
 ## Historical certified Foundation gates
 

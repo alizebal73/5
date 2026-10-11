@@ -25,6 +25,14 @@ The Agent is registered as NT AUTHORITY\LocalService, because its persistent dev
 
 For both roles, the service is registered as Manual / Demand Start and remains stopped. The helper never starts a service, configures TLS, writes secrets, modifies ACLs, touches PostgreSQL, or creates an Owner. It must not be used to upgrade, repair, replace or clean a service on an existing Manager computer.
 
+## Configure TLS on the isolated Server PC
+
+Only after reviewing the read-only preflight and registering the Server test service under the intended identity, configure TLS from the extracted payload root in an elevated PowerShell session. Replace all placeholders with values reserved for the isolated test LAN; the DNS name must resolve to the selected Server IP.
+
+    .\Tools\configure-server-tls.ps1 -ServerIp "<TEST_SERVER_IPV4>" -DnsName "<TEST_SERVER_DNS>" -HttpsPort <TEST_HTTPS_PORT> -ServiceAccount "NT SERVICE\GameNet 5 Server"
+
+Do not run this on a live Manager PC. The packaged Tools\runtime-endpoints.md uses paths that match the extracted payload; follow it for public-certificate export/trust and endpoint configuration.
+
 ## Continue the role-specific sequence
 
 - Server PC: configure TLS with the dedicated Server Service SID, write protected setup settings, provision the protected Server secret store explicitly, and only then start the Server service. Complete Owner bootstrap/finalization and prove readiness after a service restart.

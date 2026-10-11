@@ -4,30 +4,31 @@
 
 ## Current verified baseline — 2026-10-11 (latest exact-SHA refresh)
 
-- Repository: `alizebal73/5`, public.
-- `main`: protected and unchanged at `b9288471f2047570eaf8d0d6552cf87bc0ddc214`.
-- `foundation/runtime-final-v2`: protected and unchanged at `be29687e637b709158a30204bb9213bfa4813950`. Stable Checkpoint still certifies only `c3a8ba482548e963479fbdf8538be62c4d15acfe`; exact-tip certification of the base SHA remains pending.
-- `integration/runtime-operator-v1`: unchanged at `82d90178c0011c65eef76bd32cc33318d5bbd91c`; active Ruleset `protect-integration-runtime` ID `24879997` protects it with PR, conversation resolution, `quick-validation`, no deletion/force-push, Squash-only and no bypass actors.
-- PR #31: latest head `20ba74902fe620f00c58d047427c9f7d12c890f0`, Draft/open/unmerged. Exact-SHA green runs: Quick push [#38144956137](https://github.com/alizebal73/5/actions/runs/38144956137), Quick PR [#38144959579](https://github.com/alizebal73/5/actions/runs/38144959579), Full Foundation [#38144956092](https://github.com/alizebal73/5/actions/runs/38144956092), Runtime payload push [#38144956122](https://github.com/alizebal73/5/actions/runs/38144956122), Runtime payload PR [#38144959504](https://github.com/alizebal73/5/actions/runs/38144959504).
-- PR #31 adds `scripts/register-test-runtime-service.ps1` plus `docs/operations/test-runtime-service-registration.md`; payload CI validates its manifest/executable SHA-256 contracts in `-ValidateOnly`. It does not register a service on hosted CI, and this is not an installer.
-- PR #32: head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9`, Draft/unmerged; Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It adds an exact-tip Full Foundation push trigger for Foundation refs. The protected base tip remains unchanged pending review/merge and post-merge certification.
-- PR #15: latest tested head `15402b2758808327874c18e21753120ef9cfccce` passed Quick, Full Foundation and Runtime Payload on that exact SHA ([#38144366659](https://github.com/alizebal73/5/actions/runs/38144366659), [#38144369176](https://github.com/alizebal73/5/actions/runs/38144369176), [#38144369207](https://github.com/alizebal73/5/actions/runs/38144369207)); however, it remains an older Foundation-based TLS/ProgramData branch and is not the selected runtime acceptance baseline.
-- The personal self-hosted Runner is intentionally retained per owner decision until GameNet is complete. Issue #33 tracks eventual removal. GitHub runner-group restriction is not verified; older open branches may still carry self-hosted definitions.
-- Installed Windows Service identity/effective ACL, DPAPI after restart, TLS private-key access, bootstrap finalization, Agent enrollment/replay/revocation/restart and physical LAN acceptance remain open.
-- PR #30 remains merged to Integration at `e1626d7d1f2e62601329604b8823787f2c9597b6`; #27/#28/#29 are closed history-only and not merge candidates. Keep `main` and Foundation unchanged outside reviewed PRs.
-- The [Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) is the mandatory handoff.
+- Repository: alizebal73/5, public.
+- main: protected and unchanged at b9288471f2047570eaf8d0d6552cf87bc0ddc214.
+- foundation/runtime-final-v2: protected and unchanged at be29687e637b709158a30204bb9213bfa4813950. Stable Checkpoint still certifies only c3a8ba482548e963479fbdf8538be62c4d15acfe; exact-tip certification of the base SHA remains pending.
+- integration/runtime-operator-v1: unchanged at 82d90178c0011c65eef76bd32cc33318d5bbd91c; active Ruleset protect-integration-runtime ID 24879997 protects it with PR, conversation resolution, quick-validation, no deletion/force-push, Squash-only and no bypass actors.
+- PR #31: current head e5caceb11968512fb91b5f808cbd4afd24be22ad, Draft/open/unmerged. Exact-SHA green runs: Quick push [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096), Quick PR [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180), Full Foundation [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115), Runtime payload push [#38146060239](https://github.com/alizebal73/5/actions/runs/38146060239), Runtime payload PR [#38146064208](https://github.com/alizebal73/5/actions/runs/38146064208).
+- PR #31 includes scripts/register-test-runtime-service.ps1 and docs/operations/test-runtime-service-registration.md. The payload validates manifest/executable/helper SHA-256 in -ValidateOnly; no Windows service was queried, registered or started on hosted CI.
+- The Runtime payload build rewrites the packaged runtime-endpoints guide to use Tools paths instead of source-tree scripts paths; that change is green on the current exact SHA. The ZIP remains a portable test payload, not Setup.exe/MSI.
+- PR #32: head 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9, Draft/unmerged; Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It adds an exact-tip Full Foundation push trigger for Foundation refs. The protected base tip remains unchanged pending review/merge and post-merge certification.
+- PR #15: head 15402b2758808327874c18e21753120ef9cfccce, Draft/unmerged; Quick, Full Foundation and Runtime payload passed on that exact SHA ([#38144366659](https://github.com/alizebal73/5/actions/runs/38144366659), [#38144369176](https://github.com/alizebal73/5/actions/runs/38144369176), [#38144369207](https://github.com/alizebal73/5/actions/runs/38144369207)). It is an older Foundation-based TLS/ProgramData branch and is not the selected runtime acceptance baseline.
+- Personal self-hosted Runner cleanup is deliberately deferred until GameNet completion by owner decision; Issue #33 tracks removal. Runner-group restrictions are not claimed as verified, and old open branches may still contain self-hosted workflow declarations.
+- Actual installed Windows Service identity/effective ACL, DPAPI after restart, TLS private-key access, bootstrap finalization, Agent enrollment/replay/revocation/restart and physical LAN acceptance remain open.
+- PR #25 is merged; #27/#28/#29 are closed historical records, not merge candidates; PR #30 is merged at e1626d7d1f2e62601329604b8823787f2c9597b6. Keep main and Foundation unchanged outside reviewed PRs.
+- The Pre-Windows and Pre-Commercial Readiness Gate remains the mandatory handoff.
 
 ## Current priority gaps — 2026-10-11
 
 | ID | Priority | Current status | Closure criterion |
 |---|---|---|---|
-| C-01 | P0 | PR #31's exact head `20ba74902fe620f00c58d047427c9f7d12c890f0` passed Quick push/PR, Full Foundation and Runtime Payload push/PR. | Keep evidence tied to the exact SHA and rerun applicable gates after source/workflow change. |
+| C-01 | P0 | PR #31 exact head e5caceb11968512fb91b5f808cbd4afd24be22ad passed Quick push/PR, Full Foundation, and Runtime payload push/PR. | Keep evidence tied to exact SHA and rerun applicable gates after source/workflow changes. |
 | C-02 | Deferred by owner | Personal Runner remains registered by decision; runner-group restrictions are not read back as enforced. | Remove after GameNet completion and verify disappearance from repository/organization Runner settings; avoid third-party/untrusted execution while retained. |
-| C-03 | Done | Active Integration Ruleset ID `24879997` was read back with exact target and required `quick-validation`. | Keep active and verify the exact check name whenever workflow names change. |
-| C-04 | P0 before commercial slices | Hosted runtime tests are green; actual installed-service/LAN acceptance is open. | Pass isolated Windows Server/Agent service, ACL/DPAPI, TLS, bootstrap, enrollment/replay/restart and LAN protocol with evidence. |
-| C-05 | P1 before calling Foundation tip current-certified | Foundation tip `be29687e637b709158a30204bb9213bfa4813950` differs from stable-certified SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`. | After reviewing/merging PR #32, require Full Foundation on the exact resulting Foundation tip; only then update Stable Checkpoint. |
-| C-06 | P0 before any slice relying on Outbox delivery | Outbox append/leased claim/published marker exist, but no worker, retries/final-failure policy, consumer or idempotency proof. | Implement/certify these semantics before asynchronous delivery is a dependency, especially Session-to-Agent. |
-| C-07 | P1 | Some records remain historical snapshots by design. | Keep live sections in sync and pass canonical documentation validation. |
+| C-03 | Done | Active Integration Ruleset ID 24879997 was read back with exact target and required quick-validation. | Keep active and verify the check name whenever workflow names change. |
+| C-04 | P0 before commercial slices | Hosted runtime tests are green; actual installed-service and physical-LAN acceptance is open. | Pass isolated Windows Server/Agent service, ACL/DPAPI, TLS, bootstrap, enrollment/replay/restart and LAN protocol with evidence. |
+| C-05 | P1 before calling Foundation tip current-certified | Foundation tip be29687e637b709158a30204bb9213bfa4813950 differs from stable-certified SHA c3a8ba482548e963479fbdf8538be62c4d15acfe. | After reviewing/merging PR #32, require Full Foundation on the exact resulting Foundation tip; only then update Stable Checkpoint. |
+| C-06 | P0 before any slice relying on Outbox delivery | Outbox append/leased claim/published marker exist; worker, retry/final-failure policy, event consumer and idempotency proof are absent. | Implement and certify those semantics before asynchronous delivery is needed, especially Session-to-Agent. |
+| C-07 | P1 | Historical snapshots intentionally preserve old facts. | Keep live status blocks synchronized; canonical docs validator and relevant exact-SHA CI must pass.
 
 ## Historical baseline snapshot (2026-10-10; superseded by current read-back)
 
@@ -65,27 +66,30 @@
 | G-16 | Deferred | طرح Steam/GamingAccounts یک ADR پیشنهادی است و PR #19 بسته شده؛ مجازبودن مدل حساب و روش integration هنوز شرط ورود است. | عمداً پیاده‌سازی نشده | نیاز محصول صریح + بررسی برنامهٔ رسمی/اجازهٔ Valve + تصمیم محصول/ADR؛ تا آن زمان هیچ credential injection، MFA bypass یا Auto Login فرضی ساخته نشود. |
 | G-17 | P1 پیش از Release | Foundation برای PostgreSQL/migrations، audit/idempotency/outbox و backup/restore آزمون دارد؛ اما زمان‌بندی/retention، محل امن نسخه‌های پشتیبان و RPO/RTO محصولی هنوز کامل نشده‌اند. | بخشی Foundation موجود؛ عملیات کامل باز | restore دوره‌ای و ایزوله، retention، هشدار شکست، صلاحیت دسترسی، آزمون بازیابی/تطبیق و ثبت زمان/داده از دست‌رفته. |
 
-## Ordered execution route — 2026-10-11 (refreshed)
+## Ordered execution route — 2026-10-11 (latest exact-SHA refresh)
 
-1. **CI / PR #31:** its last verified code-bearing head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR #38138211044, Full Foundation #38138208159 and Runtime Payload #38138211061. The preceding code candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed all five hosted lanes. The current documentation sync is being revalidated on the PR; exact current runs are in the live PR.
-2. **PR #32 / Foundation workflows:** Full Foundation passed on its review candidate in [run #38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It remains Draft/unmerged; the protected Foundation base is unchanged.
-3. **Integration protection:** completed and read back. Active Ruleset `protect-integration-runtime` (ID `24879997`) requires a PR, `quick-validation`, conversation resolution, prevents deletion/force-push, allows Squash only, and has no bypass actor.
-4. **Runner disposition:** owner explicitly keeps the personal Runner registered until GameNet is complete, then intends to remove it. Settings-level runner-group restriction is not confirmed; Issue #33 tracks deferred removal. PR #31/#32 candidate workflows use hosted `windows-2025`; do not generalize that fact to older open branches.
-5. **Runtime acceptance:** ADR-0002 is a code contract, not operating acceptance. Installed-service identity, effective DACL, DPAPI after restart, TLS key access, bootstrap cleanup, expiry/replay/revocation, credential persistence and physical LAN still require isolated Windows acceptance.
-6. **Safe PC procedure:** before touching an existing Manager PC, run `scripts/inspect-manager-runtime-state.ps1` read-only and review its output. Do not provision, change TLS or clean ACLs blindly.
-7. **Product and release order:** start commercial slices only after the candidate runtime is accepted on Windows/LAN; do not claim Outbox end-to-end delivery until worker/retries/final failure/idempotent consumer are implemented and tested. Setup/update/repair/uninstall/rollback, DB lifecycle, signing, restore and multi-PC pilot remain release gates.
+1. PR #31 exact head e5caceb11968512fb91b5f808cbd4afd24be22ad passed Quick push [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096), Quick PR [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180), Full Foundation [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115), Runtime payload push [#38146060239](https://github.com/alizebal73/5/actions/runs/38146060239) and Runtime payload PR [#38146064208](https://github.com/alizebal73/5/actions/runs/38146064208). It remains Draft/unmerged pending complete review.
+2. PR #32 Foundation workflow maintenance candidate 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9 passed Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It remains Draft/unmerged; do not claim the current Foundation base SHA is certified.
+3. Integration protection is complete and read back. Active Ruleset protect-integration-runtime ID 24879997 requires PR, conversation resolution and quick-validation, blocks deletion/force-push, allows Squash only and has no bypass actor.
+4. Owner keeps the personal Runner registered until GameNet completion, then intends to remove it. Issue #33 tracks cleanup. Runner-group access is not certified as restricted; don't generalize the current hosted-runner setup to all old branches.
+5. ADR-0002 is an implementation contract, not operational acceptance. Installed-service identity, effective ACL, DPAPI after restart, TLS private-key access, bootstrap cleanup, expiry/replay/revocation, credential persistence and physical LAN remain open.
+6. Before touching an existing Manager PC, run Tools/inspect-manager-runtime-state.ps1 from the verified package (read-only) and review the report; do not provision secrets, change TLS or clean ACLs blindly.
+7. Start commercial work only after isolated real-Windows acceptance passes and the baseline is reviewed/adopted. Outbox is append/lease-claim/published-marker only; before async-dependent work, especially Session-to-Agent, implement/test worker, retry/final-failure, idempotent consumer and crash/race/recovery.
+8. Setup/update/repair/uninstall/rollback, DB lifecycle, package signing, restore and a 2–3-PC then ~15-station pilot remain release gates.
 
 ## Branch and PR disposition
 
 | PR / branch | وضعیت و تصمیم فعلی |
 |---|---|
-| #25 — docs/engineering-readiness-audit-v1 | Draft فعال؛ این PR همین register و هماهنگی مستندات/CI را پیشنهاد می‌کند. باید Quick Validation روی آخرین SHA موفق شود؛ ادغام نشده است. |
+| #25 — docs/engineering-readiness-audit-v1 | ادغام شده به Integration؛ دیگر PR فعال نیست. |
 | #23 — integration/runtime-operator-v1 | Draft فعال؛ Quick و Full Foundation روی SHA 55a340... سبز. ادغام هنوز نیازمند بازبینی ancestry/diff و gate سرویس/شبکه است. |
 | #24 — refactor/desktop-view-boundaries-v1 | Draft فعال؛ Quick و Full Foundation روی SHA 9a058... سبز. هنوز ادغام نشده؛ گام اول جداسازی UI است، نه پایان معماری. |
-| #27 — security/server-secret-store-active-v1 | Draft فعال و منبع تغییرهای Secret Store؛ تغییرهای هم‌پوشان با #29 هستند، پس تا بررسی diff و گواهی exact-SHA ادغام نشود. پذیرش Windows Service/DPAPI واقعی باز است. |
-| #28 — security/agent-one-time-enrollment-v1 | Draft فعال و منبع تغییرهای enrollment؛ شامل تغییرهای هم‌پوشان با #29 است. نگه دارید تا مقایسه و تصمیم ادغام کنترل‌شده؛ ادغام مستقل فعلاً نکنید. |
-| #29 — security/combined-runtime-validation-v1 | Draft validation-only، **DO NOT MERGE**؛ head `f5dd302...`. Full Foundation #38096700124، Quick PR #38096701675، Quick push #38096700116 و Runtime payload #38096701718 همه سبز؛ evidence و checksumها در log ثبت است. PR #30 بر اساس tree همین نامزد با تاریخچهٔ تمیز ادغام شده است.
-| #31 — security/runner-and-stage1-stabilization-v1 | Draft/open, not merged; current hosted CI isolation, governance refresh and ADR-0002. All three CI lanes green on SHA 77507f4e208efc4cceadeb3c08d34eea01a69660. |
+| #27 — security/server-secret-store-active-v1 | بسته‌شده و فقط سابقهٔ منبع؛ کاندید ادغام نیست. تغییرهای منتخب از مسیر #30 تحویل شده‌اند؛ پذیرش Windows Service/DPAPI واقعی باز است. |
+| #28 — security/agent-one-time-enrollment-v1 | بسته‌شده و فقط سابقهٔ منبع؛ ادغام مستقل نکنید. مسیر تحویل منتخب در #30 ثبت شده است؛ پذیرش فیزیکی Agent باز است. |
+| #29 — security/combined-runtime-validation-v1 | بسته‌شده و validation-only، **DO NOT MERGE**؛ فقط سابقهٔ آزمون است. PR #30 با درخت انتخاب‌شده و تاریخچهٔ تمیز ادغام شده است. |
+| #31 — security/runner-and-stage1-stabilization-v1 | Draft/open, not merged; head e5caceb11968512fb91b5f808cbd4afd24be22ad passed all five hosted gates. Physical service/LAN acceptance remains open. |
+| #32 — security/foundation-hosted-runner-isolation-v1 | Draft/open, not merged; Full Foundation passed on candidate 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9 in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). Foundation base unchanged. |
+| #26 — fix/foundation-workflow-paths-v1 | Closed as superseded by the broader #32; not merged and branch not deleted. |
 | #30 — security/runtime-enrollment-delivery-v1 | ادغام شد؛ head `f4387584d6c14fb55cbfca20521e221ea2462a4f`، merge commit `e1626d7d1f2e62601329604b8823787f2c9597b6`. چهار CI روی head PR و Full Foundation #38097484132، Quick push #38097484122 و Quick PR #38097487320 پس از merge همه سبز. |
 | #15 — fix/programdata-endpoints-v1 | Draft قدیمی به مقصد Foundation؛ به‌عنوان منبع مقایسه نگه دارید. تغییر TLS آن را بدون مقایسه با مدل فعلی certificate-store merge نکنید. |
 | #17 — docs/runtime-lan-smoke-evidence-2026-10-10 | شواهد تاریخی ارزشمند است ولی روی branch/candidate قدیمی. شواهد و محدودیت‌ها باید مرجع داشته باشند؛ branch کامل آن ادغام نشود. |
