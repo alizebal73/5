@@ -677,3 +677,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Regression: add a Desktop test that holds a station-list refresh open, invokes every command directly while busy, and asserts no additional list, mutation or Agent probe request is sent.
 - Verification: the follow-up candidate must pass Quick Validation, Full Foundation and Runtime payload on its exact new HEAD before PR #40 can be merged. Earlier green runs on SHA `a0944c33...` do not certify this new fix.
 - Rollback: revert only the handler-level guards and associated regression test if verified supported behavior conflicts, while preserving permission checks and server-side authorization. Do not restore CanExecute-only busy enforcement.
+
+
+## 2026-10-12 — Complete and verify the Stage 1 integration merge
+
+- Result: PR #40 was Squash-merged only into `integration/runtime-operator-v1`; merge SHA `58717adc6c1553ef21221c3d484f093494ba1ae7`. `main` and `foundation/runtime-final-v2` were unchanged.
+- Exact candidate HEAD `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` passed [Quick Validation #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187), and [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104). Candidate tests: Desktop 36, Server unit 84, Shared 38, Agent 33, Contract 1; zero failures/skips in those suites.
+- Post-merge exact-SHA gates passed: [Quick Validation #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446).
+- Source PRs #35–#39 were closed as superseded after comments linked each source to #40; their branches were deliberately retained. None was merged individually or deleted.
+- Scope boundary: Full Foundation and portable runtime payload used self-hosted Windows. The ZIP is not Setup.exe/MSI and CI does not certify actual installed Windows Service identity/ACL/DPAPI/TLS access, physical two-PC LAN/reconnect or interactive WPF UI.
+- Next gate: certify the exact current `foundation/runtime-final-v2` tip before calling it the active certified checkpoint; then do read-only Manager preflight and physical acceptance on isolated test machines with a disposable database. Do not run provisioning or ACL/TLS cleanup on the existing Manager PC before preflight review.
