@@ -13,18 +13,18 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
-## Current execution sequence lock — 2026-10-12
+## Current execution sequence lock — 2026-10-12 (post-merge)
 
-This is the live execution order; older stage notes below are historical where they disagree.
+This is the current live execution sequence; old stage notes below remain historical where they conflict.
 
-1. Keep `main` and `foundation/runtime-final-v2` unchanged. The active target is the protected `integration/runtime-operator-v1` branch.
-2. PR #40 is the single reconciled candidate for source PRs #35–#39 (42 paths, exact union). Review found that some Station Board handlers relied only on `CanExecute` for the busy gate; handler-level guards and a direct-`ICommand.Execute` regression test are being added. The follow-up must pass Quick Validation, Full Foundation and Runtime payload on one exact latest SHA before merge.
-3. After exact-head review, Squash-merge #40 only to `integration/runtime-operator-v1`. Do not merge source PRs #35–#39 individually. Confirm the resulting merge SHA and rerun/read back post-merge gates before closing the stage.
-4. PRs #15, #31 and #32 are separate Drafts with overlapping workflow and PostgreSQL verifier changes. Choose an explicit, bounded runner/workflow strategy after #40; do not merge any of them wholesale. The #40 certification currently uses self-hosted Windows and must not be described as hosted-runner certification.
-5. Re-run Full Foundation on the exact current `foundation/runtime-final-v2` tip before treating it as the active certified checkpoint. Keep the last historical Stable Checkpoint tied to its actual recorded SHA.
-6. Installed Server/Agent Windows-service identity, ACLs, DPAPI/TLS private-key access after restart, single-use enrollment/replay/revoke, lease/fencing, reconnect and two-PC physical LAN remain an operational gate. Review the read-only `inspect-manager-runtime-state.ps1` report before touching the existing Manager PC; use isolated test PCs and a disposable DB.
-7. Complete interactive WPF RTL/LTR, keyboard/focus, navigation and error-state acceptance. Only then continue customer/session/finance/inventory vertical slices in the numbered plan, with requirement-to-code/test/evidence traceability.
-8. Setup.exe/MSI, PostgreSQL deployment lifecycle, install/upgrade/repair/uninstall, staged update/rollback, signed release artifacts, SBOM and the 2–3-PC then ~15-station pilot remain mandatory release-boundary work.
+1. **Stage-one integration is complete:** PR #40 was Squash-merged into protected `integration/runtime-operator-v1` at `58717adc6c1553ef21221c3d484f093494ba1ae7`. Candidate Quick/Full/Runtime-payload checks passed on `654bc6d...`; post-merge Quick Validation [#38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and Full Foundation [#38181118446](https://github.com/alizebal73/5/actions/runs/38181118446) passed on the merge SHA.
+2. Source PRs #35–#39 were closed as superseded after their paths/tests/docs were preserved in #40. Their branches are retained. Do not merge those source PRs individually.
+3. Keep `main` and `foundation/runtime-final-v2` unchanged. Foundation currently remains at `be29687e637b709158a30204bb9213bfa4813950`; run Full Foundation on that exact SHA before calling it the active certified checkpoint. The last Stable Checkpoint certification remains tied to its recorded historical SHA.
+4. PRs #15, #31 and #32 remain independent Drafts with overlapping workflow/PostgreSQL verifier changes. Review an explicit hosted-runner strategy and exact diffs; do not merge overlapping files wholesale. The successful #40 gates used self-hosted Windows.
+5. **Next operational gate:** review the read-only `inspect-manager-runtime-state.ps1` output, then use isolated Windows Server/Agent test PCs and a disposable DB to prove real service identity/effective ACLs, DPAPI and TLS private-key access after restart, enrollment replay/revoke, lease/heartbeat and LAN reconnect. No provisioning or ACL/TLS cleanup on the existing Manager PC before preflight approval.
+6. Complete interactive WPF RTL/LTR, keyboard/focus, navigation and permission/offline/error-state acceptance.
+7. After the Runtime acceptance gate, continue the product module sequence with REQ-to-code/test/evidence traceability: Customers, Tariffs, Sessions, Billing/Wallet/Debt, Inventory/Buffet and later modules.
+8. Setup.exe/MSI, PostgreSQL deployment lifecycle, install/upgrade/repair/uninstall, staged update/rollback, signed release artifacts, SBOM and the 2–3-PC then ~15-station pilot remain mandatory release gates.
 
 ## Work item readiness and closure (mandatory)
 
