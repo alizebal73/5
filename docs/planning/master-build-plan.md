@@ -145,28 +145,28 @@ Required on real Windows machines:
 - no data-loss evidence;
 - signed release artifacts and release manifest.
 
-## Stage 1 — Finish Foundation certification
+## Stage 1 — Foundation certification — CLOSED (2026-10-12)
 
-Work only in platform infrastructure:
+**Status: CLOSED.** The Master Build Plan Stage 1 exit condition is satisfied on exact tested SHAs:
 
-- harden configuration/secret handling;
-- normalize health/readiness statuses through shared constants;
-- enforce V1 API version/header behavior;
-- implement real PostgreSQL design-time/runtime migration path;
-- implement real audit storage boundary;
-- implement idempotency storage boundary;
-- implement durable Outbox append/leased-claim/published-state storage; event delivery also requires a hosted worker, versioned routing, capped retry/backoff, attempt limit/dead-letter and delivery observability; test PostgreSQL concurrent claims, stale leases, retry windows, final failure and recovery before any async-dependent slice;
-- implement correlation/diagnostic context;
-- add transaction/concurrency integration tests;
-- add Agent device identity, authentication, lease/fencing and reconnect transport;
-- add Desktop API client and typed error handling;
-- add fa-IR/en-US localization resources;
-- add native Desktop smoke harness;
-- add backup/restore proof;
-- keep Setup/updater/repair/uninstall/rollback proof in Stages 15–18 and Gate E; do not pull installer certification into Foundation Gate A;
-- record exact evidence.
+- Foundation checkpoint `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`: [Full Foundation #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) passed, including canonical verification, disposable PostgreSQL, migration/concurrency checks, backup/isolated restore, Desktop runtime, Agent runtime and evidence upload.
+- Integration merge `161b4cbbbe16cd3fd4046f174a1c09380139c67b`: post-merge [Quick Validation #38183458461](https://github.com/alizebal73/5/actions/runs/38183458461) and [Full Foundation #38183458486](https://github.com/alizebal73/5/actions/runs/38183458486) passed on the exact merge SHA. Runner migration candidate also passed Quick PR/push and Runtime payload checks; see [Active Execution Control](../operations/active-execution-control.md).
+- Documentation-only follow-up PR #45 passed [Quick Validation #38183922997](https://github.com/alizebal73/5/actions/runs/38183922997) on candidate `d7b25f88c932b09c3cbdebb82c21100b48a53916` and merged as `05560d1db09855ddf07ae4cad35d6d5e3ee075b3`; it did not change application code.
 
-Exit condition: Full Foundation is green on the exact candidate SHA. This closes hosted Foundation only; installed Windows-service/physical-LAN acceptance remains a separate gate required before commercial vertical slices.
+The catalogue below records the original Foundation scope, not a live implementation to-do queue:
+
+- configuration and secret-handling hardening;
+- shared health/readiness status normalization;
+- V1 API version/header enforcement;
+- PostgreSQL design-time/runtime migration path;
+- audit storage and idempotency storage boundaries;
+- durable Outbox append/leased-claim/published-state path, hosted delivery worker, versioned routing, capped retry/backoff, dead-letter and delivery observability, PostgreSQL concurrency/stale-lease/retry/recovery checks;
+- correlation/diagnostic context and transaction/concurrency integration tests;
+- Agent identity/authentication/lease/fencing/reconnect transport;
+- Desktop API client, typed errors, fa-IR/en-US resources and native smoke harness;
+- backup/restore proof and exact-SHA evidence.
+
+**Scope boundary:** this closes hosted Foundation certification and automated code verification only. Installed Windows Service identity/ACLs, DPAPI/TLS access after restart, physical two-PC LAN/reconnect, interactive WPF acceptance, Setup/updater/repair/uninstall/rollback and commercial pilot remain separate gates. They do not reopen Stage 1 unless a later change invalidates its tested code.
 
 ## Stage 2 — Repository and module skeleton
 
