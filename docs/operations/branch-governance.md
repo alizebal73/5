@@ -1,28 +1,28 @@
 # GameNet 5 — Branch governance
 
-## Current GitHub read-back — 2026-10-12 (after PR #40 and docs-only PR #41)
+## Last GitHub ref read-back — immediately after PR #42 (2026-10-12; historical snapshot)
 
-This table is the live snapshot. Older tables below remain historical snapshots and must not override these refs. The [Active Execution Control](active-execution-control.md) is the single queue/disposition register.
+This table records a read-back event, not a live branch pointer. Subsequent docs PRs advance Integration; get the live head from GitHub before any operation. Older tables below are historical as well. The [Active Execution Control](active-execution-control.md) is the single PR/gate disposition register.
 
-| Ref | Observed SHA | Protected | Intended use |
+| Ref / role | SHA observed | Protected | Meaning |
 |---|---|---:|---|
-| `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | yes | Keep unchanged until release is explicitly approved. |
-| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Protected Foundation reference. Exact-tip certification must be dispatched; Stable Checkpoint currently records historical SHA `c3a8ba4...`. |
-| `integration/runtime-operator-v1` | `362513ad812aebef4ad22420f9b905d79490219d` | yes | Active Runtime/operator branch. PR #40 integrated code at parent SHA `58717adc...`; docs-only PR #41 advanced the tip. |
-| `refactor/outbox-desktop-safety-integration-v1` | `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` | no | Source branch for merged PR #40; retain for traceability until routine cleanup review. |
+| `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | yes | Protected; deliberately unchanged at the read-back. |
+| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Foundation tip at the read-back; exact-SHA certification still required. Stable Checkpoint records historical SHA `c3a8ba4...`. |
+| `integration/runtime-operator-v1` | `d2d8c626c678078c52b840fd0c9c751e7583fa91` | yes | Integration head observed after docs-control PR #42. It is a docs-control commit, not a new runtime-code certification. |
+| Runtime source merge | `58717adc6c1553ef21221c3d484f093494ba1ae7` | n/a | PR #40 code merge; exact SHA passed Quick and Full Foundation. |
+| PR #40 candidate | `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` | n/a | Exact candidate passed Quick, Full Foundation and Runtime payload. |
 
 ### Active Ruleset read-back
 
 - [protect-main](https://github.com/alizebal73/5/rules/24783754) is active for `refs/heads/main`; requires PR, conversation resolution and `quick-validation`.
 - [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active for `refs/heads/foundation/runtime-*`; requires PR, conversation resolution and `foundation`.
 - [protect-integration-runtime](https://github.com/alizebal73/5/rules/24879997) is active for `refs/heads/integration/runtime-operator-v1`; requires PR, conversation resolution and `quick-validation`.
-- All three rulesets return `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains open. This docs update did not change Rulesets.
-- Exact code-candidate gates: [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187), [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104), all successful on `654bc6d...`.
-- Code post-merge gates on `58717adc...`: [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446), both successful.
-- Docs-only PR #41 candidate `9aba023fe8ab61b99eca5eb553746194a9defc1e` passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088); current Integration tip `362513ad...` passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). Do not claim Full Foundation ran on the later docs-only SHA.
-- PRs #15/#31/#32 have overlapping workflow/runner edits. Follow their ordered review in `active-execution-control.md`; no bulk merge. Foundation/payload checks run on self-hosted Windows unless an exact run proves otherwise.
-- PRs #35–#39 are superseded by #40 and closed; source branches retained. PR #23 points the active Integration branch into the old feature branch and is not the current delivery direction.
-- CI does not certify installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect or interactive WPF behavior. Before any work on the existing Manager PC, inspect `scripts/inspect-manager-runtime-state.ps1` read-only output and use isolated test machines plus a disposable DB for changes.
+- All three rulesets return `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains open. The documentation PRs did not change Rulesets.
+- Post-merge source-code gates on `58717adc...`: [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446), both successful.
+- PR #41 docs candidate passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088); SHA `362513ad...` passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). PR #42's exact head `623bb678...` passed [Quick #38182154397](https://github.com/alizebal73/5/actions/runs/38182154397) and merged as `d2d8c626...`. Each run proves only its recorded SHA.
+- PRs #15/#31/#32 overlap on workflow/runner edits; follow their order in `active-execution-control.md`. The #40 Foundation checks used `[self-hosted, Windows, X64]`, not hosted Windows.
+- PRs #35–#39 are superseded by #40 and closed; source branches were retained. PR #23 was closed as an obsolete backward PR; its branch was not deleted.
+- CI does not certify installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect or interactive WPF behavior. Before modifying the existing Manager PC, inspect `scripts/inspect-manager-runtime-state.ps1` read-only output and use isolated test machines plus a disposable DB.
 
 ## Historical metadata snapshot (2026-10-09 — superseded by current read-back)
 
