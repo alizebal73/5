@@ -11,7 +11,7 @@ A checkpoint is stable only when restore/build/tests, architecture guards, Postg
 
 ## Active Integration / CI candidate — separate from Stable Foundation
 
-- Draft, unmerged review: [PR #31](https://github.com/alizebal73/5/pull/31), current exact head e5caceb11968512fb91b5f808cbd4afd24be22ad, targeting Integration. Quick push #38146060096, Quick PR #38146064180, Full Foundation #38146060115, Runtime Payload push #38146060239 and Runtime Payload PR #38146064208 all passed on the same SHA.
+- Draft, unmerged review: [PR #31](https://github.com/alizebal73/5/pull/31); last code-bearing baseline e5caceb11968512fb91b5f808cbd4afd24be22ad passed five exact-SHA gates. The live PR body records current documentation-only HEAD and latest run URLs.
 - PR #31 includes the guarded test-only service helper and package-aware Tools runtime instructions. CI uses -ValidateOnly; this is not physical service/LAN acceptance.
 - Separate Foundation maintenance review: [PR #32](https://github.com/alizebal73/5/pull/32), head 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9; Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It remains Draft/unmerged and does not make the base Foundation SHA independently certified.
 - Integration has active Ruleset [protect-integration-runtime #24879997](https://github.com/alizebal73/5/rules/24879997); required check is quick-validation.

@@ -11,7 +11,7 @@
 
 ## آخرین شواهد دقیق — 2026-10-11
 
-کاندید PR #31، SHA e5caceb11968512fb91b5f808cbd4afd24be22ad، هر پنج گیت زیر را روی همان SHA موفق گذرانده است:
+آخرین کاندید کد PR #31 با SHA e5caceb11968512fb91b5f808cbd4afd24be22ad هر پنج گیت را روی همان SHA گذرانده است. پس از آن فقط اسناد readiness/runbook به‌روزرسانی شده‌اند؛ برای SHA فعلی شاخه و نتیجهٔ runهای همان SHA به PR زنده رجوع کن.
 - Quick push [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096)
 - Quick PR [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180)
 - Full Foundation [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115)

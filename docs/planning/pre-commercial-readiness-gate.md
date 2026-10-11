@@ -4,7 +4,7 @@ Snapshot date: 2026-10-11. This is an execution gate, not a production-release c
 
 ## Exact-SHA baseline
 
-Current PR #31 candidate: branch security/runner-and-stage1-stabilization-v1, exact head e5caceb11968512fb91b5f808cbd4afd24be22ad, targeting integration/runtime-operator-v1 at 82d90178c0011c65eef76bd32cc33318d5bbd91c. PR #31 remains Draft/open/unmerged.
+Latest code-bearing candidate in PR #31: branch security/runner-and-stage1-stabilization-v1, exact source SHA e5caceb11968512fb91b5f808cbd4afd24be22ad. Subsequent commits on the branch update readiness/runbook documentation only; consult the live PR for the latest branch HEAD and its own runs. PR #31 remains Draft/open/unmerged and targets integration/runtime-operator-v1 at 82d90178c0011c65eef76bd32cc33318d5bbd91c.
 
 | Gate on exact head e5caceb11968512fb91b5f808cbd4afd24be22ad | Exact GitHub run | Result |
 |---|---|---|

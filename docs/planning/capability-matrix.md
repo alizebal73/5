@@ -49,7 +49,7 @@
 
 - Foundation reference: Stable Checkpoint همچنان فقط SHA c3a8ba482548e963479fbdf8538be62c4d15acfe را گواهی می‌کند. نوک محافظت‌شدهٔ foundation/runtime-final-v2 برابر be29687e637b709158a30204bb9213bfa4813950 است و اجرای ثبت‌شده روی همان SHA وجود ندارد.
 - Integration governance: شاخهٔ integration/runtime-operator-v1 روی 82d90178c0011c65eef76bd32cc33318d5bbd91c و زیر Ruleset فعال protect-integration-runtime ID 24879997 است.
-- Current hosted candidate: PR #31 head e5caceb11968512fb91b5f808cbd4afd24be22ad؛ Quick push/PR، Full Foundation و Runtime payload push/PR روی همان SHA پاس شده‌اند. PR #31 Draft/ادغام‌نشده است.
+- Current hosted source baseline: PR #31 last code-bearing SHA e5caceb11968512fb91b5f808cbd4afd24be22ad passed Quick push/PR, Full Foundation and Runtime payload push/PR. Subsequent docs-only status/runbook changes are on the live PR; read its current HEAD and latest checks before review.
 - Test-only service preparation: payload شامل Tools/register-test-runtime-service.ps1 و runbook است؛ CI با -ValidateOnly manifest/hash را بررسی می‌کند. راهنمای بسته نیز مسیرها را با Tools سازگار می‌کند. این ابزار installer نیست و اثبات نصب Windows Service/LAN محسوب نمی‌شود.
 - PR #32 / Foundation maintenance: head 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9، Draft/ادغام‌نشده؛ Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) موفق است. نوک Foundation مستقلاً گواهی نشده است.
 - Runner policy: Runner شخصی تا پایان GameNet حفظ و سپس حذف می‌شود؛ Issue #33 پیگیری می‌کند. Runner-group restriction تأیید نشده و Workflow شاخه‌های قدیمی ممکن است هنوز self-hosted باشند.

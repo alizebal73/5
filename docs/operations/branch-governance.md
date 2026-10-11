@@ -9,7 +9,7 @@ Ruleset read-back confirms Integration is protected. Runner-group restrictions a
 | main | b9288471f2047570eaf8d0d6552cf87bc0ddc214 | yes | Keep unchanged. |
 | foundation/runtime-final-v2 | be29687e637b709158a30204bb9213bfa4813950 | yes | Protected Foundation reference; Stable Checkpoint remains at historical SHA c3a8ba482548e963479fbdf8538be62c4d15acfe. |
 | integration/runtime-operator-v1 | 82d90178c0011c65eef76bd32cc33318d5bbd91c | yes | Protected by active Ruleset protect-integration-runtime. |
-| security/runner-and-stage1-stabilization-v1 | e5caceb11968512fb91b5f808cbd4afd24be22ad | no | PR #31 Draft review candidate only; 5 exact-SHA hosted gates green. |
+| security/runner-and-stage1-stabilization-v1 | e5caceb11968512fb91b5f808cbd4afd24be22ad (last code-bearing baseline; see PR #31 for the latest docs-only branch HEAD) | no | Draft review candidate only. |
 | security/foundation-hosted-runner-isolation-v1 | 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9 | no | PR #32 Draft Foundation maintenance candidate only. |
 | fix/programdata-endpoints-v1 | 15402b2758808327874c18e21753120ef9cfccce | no | Older TLS/ProgramData PR #15; not selected as runtime acceptance baseline. |
 
@@ -20,7 +20,7 @@ Active Rulesets read-back:
 
 ## CI Runner policy — 2026-10-11
 
-PR #31 head e5caceb11968512fb91b5f808cbd4afd24be22ad passes Quick push [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096), Quick PR [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180), Full Foundation [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115), Runtime payload push [#38146060239](https://github.com/alizebal73/5/actions/runs/38146060239) and Runtime payload PR [#38146064208](https://github.com/alizebal73/5/actions/runs/38146064208). PR #32 head 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9 Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). PR #15 head 15402b2758808327874c18e21753120ef9cfccce passed its own Quick/Full/Payload lanes in #38144366659, #38144369176 and #38144369207. These candidate workflows use hosted windows-2025 plus an in-repository defense-in-depth Runner guard.
+The last code-bearing PR #31 baseline e5caceb11968512fb91b5f808cbd4afd24be22ad passed
 
 The personal Runner remains registered by owner decision; remove it after GameNet completion and verify disappearance from repository/organization Runner settings. Runner-group restrictions are not certified and older branches may still contain self-hosted definitions. Eventual cleanup is tracked in [Issue #33](https://github.com/alizebal73/5/issues/33).
 

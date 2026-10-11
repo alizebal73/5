@@ -16,7 +16,7 @@
 
 این بخش وضعیت زندهٔ GitHub را نشان می‌دهد؛ تاریخچهٔ زیر آن صرفاً سوابق گذشته است.
 
-- PR #31، SHA e5caceb11968512fb91b5f808cbd4afd24be22ad، Draft و ادغام‌نشده است. پنج گیت روی همان SHA سبز شده‌اند: Quick push [#38146060096](https://github.com/alizebal73/5/actions/runs/38146060096)، Quick PR [#38146064180](https://github.com/alizebal73/5/actions/runs/38146064180)، Full Foundation [#38146060115](https://github.com/alizebal73/5/actions/runs/38146060115)، Runtime Payload push [#38146060239](https://github.com/alizebal73/5/actions/runs/38146060239) و Runtime Payload PR [#38146064208](https://github.com/alizebal73/5/actions/runs/38146064208).
+- PR #31 هنوز Draft/ادغام‌نشده است؛ آخرین کاندید کد با SHA e5caceb11968512fb91b5f808cbd4afd24be22ad پنج گیت را روی همان SHA گذرانده است. پس از آن، فقط اسناد وضعیت و runbook به‌روزرسانی شده‌اند؛ SHA فعلی شاخه و نتایج جدید را از PR زنده بخوان.
 - بستهٔ LAN Smoke ZIP خودکفا و نه Setup/MSI است. ابزار تستی ثبت سرویس Server/Agent در payload موجود است؛ CI فقط با -ValidateOnly اجرا می‌کند و سرویس واقعی را query/register/start نمی‌کند. راهنمای داخل بسته مسیر دستورها را با Tools سازگار می‌کند.
 - PR #32 در SHA 4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9 و Draft/ادغام‌نشده است؛ Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) موفق شد. Foundation فعلاً در SHA be29687e637b709158a30204bb9213bfa4813950 دست‌نخورده است؛ گواهی Stable فعلی فقط برای SHA تاریخی c3a8ba482548e963479fbdf8538be62c4d15acfe است.
 - Ruleset Integration فعال است: protect-integration-runtime، ID 24879997، با PR، حل conversation و check اجباری quick-validation. شاخهٔ Integration هنوز روی 82d90178c0011c65eef76bd32cc33318d5bbd91c است.
