@@ -2,6 +2,10 @@ name: foundation-certification
 
 on:
   workflow_dispatch:
+  # Re-certify the exact protected Foundation tip after a PR merge.
+  push:
+    branches:
+      - "foundation/runtime-*"
   # Full certification is required before merging into a protected Foundation branch.
   pull_request:
     branches:
