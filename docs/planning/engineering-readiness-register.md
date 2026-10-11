@@ -63,15 +63,15 @@
 | G-16 | Deferred | طرح Steam/GamingAccounts یک ADR پیشنهادی است و PR #19 بسته شده؛ مجازبودن مدل حساب و روش integration هنوز شرط ورود است. | عمداً پیاده‌سازی نشده | نیاز محصول صریح + بررسی برنامهٔ رسمی/اجازهٔ Valve + تصمیم محصول/ADR؛ تا آن زمان هیچ credential injection، MFA bypass یا Auto Login فرضی ساخته نشود. |
 | G-17 | P1 پیش از Release | Foundation برای PostgreSQL/migrations، audit/idempotency/outbox و backup/restore آزمون دارد؛ اما زمان‌بندی/retention، محل امن نسخه‌های پشتیبان و RPO/RTO محصولی هنوز کامل نشده‌اند. | بخشی Foundation موجود؛ عملیات کامل باز | restore دوره‌ای و ایزوله، retention، هشدار شکست، صلاحیت دسترسی، آزمون بازیابی/تطبیق و ثبت زمان/داده از دست‌رفته. |
 
-## Ordered execution route — 2026-10-11
+## Ordered execution route — 2026-10-11 (refreshed)
 
-1. **PR #31 / hosted CI:** Quick, Full Foundation and Payload passed on exact SHA 77507f4e208efc4cceadeb3c08d34eea01a69660. Review the complete diff and keep it Draft until accepted; never auto-merge.
-2. **Runner settings:** retain the local Runner, verify and restrict its access/runner group in GitHub Settings, and keep it offline during evaluation of untrusted PRs until done. The in-repository guard is defence in depth only.
-3. **Branch protection:** create/read back a real Ruleset for integration/runtime-operator-v1 that requires PR, quick-validation and conversation resolution.
-4. **ADR-0002 / Runtime:** the code contract is accepted; actual service SID, effective DACL, DPAPI after restart, TLS key access, bootstrap cleanup, token expiry/replay/revoke, credential persistence and physical LAN still need isolated Windows acceptance.
-5. **Before touching an existing Manager PC:** run inspect-manager-runtime-state.ps1 read-only and review output; no blind provisioning, TLS changes or ACL cleanup.
-6. **Product work:** after Runtime acceptance, continue UI-boundary work and then product stages with REQ → invariants/permissions → transaction/idempotency/audit/recovery → tests → exact-SHA evidence.
-7. **Before Production:** Setup/update/repair/uninstall/rollback, PostgreSQL lifecycle, package signing, backup recovery and multi-PC/pilot acceptance remain mandatory.
+1. **CI / PR #31:** its last verified code-bearing head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR #38138211044, Full Foundation #38138208159 and Runtime Payload #38138211061. The preceding code candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed all five hosted lanes. The current documentation sync is being revalidated on the PR; exact current runs are in the live PR.
+2. **PR #32 / Foundation workflows:** Full Foundation passed on its review candidate in [run #38139128433](https://github.com/alizebal73/5/actions/runs/38139128433). It remains Draft/unmerged; the protected Foundation base is unchanged.
+3. **Integration protection:** completed and read back. Active Ruleset `protect-integration-runtime` (ID `24879997`) requires a PR, `quick-validation`, conversation resolution, prevents deletion/force-push, allows Squash only, and has no bypass actor.
+4. **Runner disposition:** owner explicitly keeps the personal Runner registered until GameNet is complete, then intends to remove it. Settings-level runner-group restriction is not confirmed; Issue #33 tracks deferred removal. PR #31/#32 candidate workflows use hosted `windows-2025`; do not generalize that fact to older open branches.
+5. **Runtime acceptance:** ADR-0002 is a code contract, not operating acceptance. Installed-service identity, effective DACL, DPAPI after restart, TLS key access, bootstrap cleanup, expiry/replay/revocation, credential persistence and physical LAN still require isolated Windows acceptance.
+6. **Safe PC procedure:** before touching an existing Manager PC, run `scripts/inspect-manager-runtime-state.ps1` read-only and review its output. Do not provision, change TLS or clean ACLs blindly.
+7. **Product and release order:** start commercial slices only after the candidate runtime is accepted on Windows/LAN; do not claim Outbox end-to-end delivery until worker/retries/final failure/idempotent consumer are implemented and tested. Setup/update/repair/uninstall/rollback, DB lifecycle, signing, restore and multi-PC pilot remain release gates.
 
 ## Branch and PR disposition
 

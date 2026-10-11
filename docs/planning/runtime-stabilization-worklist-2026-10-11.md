@@ -29,20 +29,21 @@
 
 ## ترتیب الزامی کار
 
-### P0 — ایمن‌سازی CI
-- [x] اثبات Quick Validation روی GitHub-hosted Windows و ثبت نتیجهٔ دقیق (#38130781617 و #38131165436).
-- [x] اثبات Full Foundation روی GitHub-hosted Windows در harness آزمایشی؛ تمام گیت‌ها در #38131165423 سبز شدند.
-- [x] انتقال در کاندید PR به GitHub-hosted Windows انجام و روی یک SHA هر سه مسیر Quick/Full/payload سبز شده است؛ ادغام این تغییر در Integration هنوز منتظر بازبینی PR است.
-- [x] مسیر Full Foundation روی VM موقت GitHub-hosted با PostgreSQL آزمایشی اثبات شد؛ از اتصال DB یا اسرار سیستم Manager استفاده نشد.
-- [x] Runner شخصی حفظ شده و هیچ‌یک از چهار Workflow فعلی آن را انتخاب نمی‌کند.
-- [ ] دسترسی مدیریتی Runner/runner-group از GitHub Settings تأیید و محدود شود؛ guard در مخزن جایگزین این کنترل نیست. تا آن زمان Runner هنگام بررسی PR غیرقابل‌اعتماد offline بماند.
-- [ ] PR #31 پس از CI سبز روی SHA دقیق `d02192a43722efc1f49bf84fd24af911b3ece7e9` بازبینی شود؛ Ruleset Integration و دسترسی Runner/runner-group باید در GitHub Settings اعمال و read-back شوند. ادغام خودکار ممنوع است.
+### P0 — ایمن‌سازی CI و candidate evidence
+- [x] اثبات Quick Validation روی GitHub-hosted Windows و ثبت نتیجهٔ exact-SHA.
+- [x] Full Foundation روی GitHub-hosted Windows با PostgreSQL دورریختنی، backup/restore، Desktop و Agent runtime موفق شده است.
+- [x] PR #31 کاندید Workflowهای hosted را دارد؛ آخرین کاندید کد تأییدشده `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`، Quick PR #38138211044، Full Foundation #38138208159 و Runtime Payload #38138211061 موفق‌اند. کاندید کد پیشین `d02192a...` هر پنج lane را گذرانده است.
+- [x] Full Foundation روی کاندید نگهداری Foundation در PR #32 نیز موفق شد: [#38139128433](https://github.com/alizebal73/5/actions/runs/38139128433).
+- [x] Ruleset شاخهٔ `integration/runtime-operator-v1` ساخته و read-back شد؛ ID `24879997`، check اجباری `quick-validation`، PR، conversation resolution، جلوگیری از deletion/force-push، Squash-only و bypass خالی.
+- [~] Runner شخصی بنا به تصمیم مالک تا پایان GameNet حفظ می‌شود و سپس حذف خواهد شد. Runner-group restriction تأیید نشده و پاک‌سازی در Issue #33 پیگیری می‌شود؛ این مورد را «حل‌شدهٔ امنیتی» تلقی نکن.
+- [ ] PRهای #31 و #32 پس از بازبینی کامل، با ترتیب و Base صحیح تعیین تکلیف شوند؛ ادغام خودکار ممنوع است.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
-- [x] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
-- [ ] برای integration/runtime-operator-v1 Ruleset واقعی PR + quick-validation + حل مکالمات بسازیم و read-back کنیم؛ فعلاً protected نیست و ابزار فعلی اجازهٔ نوشتن Ruleset ندارد.
-- [ ] وضعیت PRهای باز و بسته را تعیین تکلیف کنیم؛ PRهای #27/#28/#29 شاخهٔ ادغام نیستند و نباید دوباره ادغام شوند. PR #30 قبلاً ادغام شده است.
-- [x] برای هر گیت، SHA دقیقِ checkout و لینک Run را ثبت کنیم؛ مدرک SHA قدیمی به نوک جدید شاخه نسبت داده نشود.
+- [x] وضعیت جاری `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با GitHub read-back هماهنگ شد؛ تاریخچهٔ قدیمی به‌عنوان سابقه حفظ می‌شود.
+- [x] Ruleset واقعی برای Integration فعال و تأیید شد؛ شاخهٔ Integration هنوز روی همان SHA قبلی است و ساخت Ruleset خودش commit/merge ایجاد نکرده است.
+- [x] وضعیت PRهای تاریخی #27/#28/#29 به‌عنوان بسته و غیرقابل‌ادغام، PR #25 به‌عنوان ادغام‌شده، و PR #26 به‌عنوان Draftِ superseded مستند شد.
+- [ ] پیش از انتخاب PR #31 به‌عنوان Integration base، آخرین CI روی نوک نهایی آن سبز باشد و diff کامل بررسی شود.
+- [x] برای هر گیت، SHA و Run جدا شده‌اند؛ evidence SHA کد قبلی به اجرای SHA مستندات جدید نسبت داده نمی‌شود.
 
 ### P1 — قرارداد و پذیرش امنیت Runtime
 - [x] ADR-0002 به‌عنوان قرارداد پیاده‌سازی Secret Store/Enrollment پذیرفته شد؛ پذیرش عملی Windows Service/DPAPI/ACL/TLS/LAN همچنان باز است.

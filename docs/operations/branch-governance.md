@@ -112,9 +112,9 @@ Historical blocker before the final read-back: `protect-main` lacked a `required
 The PR-ready change in `.github/workflows/gamenet.yml` adds `security/**` to the Quick Validation push lane. Once PR #25 is merged, new commits on isolated security branches will receive the fast build/test gate, and pull requests targeting `integration/runtime-operator-v1` receive Quick Validation. Until then, do not interpret the absence of a run on PR #27 as a passing result.
 
 
-## Security runtime/enrollment integration audit — 2026-10-11
+## Historical Security runtime/enrollment integration audit — 2026-10-11 (captured at Integration SHA 55a3403)
 
-Read-back on the active branches and security PRs confirms the protected references are unchanged: `main` remains `b9288471f2047570eaf8d0d6552cf87bc0ddc214` (protected), and `foundation/runtime-final-v2` remains `be29687e637b709158a30204bb9213bfa4813950` (protected). `integration/runtime-operator-v1` remains `55a340305f9eba3bc8f9a1ce65fb37bedbae7580` and is not protected.
+**Historical snapshot only — superseded by the authoritative current GitHub read-back above.** At the time of this audit, `main` was `b9288471f2047570eaf8d0d6552cf87bc0ddc214`, `foundation/runtime-final-v2` was `be29687e637b709158a30204bb9213bfa4813950`, and Integration was at `55a340305f9eba3bc8f9a1ce65fb37bedbae7580`. Do not use this older state as current branch-protection evidence.
 
 The ancestry/diff audit against that integration ref found:
 - PR #29 validation candidate: 168 commits ahead, 0 behind, 67 changed files.
