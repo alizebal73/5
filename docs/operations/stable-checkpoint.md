@@ -1,14 +1,14 @@
 # Stable Checkpoint — GameNet 5 Foundation
 
-> **Exact-SHA caveat — 2026-10-10:** this record names the last SHA for which this document holds explicit certification evidence; it does not certify every newer tip of foundation/runtime-final-v2. The observed branch tip is be29687e637b709158a30204bb9213bfa4813950, two commits ahead of this recorded SHA (workflow/marker/log/checkpoint changes). GitHub read-back for that tip was pending and no successful workflow run for that exact SHA was found. Re-run the required Foundation workflow on the exact tip before treating it as the current certified checkpoint. Current Runtime/operator PR evidence is recorded separately in the [Engineering Readiness Register](../planning/engineering-readiness-register.md).
+> **Latest exact-tip certification — 2026-10-12:** Foundation branch SHA `71ef6534331e6ba5a8a460fd5b8846fe40e8567a` passed Full Foundation on exact SHA in [run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053); uploaded evidence: [artifact 11718566832](https://github.com/alizebal73/5/actions/runs/38182502053). This run included runner-policy, PowerShell parser, Canonical verification, disposable PostgreSQL migration/concurrency, backup/isolated restore, Desktop runtime, Agent runtime and evidence upload. The historic certificate `c3a8ba...` below remains recorded as prior evidence, not the latest checkpoint. Runtime/operator PR evidence is tracked separately in the [Engineering Readiness Register](../planning/engineering-readiness-register.md).
 
 Status: **CERTIFIED**
 
-- Certified code commit: `c3a8ba482548e963479fbdf8538be62c4d15acfe`
+- Certified code commit: `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`
 - Branch tested: `foundation/runtime-final-v2`
-- Certification workflow: [run 37860650826](https://github.com/alizebal73/5/actions/runs/37860650826)
-- Evidence artifact: [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/37860650826/artifacts/11585812517)
-- Evidence timestamp (UTC): `2026-10-08T23:41:16.3207470Z`
+- Certification workflow: [run 38182502053](https://github.com/alizebal73/5/actions/runs/38182502053)
+- Evidence artifact: [foundation-certification-evidence](https://github.com/alizebal73/5/actions/runs/38182502053)
+- Previous certified commit: `c3a8ba482548e963479fbdf8538be62c4d15acfe` — [historical run 37860650826](https://github.com/alizebal73/5/actions/runs/37860650826)
 
 ## Verified gates
 
