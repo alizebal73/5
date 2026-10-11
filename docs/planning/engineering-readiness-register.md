@@ -2,18 +2,21 @@
 
 این سند، دفتر زندهٔ ریسک‌ها و ترتیب اجرای کار است. تاریخ snapshot: 2026-10-11. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ آن‌ها را به ترتیب اجرایی و وضعیت واقعی وصل می‌کند. هر ادعای Done باید به commit، آزمون و مدرک همان SHA متصل باشد.
 
-## Current verified baseline — 2026-10-12 (post-merge read-back)
+## Evidence baseline — GitHub read-back immediately after PR #42 (2026-10-12; historical snapshot)
+
+This section records evidence and a timestamped ref read-back. It is not a live pointer to the current Integration head: documentation commits advance that branch. Always read the live branch from GitHub before dispatching or merging anything.
 
 - Repository: `alizebal73/5`; default branch: `main`.
-- `main`: `b9288471f2047570eaf8d0d6552cf87bc0ddc214`, protected and deliberately unchanged.
-- `foundation/runtime-final-v2`: current tip `be29687e637b709158a30204bb9213bfa4813950`, protected and unchanged. Last explicitly recorded Stable Checkpoint certification remains `c3a8ba482548e963479fbdf8538be62c4d15acfe`; dispatch Full Foundation at the exact current tip before advancing the active certification marker.
-- `integration/runtime-operator-v1`: current tip `362513ad812aebef4ad22420f9b905d79490219d`, protected. Runtime source merge is `58717adc6c1553ef21221c3d484f093494ba1ae7`; PR #41 added docs-only changes after it.
-- PR [#40](https://github.com/alizebal73/5/pull/40) source candidate `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` passed [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187) and [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104). The merge SHA `58717adc...` passed [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446).
-- PR [#41](https://github.com/alizebal73/5/pull/41) was docs-only, merged at `362513ad...`; its candidate passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088) and the current Integration tip passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). We do not claim Full Foundation ran on the later docs-only SHA.
+- `main`: `b9288471f2047570eaf8d0d6552cf87bc0ddc214`, protected and deliberately unchanged at the read-back.
+- `foundation/runtime-final-v2`: `be29687e637b709158a30204bb9213bfa4813950`, protected at the read-back. Last explicitly recorded Stable Checkpoint certification remains `c3a8ba482548e963479fbdf8538be62c4d15acfe`; re-read the live tip and run Full Foundation on that exact SHA before advancing the certification marker.
+- `integration/runtime-operator-v1`: `d2d8c626c678078c52b840fd0c9c751e7583fa91` was observed immediately after PR #42 merged. It is a docs-control commit, not a new runtime-code acceptance SHA.
+- Runtime source merge PR [#40](https://github.com/alizebal73/5/pull/40): candidate `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` passed [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187), and [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104). The code merge SHA `58717adc...` passed [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446).
+- Docs-only PR #41 merged at `362513ad...`; candidate passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088), and that SHA passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). Do not reinterpret these as checks on a later commit.
+- Docs-control PR #42 merged at `d2d8c626c678078c52b840fd0c9c751e7583fa91`; its exact head `623bb678263e0d42bafa35efd7c5ca0afc6064fa` passed [Quick Validation #38182154397](https://github.com/alizebal73/5/actions/runs/38182154397).
 - Candidate test counts on #40's exact verified code head: Desktop 36, Server unit 84, Shared 38, Agent 33 and Contract 1; zero failures/skips in those suites. The handler-level busy-gate regression test is included.
-- Source PRs #35–#39 are closed as superseded by #40; their branches are retained.
-- PRs #15/#31/#32 are overlapping runner/runtime proposals and must follow the ordered disposition in [Active Execution Control](../operations/active-execution-control.md). The successful #40 Foundation run used `[self-hosted, Windows, X64]`; it is not hosted-runner certification.
-- Automated CI does not prove installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect, or interactive WPF RTL/focus behavior. Do not change the installed Manager PC without read-only preflight review and approval.
+- Source PRs #35–#39 are closed as superseded by #40; their source branches are retained. Backward PR #23 is also closed without merging or deleting its source branch.
+- PRs #15/#31/#32 overlap on runner/workflow edits. Their ordered disposition is in [Active Execution Control](../operations/active-execution-control.md). The successful #40 Full Foundation run used `[self-hosted, Windows, X64]`; it is not hosted-runner certification.
+- Automated CI does not prove installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect, or interactive WPF RTL/focus. Do not change the installed Manager PC without read-only preflight review and approval.
 
 
 
