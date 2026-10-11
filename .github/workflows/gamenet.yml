@@ -30,12 +30,16 @@ jobs:
   quick-validation:
     name: quick-validation
     timeout-minutes: 20
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: PowerShell parser gate
         timeout-minutes: 5
@@ -62,12 +66,16 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-deployment-payload]')
     needs: quick-validation
     timeout-minutes: 35
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     steps:
       - name: Checkout exact verified commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: Publish versioned self-contained payloads
         shell: pwsh

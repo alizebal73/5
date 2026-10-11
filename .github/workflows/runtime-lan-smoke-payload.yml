@@ -41,7 +41,7 @@ concurrency:
 jobs:
   build-payload:
     name: Build portable runtime payload (not Setup)
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     timeout-minutes: 35
     env:
       GAMENET_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
@@ -52,6 +52,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: Verify exact tested checkout SHA
         shell: pwsh
