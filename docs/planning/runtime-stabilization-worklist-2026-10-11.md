@@ -12,7 +12,7 @@
 - آزمون GitHub-hosted Windows با SDK دقیق .NET `10.0.401`، PowerShell parser و `scripts/verify.ps1` موفق شد.
 - Run: https://github.com/alizebal73/5/actions/runs/38130781617
 - SHA آزمایش Quick Validation: `c80c4dc9bf4050f706f1eb710a57f67201bede79`
-- آزمون Full Foundation روی GitHub-hosted Windows در جریان است؛ نتیجهٔ آن باید پیش از نهایی‌کردن تغییر Workflowها ثبت شود.
+- آزمون Full Foundation روی GitHub-hosted Windows در اجرای اول به گیت هم‌زمانی Migration رسید و آنجا شکست خورد: کارگر فرعی دستور سراسری `dotnet-ef` را می‌خواست، درحالی‌که فقط ابزار محلی مخزن restore شده بود. این وابستگی پنهان ثبت شد؛ فراخوانی به اجرای ابزار محلی تغییر داده شده و اجرای مجدد روی شاخهٔ آزمایشی در حال انجام است. تا موفقیت اجرای مجدد، انتقال کامل گیت Foundation را نهایی نمی‌کنیم.
 - در تصویر استاندارد فعلی GitHub-hosted Windows، PostgreSQL 17 موجود است اما سرویس به‌صورت پیش‌فرض متوقف/غیرفعال است؛ Workflow باید دیتابیس دورریختنی را فقط داخل VM همان Job راه‌اندازی کند و از Machine secret یا دیتابیس کامپیوتر مدیر وابسته نباشد.
 
 ## ترتیب الزامی کار
