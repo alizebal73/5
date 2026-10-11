@@ -4,15 +4,15 @@ Snapshot date: 2026-10-11. This is an execution gate, not a production-release c
 
 ## Exact-SHA baseline
 
-The current hardening candidate is PR #31, branch `security/runner-and-stage1-stabilization-v1`, SHA `53743eda950c057d435fc082994bc183e7cd723b`. The PR targets `integration/runtime-operator-v1`, whose branch tip remains `82d90178c0011c65eef76bd32cc33318d5bbd91c`. The candidate is 13 commits ahead and 0 behind that base, but it is still Draft and unmerged.
+The current hardening candidate is PR #31, branch `security/runner-and-stage1-stabilization-v1`, SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9`. The PR targets `integration/runtime-operator-v1`, whose branch tip remains `82d90178c0011c65eef76bd32cc33318d5bbd91c`. The candidate is 14 commits ahead and 0 behind that base, but it is still Draft and unmerged.
 
 | Gate | Exact-SHA run | Result |
 |---|---|---|
-| Quick Validation — push | [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632) | Passed |
-| Quick Validation — pull request | [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357) | Passed |
-| Full Foundation | [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645) | Passed |
-| Runtime payload build (not Setup/MSI) | [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366) | Passed |
-| PostgreSQL diagnostic lane | [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573) | Passed |
+| Quick Validation — push | [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156) | Passed |
+| Quick Validation — pull request | [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693) | Passed |
+| Full Foundation | [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157) | Passed |
+| Runtime payload build (not Setup/MSI) | [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) | Passed |
+| PostgreSQL diagnostic lane | [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) | Passed |
 
 All five runs above identify the same candidate SHA. This proves hosted automated gates for that tree; it does not prove real Windows Service ACL/DPAPI behavior or physical LAN operation.
 

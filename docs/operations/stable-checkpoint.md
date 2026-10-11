@@ -12,17 +12,17 @@ Status: **CERTIFIED — historical exact SHA only; not certification of the curr
 
 ## Current Integration CI candidate — 2026-10-11 (not a Foundation stable checkpoint)
 
-PR #31 remains Draft/unmerged. Latest candidate SHA `53743eda950c057d435fc082994bc183e7cd723b` passed Quick push [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632), Quick PR [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357), Full Foundation [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645), Runtime Payload [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366) and PostgreSQL Diagnostic [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573); all passed on the same exact SHA. This is an Integration/CI candidate, not a new Foundation stable checkpoint. Hosted CI does not prove installed Windows Service identity, effective ACL/DPAPI after restart, TLS private-key access under the real service, or physical two-PC LAN behavior.
+PR #31 remains Draft/unmerged. Latest candidate SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186); all passed on the same exact SHA. This is an Integration/CI candidate, not a new Foundation stable checkpoint. Hosted CI does not prove installed Windows Service identity, effective ACL/DPAPI after restart, TLS private-key access under the real service, or physical two-PC LAN behavior.
 
 ## Current candidate gates (PR #31 head only; not the historical Foundation certificate)
 
 | Gate | Exact run | Result |
 |---|---|---|
-| Quick push | [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632) | Passed |
-| Quick PR | [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357) | Passed |
-| Full Foundation | [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645) | Passed |
-| Runtime Payload | [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366) | Passed |
-| PostgreSQL Diagnostic | [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573) | Passed |
+| Quick push | [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156) | Passed |
+| Quick PR | [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693) | Passed |
+| Full Foundation | [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157) | Passed |
+| Runtime Payload | [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) | Passed |
+| PostgreSQL Diagnostic | [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) | Passed |
 
 ## Historical certified Foundation gates
 

@@ -7,7 +7,7 @@
 - مخزن فعال: `alizebal73/5`.
 - پایهٔ فنی مرجع/نامزد: `foundation/runtime-final-v2`. گواهی Foundation فقط برای SHA دقیق اجراشده معتبر است؛ تغییرات بعدی تا اجرای دوبارهٔ دروازه‌های لازم، خودبه‌خود تأیید نیستند.
 - شاخهٔ مرجع Foundation: `foundation/runtime-final-v2` در SHA `be29687e637b709158a30204bb9213bfa4813950` است؛ Stable Checkpoint فقط SHA تاریخی `c3a8ba482548e963479fbdf8538be62c4d15acfe` را گواهی می‌کند.
-- شاخهٔ Integration در read-back جاری `integration/runtime-operator-v1` روی SHA `82d90178c0011c65eef76bd32cc33318d5bbd91c` است و Ruleset ندارد. کاندید تثبیت PR #31 روی SHA `53743eda950c057d435fc082994bc183e7cd723b` هنوز Draft/ادغام‌نشده است. `main` دست‌نخورده می‌ماند.
+- شاخهٔ Integration در read-back جاری `integration/runtime-operator-v1` روی SHA `82d90178c0011c65eef76bd32cc33318d5bbd91c` است و Ruleset ندارد. کاندید تثبیت PR #31 روی SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` هنوز Draft/ادغام‌نشده است. `main` دست‌نخورده می‌ماند.
 - دفتر نقص‌ها: `docs/development/bug-fix-log.md`. هر نقص باید علت ریشه‌ای، مالک لایه، اصلاح، آزمون بازگشتی، SHA و نتیجه داشته باشد.
 - اصل کار: هر بار یک نقص یا یک برش قابلیت کوچک؛ علت‌یابی قبل از اصلاح؛ آزمون واقعی؛ ثبت مدرک؛ سپس مرحلهٔ بعد.
 - کیفیت پایه: Server مرجع قواعد تجاری است؛ PostgreSQL مرجع پایدار داده است؛ Desktop و Agent مستقیماً به دیتابیس وصل نمی‌شوند؛ پول/موجودی مبتنی بر ledger هستند؛ تغییرات حساس تراکنشی، قابل حسابرسی و در برابر تکرار/رقابت ایمن‌اند.
@@ -16,7 +16,7 @@
 
 این بخش وضعیت جاری را ثبت می‌کند؛ رخدادهای زیر آن تاریخچه‌اند و نباید وضعیت قدیمی آن‌ها با کاندید امروز اشتباه شود.
 
-- کاندید PR #31، SHA `53743eda950c057d435fc082994bc183e7cd723b`، پنج گیت hosted را روی همان SHA سبز گذرانده است: Quick push [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632)، Quick PR [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357)، Full Foundation [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645)، Runtime Payload [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366) و PostgreSQL Diagnostic [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573). PR همچنان Draft و ادغام‌نشده است.
+- کاندید PR #31، SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9`، پنج گیت hosted را روی همان SHA سبز گذرانده است: Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156)، Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693)، Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157)، Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) و PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186). PR همچنان Draft و ادغام‌نشده است.
 - Integration هنوز روی SHA `82d90178c0011c65eef76bd32cc33318d5bbd91c` است؛ PR #31 کاندیدی ۱۳ commit جلوتر است و جای Integration ادغام‌شده را نمی‌گیرد. Integration Ruleset فعال ندارد.
 - Full Foundation کاندید به معنی نصب واقعی Server/Agent به‌صورت Windows Service یا LAN نیست. فقط SHA تاریخی `c3a8ba482548e963479fbdf8538be62c4d15acfe` در Stable Checkpoint گواهی Foundation دارد؛ نوک جدید Foundation را خودکار گواهی‌شده تلقی نکنید.
 - ADR-0002 قرارداد پیاده‌سازی Secret Store/Enrollment را پذیرفته است؛ آزمون Service SID، ACL، DPAPI پس از restart، کلید TLS تحت هویت سرویس، Bootstrap cleanup و LAN واقعی همچنان بازند.

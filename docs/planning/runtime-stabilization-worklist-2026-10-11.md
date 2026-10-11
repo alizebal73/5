@@ -10,12 +10,12 @@
 
 ## آخرین گواهی روی کاندید دقیق — 2026-10-11
 
-روی SHA `53743eda950c057d435fc082994bc183e7cd723b` هر پنج مسیر موفق شدند:
-- Quick push [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632)
-- Quick PR [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357)
-- Full Foundation [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645)
-- Runtime Payload [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366)
-- PostgreSQL Diagnostic [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573)
+روی SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` هر پنج مسیر موفق شدند:
+- Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156)
+- Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693)
+- Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157)
+- Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491)
+- PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186)
 
 این گواهی مربوط به کاندید PR #31 است، نه نوک Integration یا Stable Foundation. PR هنوز Draft و ادغام‌نشده است.
 
@@ -41,7 +41,7 @@
 - [x] مسیر Full Foundation روی VM موقت GitHub-hosted با PostgreSQL آزمایشی اثبات شد؛ از اتصال DB یا اسرار سیستم Manager استفاده نشد.
 - [x] Runner شخصی حفظ شده و هیچ‌یک از چهار Workflow فعلی آن را انتخاب نمی‌کند.
 - [ ] دسترسی مدیریتی Runner/runner-group از GitHub Settings تأیید و محدود شود؛ guard در مخزن جایگزین این کنترل نیست. تا آن زمان Runner هنگام بررسی PR غیرقابل‌اعتماد offline بماند.
-- [ ] PR #31 پس از CI سبز روی SHA دقیق `53743eda950c057d435fc082994bc183e7cd723b` بازبینی شود؛ Ruleset Integration و دسترسی Runner/runner-group باید در GitHub Settings اعمال و read-back شوند. ادغام خودکار ممنوع است.
+- [ ] PR #31 پس از CI سبز روی SHA دقیق `d02192a43722efc1f49bf84fd24af911b3ece7e9` بازبینی شود؛ Ruleset Integration و دسترسی Runner/runner-group باید در GitHub Settings اعمال و read-back شوند. ادغام خودکار ممنوع است.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
 - [x] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
