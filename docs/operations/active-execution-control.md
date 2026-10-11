@@ -39,10 +39,10 @@ Evidence:
 
 ### Gate R — Choose and stabilize one CI runner policy
 
-The existing CI migration work overlaps. Do not merge PRs #15, #31 and #32 wholesale or change multiple workflow copies concurrently.
+Foundation runner migration is complete in PR #32; the exact post-merge Full Foundation run is Gate F and remains in progress. Do not merge PR #15 or #31 wholesale, and do not change overlapping workflow files concurrently.
 
 1. [PR #32](https://github.com/alizebal73/5/pull/32) has been merged to the protected Foundation branch after exact-head Full Foundation passed on its PR candidate. It now uses `windows-2025`, enforces a runner-policy guard, and triggers Full Foundation on pushes. The post-merge certification is [run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) on SHA `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; that run must succeed before the new tip is called certified.
-2. Reconcile [PR #31](https://github.com/alizebal73/5/pull/31) against the final runner design for the Integration workflows. Port only unique, needed changes onto the current Integration tip; otherwise close it as superseded after documenting that disposition.
+2. After the Foundation run finishes, reconcile [PR #31](https://github.com/alizebal73/5/pull/31) against the already-merged runner policy. Its base is stale and workflow diffs overlap; port only unique, needed Integration workflow changes onto the then-current Integration tip and run exact-head Quick + Full Foundation, or close #31 as superseded with source branch retained.
 3. Review [PR #15](https://github.com/alizebal73/5/pull/15) separately: its ProgramData/TLS runtime code is not the same work item as runner migration. Separate runtime-source changes from overlapping workflow changes before proposing a merge.
 4. Evidence for a runner change must identify the exact SHA, actual runner image/type, the PostgreSQL isolation boundary and Full Foundation outcome. Success on a self-hosted runner must never be reported as hosted-runner certification.
 
@@ -71,7 +71,7 @@ Installer/setup, PostgreSQL install/upgrade/repair/uninstall, staged update/roll
 | [#21](https://github.com/alizebal73/5/pull/21) | Initial Desktop operator shell | Keep Draft only if it has unique UI behavior absent from Integration; compare exact XAML/ViewModel/tests before any merge. Do not use an old base as the integration target. |
 | [#23](https://github.com/alizebal73/5/pull/23) | Integration branch proposed back into old `feature/operator-identity-v1` base | Closed as obsolete without merging; source branch retained. Do not reopen or merge backwards without a new, explicit requirement. |
 | [#24](https://github.com/alizebal73/5/pull/24) | StationBoard view extraction | Keep Draft as a later focused UI refactor; rebase/retarget to the current Integration tip only after the runtime acceptance priority is cleared and exact-head gates pass. |
-| [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Keep blocked until #32's runner decision is final; never merge overlapping workflow files together. Port unique needed changes or close as superseded with evidence. |
+| [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Base is stale; #32 is merged. After Gate F, compare exact diff, port only unique needed Integration runner changes to a fresh current-base branch, or close as superseded with evidence and retain source branch. |
 | [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; PR candidate passed Full Foundation on exact head `4fb20dc...`. Post-merge Full Foundation [#38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) is running on the merged SHA; keep certification pending until it succeeds. |
 
 Closed source PRs #35–#39 remain superseded by #40; their source branches were retained. Do not reopen them or merge their branches separately without a newly demonstrated, unique defect.
