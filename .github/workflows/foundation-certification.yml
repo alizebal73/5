@@ -17,6 +17,9 @@ on:
       - "refactor/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
+      - ".github/workflows/foundation-runtime.yml"
+      - ".github/workflows/gamenet.yml"
+      - "scripts/check-ci-runner-policy.ps1"
       - ".github/workflows/runtime-lan-smoke-payload.yml"
       - "scripts/configure-agent-runtime-state.ps1"
       - "docs/operations/agent-service-state.md"
@@ -64,12 +67,16 @@ permissions:
 jobs:
   foundation:
     timeout-minutes: 45
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
 
       - name: PowerShell parser gate
         timeout-minutes: 5
@@ -92,6 +99,47 @@ jobs:
         timeout-minutes: 15
         shell: pwsh
         run: .\scripts\verify.ps1
+
+      - name: Prepare disposable PostgreSQL certification database
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $serviceName = "postgresql-x64-17"
+          $service = Get-Service -Name $serviceName -ErrorAction Stop
+          if ($service.Status -ne "Running") {
+            Set-Service -Name $serviceName -StartupType Manual
+            Start-Service -Name $serviceName
+          }
+
+          $psql = Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe"
+          $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+          if (-not (Test-Path -LiteralPath $psql -PathType Leaf)) {
+            throw "PostgreSQL 17 client was not found on the hosted Windows image."
+          }
+
+          # This password exists only inside the disposable hosted VM; it is not a repository secret.
+          $env:PGPASSWORD = "root"
+          Write-Output "::add-mask::root"
+          & $psql --host=127.0.0.1 --port=5432 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 --command="CREATE DATABASE gamenet_foundation_probe;"
+          if ($LASTEXITCODE -ne 0) {
+            $exists = (& $psql --host=127.0.0.1 --port=5432 --username=postgres --dbname=postgres --tuples-only --no-align --command="SELECT 1 FROM pg_database WHERE datname = 'gamenet_foundation_probe';" 2>&1) -join ""
+            if ($LASTEXITCODE -ne 0 -or $exists.Trim() -ne "1") {
+              throw "Could not create the disposable Foundation database."
+            }
+          }
+
+          $connection = "Host=127.0.0.1;Port=5432;Database=gamenet_foundation_probe;Username=postgres;Password=root;Include Error Detail=true;Pooling=false"
+          Write-Output "::add-mask::$connection"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "GAMENET_DATABASE_CONNECTION=$connection"
+          $env:GAMENET_DATABASE_CONNECTION = $connection
+
+          & $dotnet tool restore
+          if ($LASTEXITCODE -ne 0) { throw "Could not restore the local dotnet-ef tool." }
+          & $dotnet ef database update --configuration Release --project src/Server/GameNet.Server.csproj --startup-project src/Server/GameNet.Server.csproj --context GameNet.Server.Persistence.GameNetDbContext
+          if ($LASTEXITCODE -ne 0) { throw "Could not initialize the disposable Foundation database with the repository migrations." }
+
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 
       - name: PostgreSQL certification
         timeout-minutes: 15
