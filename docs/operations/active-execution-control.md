@@ -3,13 +3,19 @@
 **Snapshot date:** 2026-10-12  
 **Purpose:** Prevent rework loops by separating closed engineering stages from distinct operational/release gates. This is the active execution control document. The master plan remains the product plan; this file governs the current queue and evidence rules.
 
-## 1. Verified branch state
+## 1. SHA evidence versus live branch heads
 
-| Ref | Current SHA | State and meaning |
+**Important:** the branch values below are a timestamped historical read-back taken immediately after PR #42 merged on 2026-10-12. They are not a permanent live pointer. Documentation PRs themselves advance Integration's commit SHA, so the live Integration head must always be read from GitHub immediately before an operation; never infer it from a SHA copied into this document.
+
+| Ref / evidence role | SHA observed or verified | State and meaning |
 |---|---|---|
-| `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | Protected; deliberately unchanged. |
-| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | Protected; current tip, but not yet independently recertified at this exact SHA. Last explicitly recorded Stable Checkpoint certification is `c3a8ba482548e963479fbdf8538be62c4d15acfe`. |
-| `integration/runtime-operator-v1` | `362513ad812aebef4ad22420f9b905d79490219d` | Protected; active Runtime/operator branch. PR #40 source merge is `58717adc6c1553ef21221c3d484f093494ba1ae7`; PR #41 then made documentation-only changes. |
+| `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | Protected; deliberately unchanged at the read-back. |
+| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | Protected; tip observed at the read-back, but not independently recertified at this exact SHA. Last explicitly recorded Stable Checkpoint certification is `c3a8ba482548e963479fbdf8538be62c4d15acfe`. Verify the live tip before dispatching the gate. |
+| `integration/runtime-operator-v1` | `d2d8c626c678078c52b840fd0c9c751e7583fa91` | Protected; this was the head observed immediately after docs-control PR #42 merged. This SHA contains process/documentation updates; it is not a new runtime-code acceptance SHA. |
+| Runtime code acceptance commit | `58717adc6c1553ef21221c3d484f093494ba1ae7` | PR #40 integration source merge; its Quick and Full Foundation checks passed. |
+| Prior docs-only snapshot | `362513ad812aebef4ad22420f9b905d79490219d` | PR #41 docs-only merge; its tree passed Quick Validation. Historical evidence remains valid for that exact SHA. |
+
+For execution-time live refs, use [the Integration branch page](https://github.com/alizebal73/5/tree/integration/runtime-operator-v1), [the Foundation branch page](https://github.com/alizebal73/5/tree/foundation/runtime-final-v2), or GitHub's branch list. These links/reads—not a SHA embedded in a Markdown file—are the live authority.
 
 ## 2. Stage 1 decision — CLOSED
 
@@ -18,7 +24,7 @@ Stage 1 means **code integration and its automated verification**, not physical 
 Evidence:
 - PR [#40](https://github.com/alizebal73/5/pull/40) merged the integrated code. Candidate `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` passed [Quick Validation #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187) and [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104).
 - Post-merge code SHA `58717adc6c1553ef21221c3d484f093494ba1ae7` passed [Quick Validation #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446).
-- PR [#41](https://github.com/alizebal73/5/pull/41) made documentation-only updates and merged as `362513ad812aebef4ad22420f9b905d79490219d`. Its candidate passed [Quick Validation #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088), and the post-merge current integration tip passed [Quick Validation #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202).
+- PR [#41](https://github.com/alizebal73/5/pull/41) made documentation-only updates and merged as `362513ad812aebef4ad22420f9b905d79490219d`. Its candidate passed [Quick Validation #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088), and the pre-control Integration SHA `362513ad812aebef4ad22420f9b905d79490219d` passed [Quick Validation #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). This is historical evidence for that SHA, not a claim about a later live branch head.
 
 **Do not reopen Stage 1** to repeat completed tests, certify a different Foundation ref, test installed Windows services, perform a visual WPF smoke, migrate runners, or build an installer. Track those under their own gates below. A later source-code change reopens only the gates affected by that code change.
 
@@ -26,7 +32,7 @@ Evidence:
 
 ### Gate F — Recertify the current Foundation tip
 
-- Target: exact SHA `be29687e637b709158a30204bb9213bfa4813950` on `foundation/runtime-final-v2`.
+- Target recorded at the last read-back: `be29687e637b709158a30204bb9213bfa4813950` on `foundation/runtime-final-v2`. Re-read the live branch head immediately before dispatch; if it changed, use the actual current tip and record it.
 - The Foundation workflow already supports `workflow_dispatch`. Dispatch **Foundation Certification** against that branch without changing code, then record the run URL, tested checkout SHA and result in [Stable Checkpoint](stable-checkpoint.md) and the readiness register.
 - If it passes, update the active certification marker to that exact SHA. If it fails, fix only the observed root cause, add/retain the regression, and rerun the relevant gate; do not repeat unrelated completed work.
 - A successful run on a PR candidate or on Integration is not evidence that this exact Foundation SHA was certified.
@@ -82,7 +88,7 @@ Closed source PRs #35–#39 remain superseded by #40; their source branches were
 
 ## 6. Definition of done for this control problem
 
-- The current Integration tip and current Foundation tip are recorded separately.
+- Runtime-code acceptance SHA, timestamped branch read-back and live branch refs read at action time are kept separate. Static documentation must never claim its own commit SHA is the permanently current Integration head.
 - Stage 1 remains closed and its evidence links are stable.
 - The current Foundation-tip certification is one explicit action, not a recurring broad review.
 - Runner migration has a specified order (#32 Foundation first, then #31 Integration reconciliation); runtime endpoint/TLS source work (#15) is separate.
