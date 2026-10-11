@@ -36,11 +36,11 @@ Current references and governance:
 
 ## Required physical acceptance protocol
 
-The portable payload includes a hash-verified, test-only service registration helper and a dedicated runbook. CI executes the helper only with -ValidateOnly, which must not query or change Windows services. This is not a service installer or physical acceptance.
+The portable payload includes a hash-verified, test-only service registration helper and a dedicated runbook. CI executes the helper only with -ValidateOnly, which must not query or change Windows services. Its automated state check covers known services/markers, not every possible file under ProgramData; the runbook therefore requires an operator hard stop whenever %ProgramData%\GameNet Manager exists at all, including an empty directory. This is not a service installer or physical acceptance.
 
 Run only on isolated test Windows machines with a disposable PostgreSQL database and throwaway credentials. Never test against a live Manager database.
 
-1. On both the isolated Server PC and separate Agent PC, run Tools\inspect-manager-runtime-state.ps1 read-only from the verified payload and review the output. Stop if any unexpected GameNet state, service, certificate, ACL, or listener is found.
+1. On each isolated test PC, run Tools/inspect-manager-runtime-state.ps1 read-only and review the report. If %ProgramData%\GameNet Manager exists at all (even if empty), or any unexpected service, configuration, protected file, certificate, ACL or listener is present, stop; do not register a service and use a fresh dedicated test PC.
 2. On the two isolated PCs, register only the matching test service using Tools\register-test-runtime-service.ps1 -Component Server -PayloadRoot $PWD -TestOnly -PreflightReviewed or -Component Agent. Verify the output shows Manual/Demand Start and Stopped. Do not register a second copy or replace an existing service.
 3. Prove effective DACLs for ProgramData, secret files, Agent state and TLS private-key file. Verify unauthorized local principals cannot read/write protected paths and the intended Server/Agent service identities can access only the files they need.
 4. Record exact source SHA, payload SHA-256, Windows build, PostgreSQL version, Server/Agent service accounts and Service SIDs, endpoint, port and public-certificate fingerprint.
