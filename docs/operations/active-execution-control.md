@@ -33,7 +33,7 @@ Evidence:
 ### Gate F — Recertify the current Foundation tip
 
 - Target recorded at the last read-back: `be29687e637b709158a30204bb9213bfa4813950` on `foundation/runtime-final-v2`. Re-read the live branch head immediately before dispatch; if it changed, use the actual current tip and record it.
-- The Foundation workflow already supports `workflow_dispatch`. Dispatch **Foundation Certification** against that branch without changing code, then record the run URL, tested checkout SHA and result in [Stable Checkpoint](stable-checkpoint.md) and the readiness register.
+- PR [#32](https://github.com/alizebal73/5/pull/32) is now merged to Foundation at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`. Its new push-triggered [Full Foundation run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) is running on that exact SHA. Record its final result and tested checkout SHA in [Stable Checkpoint](stable-checkpoint.md) and the readiness register; do not mark Foundation certified until the run succeeds. Because the workflow now runs on each `foundation/runtime-*` push, future protected-branch merges should automatically certify their resulting exact tip.
 - If it passes, update the active certification marker to that exact SHA. If it fails, fix only the observed root cause, add/retain the regression, and rerun the relevant gate; do not repeat unrelated completed work.
 - A successful run on a PR candidate or on Integration is not evidence that this exact Foundation SHA was certified.
 
@@ -41,7 +41,7 @@ Evidence:
 
 The existing CI migration work overlaps. Do not merge PRs #15, #31 and #32 wholesale or change multiple workflow copies concurrently.
 
-1. Review [PR #32](https://github.com/alizebal73/5/pull/32) first for the Foundation-targeted hosted-Windows runner design and PostgreSQL isolation. Keep the protected Foundation branch unchanged until that PR passes and is reviewed.
+1. [PR #32](https://github.com/alizebal73/5/pull/32) has been merged to the protected Foundation branch after exact-head Full Foundation passed on its PR candidate. It now uses `windows-2025`, enforces a runner-policy guard, and triggers Full Foundation on pushes. The post-merge certification is [run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) on SHA `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; that run must succeed before the new tip is called certified.
 2. Reconcile [PR #31](https://github.com/alizebal73/5/pull/31) against the final runner design for the Integration workflows. Port only unique, needed changes onto the current Integration tip; otherwise close it as superseded after documenting that disposition.
 3. Review [PR #15](https://github.com/alizebal73/5/pull/15) separately: its ProgramData/TLS runtime code is not the same work item as runner migration. Separate runtime-source changes from overlapping workflow changes before proposing a merge.
 4. Evidence for a runner change must identify the exact SHA, actual runner image/type, the PostgreSQL isolation boundary and Full Foundation outcome. Success on a self-hosted runner must never be reported as hosted-runner certification.
@@ -69,10 +69,10 @@ Installer/setup, PostgreSQL install/upgrade/repair/uninstall, staged update/roll
 | [#18](https://github.com/alizebal73/5/pull/18) | Proposed secret lifecycle ADR | Keep as design review only until compared with the current secret-store implementation and ADR naming; do not treat a Proposed ADR as approved policy. |
 | [#20](https://github.com/alizebal73/5/pull/20) | DPAPI Server secret-store implementation | Its `DpapiServerSecretStore.cs` blob is identical to current Integration. Audit every changed path against Integration; if the entire implementation is already present, close as superseded with a comment and retain the branch. Never merge duplicate code. |
 | [#21](https://github.com/alizebal73/5/pull/21) | Initial Desktop operator shell | Keep Draft only if it has unique UI behavior absent from Integration; compare exact XAML/ViewModel/tests before any merge. Do not use an old base as the integration target. |
-| [#23](https://github.com/alizebal73/5/pull/23) | Integration branch proposed back into old `feature/operator-identity-v1` base | Not part of the active delivery direction. Close as obsolete after posting that Integration is the active stream; retain the branch. Do not merge backwards into the old feature branch. |
+| [#23](https://github.com/alizebal73/5/pull/23) | Integration branch proposed back into old `feature/operator-identity-v1` base | Closed as obsolete without merging; source branch retained. Do not reopen or merge backwards without a new, explicit requirement. |
 | [#24](https://github.com/alizebal73/5/pull/24) | StationBoard view extraction | Keep Draft as a later focused UI refactor; rebase/retarget to the current Integration tip only after the runtime acceptance priority is cleared and exact-head gates pass. |
 | [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Keep blocked until #32's runner decision is final; never merge overlapping workflow files together. Port unique needed changes or close as superseded with evidence. |
-| [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | The first runner-policy review target. Keep Draft until exact-head Full Foundation and workflow/runner review pass; merging is a protected-branch decision, not automatic. |
+| [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; PR candidate passed Full Foundation on exact head `4fb20dc...`. Post-merge Full Foundation [#38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) is running on the merged SHA; keep certification pending until it succeeds. |
 
 Closed source PRs #35–#39 remain superseded by #40; their source branches were retained. Do not reopen them or merge their branches separately without a newly demonstrated, unique defect.
 
