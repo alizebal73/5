@@ -20,10 +20,10 @@ foreach ($file in $files) {
     $matches = [regex]::Matches($source, '(?im)^\s*runs-on\s*:\s*(?<runner>[^\r\n]+)')
     foreach ($match in $matches) {
         $assignmentCount++
-        $runner = $match.Groups["runner"].Value.Trim().Trim('"', "'")
+        $runner = $match.Groups["runner"].Value.Trim().Trim([char]34).Trim([char]39)
         if ($runner -ne "windows-2025") {
             $relative = [System.IO.Path]::GetRelativePath($repoRoot, $file.FullName)
-            throw "Unapproved CI runner '$runner' in '$relative'. Automated workflows currently require windows-2025. This guard is defence in depth only; GitHub-side Runner access settings must also prevent untrusted PR code from using self-hosted runners."
+            throw "Unapproved CI runner '$runner' in '$relative'. Automated workflows currently require windows-2025. This in-repository guard is defence in depth only; GitHub-side Runner access settings must also prevent untrusted PR code from using self-hosted runners."
         }
     }
 }

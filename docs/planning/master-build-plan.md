@@ -13,17 +13,17 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
-## Current execution sequence lock — 2026-10-10
+## Current execution sequence lock — 2026-10-11
 
-The live risk/state list is [Engineering Readiness Register](engineering-readiness-register.md). This section supersedes older "current step" statements below where dates/status conflict; dated evidence remains as history.
+The Engineering Readiness Register is the live source for blockers. This section supersedes older current-step statements; numbered product stages below remain the product build order.
 
-1. Keep main and foundation/runtime-final-v2 unchanged. The last recorded stable-checkpoint certificate is exact-SHA evidence, not a blanket certificate for a later branch tip; run Foundation on the exact current tip before calling it certified.
-2. Review PR #23 and #24 at their exact tested heads, without direct merge or assuming CI proves service/LAN behavior.
-3. Review/accept ADR-0002 (PR #18), then diff-review and selectively port the protected Server secret-store implementation in PR #20. Before any Manager machine action, review the read-only inspect-manager-runtime-state.ps1 output; do not run provisioning/TLS/cleanup scripts blindly.
-4. Prove real Server/Agent Windows service identities, Service SID/private-key/secret ACLs, DPAPI persistence, authenticated single-use Agent enrollment with atomic redemption/replay protection, lease/heartbeat and service restart/reconnect over normally validated HTTPS with a disposable DB.
-5. Only after runtime boundary acceptance, continue isolated UI boundary refactoring (Agent health timer, Login/Password views, shell/navigation, permission-aware commands and binding/locale tests), then follow the numbered business module order.
-6. Every vertical slice requires an explicit REQ ID mapped to domain invariant, permissions, transaction/idempotency/concurrency, audit, recovery, automated and physical tests as applicable, and exact-SHA evidence.
-7. Setup/updater/repair/rollback remain later release-boundary work but are mandatory before production. A self-contained ZIP is not Setup.exe/MSI, and CI/loopback is not physical-install certification.
+1. Review PR #31 (Draft, not merged). It moves tracked CI/diagnostic workflows to hosted windows-2025, adds a Runner-assignment guard, fixes local EF-tool portability, refreshes current governance evidence and accepts ADR-0002 as the implementation contract. Keep main and foundation/runtime-final-v2 unchanged.
+2. Require exact-SHA CI after every workflow/code change. Candidate 991152bf60676b2a03c0625780b5dcc16f365032 passed Quick, Full Foundation and Payload. Docs-only SHA 3fef98dd40cfd87da6dba6450824baff366bdf24 passed Quick and Payload. Isolation SHA 77507f4e208efc4cceadeb3c08d34eea01a69660 passed Quick #38134009251, Full #38134005849 and Payload #38134009263.
+3. Runner safety is not fully closed: the user's self-hosted Runner is retained and no current Workflow selects it. The in-repository guard is defence in depth only. Verify GitHub-side Runner/runner-group access and keep the local Runner offline while untrusted PRs are evaluated until access is confirmed. integration/runtime-operator-v1 has no active Ruleset.
+4. ADR-0002 is accepted as implementation contract, not operational certification. Real Windows service identity, effective ACL, DPAPI after restart, TLS private-key access, bootstrap finalization, Agent enrollment/replay and physical LAN remain acceptance gates.
+5. Before any action on an existing Manager PC, run inspect-manager-runtime-state.ps1 read-only and review the report. Do not run provisioning, TLS changes or ACL cleanup blindly.
+6. After runtime acceptance, continue isolated UI view-boundary work, then numbered product stages. Each vertical slice needs REQ IDs mapped to invariants, permissions, transaction/idempotency/concurrency, audit, recovery, tests and exact-SHA evidence.
+7. Setup/updater/repair/uninstall/rollback, DB lifecycle, package signing, backup restore and 2–3-PC/pilot validation remain mandatory before Production. A self-contained ZIP is not Setup.exe/MSI; hosted CI/loopback is not physical-install certification.
 
 Current UI boundary work is an early architecture-hardening slice; it does not replace Stage 14's final design system. Avoid mixing a theme/layout overhaul with TLS, service identity or business-domain changes in one commit.
 

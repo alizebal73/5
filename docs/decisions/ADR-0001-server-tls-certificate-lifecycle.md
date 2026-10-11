@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-09
 - Scope: GameNet 5 Foundation and all descendants
+- Related decision: ADR-0002 — Server Secret Store and Agent Enrollment Contract; the TLS private-key lifecycle remains separate.
 
 ## Context
 

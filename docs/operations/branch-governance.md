@@ -1,33 +1,32 @@
 # GameNet 5 — Branch governance
 
-## Current GitHub read-back — 2026-10-10
+## Current GitHub read-back — 2026-10-11 (authoritative snapshot)
 
-This section supersedes the 2026-10-09 metadata snapshot below. Values were read back from GitHub; no branch or ruleset was edited during this audit.
+All data below is based on current GitHub read-back. Ruleset reads are available; the current connection does not provide administrative Ruleset or runner-group writes.
 
 | Ref | Observed SHA | Protected | Intended use |
 |---|---|---:|---|
-| main | b9288471f2047570eaf8d0d6552cf87bc0ddc214 | yes | Keep unchanged until release path is explicitly approved. |
-| foundation/runtime-final-v2 | be29687e637b709158a30204bb9213bfa4813950 | yes | Protected candidate/reference only. Last recorded stable-checkpoint SHA differs; re-certify the exact current tip before treating it as currently certified. |
-| integration/runtime-operator-v1 | 55a340305f9eba3bc8f9a1ce65fb37bedbae7580 | no | Active Runtime/operator integration branch; do not push unrelated work here. |
-| refactor/desktop-view-boundaries-v1 | 9a058043ca8ba69f2b0bd23777263063ee681c92 | no | Isolated PR #24 for the first UI boundary extraction. |
-| feature/operator-identity-v1 | d6a98ef1a7b87d9ced078b3b6f522406caa19b36 | no | PR #23 target; keep separate from Foundation candidate. |
+| main | b9288471f2047570eaf8d0d6552cf87bc0ddc214 | yes | Keep unchanged. |
+| foundation/runtime-final-v2 | be29687e637b709158a30204bb9213bfa4813950 | yes | Protected Foundation reference; current tip differs from the certified SHA recorded below. |
+| integration/runtime-operator-v1 | 82d90178c0011c65eef76bd32cc33318d5bbd91c | **no** | Active Integration branch; no active Ruleset targets it. |
+| security/runner-and-stage1-stabilization-v1 | PR #31 head | no | Draft review branch only. |
 
-Read-back of the active Rulesets confirmed:
+Active Rulesets read-back:
+- protect-main (24783754) targets refs/heads/main; PR, conversation resolution and quick-validation are required. strict up-to-date checks are false and no independent approvals are required.
+- protect-foundation-runtime (24784035) targets refs/heads/foundation/runtime-*; PR, conversation resolution and foundation are required. strict up-to-date checks are false and no independent approvals are required.
+- No active Ruleset targets integration/runtime-operator-v1. Do not call Integration protected until a Ruleset is created in GitHub Settings and read back.
 
-- [protect-main](https://github.com/alizebal73/5/rules/24783754) is active and requires a PR, conversation resolution and status check `quick-validation`.
-- [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active and requires a PR, conversation resolution and status check `foundation`.
-- Both currently report `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains to be considered. The current GitHub connection exposed read-only Ruleset access, so this audit did not change the rules.
-- The active `integration/runtime-operator-v1` ref is not protected. First make sure PR-targeted Quick Validation is green, then add a PR/status-check Ruleset if available. Until then, keep changes isolated and do not treat this ref as protected.
+## CI Runner policy — 2026-10-11
 
-Comparison snapshot (2026-10-10): `integration/runtime-operator-v1` is 122 commits ahead and 1 commit behind `foundation/runtime-final-v2`, with merge base `adb2159fb85564187718df8cbddcd3377e599c1c`. Its tree has product/runtime work and workflow changes; it is not a mirror of the Foundation ref. Do not rebase/merge the whole branch graph just to close this one-commit ancestry gap. Review the effective workflow delta explicitly before a merge. PR #23 itself is four commits ahead of its `feature/operator-identity-v1` base and currently has green exact-head Quick/Full Foundation runs.
+PR #31 moves all four tracked Workflow jobs to GitHub-hosted windows-2025 and adds scripts/check-ci-runner-policy.ps1 as a defence-in-depth assignment guard. The user's self-hosted Runner has not been deleted, reinstalled or modified; no current Workflow selects it. The PostgreSQL diagnostic lane creates a disposable database inside its ephemeral hosted VM.
 
-### Open PR disposition policy
+The in-repository guard is not a security boundary because an untrusted PR can attempt to modify the workflow or guard itself. GitHub-side Runner/runner-group restrictions could not be changed through the current connection. Keep the local Runner offline during evaluation of untrusted PRs until Settings-level access is verified. Use it only later for separately reviewed trusted physical acceptance.
 
-PR inventory read-back lists #15, #17, #18, #20, #21, #23 and #24 as open Drafts. #23 and #24 are the active implementation path; #15/#17/#18/#20/#21 use older bases or preserve historical evidence/design. No old PR should be merged wholesale. Review each unique diff/evidence, port useful work to the active path, then close with a reason. Do not delete branches until the PR disposition and all unique evidence are resolved.
+PR #31 remains Draft/unmerged. Candidate SHA 991152bf60676b2a03c0625780b5dcc16f365032 passed Quick #38131788387, Full Foundation #38131788388 and Payload #38131788408. Docs-only SHA 3fef98dd40cfd87da6dba6450824baff366bdf24 passed Quick #38132197464 and Payload #38132197411. Isolation SHA 77507f4e208efc4cceadeb3c08d34eea01a69660 passed Quick #38134009251, Full Foundation #38134005849 and Payload #38134009263.
 
-The complete per-PR decision table and cleanup sequence are in [Engineering Readiness Register](../planning/engineering-readiness-register.md).
+Older records below are preserved as historical audit trail and do not override the current snapshot above.
 
-## Historical metadata snapshot (2026-10-09 — superseded by current read-back)
+## Historical metadata snapshot (2026-10-09 — superseded by 2026-10-11 read-back)
 
 At that earlier read, these refs were reported `protected=false`. Do not treat the table below as the current state:
 

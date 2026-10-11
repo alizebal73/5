@@ -4,8 +4,8 @@
 ## تصمیم اجرایی فعلی
 - معماری محصول از صفر بازنویسی نمی‌شود؛ تغییرها کوچک، قابل بازبینی و مبتنی بر شاخهٔ مرجع خواهند بود.
 - Runner خودمیزبان کاربر از سیستم حذف یا دوباره نصب نمی‌شود؛ این تغییرات آن را هدف نمی‌گیرند.
-- مسیر CI خودکار: GitHub-hosted Windows برای Quick Validation، Full Foundation و ساخت payload؛ Runner خودمیزبان فقط برای آزمون فیزیکی/شبکهٔ مورداعتماد در مرحلهٔ پذیرش.
-- نکتهٔ امنیتی باز: در مخزن عمومی، تغییر `runs-on` در PR غیرقابل‌اعتماد می‌تواند خطر را برگرداند؛ تغییر YAML به‌تنهایی کنترل دسترسی Runner را اثبات نمی‌کند. تا قبل از تأیید تنظیمات دسترسی Runner، آن را در دوره‌های اجرای PRهای غیرقابل‌اعتماد آنلاین نگذارید؛ اگر runner-group محدود به workflow/ref مورداعتماد در این حساب وجود ندارد، سرویس Runner فقط برای آزمون دستی مورداعتماد فعال شود. اتصال GitHub فعلی امکان نوشتن تنظیمات Runner/Ruleset را به ما نداده است.
+- تصمیم CI فعلی: هر چهار Workflow روی GitHub-hosted windows-2025 اجرا می‌شوند. Runner شخصی حذف، بازنصب یا دست‌کاری نشده و هیچ Workflow فعلی آن را انتخاب نمی‌کند.
+- مرز امنیتی باز: guard داخل مخزن فقط دفاع در عمق است؛ دسترسی Runner/runner-group باید جداگانه در GitHub Settings محدود شود. تا تأیید، Runner محلی هنگام بررسی/اجرای PR غیرقابل‌اعتماد offline بماند.
 - تغییر هیچ‌یک از `main` و `foundation/runtime-final-v2` مجاز نیست مگر در PR نگهداری جداگانه، با دلیل و گواهی مستقل.
 
 ## شواهد Runner
@@ -18,6 +18,9 @@
 - Full Foundation نهایی شامل parser، build/unit tests، PostgreSQL migration/concurrency، backup/restore، Desktop و Agent runtime بود و همهٔ گیت‌ها سبز شدند. این مدرک CI روی SHA کاندید است، نه تأیید نصب واقعی Windows Service یا آزمون فیزیکی LAN.
 - در تصویر استاندارد فعلی GitHub-hosted Windows، PostgreSQL 17 موجود است اما سرویس به‌صورت پیش‌فرض متوقف/غیرفعال است؛ Workflow باید دیتابیس دورریختنی را فقط داخل VM همان Job راه‌اندازی کند و از Machine secret یا دیتابیس کامپیوتر مدیر وابسته نباشد.
 
+
+- نتیجهٔ exact-SHA `77507f4e208efc4cceadeb3c08d34eea01a69660`: Quick [#38134009251](https://github.com/alizebal73/5/actions/runs/38134009251)، Full Foundation [#38134005849](https://github.com/alizebal73/5/actions/runs/38134005849) و Runtime Payload [#38134009263](https://github.com/alizebal73/5/actions/runs/38134009263) همه موفق‌اند.
+
 ## ترتیب الزامی کار
 
 ### P0 — ایمن‌سازی CI
@@ -25,17 +28,18 @@
 - [x] اثبات Full Foundation روی GitHub-hosted Windows در harness آزمایشی؛ تمام گیت‌ها در #38131165423 سبز شدند.
 - [x] انتقال در کاندید PR به GitHub-hosted Windows انجام و روی یک SHA هر سه مسیر Quick/Full/payload سبز شده است؛ ادغام این تغییر در Integration هنوز منتظر بازبینی PR است.
 - [x] مسیر Full Foundation روی VM موقت GitHub-hosted با PostgreSQL آزمایشی اثبات شد؛ از اتصال DB یا اسرار سیستم Manager استفاده نشد.
-- [ ] Runner خودمیزبان حذف نشود؛ دسترسی واقعی آن از تنظیمات GitHub محدود شود یا فقط هنگام اجرای تست دستی مورداعتماد online باشد. صرفاً hosted کردن YAML فعلی، در یک مخزن عمومی، تضمین نمی‌کند PR بعدی نتواند `runs-on` را تغییر دهد.
-- [ ] PR محدود Workflowها و اصلاح ابزار EF محلی را بازبینی کنیم؛ پس از بازبینی diff، بررسی امنیت Runner و تأیید CIهای PR تصمیم به ادغام بگیریم؛ هیچ گیتی حذف نشود.
+- [x] Runner شخصی حفظ شده و هیچ‌یک از چهار Workflow فعلی آن را انتخاب نمی‌کند.
+- [ ] دسترسی مدیریتی Runner/runner-group از GitHub Settings تأیید و محدود شود؛ guard در مخزن جایگزین این کنترل نیست. تا آن زمان Runner هنگام بررسی PR غیرقابل‌اعتماد offline بماند.
+- [ ] PR #31 پس از CI سبز روی آخرین SHA، بازبینی diff و رسیدگی به دسترسی Runner و Ruleset شاخه Integration بررسی شود؛ ادغام خودکار ممنوع است.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
 - [ ] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
-- [ ] حفاظت `integration/runtime-operator-v1` با PR و بررسی‌های اجباری را تنظیم/تأیید کنیم؛ وضعیت Ruleset را از GitHub دوباره بخوانیم.
+- [ ] برای integration/runtime-operator-v1 Ruleset واقعی PR + quick-validation + حل مکالمات بسازیم و read-back کنیم؛ فعلاً protected نیست و ابزار فعلی اجازهٔ نوشتن Ruleset ندارد.
 - [ ] وضعیت PRهای باز و بسته را تعیین تکلیف کنیم؛ PRهای #27/#28/#29 شاخهٔ ادغام نیستند و نباید دوباره ادغام شوند. PR #30 قبلاً ادغام شده است.
 - [ ] برای هر گیت، SHA دقیقِ checkout و لینک Run را ثبت کنیم؛ مدرک SHA قدیمی به نوک جدید شاخه نسبت داده نشود.
 
 ### P1 — قرارداد و پذیرش امنیت Runtime
-- [ ] ADR-0002 را با کد فعلی Secret Store و Enrollment تطبیق و به قرارداد پذیرفته‌شده تبدیل کنیم.
+- [x] ADR-0002 به‌عنوان قرارداد پیاده‌سازی Secret Store/Enrollment پذیرفته شد؛ پذیرش عملی Windows Service/DPAPI/ACL/TLS/LAN همچنان باز است.
 - [ ] هویت Windows Service، Service SID، ACL مؤثر، محدوده DPAPI، مسیرهای دو فایل Secret، Bootstrap cleanup، چرخش و بازیابی را مستند کنیم.
 - [ ] پیش از هر اقدام روی کامپیوتر مدیر، `inspect-manager-runtime-state.ps1` را فقط‌خواندنی اجرا و خروجی آن را بازبینی کنیم؛ Provisioning/پاک‌سازی ACL یا گواهی کورکورانه ممنوع است.
 - [ ] در محیط آزمایشی جدا، بعد از نصب واقعی سرویس Server/Agent، دسترسی DPAPI و کلید TLS پس از Restart را اثبات کنیم.
