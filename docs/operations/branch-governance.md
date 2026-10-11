@@ -7,7 +7,7 @@ This table records a read-back event, not a live branch pointer. Subsequent docs
 | Ref / role | SHA observed | Protected | Meaning |
 |---|---|---:|---|
 | `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | yes | Protected; deliberately unchanged at the read-back. |
-| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Foundation tip at the read-back; exact-SHA certification still required. Stable Checkpoint records historical SHA `c3a8ba4...`. |
+| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Historical tip before runner-policy PR #32; #32 has since moved Foundation to `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`. Post-merge Full Foundation [#38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) is pending on that exact SHA. |
 | `integration/runtime-operator-v1` | `d2d8c626c678078c52b840fd0c9c751e7583fa91` | yes | Integration head observed after docs-control PR #42. It is a docs-control commit, not a new runtime-code certification. |
 | Runtime source merge | `58717adc6c1553ef21221c3d484f093494ba1ae7` | n/a | PR #40 code merge; exact SHA passed Quick and Full Foundation. |
 | PR #40 candidate | `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` | n/a | Exact candidate passed Quick, Full Foundation and Runtime payload. |
@@ -20,7 +20,7 @@ This table records a read-back event, not a live branch pointer. Subsequent docs
 - All three rulesets return `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains open. The documentation PRs did not change Rulesets.
 - Post-merge source-code gates on `58717adc...`: [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446), both successful.
 - PR #41 docs candidate passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088); SHA `362513ad...` passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). PR #42's exact head `623bb678...` passed [Quick #38182154397](https://github.com/alizebal73/5/actions/runs/38182154397) and merged as `d2d8c626...`. Each run proves only its recorded SHA.
-- PRs #15/#31/#32 overlap on workflow/runner edits; follow their order in `active-execution-control.md`. The #40 Foundation checks used `[self-hosted, Windows, X64]`, not hosted Windows.
+- PR #32 is merged and moves Foundation automation to hosted `windows-2025`; post-merge Full Foundation run #38182502053 is pending on exact SHA `71ef653...`. PR #31 remains the Integration-runner follow-up; #15's endpoint/TLS source must be isolated from workflow changes.
 - PRs #35–#39 are superseded by #40 and closed; source branches were retained. PR #23 was closed as an obsolete backward PR; its branch was not deleted.
 - CI does not certify installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect or interactive WPF behavior. Before modifying the existing Manager PC, inspect `scripts/inspect-manager-runtime-state.ps1` read-only output and use isolated test machines plus a disposable DB.
 
