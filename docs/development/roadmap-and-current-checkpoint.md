@@ -6,10 +6,21 @@
 
 - مخزن فعال: `alizebal73/5`.
 - پایهٔ فنی مرجع/نامزد: `foundation/runtime-final-v2`. گواهی Foundation فقط برای SHA دقیق اجراشده معتبر است؛ تغییرات بعدی تا اجرای دوبارهٔ دروازه‌های لازم، خودبه‌خود تأیید نیستند.
-- شاخهٔ کاری فعلی: `feature/operator-identity-v1`. از ادغام مستقیم شاخه‌های قدیمی خودداری شود؛ `main` تا تصمیم صریح دربارهٔ مسیر انتشار دست‌نخورده بماند.
+- شاخهٔ مرجع انتشار: `foundation/runtime-final-v2` (نامزد پایه، نه مقصد ادغام مستقیم featureها). شاخهٔ فعال Runtime/operator در snapshot جاری `integration/runtime-operator-v1` با SHA `55a340305f9eba3bc8f9a1ce65fb37bedbae7580` است؛ PR #23 هنوز Draft است. شاخهٔ UI `refactor/desktop-view-boundaries-v1` با SHA `9a058043ca8ba69f2b0bd23777263063ee681c92` و PR #24 نیز Draft و ادغام‌نشده است. `main` دست‌نخورده می‌ماند.
 - دفتر نقص‌ها: `docs/development/bug-fix-log.md`. هر نقص باید علت ریشه‌ای، مالک لایه، اصلاح، آزمون بازگشتی، SHA و نتیجه داشته باشد.
 - اصل کار: هر بار یک نقص یا یک برش قابلیت کوچک؛ علت‌یابی قبل از اصلاح؛ آزمون واقعی؛ ثبت مدرک؛ سپس مرحلهٔ بعد.
 - کیفیت پایه: Server مرجع قواعد تجاری است؛ PostgreSQL مرجع پایدار داده است؛ Desktop و Agent مستقیماً به دیتابیس وصل نمی‌شوند؛ پول/موجودی مبتنی بر ledger هستند؛ تغییرات حساس تراکنشی، قابل حسابرسی و در برابر تکرار/رقابت ایمن‌اند.
+
+## وضعیت اجرایی جاری — 2026-10-10
+
+این بخش وضعیت زنده را ثبت می‌کند؛ رویدادهای پایین‌تر تاریخچه‌اند و نباید status قدیمی آن‌ها به‌عنوان مرحلهٔ جاری خوانده شود.
+
+- Quick Validation و Full Foundation برای PR #23 روی SHA `55a340305f9eba3bc8f9a1ce65fb37bedbae7580` موفق‌اند: [Quick #38041093148](https://github.com/alizebal73/5/actions/runs/38041093148)، [Full #38041093167](https://github.com/alizebal73/5/actions/runs/38041093167). PR هنوز Draft است.
+- نخستین برش جداسازی UI در PR #24، SHA `9a058043ca8ba69f2b0bd23777263063ee681c92`، نیز Quick و Full Foundation را گذرانده: [Quick #38041986482](https://github.com/alizebal73/5/actions/runs/38041986482)، [Full #38041986502](https://github.com/alizebal73/5/actions/runs/38041986502). ادغام نشده و timer سلامت Agent، viewهای ورود/تغییر گذرواژه، permission-aware commands و آزمون‌های تعاملی UI باقی‌اند.
+- Last recorded certified Foundation SHA در Stable Checkpoint برابر `c3a8ba482548e963479fbdf8538be62c4d15acfe` است. Tip فعلی `foundation/runtime-final-v2` برابر `be29687e637b709158a30204bb9213bfa4813950` دو commit جلوتر است و در read-back وضعیت آن pending بود؛ قبل از نامیدن آن به‌عنوان SHA گواهی‌شده، اجرای Foundation روی خود همین SHA لازم است.
+- CI موفق روی دو SHA فعال، اثبات نصب Server/Agent به‌صورت Windows Service یا اتصال تازهٔ LAN روی همان کد نیست. آزمون LAN موجود در PR #17 با branch/runtime قدیمی و process تعاملی انجام شده است.
+- ترتیب قفل‌شده: (۱) تأیید CI و مستندات PR #25؛ (۲) Full Foundation روی tip جاری و بازبینی PR #23/#24؛ (۳) پذیرش ADR-0002 و بازبینی/port محدود مخزن اسرار PR #20؛ (۴) preflight خواندنی Manager و سپس آزمون Service-backed LAN با دیتابیس آزمایشی؛ (۵) ادامهٔ UI به‌صورت برش‌های جدا؛ (۶) بعد از قبول runtime boundary، توسعهٔ ماژول‌ها به‌ترتیب plan. هیچ provisioning/TLS/ACL cleanup روی ماشین مدیر قبل از گزارش خواندنی و بررسی آن انجام نشود.
+- موارد تفصیلی، PRهای قدیمی، status و معیار پایان در [Engineering Readiness Register](../planning/engineering-readiness-register.md) ثبت می‌شوند و باید بعد از هر گام با SHA واقعی به‌روزرسانی شوند.
 
 ### نقطهٔ آغاز ثبت‌شده
 

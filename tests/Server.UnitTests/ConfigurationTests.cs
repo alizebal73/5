@@ -10,8 +10,10 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
-    public void Enabled_authentication_requires_a_database_connection()
+    public void Enabled_authentication_does_not_require_database_credentials_in_options_configuration()
     {
+        // Production database credentials enter EF Core through IDatabaseConnectionSecret,
+        // not through ordinary GameNetOptions configuration.
         var result = new GameNetOptionsValidator().Validate(null, new GameNetOptions
         {
             Authentication = new AuthenticationOptions
@@ -24,6 +26,6 @@ public sealed class ConfigurationTests
             Agent = new AgentOptions { ProvisioningKey = new string('p', 48) }
         });
 
-        Assert.False(result.Succeeded);
+        Assert.True(result.Succeeded);
     }
 }

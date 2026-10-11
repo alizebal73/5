@@ -25,7 +25,9 @@ $envNames = @(
     "GameNet__AgentTransport__ServerBaseUrl",
     "GAMENET_AGENT_BOOTSTRAP_SECRET",
     "GAMENET_BOOTSTRAP_SECRET",
-    "GameNet__Setup__BootstrapSecret"
+    "GameNet__Setup__BootstrapSecret",
+    "GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS",
+    "GAMENET_PROTECTED_SETTINGS_FILE"
 )
 $oldEnvironment = @{}
 foreach ($name in $envNames) {
@@ -70,6 +72,7 @@ function Invoke-IdentityRequest(
 
     return [pscustomobject]@{
         StatusCode = [int]$response.StatusCode
+        CacheControl = [string]$response.Headers['Cache-Control']
         Json = $json
     }
 }
@@ -114,6 +117,7 @@ $agentErrorLog = Join-Path $root "agent.err"
 $agentProcess = $null
 $serverLog = Join-Path $root "server.log"
 $serverErrorLog = Join-Path $root "server.err"
+$protectedSettingsPath = Join-Path $root "server-secrets.bin"
 $diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
 $runToken = [Guid]::NewGuid().ToString("N")
 $server = $null
@@ -130,21 +134,59 @@ $basicToken = $null
 $managerPassword = $null
 $managerToken = $null
 $accessToken = $null
+$stationEnrollmentToken = $null
+$stationEnrollmentTokenId = $null
+$stationEnrollmentExpiresAtUtc = $null
+$enrollmentPayload = $null
+$clearEnrollmentBytes = $null
+$enrollmentEntropy = $null
+$protectedEnrollmentBytes = $null
 
 try {
     # This runs only while verify-postgresql.ps1 points this process to a brand-new,
     # migrated PostgreSQL database. Never fall back to the machine-level database.
     $env:GameNet__DatabaseConnectionString = $env:GAMENET_DATABASE_CONNECTION
     $env:ASPNETCORE_URLS = $serverUrl
-    $env:ASPNETCORE_ENVIRONMENT = "Production"
-    $env:DOTNET_ENVIRONMENT = "Production"
+    # This integration smoke uses the explicit Development-only secret seam. Production's
+    # rejection of environment-based secrets is covered by ServerSecretBootstrapTests.
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
+    $env:GAMENET_PROTECTED_SETTINGS_FILE = $protectedSettingsPath
     $env:GameNet__Authentication__Enabled = "true"
     $env:GameNet__Authentication__Issuer = "GameNet5.Identity.RuntimeCertification"
     $env:GameNet__Authentication__Audience = "GameNet5.Identity.RuntimeCertification.Client"
     $env:GameNet__Authentication__SigningKey = $signingKey
     $env:GameNet__Agent__ProvisioningKey = $provisioningKey
-    $env:GAMENET_BOOTSTRAP_SECRET = $bootstrapSecret
-    $env:GameNet__Setup__BootstrapSecret = $bootstrapSecret
+    Remove-Item Env:GAMENET_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    Remove-Item Env:GameNet__Setup__BootstrapSecret -ErrorAction SilentlyContinue
+
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' ("*$currentSid`:(OI)(CI)(F)") | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not restrict the isolated Identity test directory ACL." }
+
+    try {
+        Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop
+    } catch {
+        Add-Type -AssemblyName System.Security -ErrorAction Stop
+    }
+    $setupSettings = [ordered]@{
+        "GameNet:Authentication:Enabled" = "true"
+        "GameNet:Authentication:Issuer" = "GameNet5.Identity.RuntimeCertification"
+        "GameNet:Authentication:Audience" = "GameNet5.Identity.RuntimeCertification.Client"
+        "GameNet:Setup:BootstrapSecret" = $bootstrapSecret
+        "GameNet:ServerTls:CertificateThumbprint" = ("A" * 40)
+    }
+    $clearSetupBytes = [Text.Encoding]::UTF8.GetBytes(($setupSettings | ConvertTo-Json -Compress))
+    $protectedSetupBytes = [Security.Cryptography.ProtectedData]::Protect(
+        $clearSetupBytes, $null, [Security.Cryptography.DataProtectionScope]::LocalMachine)
+    try {
+        [IO.File]::WriteAllBytes($protectedSettingsPath, $protectedSetupBytes)
+    }
+    finally {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearSetupBytes)
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedSetupBytes)
+    }
 
     $startArguments = @{
         FilePath = $dotnetPath
@@ -237,6 +279,190 @@ try {
     Assert-Status $current 200 "Authenticated current-operator request"
     if ($current.Json.data.username -ne $username) { throw "The current-operator endpoint returned the wrong identity." }
 
+    # Enrollment tokens are issued only through operator permission and redeemed exactly once.
+    $enrollmentDeviceId = "ci-enrollment-" + [Guid]::NewGuid().ToString("N")
+    $enrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $enrollmentDeviceId }
+    Assert-Status $enrollmentIssue 200 "Authorized operator issues an Agent enrollment token"
+    $enrollmentToken = [string]$enrollmentIssue.Json.token
+    $enrollmentTokenId = [string]$enrollmentIssue.Json.tokenId
+    if ([string]::IsNullOrWhiteSpace($enrollmentTokenId) -or $enrollmentToken.Length -ne 43) {
+        throw "Enrollment issue did not return a valid one-time token."
+    }
+    if ($enrollmentIssue.CacheControl -notmatch "no-store") { throw "Enrollment token response must be no-store." }
+
+    $enrollmentRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentRedeem 200 "Agent redeems its enrollment token"
+    $enrolledSecret = [string]$enrollmentRedeem.Json.secret
+    if ([string]::IsNullOrWhiteSpace($enrolledSecret) -or $enrollmentRedeem.Json.deviceId -ne $enrollmentDeviceId) {
+        throw "Enrollment redemption did not return the expected DeviceId and fresh credential."
+    }
+    if ($enrollmentRedeem.CacheControl -notmatch "no-store") { throw "Enrollment credential response must be no-store." }
+
+    $enrollmentReplay = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentReplay 401 "Reject replay of a redeemed enrollment token"
+
+    $enrolledAgentLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $enrollmentDeviceId; secret = $enrolledSecret }
+    Assert-Status $enrolledAgentLogin 200 "Authenticate Agent with the credential created by enrollment"
+    if ([string]::IsNullOrWhiteSpace([string]$enrolledAgentLogin.Json.accessToken)) { throw "The enrolled Agent credential could not obtain an access token." }
+
+    # Recovery must never restore or replace a credential that has authenticated, even after revocation.
+    $unknownRecoveryDeviceId = "ci-enrollment-no-history-" + [Guid]::NewGuid().ToString("N")
+    $unknownRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $unknownRecoveryDeviceId
+        reason = "CI verifies recovery cannot issue tokens for a DeviceId with no enrollment history."
+    }
+    Assert-ErrorCode $unknownRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery for DeviceId with no enrollment history"
+
+    $usedCredentialRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI must reject recovery after an Agent credential has authenticated."
+    }
+    Assert-ErrorCode $usedCredentialRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery of an already-used Agent credential"
+
+    $credentialRevocationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
+    }
+    $revokeUsedCredential = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/revoke" $credentialRevocationHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI checks that normal revocation is not bypassed by enrollment recovery."
+    }
+    Assert-Status $revokeUsedCredential 200 "Revoke previously authenticated Agent credential"
+    if ($revokeUsedCredential.Json.revoked -ne $true) {
+        throw "The previously authenticated Agent credential was not revoked for the recovery-boundary test."
+    }
+    $revokedCredentialRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI must not use enrollment recovery to undo ordinary credential revocation."
+    }
+    Assert-ErrorCode $revokedCredentialRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery after ordinary Agent credential revocation"
+
+    # Simulate server redemption succeeding while local credential persistence fails.
+    $recoveryDeviceId = "ci-enrollment-recovery-" + [Guid]::NewGuid().ToString("N")
+    $recoveryInitialIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $recoveryDeviceId
+    }
+    Assert-Status $recoveryInitialIssue 200 "Issue original token for enrollment-recovery test"
+    $recoveryInitialToken = [string]$recoveryInitialIssue.Json.token
+    $recoveryInitialRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        token = $recoveryInitialToken
+    }
+    Assert-Status $recoveryInitialRedeem 200 "Redeem original token before simulating local credential-persistence failure"
+    $lostCredentialSecret = [string]$recoveryInitialRedeem.Json.secret
+
+    $recoveryIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $recoveryDeviceId
+        reason = "CI simulated local DPAPI credential persistence failure after server redemption."
+    }
+    Assert-Status $recoveryIssue 200 "Recover never-authenticated enrollment credential"
+    if ([string]$recoveryIssue.CacheControl -notmatch "no-store") {
+        throw "Enrollment-recovery token response must be no-store."
+    }
+    $recoveryToken = [string]$recoveryIssue.Json.token
+    if ($recoveryToken -notmatch '^[A-Za-z0-9_-]{43}$' -or
+        [string]::IsNullOrWhiteSpace([string]$recoveryIssue.Json.tokenId)) {
+        throw "Enrollment recovery did not return a valid replacement token."
+    }
+    $lostSecretLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        secret = $lostCredentialSecret
+    }
+    Assert-Status $lostSecretLogin 401 "Reject the lost credential after explicit enrollment recovery"
+    $oldEnrollmentReplay = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        token = $recoveryInitialToken
+    }
+    Assert-Status $oldEnrollmentReplay 401 "Reject the original redeemed token after enrollment recovery"
+    $recoveryRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        token = $recoveryToken
+    }
+    Assert-Status $recoveryRedeem 200 "Redeem the recovery-issued token"
+    $recoveredLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        secret = [string]$recoveryRedeem.Json.secret
+    }
+    Assert-Status $recoveredLogin 200 "Authenticate the recovered Agent credential"
+
+    # A pending token can be refreshed only when no credential for this DeviceId has authenticated.
+    $pendingRecoveryDeviceId = "ci-enrollment-pending-recovery-" + [Guid]::NewGuid().ToString("N")
+    $pendingOriginalIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+    }
+    Assert-Status $pendingOriginalIssue 200 "Issue original unredeemed token for recovery test"
+    $pendingReplacementIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        reason = "CI verifies refresh of a pending or expired token before any credential has authenticated."
+    }
+    Assert-Status $pendingReplacementIssue 200 "Replace unredeemed enrollment token with an explicit recovery request"
+    if ([string]$pendingReplacementIssue.CacheControl -notmatch "no-store") {
+        throw "Pending-token recovery response must be no-store."
+    }
+    $rejectedOldPendingToken = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        token = [string]$pendingOriginalIssue.Json.token
+    }
+    Assert-Status $rejectedOldPendingToken 401 "Reject previous pending enrollment token after recovery"
+    $acceptedReplacementToken = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        token = [string]$pendingReplacementIssue.Json.token
+    }
+    Assert-Status $acceptedReplacementToken 200 "Accept replacement token created through bounded pending-token recovery"
+
+    $revokedDeviceId = "ci-enrollment-revoked-" + [Guid]::NewGuid().ToString("N")
+    $revocableIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $revokedDeviceId }
+    Assert-Status $revocableIssue 200 "Issue token for revocation test"
+    $revocation = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens/$($revocableIssue.Json.tokenId)/revoke" $operatorHeaders @{ reason = "CI enrollment revocation test" }
+    Assert-Status $revocation 200 "Authorized operator revokes unused enrollment token"
+    if ($revocation.Json.revoked -ne $true) { throw "Enrollment token revocation was not confirmed." }
+    $revokedRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $revokedDeviceId; token = [string]$revocableIssue.Json.token }
+    Assert-Status $revokedRedeem 401 "Reject redemption of revoked enrollment token"
+
+    # A competing request cannot redeem the same token twice; the follow-up request must be rejected.
+    $raceDeviceId = "ci-enrollment-race-" + [Guid]::NewGuid().ToString("N")
+    $raceIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $raceDeviceId }
+    Assert-Status $raceIssue 200 "Issue token for single-use verification"
+    $raceRedeem1 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem1 200 "First enrollment redemption wins"
+    $raceRedeem2 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem2 401 "Second enrollment redemption is rejected"
+    
+    # Two independent requests race to redeem one token; the database transaction must allow only one winner.
+    $parallelDeviceId = "ci-enrollment-parallel-" + [Guid]::NewGuid().ToString("N")
+    $parallelIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $parallelDeviceId }
+    Assert-Status $parallelIssue 200 "Issue token for concurrent redemption"
+    $parallelUri = "$serverUrl/api/v1/agent/enrollment/redeem"
+    $parallelBody = @{ deviceId = $parallelDeviceId; token = [string]$parallelIssue.Json.token } | ConvertTo-Json -Compress
+    $parallelScript = {
+        param($uri, $body)
+        try {
+            $response = Invoke-WebRequest -Method Post -Uri $uri -Headers @{ "X-GameNet-Contract" = "v1" } -ContentType "application/json" -Body $body -TimeoutSec 20 -SkipHttpErrorCheck
+            $json = $response.Content | ConvertFrom-Json -Depth 10
+            [pscustomobject]@{ StatusCode = [int]$response.StatusCode; Secret = [string]$json.secret }
+        }
+        catch {
+            [pscustomobject]@{ StatusCode = -1; Secret = "" }
+        }
+    }
+    $parallelJobs = @(
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+    )
+    try {
+        $parallelResults = @(Receive-Job -Job $parallelJobs -Wait)
+    }
+    finally {
+        Remove-Job -Job $parallelJobs -Force -ErrorAction SilentlyContinue
+    }
+    $parallelWinners = @($parallelResults | Where-Object { $_.StatusCode -eq 200 -and -not [string]::IsNullOrWhiteSpace($_.Secret) })
+    $parallelLosers = @($parallelResults | Where-Object { $_.StatusCode -eq 401 })
+    if ($parallelResults.Count -ne 2 -or $parallelWinners.Count -ne 1 -or $parallelLosers.Count -ne 1) {
+        throw "Concurrent enrollment redemption did not produce exactly one credential and one rejected request."
+    }
+    $parallelLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $parallelDeviceId; secret = [string]$parallelWinners[0].Secret }
+    Assert-Status $parallelLogin 200 "Authenticate Agent using the one credential created by concurrent redemption"
+
     # Station mutations must be idempotent and Station online state must not be inferred from credential existence.
     $stationCode = "CI-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
     $stationCreateKey = "ci-station-create-" + [Guid]::NewGuid().ToString("N")
@@ -264,15 +490,115 @@ try {
     Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
 
     $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
-    $provisionHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
-    }
-    $provisionedAgent = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/provision" $provisionHeaders @{
+    $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
         deviceId = $stationDeviceId
     }
-    Assert-Status $provisionedAgent 200 "Provision Agent credential for station binding"
+    Assert-Status $stationEnrollmentIssue 200 "Issue single-use enrollment token for the live Runtime Agent"
+    if ($stationEnrollmentIssue.CacheControl -notmatch "no-store") {
+        throw "Live Agent enrollment-token response must be no-store."
+    }
+    $stationEnrollmentToken = [string]$stationEnrollmentIssue.Json.token
+    $stationEnrollmentTokenId = [string]$stationEnrollmentIssue.Json.tokenId
+    try {
+        # ConvertFrom-Json may already materialize ISO timestamps as DateTime. Do not
+        # cast that value to a culture-formatted string and parse it again: the CI runner
+        # uses a Persian calendar culture, which can shift a Gregorian year by 622 years.
+        $expiryValue = $stationEnrollmentIssue.Json.expiresAtUtc
+        if ($expiryValue -is [DateTimeOffset]) {
+            $stationEnrollmentExpiresAtUtc = $expiryValue.ToUniversalTime()
+        }
+        elseif ($expiryValue -is [DateTime]) {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::new($expiryValue.ToUniversalTime())
+        }
+        else {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
+                [string]$expiryValue,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+        }
+    }
+    catch {
+        throw "Server returned an invalid expiry for the live Agent enrollment token."
+    }
+    $stationEnrollmentTokenFormatValid = $stationEnrollmentToken -match '^[A-Za-z0-9_-]{43}$'
+    $stationEnrollmentTokenIdPresent = -not [string]::IsNullOrWhiteSpace($stationEnrollmentTokenId)
+    $stationEnrollmentSecondsRemaining = ($stationEnrollmentExpiresAtUtc - [DateTimeOffset]::UtcNow).TotalSeconds
+    if (-not $stationEnrollmentTokenIdPresent -or
+        -not $stationEnrollmentTokenFormatValid -or
+        $stationEnrollmentSecondsRemaining -le 0 -or
+        $stationEnrollmentSecondsRemaining -gt 960) {
+        throw ("Server returned an invalid one-time enrollment token for the live Runtime Agent " +
+            "(tokenLength={0}; tokenFormatValid={1}; tokenIdPresent={2}; expiryUtc={3:o}; secondsRemaining={4:N1})." -f
+            $stationEnrollmentToken.Length,
+            $stationEnrollmentTokenFormatValid,
+            $stationEnrollmentTokenIdPresent,
+            $stationEnrollmentExpiresAtUtc,
+            $stationEnrollmentSecondsRemaining)
+    }
 
+    # Exercise the complete first-start enrollment path for the real Runtime Agent.
+    # This temporary DPAPI handoff does not certify the installed LocalService Windows-service boundary.
+    New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
+    @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
+
+    $enrollmentPayload = [ordered]@{
+        formatVersion = 1
+        deviceId = $stationDeviceId
+        token = $stationEnrollmentToken
+        expiresAtUtc = $stationEnrollmentExpiresAtUtc.ToString("O")
+    }
+    $clearEnrollmentBytes = [Text.Encoding]::UTF8.GetBytes(($enrollmentPayload | ConvertTo-Json -Compress))
+    $enrollmentEntropy = [Text.Encoding]::UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + $stationDeviceId)
+    try {
+        $protectedEnrollmentBytes = [Security.Cryptography.ProtectedData]::Protect(
+            $clearEnrollmentBytes,
+            $enrollmentEntropy,
+            [Security.Cryptography.DataProtectionScope]::LocalMachine)
+        [IO.File]::WriteAllBytes(
+            (Join-Path $agentIdentityRoot "enrollment-token.dpapi"),
+            $protectedEnrollmentBytes)
+    }
+    finally {
+        if ($null -ne $clearEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+            $clearEnrollmentBytes = $null
+        }
+        if ($null -ne $enrollmentEntropy) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+            $enrollmentEntropy = $null
+        }
+        if ($null -ne $protectedEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+            $protectedEnrollmentBytes = $null
+        }
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
+    $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
+    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
+    Remove-Item Env:GAMENET_AGENT_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
+    $agentEnrollmentPersisted = $false
+    $agentTokenPath = Join-Path $agentIdentityRoot "enrollment-token.dpapi"
+    $agentCredentialPath = Join-Path $agentIdentityRoot "credential.bin"
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if ($agentProcess.HasExited) {
+            throw "The Runtime Agent exited before completing one-time enrollment (exitCode=$($agentProcess.ExitCode))."
+        }
+        if (-not (Test-Path -LiteralPath $agentTokenPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $agentCredentialPath -PathType Leaf)) {
+            $agentEnrollmentPersisted = $true
+            break
+        }
+    }
+    if (-not $agentEnrollmentPersisted) {
+        throw "The Runtime Agent did not redeem the enrollment token and persist its credential within 30 seconds."
+    }
+
+    # Bind only after token redemption has created the server-side Agent credential.
+    # The Agent may authenticate/heartbeat between persistence and this request, so
+    # accept the server's current online snapshot and verify the station/device/version.
     $bindHeaders = @{
         "X-GameNet-Contract" = "v1"
         Authorization = "Bearer $accessToken"
@@ -282,20 +608,13 @@ try {
         deviceId = $stationDeviceId
         expectedVersion = 1
     }
-    Assert-Status $boundStation 200 "Bind provisioned Agent to station"
+    Assert-Status $boundStation 200 "Bind enrolled Agent to station"
     if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
-        $boundStation.Json.data.agentOnline -ne $false -or
-        $boundStation.Json.data.version -ne 2) {
-        throw "Station binding or server-derived offline state was incorrect before Agent connection."
+        $boundStation.Json.data.version -ne 2 -or
+        $null -eq $boundStation.Json.data.agentOnline) {
+        throw "Station binding or server-derived online state was incorrect after Agent enrollment."
     }
 
-    # Exercise a real Server-to-Agent command against this isolated runtime Server.
-    New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
-    @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
-    $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
-    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
-    $env:GAMENET_AGENT_BOOTSTRAP_SECRET = [string]$provisionedAgent.Json.secret
-    $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
 
     $agentOnline = $false
     for ($attempt = 1; $attempt -le 30; $attempt++) {
@@ -305,7 +624,13 @@ try {
         $liveStation = @($liveStations.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
         if ($liveStation -and $liveStation.agentOnline -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$liveStation.lastHeartbeatAtUtc)) { $agentOnline = $true; break }
     }
-    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat." }
+    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat after one-time enrollment." }
+    if (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "enrollment-token.dpapi") -PathType Leaf) {
+        throw "The Agent did not remove its consumed enrollment-token file after saving the credential."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "credential.bin") -PathType Leaf)) {
+        throw "The Agent did not persist its per-device DPAPI credential after enrollment."
+    }
 
     $healthProbe = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
     Assert-Status $healthProbe 200 "Dispatch safe Agent health-probe command"
@@ -442,6 +767,12 @@ try {
     Assert-Status $managerTokenResponse 200 "Login constrained role manager"
     $managerToken = [string]$managerTokenResponse.Json.data.accessToken
     $managerHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken" }
+
+    $managerEnrollmentDenied = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $managerHeaders @{
+        deviceId = "ci-enrollment-denied-" + [Guid]::NewGuid().ToString("N")
+    }
+    Assert-Status $managerEnrollmentDenied 403 "Deny enrollment token issue without agents.enrollment.manage"
+
 
     $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
@@ -619,7 +950,7 @@ finally {
     else {
         $stdout = Read-DiagnosticText $serverLog
         $stderr = Read-DiagnosticText $serverErrorLog
-        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken)) {
+        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken, $stationEnrollmentToken)) {
             if (-not [string]::IsNullOrWhiteSpace([string]$secretValue)) {
                 $stdout = $stdout.Replace([string]$secretValue, "<redacted>")
                 $stderr = $stderr.Replace([string]$secretValue, "<redacted>")
@@ -648,4 +979,15 @@ finally {
     foreach ($name in $envNames) {
         [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name], "Process")
     }
+    if ($null -ne $clearEnrollmentBytes) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+    }
+    if ($null -ne $enrollmentEntropy) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+    }
+    if ($null -ne $protectedEnrollmentBytes) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
 }

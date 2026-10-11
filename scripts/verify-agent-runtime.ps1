@@ -106,6 +106,10 @@ $signingKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGener
 $provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $envNames = @(
     "ASPNETCORE_URLS",
+    "ASPNETCORE_ENVIRONMENT",
+    "DOTNET_ENVIRONMENT",
+    "GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS",
+    "GAMENET_DATABASE_CONNECTION",
     "GameNet__Authentication__Enabled",
     "GameNet__Authentication__Issuer",
     "GameNet__Authentication__Audience",
@@ -141,6 +145,10 @@ $pgBase = $null
 
 try {
     $env:ASPNETCORE_URLS = $serverUrl
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
+    $env:GAMENET_DATABASE_CONNECTION = $connection
     $env:GameNet__Authentication__Enabled = "true"
     $env:GameNet__Authentication__Issuer = "GameNet5.Foundation.Certification"
     $env:GameNet__Authentication__Audience = "GameNet5.Agent"

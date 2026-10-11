@@ -13,6 +13,21 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
+## Current execution sequence lock — 2026-10-10
+
+The live risk/state list is [Engineering Readiness Register](engineering-readiness-register.md). This section supersedes older "current step" statements below where dates/status conflict; dated evidence remains as history.
+
+1. Keep main and foundation/runtime-final-v2 unchanged. The last recorded stable-checkpoint certificate is exact-SHA evidence, not a blanket certificate for a later branch tip; run Foundation on the exact current tip before calling it certified.
+2. Review PR #23 and #24 at their exact tested heads, without direct merge or assuming CI proves service/LAN behavior.
+3. Review/accept ADR-0002 (PR #18), then diff-review and selectively port the protected Server secret-store implementation in PR #20. Before any Manager machine action, review the read-only inspect-manager-runtime-state.ps1 output; do not run provisioning/TLS/cleanup scripts blindly.
+4. Prove real Server/Agent Windows service identities, Service SID/private-key/secret ACLs, DPAPI persistence, authenticated single-use Agent enrollment with atomic redemption/replay protection, lease/heartbeat and service restart/reconnect over normally validated HTTPS with a disposable DB.
+5. Only after runtime boundary acceptance, continue isolated UI boundary refactoring (Agent health timer, Login/Password views, shell/navigation, permission-aware commands and binding/locale tests), then follow the numbered business module order.
+6. Every vertical slice requires an explicit REQ ID mapped to domain invariant, permissions, transaction/idempotency/concurrency, audit, recovery, automated and physical tests as applicable, and exact-SHA evidence.
+7. Setup/updater/repair/rollback remain later release-boundary work but are mandatory before production. A self-contained ZIP is not Setup.exe/MSI, and CI/loopback is not physical-install certification.
+
+Current UI boundary work is an early architecture-hardening slice; it does not replace Stage 14's final design system. Avoid mixing a theme/layout overhaul with TLS, service identity or business-domain changes in one commit.
+
+
 ## Work item readiness and closure (mandatory)
 
 - [Definition of Ready](docs/planning/definition-of-ready.md) is the entry gate for every feature/bug slice; [Definition of Done](docs/planning/definition-of-done.md) is the closure gate.

@@ -14,31 +14,42 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
+if (args.Any(argument => string.Equals(argument, "--provision-secrets", StringComparison.Ordinal)))
+{
+    if (args.Length != 1)
+        throw new InvalidOperationException("Run secret provisioning with --provision-secrets as the only argument.");
+    if (!OperatingSystem.IsWindows())
+        throw new ServerSecretStoreException("Server secret-store provisioning requires Windows.");
+
+    ServerSecretProvisioning.RunInteractive();
+    return;
+}
+
 var migrateOnly = args.Contains("--migrate-only", StringComparer.Ordinal);
 var hostArguments = args
     .Where(argument => !string.Equals(argument, "--migrate-only", StringComparison.Ordinal))
     .ToArray();
 var builder = WebApplication.CreateBuilder(hostArguments);
 
-var databaseConnection = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
-if (!string.IsNullOrWhiteSpace(databaseConnection) &&
-    string.IsNullOrWhiteSpace(builder.Configuration["GameNet:DatabaseConnectionString"]))
-{
-    builder.Configuration["GameNet:DatabaseConnectionString"] = databaseConnection;
-}
+ServerTlsHostConfiguration.AddProgramDataConfiguration(builder);
 
 var protectedSettingsEnabled =
     builder.Environment.IsProduction() &&
     bool.TryParse(builder.Configuration["GameNet:ProtectedSettings:Enabled"], out var enableProtectedFile) &&
     enableProtectedFile;
+ProductionStartupPolicy.EnsureProtectedSettingsEnabled(
+    builder.Environment.EnvironmentName,
+    protectedSettingsEnabled);
+ProductionStartupPolicy.EnsureProtectedSettingsPathOverrideAllowed(
+    builder.Environment.EnvironmentName,
+    Environment.GetEnvironmentVariable(ProtectedServerSettings.PathEnvironmentVariableName));
 ProtectedServerSettings.LoadInto(builder.Configuration, protectedSettingsEnabled);
+ServerTlsHostConfiguration.ConfigureListeners(builder);
 
-var bootstrapSecret = Environment.GetEnvironmentVariable("GAMENET_BOOTSTRAP_SECRET");
-if (!string.IsNullOrWhiteSpace(bootstrapSecret) &&
-    string.IsNullOrWhiteSpace(builder.Configuration["GameNet:Setup:BootstrapSecret"]))
-{
-    builder.Configuration["GameNet:Setup:BootstrapSecret"] = bootstrapSecret;
-}
+var serverSecrets = ServerSecretBootstrap.Load(builder.Environment, builder.Configuration, args);
+builder.Services.AddSingleton<IDatabaseConnectionSecret>(serverSecrets);
+builder.Services.AddSingleton<IJwtSigningKeySecret>(serverSecrets);
+builder.Services.AddSingleton<IAgentProvisioningKeySecret>(serverSecrets);
 
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
 builder.Services.AddGameNetServer();
@@ -52,8 +63,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 var runtimeOptions = app.Services.GetRequiredService<IOptions<GameNetOptions>>().Value;
-if (app.Environment.IsProduction() && !runtimeOptions.Authentication.Enabled)
-    throw new InvalidOperationException("Production authentication must be enabled.");
+ProductionStartupPolicy.EnsureAuthenticationEnabled(
+    app.Environment.EnvironmentName,
+    runtimeOptions.Authentication.Enabled);
 
 if (migrateOnly)
 {
@@ -76,6 +88,7 @@ if (migrateOnly)
 }
 
 app.MapAgentCredentialRoutes();
+app.MapAgentEnrollmentRoutes();
 app.MapIdentityEndpoints();
 app.MapOperatorManagementEndpoints();
 app.MapStationEndpoints();

@@ -54,7 +54,7 @@ try {
 
     Write-Host ("Initial owner created: {0} ({1})" -f $response.data.username, $response.data.userId)
     Write-Host "The Server reads the expected bootstrap secret from its DPAPI-protected settings file; a machine-wide GAMENET_BOOTSTRAP_SECRET is not required."
-Write-Warning "The one-time bootstrap secret remains in the protected file. Installation is not considered fully hardened until a supported post-bootstrap step removes it from that file."
+Write-Warning "After confirming the Owner can sign in, run scripts/finalize-server-setup.ps1 from an elevated PowerShell session on the Server machine to remove the one-time bootstrap secret. This script must not be run from the management workstation."
 }
 finally {
     [void]$headers.Remove("X-GameNet-Bootstrap-Secret")

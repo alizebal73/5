@@ -11,7 +11,8 @@ namespace GameNet.Server.Infrastructure.Security;
 
 public sealed class AgentAccessTokenIssuer(
     IOptions<GameNetOptions> options,
-    IGameClock clock) : IAgentAccessTokenIssuer
+    IGameClock clock,
+    IJwtSigningKeySecret signingSecret) : IAgentAccessTokenIssuer
 {
     public AgentTokenResponse Issue(string deviceId)
     {
@@ -19,7 +20,7 @@ public sealed class AgentAccessTokenIssuer(
         if (!auth.Enabled ||
             string.IsNullOrWhiteSpace(auth.Issuer) ||
             string.IsNullOrWhiteSpace(auth.Audience) ||
-            string.IsNullOrWhiteSpace(auth.SigningKey))
+            string.IsNullOrWhiteSpace(signingSecret.SigningKey))
         {
             throw new InvalidOperationException("JWT authentication is not fully configured.");
         }
@@ -27,7 +28,7 @@ public sealed class AgentAccessTokenIssuer(
         var now = clock.UtcNow;
         var expires = now.AddSeconds(options.Value.Agent.AccessTokenLifetimeSeconds);
         var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(auth.SigningKey)),
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingSecret.SigningKey)),
             SecurityAlgorithms.HmacSha256);
 
         var claims = new[]

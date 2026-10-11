@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Modules.Identity.Application;
 using GameNet.Server.Modules.Identity.Domain;
 using GameNet.Shared.Primitives;
@@ -10,13 +11,13 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace GameNet.Server.Modules.Identity.Infrastructure.Security;
 
-public sealed class JwtTokenService(IOptions<GameNetOptions> options, IGameClock clock) : ITokenService
+public sealed class JwtTokenService(IOptions<GameNetOptions> options, IGameClock clock, IJwtSigningKeySecret signingSecret) : ITokenService
 {
     public IssuedAccessToken Issue(OperatorUser user, IReadOnlySet<string> permissions)
     {
         var settings = options.Value.Authentication;
         if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.Issuer) ||
-            string.IsNullOrWhiteSpace(settings.Audience) || string.IsNullOrWhiteSpace(settings.SigningKey))
+            string.IsNullOrWhiteSpace(settings.Audience) || string.IsNullOrWhiteSpace(signingSecret.SigningKey))
             throw new InvalidOperationException("AUTH_CONFIGURATION_INVALID");
         var now = clock.UtcNow;
         var expires = now.AddHours(8);
@@ -31,7 +32,7 @@ public sealed class JwtTokenService(IOptions<GameNetOptions> options, IGameClock
             new(JwtRegisteredClaimNames.Jti, jti)
         };
         claims.AddRange(permissions.Select(permission => new Claim("permission", permission)));
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.SigningKey));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingSecret.SigningKey));
         var token = new JwtSecurityToken(issuer: settings.Issuer, audience: settings.Audience, claims: claims,
             notBefore: now.UtcDateTime, expires: expires.UtcDateTime,
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));

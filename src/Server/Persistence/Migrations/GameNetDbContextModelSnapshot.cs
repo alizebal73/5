@@ -212,6 +212,65 @@ namespace GameNet.Server.Persistence.Migrations
                     b.ToTable("agent_connection_leases", (string)null);
                 });
 
+            modelBuilder.Entity("GameNet.Server.Persistence.Entities.AgentEnrollmentToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedNever()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("device_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<DateTimeOffset>("IssuedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at_utc");
+
+                    b.Property<Guid>("IssuedByOperatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("issued_by_operator_id");
+
+                    b.Property<DateTimeOffset?>("RedeemedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("redeemed_at_utc");
+
+                    b.Property<DateTimeOffset?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_enrollment_tokens");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_enrollment_tokens_pending_device")
+                        .HasFilter("redeemed_at_utc IS NULL AND revoked_at_utc IS NULL");
+
+                    b.HasIndex("ExpiresAtUtc")
+                        .HasDatabaseName("ix_agent_enrollment_tokens_expires_at_utc");
+
+                    b.HasIndex("IssuedByOperatorId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_enrollment_tokens_token_hash");
+
+                    b.ToTable("agent_enrollment_tokens", (string)null);
+                });
+
             modelBuilder.Entity("GameNet.Server.Persistence.Entities.AgentCredential", b =>
                 {
                     b.Property<Guid>("Id")
@@ -405,6 +464,13 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasConstraintName("fk_role_permissions_roles_role_id");
                 });
 
+
+            modelBuilder.Entity("GameNet.Server.Persistence.Entities.AgentEnrollmentToken", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Identity.Domain.OperatorUser", null).WithMany()
+                        .HasForeignKey("IssuedByOperatorId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_agent_enrollment_tokens_issued_by_operator");
+                });
 
             modelBuilder.Entity("GameNet.Server.Modules.Stations.Domain.Station", b =>
                 {

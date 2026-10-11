@@ -1,6 +1,9 @@
 [CmdletBinding()]
 param(
-    [Parameter()][string]$DestinationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server-secrets.bin")
+    [Parameter()][string]$DestinationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server-secrets.bin"),
+    [Parameter()][string]$ServerConfigurationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server.json"),
+    [Parameter()][string]$PublicCertificatePath = (Join-Path $PSScriptRoot "..\artifacts\gamenet-server.cer"),
+    [Parameter()][string]$ServiceAccount = "NT SERVICE\GameNet 5 Server"
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,9 +13,23 @@ $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.Wind
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw "Run this script from an elevated PowerShell session."
 }
+
 $fullDestination = [System.IO.Path]::GetFullPath($DestinationPath)
+$fullServerConfigurationPath = [System.IO.Path]::GetFullPath($ServerConfigurationPath)
+$fullPublicCertificatePath = [System.IO.Path]::GetFullPath($PublicCertificatePath)
+$configurationDirectory = [System.IO.Path]::GetFullPath((Split-Path -Parent $fullServerConfigurationPath))
+$destinationDirectory = [System.IO.Path]::GetFullPath((Split-Path -Parent $fullDestination))
+if (-not [string]::Equals($configurationDirectory, $destinationDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Protected Server secrets must be stored beside server.json in the ACL-protected configuration directory."
+}
 if (Test-Path -LiteralPath $fullDestination) {
     throw "Protected settings already exist. Refusing to overwrite the Server secrets file."
+}
+if (-not (Test-Path -LiteralPath $fullServerConfigurationPath -PathType Leaf)) {
+    throw "Run configure-server-tls.ps1 first; the expected server.json configuration is missing."
+}
+if (-not (Test-Path -LiteralPath $fullPublicCertificatePath -PathType Leaf)) {
+    throw "The public Server trust certificate was not found at the configured path."
 }
 
 try {
@@ -51,111 +68,88 @@ function Read-SecretText([string]$Prompt, [int]$MinimumLength = 32, [int]$Maximu
 
 function Clear-ByteArray([byte[]]$Bytes) {
     if ($null -ne $Bytes -and $Bytes.Length -gt 0) {
-        [Array]::Clear($Bytes, 0, $Bytes.Length)
+        [System.Security.Cryptography.CryptographicOperations]::ZeroMemory($Bytes)
     }
 }
 
-function New-RandomSecret([int]$ByteCount = 48) {
-    $bytes = New-Object byte[] $ByteCount
-    $random = [Security.Cryptography.RandomNumberGenerator]::Create()
-    try {
-        $random.GetBytes($bytes)
-        $value = [Convert]::ToBase64String($bytes)
-        return $value.TrimEnd('=').Replace('+', '-').Replace('/', '_')
-    }
-    finally {
-        $random.Dispose()
-        Clear-ByteArray $bytes
-    }
+# TLS is configured separately: its private key stays non-exportable in LocalMachine\My.
+$serverConfiguration = Get-Content -LiteralPath $fullServerConfigurationPath -Raw | ConvertFrom-Json -AsHashtable
+$urls = [string]$serverConfiguration["urls"]
+$thumbprint = [string]$serverConfiguration["GameNet"]["ServerTls"]["CertificateThumbprint"]
+if ([string]::IsNullOrWhiteSpace($urls) -or [string]::IsNullOrWhiteSpace($thumbprint)) {
+    throw "server.json must contain HTTPS urls and GameNet:ServerTls:CertificateThumbprint."
 }
-
-$directory = Split-Path -Parent $fullDestination
-New-Item -ItemType Directory -Force -Path $directory | Out-Null
-
-# Restrict the directory before creating any file that will contain protected credentials.
-& icacls.exe $directory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "Could not restrict protected settings directory ACLs." }
-
-$hostName = Read-RequiredText "PostgreSQL host (use localhost when PostgreSQL is installed on this PC)" 255
-$portText = Read-RequiredText "PostgreSQL port (normally 5432)" 5
-$port = 0
-if (-not [int]::TryParse($portText, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
-    throw "The PostgreSQL port must be a valid TCP port."
+$httpsUrls = @($urls.Split(';', [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim() })
+if ($httpsUrls.Count -ne 1 -or -not $httpsUrls[0].StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) {
+    throw "The initial production Server configuration must contain exactly one HTTPS listener."
 }
-$database = Read-RequiredText "GameNet database name" 63
-$dbUser = Read-RequiredText "Dedicated PostgreSQL application username" 63
-$dbPassword = Read-SecretText "PostgreSQL application password" 20 256
-$bootstrapSecret = Read-SecretText "Initial owner bootstrap secret (you must re-enter this in bootstrap-admin.ps1)" 32 512
-$serverAddressText = Read-RequiredText "Reserved/static LAN IPv4 address that Desktop and Agent will use" 15
+$serverUri = $null
+if (-not [Uri]::TryCreate($httpsUrls[0], [UriKind]::Absolute, [ref]$serverUri) -or
+    -not [string]::IsNullOrEmpty($serverUri.UserInfo) -or
+    -not [string]::IsNullOrEmpty($serverUri.Query) -or
+    -not [string]::IsNullOrEmpty($serverUri.Fragment) -or
+    $serverUri.AbsolutePath -ne "/" -or
+    $serverUri.IsLoopback) {
+    throw "server.json must use a root HTTPS URL with a reserved non-loopback Server address."
+}
 $serverAddress = $null
-if (-not [System.Net.IPAddress]::TryParse($serverAddressText, [ref]$serverAddress) -or
-    $serverAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or
-    $serverAddress.ToString() -cne $serverAddressText -or
-    [System.Net.IPAddress]::IsLoopback($serverAddress)) {
-    throw "The Server address must be a canonical, non-loopback IPv4 address reserved for this PC."
-}
-$serverAddressBytes = $serverAddress.GetAddressBytes()
-if ($serverAddressBytes[0] -eq 0 -or $serverAddressBytes[0] -ge 224 -or $serverAddressBytes[3] -eq 255) {
-    throw "The Server address must be a usable unicast IPv4 address."
+if (-not [System.Net.IPAddress]::TryParse($serverUri.Host, [ref]$serverAddress) -or
+    $serverAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+    throw "The configured HTTPS listener must use the reserved IPv4 address covered by the Server certificate."
 }
 
-$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-$builder["Host"] = $hostName
-$builder["Port"] = $port
-$builder["Database"] = $database
-$builder["Username"] = $dbUser
-$builder["Password"] = $dbPassword
-$builder["Timeout"] = 10
-$builder["Command Timeout"] = 30
-$builder["Pooling"] = $true
-$connectionString = $builder.ConnectionString
+$thumbprint = $thumbprint.Replace(" ", "").ToUpperInvariant()
+if ($thumbprint.Length -ne 40 -or $thumbprint -notmatch '^[A-F0-9]{40}$') {
+    throw "The Server certificate thumbprint in server.json is invalid."
+}
+$certificate = Get-Item -LiteralPath ("Cert:\LocalMachine\My\" + $thumbprint) -ErrorAction Stop
+$publicCertificate = $null
+$rsa = $null
+try {
+    if (-not $certificate.HasPrivateKey -or $certificate.Thumbprint -ne $thumbprint) {
+        throw "The Server certificate store entry is missing its private key or does not match server.json."
+    }
+    $publicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($fullPublicCertificatePath)
+    if ($publicCertificate.HasPrivateKey -or $publicCertificate.Thumbprint -ne $thumbprint) {
+        throw "The public trust certificate contains a private key or does not match the Server certificate."
+    }
 
-$certificatePath = Join-Path $directory "server.pfx"
-$publicCertificatePath = Join-Path $directory "server-trust.cer"
-if ((Test-Path -LiteralPath $certificatePath) -or (Test-Path -LiteralPath $publicCertificatePath)) {
-    throw "A Server TLS certificate already exists. Refusing to overwrite existing TLS material."
+    Import-Module -Name (Join-Path $PSScriptRoot "modules/ServerTlsCertificate.psm1") -Force
+    $dnsName = $certificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::DnsName, $false)
+    Test-GameNetServerTlsCertificateProfile -Certificate $certificate -ServerAddress $serverAddress -DnsName $dnsName
+
+    $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificate)
+    $exportRejected = $false
+    try {
+        $privateBytes = $rsa.ExportRSAPrivateKey()
+        [System.Security.Cryptography.CryptographicOperations]::ZeroMemory($privateBytes)
+    }
+    catch [System.Security.Cryptography.CryptographicException] {
+        $exportRejected = $true
+    }
+    if (-not $exportRejected) {
+        throw "The Server TLS private key is exportable. Refusing to provision protected Server settings."
+    }
+}
+finally {
+    if ($null -ne $rsa) { $rsa.Dispose() }
+    if ($null -ne $publicCertificate) { $publicCertificate.Dispose() }
+    if ($null -ne $certificate) { $certificate.Dispose() }
 }
 
-$certificateInfo = $null
-$secureCertificatePassword = $null
-$certificatePassword = $null
-$certificatePfxCreated = $false
-$publicCertificateCreated = $false
+$bootstrapSecret = Read-SecretText "Initial owner bootstrap secret (re-enter only when prompted by bootstrap-admin.ps1)" 32 512
+
 $settingsFileCreated = $false
 $clearBytes = $null
 $protectedBytes = $null
 $settings = $null
 try {
-    $certificatePassword = New-RandomSecret 48
-    $secureCertificatePassword = ConvertTo-SecureString -String $certificatePassword -AsPlainText -Force
-
-    Import-Module -Name (Join-Path $PSScriptRoot "modules/ServerTlsCertificate.psm1") -Force
-    $certificateOptions = @{
-        ServerAddress = $serverAddress
-        PfxPath = $certificatePath
-        PublicCertificatePath = $publicCertificatePath
-        Password = $secureCertificatePassword
-        CertificateStoreLocation = "Cert:\LocalMachine\My"
-    }
-    $certificateInfo = New-GameNetServerTlsCertificate @certificateOptions
-    $certificatePfxCreated = $true
-    $publicCertificateCreated = $true
-
-    foreach ($certificateFile in @($certificatePath, $publicCertificatePath)) {
-        & icacls.exe $certificateFile /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Could not restrict Server TLS certificate file ACLs." }
-    }
-
     $settings = [ordered]@{
-        "GameNet:DatabaseConnectionString" = $connectionString
         "GameNet:Authentication:Enabled" = "true"
         "GameNet:Authentication:Issuer" = "GameNet5.Server"
         "GameNet:Authentication:Audience" = "GameNet5.Desktop"
-        "GameNet:Authentication:SigningKey" = (New-RandomSecret 48)
-        "GameNet:Agent:ProvisioningKey" = (New-RandomSecret 48)
         "GameNet:Setup:BootstrapSecret" = $bootstrapSecret
-        "Kestrel:Endpoints:Https:Certificate:Path" = [System.IO.Path]::GetFullPath($certificatePath)
-        "Kestrel:Endpoints:Https:Certificate:Password" = $certificatePassword
+        "GameNet:ServerTls:CertificateThumbprint" = $thumbprint
     }
 
     $clearBytes = [System.Text.Encoding]::UTF8.GetBytes(($settings | ConvertTo-Json -Compress))
@@ -163,11 +157,49 @@ try {
         $clearBytes,
         $null,
         [Security.Cryptography.DataProtectionScope]::LocalMachine)
-    $stream = [System.IO.File]::Open(
-        $fullDestination,
+
+    $directory = Split-Path -Parent $fullDestination
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+
+    # Apply the final protected DACL during file creation. LocalMachine DPAPI is
+    # machine-scoped, so creating the ciphertext with inherited Users-read access
+    # and tightening the ACL only afterwards would expose a short read window.
+    $systemSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-18")
+    $administratorsSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544")
+    $serviceSid = ([System.Security.Principal.NTAccount]::new($ServiceAccount)).Translate(
+        [System.Security.Principal.SecurityIdentifier])
+    $expectedServiceSid = ([System.Security.Principal.NTAccount]::new("NT SERVICE\GameNet 5 Server")).Translate(
+        [System.Security.Principal.SecurityIdentifier])
+    if ($serviceSid.Value -ne $expectedServiceSid.Value) {
+        throw "The protected setup file must grant read access to the dedicated GameNet Server service SID, not a shared service account."
+    }
+    if ($serviceSid.Value -eq $systemSid.Value -or $serviceSid.Value -eq $administratorsSid.Value) {
+        throw "The configured Server service account must be distinct from SYSTEM and local Administrators."
+    }
+
+    $fileSecurity = [System.Security.AccessControl.FileSecurity]::new()
+    $fileSecurity.SetAccessRuleProtection($true, $false)
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $systemSid,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $administratorsSid,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $serviceSid,
+        [System.Security.AccessControl.FileSystemRights]::Read,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+
+    $stream = [System.IO.FileSystemAclExtensions]::Create(
+        [System.IO.FileInfo]::new($fullDestination),
         [System.IO.FileMode]::CreateNew,
-        [System.IO.FileAccess]::Write,
-        [System.IO.FileShare]::None)
+        ([System.Security.AccessControl.FileSystemRights]::WriteData -bor [System.Security.AccessControl.FileSystemRights]::ReadAttributes),
+        [System.IO.FileShare]::None,
+        4096,
+        [System.IO.FileOptions]::WriteThrough,
+        $fileSecurity)
     $settingsFileCreated = $true
     try {
         $stream.Write($protectedBytes, 0, $protectedBytes.Length)
@@ -177,38 +209,29 @@ try {
         $stream.Dispose()
     }
 
-    & icacls.exe $fullDestination /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+    # Only LocalSystem, Administrators, and the dedicated GameNet Server service SID may read the file.
+    & icacls.exe $fullDestination /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' ("$ServiceAccount`:(R)") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not restrict protected settings file ACLs." }
 
-    Write-Host "Protected Server settings and TLS certificate were written and ACL-restricted."
-    Write-Host "The Server will listen on HTTPS port 5081; use https://$($serverAddress.ToString()):5081 from the LAN."
-    Write-Host "Public certificate file: $publicCertificatePath"
-    Write-Host ("SHA-256 certificate fingerprint: {0}" -f $certificateInfo.Sha256Fingerprint)
-    Write-Host ("Certificate expires (UTC): {0}" -f $certificateInfo.ExpiresUtc)
-    Write-Host "Copy only server-trust.cer to each client PC; verify this fingerprint out of band before trusting it."
-    Write-Host "Never distribute server.pfx. No secret values were displayed or written to plaintext configuration."
+    Write-Host "Protected Server setup settings were written; deployment secrets are provisioned separately with the dedicated Server secret store."
+    Write-Host "The TLS private key remains in the Windows certificate store."
+    Write-Host "Server endpoint: $($serverUri.AbsoluteUri)"
+    Write-Host "Public trust certificate: $fullPublicCertificatePath"
+    Write-Host ("SHA-256 certificate fingerprint: {0}" -f (Get-FileHash -LiteralPath $fullPublicCertificatePath -Algorithm SHA256).Hash.ToUpperInvariant())
+    Write-Host "Verify the fingerprint out of band on every client before trusting the public certificate."
+    Write-Host "Never export or distribute the Server TLS private key."
     Write-Host "Re-enter the bootstrap secret when running scripts/bootstrap-admin.ps1."
+    Write-Host "This file does not store the PostgreSQL connection string, JWT signing key, or Agent provisioning key."
 }
 catch {
     if ($settingsFileCreated -and (Test-Path -LiteralPath $fullDestination)) {
         Remove-Item -LiteralPath $fullDestination -Force -ErrorAction SilentlyContinue
     }
-    if ($certificatePfxCreated -and (Test-Path -LiteralPath $certificatePath)) {
-        Remove-Item -LiteralPath $certificatePath -Force -ErrorAction SilentlyContinue
-    }
-    if ($publicCertificateCreated -and (Test-Path -LiteralPath $publicCertificatePath)) {
-        Remove-Item -LiteralPath $publicCertificatePath -Force -ErrorAction SilentlyContinue
-    }
     throw
 }
 finally {
-    if ($null -ne $secureCertificatePassword) { $secureCertificatePassword.Dispose() }
     Clear-ByteArray $clearBytes
     Clear-ByteArray $protectedBytes
-    $connectionString = $null
-    $dbPassword = $null
     $bootstrapSecret = $null
-    $certificatePassword = $null
-    $certificateInfo = $null
     $settings = $null
 }

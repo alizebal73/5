@@ -14,7 +14,8 @@ public sealed class DesktopFoundationTests
     [Fact]
     public void Desktop_and_agent_use_the_shared_server_origin_policy()
     {
-        Assert.True(ServerEndpointAddress.IsAllowed(new ServerConnectionOptions().BaseUrl));
+        Assert.False(ServerEndpointAddress.IsAllowed(new ServerConnectionOptions().BaseUrl));
+        Assert.True(ServerEndpointAddress.IsAllowed(new ServerConnectionOptions { BaseUrl = "https://192.168.0.9:5081" }.BaseUrl));
         Assert.False(ServerEndpointAddress.IsAllowed("http://192.168.0.9:5080"));
         Assert.False(ServerEndpointAddress.IsAllowed("https://server.example/api"));
     }
