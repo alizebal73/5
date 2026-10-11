@@ -1,31 +1,27 @@
 # GameNet 5 — Branch governance
 
-## Current GitHub read-back — 2026-10-10
+## GitHub read-back baseline — 2026-10-12 (pre-follow-up)
 
-This section supersedes the 2026-10-09 metadata snapshot below. Values were read back from GitHub; no branch or ruleset was edited during this audit.
+This is the exact read-back before the handler-busy follow-up commit to PR #40. Re-read the live PR head and branch refs after that commit. Older tables below are historical and do not represent current refs.
 
 | Ref | Observed SHA | Protected | Intended use |
 |---|---|---:|---|
-| main | b9288471f2047570eaf8d0d6552cf87bc0ddc214 | yes | Keep unchanged until release path is explicitly approved. |
-| foundation/runtime-final-v2 | be29687e637b709158a30204bb9213bfa4813950 | yes | Protected candidate/reference only. Last recorded stable-checkpoint SHA differs; re-certify the exact current tip before treating it as currently certified. |
-| integration/runtime-operator-v1 | 55a340305f9eba3bc8f9a1ce65fb37bedbae7580 | no | Active Runtime/operator integration branch; do not push unrelated work here. |
-| refactor/desktop-view-boundaries-v1 | 9a058043ca8ba69f2b0bd23777263063ee681c92 | no | Isolated PR #24 for the first UI boundary extraction. |
-| feature/operator-identity-v1 | d6a98ef1a7b87d9ced078b3b6f522406caa19b36 | no | PR #23 target; keep separate from Foundation candidate. |
+| `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | yes | Keep unchanged until release is explicitly approved. |
+| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Foundation candidate/reference only. Exact current-tip certification remains required; the last explicit stable certificate is on the historical SHA in stable-checkpoint.md. |
+| `integration/runtime-operator-v1` | `82d90178c0011c65eef76bd32cc33318d5bbd91c` | yes | Active Runtime/operator integration target; the required PR/Quick Validation Ruleset is active. |
+| `refactor/outbox-desktop-safety-integration-v1` | `a0944c33c6ff24df7a518d4ab0f108f298e51dbc` | no | PR #40 reconciled candidate immediately before the handler-busy follow-up. |
+| `feature/operator-identity-v1` | `d6a98ef1a7b87d9ced078b3b6f522406caa19b36` | no | Older source/base for PR #23; not the current integration target. |
 
-Read-back of the active Rulesets confirmed:
+### Active Ruleset read-back
 
-- [protect-main](https://github.com/alizebal73/5/rules/24783754) is active and requires a PR, conversation resolution and status check `quick-validation`.
-- [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active and requires a PR, conversation resolution and status check `foundation`.
-- Both currently report `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains to be considered. The current GitHub connection exposed read-only Ruleset access, so this audit did not change the rules.
-- The active `integration/runtime-operator-v1` ref is not protected. First make sure PR-targeted Quick Validation is green, then add a PR/status-check Ruleset if available. Until then, keep changes isolated and do not treat this ref as protected.
-
-Comparison snapshot (2026-10-10): `integration/runtime-operator-v1` is 122 commits ahead and 1 commit behind `foundation/runtime-final-v2`, with merge base `adb2159fb85564187718df8cbddcd3377e599c1c`. Its tree has product/runtime work and workflow changes; it is not a mirror of the Foundation ref. Do not rebase/merge the whole branch graph just to close this one-commit ancestry gap. Review the effective workflow delta explicitly before a merge. PR #23 itself is four commits ahead of its `feature/operator-identity-v1` base and currently has green exact-head Quick/Full Foundation runs.
-
-### Open PR disposition policy
-
-PR inventory read-back lists #15, #17, #18, #20, #21, #23 and #24 as open Drafts. #23 and #24 are the active implementation path; #15/#17/#18/#20/#21 use older bases or preserve historical evidence/design. No old PR should be merged wholesale. Review each unique diff/evidence, port useful work to the active path, then close with a reason. Do not delete branches until the PR disposition and all unique evidence are resolved.
-
-The complete per-PR decision table and cleanup sequence are in [Engineering Readiness Register](../planning/engineering-readiness-register.md).
+- [protect-main](https://github.com/alizebal73/5/rules/24783754) is active for `refs/heads/main`; it requires a pull request, conversation resolution and `quick-validation`.
+- [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active for `refs/heads/foundation/runtime-*`; it requires a pull request, conversation resolution and `foundation`.
+- [protect-integration-runtime](https://github.com/alizebal73/5/rules/24879997) is active for `refs/heads/integration/runtime-operator-v1`; it requires a pull request, conversation resolution and `quick-validation`.
+- All three Rulesets currently return `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains to be considered. This read-only audit did not change Rulesets.
+- The previous PR #40 Full Foundation run used `runs-on: [self-hosted, Windows, X64]`. It proves the candidate on that runner, not on GitHub-hosted Windows. PR #31 and #32 propose hosted-runner changes but overlap with #15 and each other; do not merge their workflow changes wholesale.
+- PR #40 combines all 42 changed paths from #35–#39. Those source PRs should not be merged one-by-one. The predecessor SHA passed Quick Validation, Full Foundation twice and Runtime payload; the handler-busy follow-up must pass the same gates again.
+- Older-base PRs #15/#17/#18/#20/#21/#24 should remain unmerged until unique diffs/evidence are reviewed and ported selectively. Do not delete their branches before recording disposition.
+- Physical installed-Service/LAN/UI acceptance remains independent of CI. Before any operation on the existing Manager PC, review the read-only `inspect-manager-runtime-state.ps1` result; use isolated test machines and a disposable database.
 
 ## Historical metadata snapshot (2026-10-09 — superseded by current read-back)
 

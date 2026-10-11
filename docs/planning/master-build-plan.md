@@ -15,15 +15,16 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 
 ## Current execution sequence lock — 2026-10-12
 
-This live sequence supersedes older "current step" statements below; historical evidence remains available but never substitutes for the exact current candidate SHA.
+This is the live execution order; older stage notes below are historical where they disagree.
 
-1. Keep `main` and `foundation/runtime-final-v2` unchanged. The active Runtime/operator base remains `integration/runtime-operator-v1`; the branch graph and the Foundation/Runtime code are not to be wholesale-merged.
-2. PRs #15, #31 and #32 are separate Drafts with overlapping workflow changes. Review exact diffs and choose an explicit sequence before any integration; green CI alone does not authorize merging.
-3. Real Server/Agent Windows-service identity, effective ACLs, DPAPI-after-restart, TLS private-key access, initial bootstrap cleanup, single-use enrollment/replay/revoke, lease/fencing and two-PC physical LAN remain an operational acceptance gate. Before any action on the existing Manager PC, run and review the read-only `inspect-manager-runtime-state.ps1`; use isolated Windows test machines and a disposable database.
-4. Outbox append/lease-claim/published-marker is not end-to-end delivery. The isolated `security/outbox-delivery-worker-v1` candidate adds the worker, versioned routing, capped retry/backoff, attempt limit/dead-letter including crash-after-claim recovery, reversible migration, and an atomic PostgreSQL Inbox receipt that suppresses duplicate local processing while rolling back on handler failure. PostgreSQL lifecycle tests cover concurrent claims, duplicate EventIds, rollback/retry, stale leases and dead-letter/published states. It is **not Done** until all exact-HEAD gates pass. External effects still require a follow-up Outbox event and durable deduplication at the remote receiver; the Session-to-Agent slice stays blocked pending actual command consumer/reconnect testing.
-5. Begin/continue business vertical slices only after the runtime acceptance gate passes, in the numbered product-stage order below. Each slice must carry requirement IDs, owner/invariants, permissions, migration/transaction/idempotency/concurrency, audit/recovery tests and exact-SHA evidence.
-6. Setup.exe/MSI, PostgreSQL deployment lifecycle, install/upgrade/repair/uninstall, staged updater, rollback, signed release artifacts, SBOM and the 2–3-PC then ~15-station pilot remain mandatory release-boundary work; they are not a reason to mix installer changes into Foundation/Outbox commits.
-
+1. Keep `main` and `foundation/runtime-final-v2` unchanged. The active target is the protected `integration/runtime-operator-v1` branch.
+2. PR #40 is the single reconciled candidate for source PRs #35–#39 (42 paths, exact union). Review found that some Station Board handlers relied only on `CanExecute` for the busy gate; handler-level guards and a direct-`ICommand.Execute` regression test are being added. The follow-up must pass Quick Validation, Full Foundation and Runtime payload on one exact latest SHA before merge.
+3. After exact-head review, Squash-merge #40 only to `integration/runtime-operator-v1`. Do not merge source PRs #35–#39 individually. Confirm the resulting merge SHA and rerun/read back post-merge gates before closing the stage.
+4. PRs #15, #31 and #32 are separate Drafts with overlapping workflow and PostgreSQL verifier changes. Choose an explicit, bounded runner/workflow strategy after #40; do not merge any of them wholesale. The #40 certification currently uses self-hosted Windows and must not be described as hosted-runner certification.
+5. Re-run Full Foundation on the exact current `foundation/runtime-final-v2` tip before treating it as the active certified checkpoint. Keep the last historical Stable Checkpoint tied to its actual recorded SHA.
+6. Installed Server/Agent Windows-service identity, ACLs, DPAPI/TLS private-key access after restart, single-use enrollment/replay/revoke, lease/fencing, reconnect and two-PC physical LAN remain an operational gate. Review the read-only `inspect-manager-runtime-state.ps1` report before touching the existing Manager PC; use isolated test PCs and a disposable DB.
+7. Complete interactive WPF RTL/LTR, keyboard/focus, navigation and error-state acceptance. Only then continue customer/session/finance/inventory vertical slices in the numbered plan, with requirement-to-code/test/evidence traceability.
+8. Setup.exe/MSI, PostgreSQL deployment lifecycle, install/upgrade/repair/uninstall, staged update/rollback, signed release artifacts, SBOM and the 2–3-PC then ~15-station pilot remain mandatory release-boundary work.
 
 ## Work item readiness and closure (mandatory)
 

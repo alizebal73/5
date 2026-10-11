@@ -667,3 +667,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Test inventory: Outbox reliability/real-PostgreSQL tests, Agent health coordinator lifecycle tests, station permission/revocation race tests, XAML resource contract tests and binding/password lifecycle tests are all present in the same tree.
 - Verification: pending CI on the exact consolidated SHA. A green isolated PR run does not prove this combined commit until its own Quick Validation and Full Foundation complete.
 - Safety boundary: no PR was merged and no changes were made to `main`, `foundation/runtime-final-v2` or the Manager PC. Installed Windows Service/DPAPI/TLS identity and LAN acceptance remain outstanding.
+
+
+## 2026-10-12 — Enforce Station Board busy policy in command handlers
+
+- Finding: `AsyncUiAction.Execute` can invoke a delegate even when `CanExecute` is false. Refresh had a handler-level busy check, but Create, Agent health probe and shared mutation paths relied on command availability for overlap prevention.
+- Risk: direct `ICommand.Execute` while another request was in flight could start a second HTTP request, competing refresh/mutation or probe work and corrupt busy-state UX.
+- Fix: add a fail-closed `IsBusy` guard at the start of Create and Agent health probe handlers and in the shared mutation handler. Refresh keeps its existing handler-level guard.
+- Regression: add a Desktop test that holds a station-list refresh open, invokes every command directly while busy, and asserts no additional list, mutation or Agent probe request is sent.
+- Verification: the follow-up candidate must pass Quick Validation, Full Foundation and Runtime payload on its exact new HEAD before PR #40 can be merged. Earlier green runs on SHA `a0944c33...` do not certify this new fix.
+- Rollback: revert only the handler-level guards and associated regression test if verified supported behavior conflicts, while preserving permission checks and server-side authorization. Do not restore CanExecute-only busy enforcement.

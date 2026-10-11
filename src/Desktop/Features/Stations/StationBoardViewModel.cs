@@ -177,6 +177,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     private async Task CreateAsync()
     {
+        if (IsBusy) return;
         if (!CanOperateStations)
         {
             ErrorMessage = Text("اجازهٔ تغییر ایستگاه‌ها را ندارید.", "You do not have permission to change stations.");
@@ -226,6 +227,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     private async Task ProbeAgentHealthAsync()
     {
+        if (IsBusy) return;
         if (!CanReadStations)
         {
             ErrorMessage = Text("اجازهٔ مشاهدهٔ سلامت Agent را ندارید.", "You do not have permission to inspect Agent health.");
@@ -272,6 +274,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     private async Task MutateAsync(string scope, Guid stationId, Func<string, Task<StationResponse>> action, string successMessage)
     {
+        if (IsBusy) return;
         if (!CanOperateStations)
         {
             ErrorMessage = Text("اجازهٔ تغییر ایستگاه‌ها را ندارید.", "You do not have permission to change stations.");

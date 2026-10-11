@@ -196,6 +196,49 @@ public sealed class StationBoardPermissionTests
         Assert.Equal(1, api.ListCalls);
     }
 
+    [Fact]
+    public async Task Direct_command_execution_cannot_bypass_busy_gate()
+    {
+        var granted = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Permissions.StationsRead,
+            Permissions.StationsOperate
+        };
+        var pendingResponse = new TaskCompletionSource<IReadOnlyList<StationResponse>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var api = new PermissionTestServerClient { PendingListResponse = pendingResponse.Task };
+        var board = new StationBoardViewModel(api, granted.Contains)
+        {
+            NewCode = "PC-02",
+            NewName = "Second PC"
+        };
+        board.SelectedStation = new StationBoardItem(PermissionTestServerClient.TestStation());
+        board.RenameName = "Renamed PC";
+        board.DeviceId = "agent-other";
+
+        var refresh = board.RefreshAsync();
+        Assert.True(board.IsBusy);
+        Assert.Equal(1, api.ListCalls);
+
+        // AsyncUiAction.Execute can invoke delegates without enforcing CanExecute.
+        // Handler-level busy checks must prevent concurrent HTTP requests.
+        board.RefreshCommand.Execute(null);
+        board.CreateCommand.Execute(null);
+        board.RenameCommand.Execute(null);
+        board.BindAgentCommand.Execute(null);
+        board.MaintenanceCommand.Execute(null);
+        board.AvailableCommand.Execute(null);
+        board.AgentHealthProbeCommand.Execute(null);
+
+        Assert.Equal(1, api.ListCalls);
+        Assert.Equal(0, api.MutationCalls);
+        Assert.Equal(0, api.ProbeCalls);
+
+        pendingResponse.SetResult([PermissionTestServerClient.TestStation()]);
+        await refresh.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(board.IsBusy);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
         for (var attempt = 0; attempt < 200; attempt++)
@@ -213,6 +256,7 @@ public sealed class StationBoardPermissionTests
     {
         public int ListCalls { get; private set; }
         public int MutationCalls { get; private set; }
+        public int ProbeCalls { get; private set; }
         public Task<IReadOnlyList<StationResponse>>? PendingListResponse { get; set; }
         public CurrentOperatorResponse CurrentOperator { get; set; } = new(
             Guid.Parse("c31e4c7e-806f-4d42-9f33-9940ac4ab351"),
@@ -288,7 +332,11 @@ public sealed class StationBoardPermissionTests
 
         public Task<AgentCommandAcknowledgement> ProbeAgentHealthAsync(
             Guid stationId,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            ProbeCalls++;
+            throw new InvalidOperationException("A probe request must not run while another command is busy.");
+        }
 
         public Task LogoutAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
