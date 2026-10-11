@@ -167,19 +167,44 @@ jobs:
             "--output", $desktopOutput
           )
 
-          # The migration bundle is an explicit, separate operation. It does not
-          # connect to or mutate any database during package creation.
-          Invoke-DotNet @("tool", "restore")
-          $migrationBundle = Join-Path $toolsOutput "GameNet.Migrations.exe"
-          Invoke-DotNet @(
-            "ef", "migrations", "bundle",
-            "--project", "src/Server/GameNet.Server.csproj",
-            "--startup-project", "src/Server/GameNet.Server.csproj",
-            "--context", "GameNet.Server.Persistence.GameNetDbContext",
-            "--configuration", "Release",
-            "--self-contained", "--target-runtime", "win-x64",
-            "--output", $migrationBundle
-          )
+          # EF design-time construction requires a connection string. Never inherit a
+          # self-hosted runner's Machine connection (which might target real data) into
+          # the bundle. The placeholder is intentionally unusable and local to this step.
+          $previousConnection = [Environment]::GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION", "Process")
+          $previousAspNetCoreEnvironment = [Environment]::GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Process")
+          $previousDotNetEnvironment = [Environment]::GetEnvironmentVariable("DOTNET_ENVIRONMENT", "Process")
+          try {
+            $env:GAMENET_DATABASE_CONNECTION = "Host=127.0.0.1;Port=1;Database=gamenet_design_time_only;Username=gamenet_design_time;Pooling=false"
+            $env:ASPNETCORE_ENVIRONMENT = "Production"
+            $env:DOTNET_ENVIRONMENT = "Production"
+
+            Invoke-DotNet @("tool", "restore")
+            $migrationBundle = Join-Path $toolsOutput "GameNet.Migrations.exe"
+            Invoke-DotNet @(
+              "ef", "migrations", "bundle",
+              "--project", "src/Server/GameNet.Server.csproj",
+              "--startup-project", "src/Server/GameNet.Server.csproj",
+              "--context", "GameNet.Server.Persistence.GameNetDbContext",
+              "--configuration", "Release",
+              "--self-contained", "--target-runtime", "win-x64",
+              "--output", $migrationBundle
+            )
+
+            # Verify the bundle starts and exposes an explicit connection override.
+            # Package creation itself must never apply migrations.
+            $bundleHelp = @(& $migrationBundle --help 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+              throw "The migration bundle failed its non-mutating --help smoke test."
+            }
+            if (($bundleHelp -join [Environment]::NewLine) -notmatch "(?i)--connection") {
+              throw "The migration bundle does not advertise its explicit --connection override."
+            }
+          }
+          finally {
+            if ([string]::IsNullOrEmpty($previousConnection)) { Remove-Item Env:GAMENET_DATABASE_CONNECTION -ErrorAction SilentlyContinue } else { $env:GAMENET_DATABASE_CONNECTION = $previousConnection }
+            if ([string]::IsNullOrEmpty($previousAspNetCoreEnvironment)) { Remove-Item Env:ASPNETCORE_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:ASPNETCORE_ENVIRONMENT = $previousAspNetCoreEnvironment }
+            if ([string]::IsNullOrEmpty($previousDotNetEnvironment)) { Remove-Item Env:DOTNET_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:DOTNET_ENVIRONMENT = $previousDotNetEnvironment }
+          }
 
           Copy-Item -LiteralPath "scripts/configure-server-tls.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/trust-server-certificate.ps1" -Destination $toolsOutput
