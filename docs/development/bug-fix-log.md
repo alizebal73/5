@@ -577,3 +577,32 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
 - Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
 - Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
+
+
+## 2026-10-12 — Add explicit Outbox delivery, retry and dead-letter lifecycle
+
+- Finding: the persisted Outbox had an atomic append/leased-claim/published-marker boundary but no hosted delivery worker, event-type routing, scheduled retry, final-failure state or executable PostgreSQL lifecycle tests. Treating claim/publish storage as end-to-end delivery would have allowed a future Session-to-Agent slice to lose work or replay it without an explicit consumer contract.
+- Change: add a hosted worker with versioned handler routing, lease-guarded completion/failure, attempt counting, capped exponential backoff with jitter, permanent-failure/dead-letter state, validated settings and payload/secret-safe diagnostics. Add a reversible migration and keep the EF model snapshot synchronized. Missing handlers fail explicitly instead of silently "publishing" a no-op.
+- Delivery invariant: at-least-once delivery is explicit. Every handler must be idempotent by stable EventId; external Agent command consumers require their own durable command-id deduplication. This branch does not implement Session-to-Agent commands or claim exactly-once external effects.
+- Regression coverage: unit tests cover attempt counting, handler routing, duplicate handler registration and retry policy. The PostgreSQL Foundation lane now runs disposable-database tests for competing claims, retry scheduling, stale-lease rejection, final failure/dead-letter and successful published marking.
+- Verification status: **pending exact-HEAD CI at the time this entry was created**. Do not mark this work complete until canonical build/tests, EF pending-model check, clean PostgreSQL migration/concurrency and the Outbox PostgreSQL test all pass on one exact candidate SHA.
+- Safety boundary: the change is on an isolated security branch and does not change `main`, `foundation/runtime-final-v2`, or the physical manager PC. Do not merge automatically when CI turns green.
+- Rollback: revert the isolated delivery-worker/migration/test slice as a unit if the exact-SHA verification fails; preserve the existing durable append/claim boundary and do not mark Outbox as end-to-end delivery in the fallback state.
+
+
+## 2026-10-12 — Make Outbox consumer deduplication durable and transactional
+
+- Finding: passing a stable EventId to a handler makes idempotency possible but does not enforce duplicate suppression. A retry after a crash could invoke a local handler more than once, while doing network/SignalR work inside a database transaction would violate the architecture boundary.
+- Change: add `outbox_inbox_receipts` with unique EventId and `IOutboxInbox.ExecuteOnceAsync`. An atomic PostgreSQL `INSERT ... ON CONFLICT DO NOTHING` wins ownership for one delivery; the receipt and handler-local database writes share one transaction. A handler failure rolls the receipt back; a committed receipt suppresses replay even if the Outbox published-marker update was interrupted. Duplicate suppression is observable without logging event payloads.
+- Invariant: Inbox handlers may perform only local database work in the Inbox transaction. Network, SignalR, files and other external effects must be represented by another Outbox row and delivered after commit; the remote consumer (particularly Agent command execution) still needs durable command-id deduplication.
+- Regression coverage: added PostgreSQL tests for two concurrent calls using the same EventId and for rollback/retry after a handler exception. The disposable PostgreSQL gate asserts the Inbox table/columns and now filters all Outbox tests.
+- Verification status: **pending exact-HEAD CI**. A preceding CI attempt correctly caught a missing EF migration Designer artifact; that artifact has been added, and this expanded Inbox revision must pass the full exact-SHA gates anew.
+- Rollback: revert the Inbox entity/table/dispatcher wiring/test/doc slice together if migration/model or transaction tests fail; do not claim duplicate processing is prevented until the final exact-SHA tests pass.
+
+
+## 2026-10-12 — Enforce Outbox attempt limit after a worker crash
+
+- Finding: a worker can crash after Claim and before calling the handler or recording a failure. Without a claim-side terminal transition, the expired lease could be reclaimed repeatedly and bypass the configured MaxAttempts.
+- Change: ClaimBatchAsync now receives the configured attempt budget, terminalizes expired/unowned rows that already exhausted the budget, and excludes exhausted attempts from the subsequent claim query in the same database transaction.
+- Regression: PostgreSQL integration test simulates a worker crash after the last allowed claim and verifies the next claim returns no event and the row has a stable dead-letter failure code with its lease cleared.
+- Verification status: pending exact-HEAD Quick Validation, Full Foundation and runtime payload CI. Earlier missing migration Designer was corrected, and the latest code head still needs to pass all required checks.

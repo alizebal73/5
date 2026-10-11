@@ -119,9 +119,23 @@ namespace GameNet.Server.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<int>("AttemptCount")
+                        .HasDefaultValue(0)
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTimeOffset?>("DeadLetteredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dead_lettered_at_utc");
+
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid")
                         .HasColumnName("event_id");
+
+                    b.Property<string>("LastFailureCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("last_failure_code");
 
                     b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -131,6 +145,10 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("lease_token");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
 
                     b.Property<DateTimeOffset>("OccurredAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -158,9 +176,37 @@ namespace GameNet.Server.Persistence.Migrations
 
                     b.HasIndex("LeaseExpiresAtUtc", "Id");
 
+                    b.HasIndex("NextAttemptAtUtc", "Id")
+                        .HasDatabaseName("ix_outbox_messages_delivery_due")
+                        .HasFilter("published_at_utc IS NULL AND dead_lettered_at_utc IS NULL");
+
                     b.HasIndex("PublishedAtUtc", "OccurredAtUtc");
 
                     b.ToTable("outbox_messages", (string)null);
+                });
+
+            modelBuilder.Entity("GameNet.Server.Infrastructure.Outbox.OutboxInboxReceipt", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .ValueGeneratedNever()
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTimeOffset>("ProcessedAtUtc")
+                        .IsRequired()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at_utc");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("type");
+
+                    b.HasKey("EventId")
+                        .HasName("pk_outbox_inbox_receipts");
+
+                    b.ToTable("outbox_inbox_receipts", (string)null);
                 });
 
             modelBuilder.Entity("GameNet.Server.Persistence.Entities.AgentConnectionLease", b =>
