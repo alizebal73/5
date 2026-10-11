@@ -74,6 +74,9 @@ jobs:
           Write-Output "::add-mask::$connection"
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "GAMENET_DATABASE_CONNECTION=$connection"
           $env:GAMENET_DATABASE_CONNECTION = $connection
+          & $dotnet restore GameNet.slnx --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "Could not restore GameNet solution packages for diagnostic migration." }
+
           & $dotnet tool restore
           if ($LASTEXITCODE -ne 0) { throw "Could not restore the local dotnet-ef tool." }
           & $dotnet ef database update --configuration Release --project src/Server/GameNet.Server.csproj --startup-project src/Server/GameNet.Server.csproj --context GameNet.Server.Persistence.GameNetDbContext
