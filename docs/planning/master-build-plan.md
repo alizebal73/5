@@ -15,24 +15,25 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 
 ## Current execution sequence lock — 2026-10-11
 
-The Engineering Readiness Register is the live source for blockers. This section supersedes older current-step statements; numbered product stages below remain the product build order.
+The [Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) and Engineering Readiness Register are the live source for open blockers. The numbered product stages below remain the product build order.
 
-1. Review PR #31 (Draft, not merged). It moves tracked CI/diagnostic workflows to hosted windows-2025, adds a Runner-assignment guard, fixes local EF-tool portability, refreshes current governance evidence and accepts ADR-0002 as the implementation contract. Keep main and foundation/runtime-final-v2 unchanged.
-2. Require exact-SHA CI after every workflow/code change. Candidate 991152bf60676b2a03c0625780b5dcc16f365032 passed Quick, Full Foundation and Payload. Docs-only SHA 3fef98dd40cfd87da6dba6450824baff366bdf24 passed Quick and Payload. Isolation SHA 77507f4e208efc4cceadeb3c08d34eea01a69660 passed Quick #38134009251, Full #38134005849 and Payload #38134009263.
-3. Runner safety is not fully closed: the user's self-hosted Runner is retained and no current Workflow selects it. The in-repository guard is defence in depth only. Verify GitHub-side Runner/runner-group access and keep the local Runner offline while untrusted PRs are evaluated until access is confirmed. integration/runtime-operator-v1 has no active Ruleset.
-4. ADR-0002 is accepted as implementation contract, not operational certification. Real Windows service identity, effective ACL, DPAPI after restart, TLS private-key access, bootstrap finalization, Agent enrollment/replay and physical LAN remain acceptance gates.
-5. Before any action on an existing Manager PC, run inspect-manager-runtime-state.ps1 read-only and review the report. Do not run provisioning, TLS changes or ACL cleanup blindly.
-6. After runtime acceptance, continue isolated UI view-boundary work, then numbered product stages. Each vertical slice needs REQ IDs mapped to invariants, permissions, transaction/idempotency/concurrency, audit, recovery, tests and exact-SHA evidence.
-7. Setup/updater/repair/uninstall/rollback, DB lifecycle, package signing, backup restore and 2–3-PC/pilot validation remain mandatory before Production. A self-contained ZIP is not Setup.exe/MSI; hosted CI/loopback is not physical-install certification.
+1. Current exact-SHA candidate is PR #31 at `53743eda950c057d435fc082994bc183e7cd723b`. Quick push #38135640632, Quick PR #38135643357, Full Foundation #38135640645, Runtime Payload #38135643366 and PostgreSQL Diagnostic #38135640573 all passed on that same SHA. PR #31 remains Draft/unmerged.
+2. Keep `main` (`b9288471f2047570eaf8d0d6552cf87bc0ddc214`) and `foundation/runtime-final-v2` (`be29687e637b709158a30204bb9213bfa4813950`) unchanged. Stable Checkpoint still certifies only `c3a8ba482548e963479fbdf8538be62c4d15acfe`; the latest Foundation tip must not be mislabeled as independently certified.
+3. Before relying on Integration as the shared merge base, create/read back its actual Ruleset and verify/restrict GitHub-side Runner/runner-group access. Integration is currently unprotected. The connected integration can read these settings but cannot write them; until verified, keep the personal self-hosted Runner offline for untrusted PR evaluation.
+4. ADR-0002 is accepted as the implementation contract, not operational acceptance. Real Windows service identity, effective ACL, DPAPI after restart, TLS private-key access, bootstrap finalization, Agent enrollment/replay and physical LAN remain acceptance gates.
+5. Before any action on an existing Manager PC, run `scripts/inspect-manager-runtime-state.ps1` read-only and review the report. Never run provisioning, TLS changes or ACL cleanup blindly.
+6. Complete the isolated real-Windows Server/Agent acceptance gate before starting commercial vertical slices. Then continue Desktop view-boundary work and numbered product stages. Each slice needs REQ IDs mapped to invariants, permissions, transactions/idempotency/concurrency, audit, recovery, tests and exact-SHA evidence.
+7. Outbox append/claim/published markers are not end-to-end delivery. Before any slice relying on asynchronous/external delivery (notably Session-to-Agent command dispatch), add and test the worker, retry/final-failure behavior, idempotent consumer and recovery semantics.
+8. Setup/updater/repair/uninstall/rollback, DB lifecycle, package signing, backup restore and 2–3-PC/~15-station pilot remain mandatory before Production. A self-contained ZIP is not Setup.exe/MSI; hosted CI/loopback is not physical-install certification.
 
 Current UI boundary work is an early architecture-hardening slice; it does not replace Stage 14's final design system. Avoid mixing a theme/layout overhaul with TLS, service identity or business-domain changes in one commit.
-
 
 ## Work item readiness and closure (mandatory)
 
 - [Definition of Ready](docs/planning/definition-of-ready.md) is the entry gate for every feature/bug slice; [Definition of Done](docs/planning/definition-of-done.md) is the closure gate.
 - Follow [bug-fix process](docs/development/bug-fix-process.md) and use [bug-fix template](docs/templates/bug-fix-template.md) for defects.
 - Use [vertical-slice template](docs/templates/vertical-slice-template.md) for product slices and link every slice to IDs in docs/planning/requirements-traceability.md.
+- Treat [Pre-Windows and Pre-Commercial Readiness Gate](docs/planning/pre-commercial-readiness-gate.md) as the mandatory handoff gate between hosted Foundation, physical acceptance and commercial work.
 - scripts/check-work-item-docs.ps1 validates the required policies/templates and unique stable requirement IDs; scripts/verify.ps1 runs this gate during canonical verification.
 
 ## Product target
@@ -157,7 +158,7 @@ Work only in platform infrastructure:
 - implement real PostgreSQL design-time/runtime migration path;
 - implement real audit storage boundary;
 - implement idempotency storage boundary;
-- implement outbox storage and dispatcher boundary;
+- implement durable Outbox append/leased-claim/published-state boundary; complete a worker, retry/final-failure policy and idempotent consumer before any slice that depends on asynchronous/external delivery;
 - implement correlation/diagnostic context;
 - add transaction/concurrency integration tests;
 - add Agent device identity, authentication, lease/fencing and reconnect transport;
@@ -165,10 +166,10 @@ Work only in platform infrastructure:
 - add fa-IR/en-US localization resources;
 - add native Desktop smoke harness;
 - add backup/restore proof;
-- add updater/rollback proof;
+- keep Setup/updater/repair/rollback proof in Stages 15–18 and Gate E; do not pull installer certification into Foundation Gate A;
 - record exact evidence.
 
-Exit condition: Foundation Certification document can honestly be marked green.
+Exit condition: Full Foundation is green on the exact candidate SHA. This closes the hosted technical Foundation gate only; installed-service/physical-LAN acceptance is a separate gate required before commercial vertical slices.
 
 ## Stage 2 — Repository and module skeleton
 

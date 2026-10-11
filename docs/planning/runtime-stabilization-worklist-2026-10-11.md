@@ -8,6 +8,17 @@
 - مرز امنیتی باز: guard داخل مخزن فقط دفاع در عمق است؛ دسترسی Runner/runner-group باید جداگانه در GitHub Settings محدود شود. تا تأیید، Runner محلی هنگام بررسی/اجرای PR غیرقابل‌اعتماد offline بماند.
 - تغییر هیچ‌یک از `main` و `foundation/runtime-final-v2` مجاز نیست مگر در PR نگهداری جداگانه، با دلیل و گواهی مستقل.
 
+## آخرین گواهی روی کاندید دقیق — 2026-10-11
+
+روی SHA `53743eda950c057d435fc082994bc183e7cd723b` هر پنج مسیر موفق شدند:
+- Quick push [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632)
+- Quick PR [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357)
+- Full Foundation [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645)
+- Runtime Payload [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366)
+- PostgreSQL Diagnostic [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573)
+
+این گواهی مربوط به کاندید PR #31 است، نه نوک Integration یا Stable Foundation. PR هنوز Draft و ادغام‌نشده است.
+
 ## شواهد Runner
 - آزمون GitHub-hosted Windows با SDK دقیق .NET `10.0.401`، PowerShell parser و `scripts/verify.ps1` موفق شد: [Run #38130781617](https://github.com/alizebal73/5/actions/runs/38130781617)، SHA `c80c4dc9bf4050f706f1eb710a57f67201bede79`.
 - اجرای تکراری Quick Validation پس از اصلاح portability نیز موفق شد: [Run #38131165436](https://github.com/alizebal73/5/actions/runs/38131165436)، SHA `636741d82dea5bb8f8f2c269c39784b5739316ee`.
@@ -30,7 +41,7 @@
 - [x] مسیر Full Foundation روی VM موقت GitHub-hosted با PostgreSQL آزمایشی اثبات شد؛ از اتصال DB یا اسرار سیستم Manager استفاده نشد.
 - [x] Runner شخصی حفظ شده و هیچ‌یک از چهار Workflow فعلی آن را انتخاب نمی‌کند.
 - [ ] دسترسی مدیریتی Runner/runner-group از GitHub Settings تأیید و محدود شود؛ guard در مخزن جایگزین این کنترل نیست. تا آن زمان Runner هنگام بررسی PR غیرقابل‌اعتماد offline بماند.
-- [ ] PR #31 پس از CI سبز روی آخرین SHA، بازبینی diff و رسیدگی به دسترسی Runner و Ruleset شاخه Integration بررسی شود؛ ادغام خودکار ممنوع است.
+- [ ] PR #31 پس از CI سبز روی SHA دقیق `53743eda950c057d435fc082994bc183e7cd723b` بازبینی شود؛ Ruleset Integration و دسترسی Runner/runner-group باید در GitHub Settings اعمال و read-back شوند. ادغام خودکار ممنوع است.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
 - [x] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
@@ -47,9 +58,9 @@
 - [ ] آزمون مقدماتی LAN قدیمی را شاهد تاریخی نگه داریم، نه تأیید سرویس واقعی نسخهٔ جاری.
 
 ### P1 — بستن Foundation و مستندات
-- [ ] تناقض Stage 1 و Gate A را رفع کنیم؛ Setup/Updater/Repair/Rollback در Stageهای انتشار خود باقی بمانند.
-- [ ] Outbox را دقیق طبقه‌بندی کنیم: ذخیره/Claim در برابر تحویل واقعی؛ پیش از هر وابستگی محصولی، Worker، retry/backoff، شکست نهایی، Idempotency مصرف‌کننده و تست رقابت/بازیابی تکمیل شود یا صریحاً به گیت وابسته موکول شود.
-- [ ] برای هر یک از نیازمندی‌ها، زنجیرهٔ REQ → تصمیم/Invariant → کد/API → تست → Run/SHA ثبت شود.
+- [x] تناقض Stage 1 و Gate A در Master Build Plan رفع شد؛ Setup/Updater/Repair/Rollback در Gate انتشار باقی می‌مانند. Outbox مرز ثبت/Claim است، نه تحویل end-to-end.
+- [x] Outbox به‌صورت «ثبت/Claim/علامت‌گذاری Published» در برابر «تحویل واقعی» طبقه‌بندی شد. [ ] Worker، retry/backoff، final-failure/dead-letter، Idempotency مصرف‌کننده و تست رقابت/بازیابی پیش از هر slice وابسته به تحویل ناهمگام، به‌ویژه Session-to-Agent، تکمیل شود.
+- [ ] برای هر برش تجاری، زنجیرهٔ REQ → تصمیم/Invariant → کد/API → تست → Run/SHA ثبت شود؛ شناسه و معیار کلی ماتریس به‌تنهایی ادعای Done نمی‌سازد.
 - [ ] آزمون‌های Auth/Owner/permissions/lockout/session revoke و رد درخواست غیرمجاز مستقیم به Server کامل شوند.
 - [ ] آزمون ساختاریافتهٔ logging/correlation، حذف Secret از log/artifact، readiness/health، backup retention، هشدار شکست و آزمون دوره‌ای restore با RPO/RTO تعریف شود.
 - [ ] اسکن تاریخچهٔ کامل Git/branch/artifact برای Secret، اسکن آسیب‌پذیری وابستگی‌ها، مجوز کتابخانه‌ها، SBOM و امضای release در گیت‌های مناسب ثبت شود؛ در صورت یافتن Secret واقعی، اول revoke/rotate.
@@ -65,6 +76,10 @@
 - [ ] Setup/upgrade/repair/uninstall/update/rollback، امضای بسته، checksum/manifest و بازیابی نصب واقعی را آزمایش کنیم.
 - [ ] پذیرش ۲–۳ کامپیوتر، سپس پایلوت حدود ۱۵ ایستگاه، همراه با قطع شبکه/برق، Restart، بازیابی و بررسی عدم ازدست‌رفتن داده.
 - [ ] Runbook نصب، Backup/Restore، چرخش گواهی و Secret، عیب‌یابی و بهره‌برداری ۲۴ساعته را نهایی کنیم.
+
+## مرجع گیت پیش از انتقال مرحله
+
+[Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) مرجع واحد فهرست پایان کارهای مخزنی، موانع GitHub-side و پروتکل پذیرش فیزیکی است. Stage 1 hosted certification سبز است؛ پذیرش عملیاتی/Commercial به گیت فیزیکی وابسته است.
 
 ## تعریف بستن هر کار
 یک کار فقط وقتی بسته است که diff محدود و بازبینی‌شده باشد، آزمون لازم روی همان SHA اجرا شود، مدرک Run قابل دسترسی باشد، نتیجهٔ ناموفق/اجرا‌نشده پنهان نشود، ریسک باقی‌مانده ثبت شود و مسیر بازگشت روشن باشد.

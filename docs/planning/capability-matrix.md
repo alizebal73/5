@@ -45,14 +45,15 @@
 - هر دکمهٔ عملیاتی باید backend واقعی، مجوز Server، رفتار خطا و آزمون داشته باشد؛ mock، success ساختگی و placeholder در production ممنوع‌اند.
 - فارسی RTL و واحد تومان در کل مسیر UI/گزارش سازگارند؛ محاسبات زمان UTC/business-timezone را از هم جدا می‌کنند.
 
-## وضعیت جاری پیاده‌سازی — 2026-10-10
+## وضعیت جاری پیاده‌سازی — 2026-10-11
 
-- **Foundation reference:** آخرین stable-checkpoint ثبت‌شده برای SHA دقیق c3a8ba482548e963479fbdf8538be62c4d15acfe است. Tip فعلی Foundation branch برابر be29687e637b709158a30204bb9213bfa4813950 است و باید روی همان SHA مجدداً full certification شود؛ این دو status یکی نیستند.
-- **Runtime / Identity / Stations:** integration/runtime-operator-v1 روی SHA 55a340305f9eba3bc8f9a1ce65fb37bedbae7580 از Quick Validation و Full Foundation عبور کرده است؛ PR #23 Draft است و physical Windows-Service/LAN gate هنوز باز است.
-- **Desktop UI boundary:** PR #24 اولین استخراج StationBoardView را روی SHA 9a058043ca8ba69f2b0bd23777263063ee681c92 با Quick و Full Foundation سبز کرده است؛ ادغام نشده و جداسازی timer/Login/Shell/command permissions و UI interaction tests باقی‌اند.
-- **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift, Approvals:** نیازمندی‌های محصولی‌اند؛ در snapshot یکپارچهٔ جاری ماژول‌های کامل و تأییدشدهٔ آن‌ها وجود ندارد. تا عبور cross-PC Foundation runtime gate نباید با دکمه/صفحهٔ نمایشی به‌عنوان قابلیت آماده عرضه شوند.
-- **Protected Server secret lifecycle:** ADR-0002/PR #18 هنوز Proposed و پیاده‌سازی PR #20 هنوز Draft/stacked است؛ production secret store یا Windows-service secret access را کامل فرض نکنید.
-- **Setup/update/repair/rollback:** خروجی ZIP با manifest با Setup.exe/MSI برابر نیست. Windows Service commissioning، انتخاب مدل PostgreSQL provisioning، دو-PC install/restart/reconnect و Release gate هنوز باز هستند.
-- **Steam/GamingAccounts:** خارج از اجرای فعلی و Deferred است تا requirement محصولی و مدل integration مجاز/پشتیبانی‌شده به‌صورت روشن تأیید شود؛ branch آزمایشی قدیمی مجوز پیاده‌سازی خودکار نیست.
+- **Foundation reference:** Stable Checkpoint still certifies only exact SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`. Current protected tip `be29687e637b709158a30204bb9213bfa4813950` is not independently labelled certified without an exact-tip run.
+- **Current hosted candidate:** PR #31 at `53743eda950c057d435fc082994bc183e7cd723b` passed Quick push #38135640632, Quick PR #38135643357, Full Foundation #38135640645, Runtime Payload #38135643366 and PostgreSQL Diagnostic #38135640573 on the same exact SHA. PR #31 remains Draft/unmerged; Integration's shared branch tip is still `82d90178c0011c65eef76bd32cc33318d5bbd91c` and has no active Ruleset.
+- **Runtime / Identity / Stations:** Modules/APIs are present and hosted tests are green on the current candidate. Actual service identity/ACL/DPAPI/TLS and physical PC/LAN acceptance remain open; the StationBoard UI extraction is an older, unmerged PR #24 and must be selectively rebased/reviewed, not wholesale merged.
+- **Protected Server secret lifecycle:** ADR-0002 is accepted as the implementation contract on the current candidate, not as Production/operational acceptance. The candidate includes protected store and Agent enrollment code; real Windows-service secret access, bootstrap finalization, rotation/recovery and physical enrollment/restart remain open.
+- **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift and Approvals:** requirements are documented, but these full business modules are not implemented as production-usable slices in the current Integration snapshot. Do not treat requirement rows, skeletons or Desktop display elements as completion.
+- **Outbox:** durable append, leased claim and published-state marking exist; end-to-end worker delivery, retry/final-failure handling and consumer idempotency do not. Before a slice that needs asynchronous delivery—especially Session-to-Agent control—make those parts an explicit, tested dependency.
+- **Setup/update/repair/rollback:** the hosted runtime artifact is a self-contained ZIP, not Setup.exe/MSI. PostgreSQL install/provisioning decision, actual service commissioning, install/upgrade/rollback, package signing and physical pilot remain release gates.
+- **Steam/Game Account Pool:** keep scoped as separate work; Steam Auto-login remains deferred until the product requirement and permitted operating model are explicitly approved.
 
-مبنای مرجع وضعیت و ترتیب: [Engineering Readiness Register](engineering-readiness-register.md). اجرای موفق روی SHA قبلی، وضعیت candidate فعلی یا Release را خودکار گواهی نمی‌کند.
+For the mandatory handoff checklist, see [Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) and [Engineering Readiness Register](engineering-readiness-register.md). A successful older SHA does not certify a later candidate automatically.

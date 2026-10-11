@@ -12,8 +12,8 @@ A checkpoint is stable only when restore/build/tests, architecture guards, Postg
 ## Active Integration / CI candidate — separate from Stable Foundation
 
 - Draft, unmerged review: [PR #31](https://github.com/alizebal73/5/pull/31), targeting integration/runtime-operator-v1.
-- Candidate SHA 991152bf60676b2a03c0625780b5dcc16f365032 passed [Quick](https://github.com/alizebal73/5/actions/runs/38131788387), [Full Foundation](https://github.com/alizebal73/5/actions/runs/38131788388) and [Runtime Payload](https://github.com/alizebal73/5/actions/runs/38131788408). Docs-only SHA 3fef98dd40cfd87da6dba6450824baff366bdf24 passed Quick #38132197464 and Payload #38132197411.
-- Isolation SHA 77507f4e208efc4cceadeb3c08d34eea01a69660 passed [Quick #38134009251](https://github.com/alizebal73/5/actions/runs/38134009251), [Full Foundation #38134005849](https://github.com/alizebal73/5/actions/runs/38134005849) and [Runtime Payload #38134009263](https://github.com/alizebal73/5/actions/runs/38134009263).
+- Latest exact-SHA candidate `53743eda950c057d435fc082994bc183e7cd723b` passed Quick push [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632), Quick PR [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357), Full Foundation [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645), Runtime Payload [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366) and PostgreSQL Diagnostic [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573); all five passed on the same SHA.
+- Earlier candidates `991152b...`, `3fef98d...` and `77507f4...` remain historical evidence and do not supersede the latest exact-SHA result.
 - integration/runtime-operator-v1 currently has no active Ruleset. Green CI does not make the branch protected.
 - The local self-hosted Runner is retained and not selected by current workflow jobs; GitHub-side Runner access policy remains open. This candidate is not an installer, Production release or physical-LAN certification.
 

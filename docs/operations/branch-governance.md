@@ -22,7 +22,7 @@ PR #31 moves all four tracked Workflow jobs to GitHub-hosted windows-2025 and ad
 
 The in-repository guard is not a security boundary because an untrusted PR can attempt to modify the workflow or guard itself. GitHub-side Runner/runner-group restrictions could not be changed through the current connection. Keep the local Runner offline during evaluation of untrusted PRs until Settings-level access is verified. Use it only later for separately reviewed trusted physical acceptance.
 
-PR #31 remains Draft/unmerged. Candidate SHA 991152bf60676b2a03c0625780b5dcc16f365032 passed Quick #38131788387, Full Foundation #38131788388 and Payload #38131788408. Docs-only SHA 3fef98dd40cfd87da6dba6450824baff366bdf24 passed Quick #38132197464 and Payload #38132197411. Isolation SHA 77507f4e208efc4cceadeb3c08d34eea01a69660 passed Quick #38134009251, Full Foundation #38134005849 and Payload #38134009263.
+PR #31 remains Draft/unmerged. Latest candidate SHA `53743eda950c057d435fc082994bc183e7cd723b` passed Quick push [#38135640632](https://github.com/alizebal73/5/actions/runs/38135640632), Quick PR [#38135643357](https://github.com/alizebal73/5/actions/runs/38135643357), Full Foundation [#38135640645](https://github.com/alizebal73/5/actions/runs/38135640645), Runtime Payload [#38135643366](https://github.com/alizebal73/5/actions/runs/38135643366) and PostgreSQL Diagnostic [#38135640573](https://github.com/alizebal73/5/actions/runs/38135640573). All five passed on the same exact SHA. Earlier candidates remain historical evidence, not current-head certification.
 
 Older records below are preserved as historical audit trail and do not override the current snapshot above.
 
@@ -39,6 +39,8 @@ At that earlier read, these refs were reported `protected=false`. Do not treat t
 The Repository Rulesets endpoint returned an empty list at audit time. The administrative branch-protection endpoint was not writable through the connected GitHub integration, so this document records the observed state and policy; it does **not** claim to have enabled any settings.
 
 ## Required policy
+
+The exact current hosted-CI candidate and blockers before physical acceptance are tracked in [Pre-Windows and Pre-Commercial Readiness Gate](../planning/pre-commercial-readiness-gate.md). The open Ruleset and GitHub-side Runner permissions are administrator actions and remain unverified; no source-level guard is a substitute.
 
 ### `main`
 

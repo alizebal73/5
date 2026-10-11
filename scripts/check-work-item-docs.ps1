@@ -35,6 +35,7 @@ $matrixPath = "docs/planning/capability-matrix.md"
 $logPath = "docs/development/bug-fix-log.md"
 $planPath = "docs/planning/master-build-plan.md"
 $readinessPath = "docs/planning/engineering-readiness-register.md"
+$preflightPath = "docs/planning/pre-commercial-readiness-gate.md"
 
 $ready = Get-RequiredText $readyPath
 $done = Get-RequiredText $donePath
@@ -46,6 +47,7 @@ $matrix = Get-RequiredText $matrixPath
 $log = Get-RequiredText $logPath
 $plan = Get-RequiredText $planPath
 $readiness = Get-RequiredText $readinessPath
+$preflight = Get-RequiredText $preflightPath
 
 Assert-RequiredTerms $readyPath $ready @(
     "## اطلاعات پایه",
@@ -116,11 +118,21 @@ Assert-RequiredTerms $planPath $plan @(
 
 Assert-RequiredTerms $readinessPath $readiness @(
     "## Current verified baseline",
+    "## Current priority gaps",
     "## Active gap register",
     "## Ordered execution route",
     "## Branch and PR disposition",
     "## Stage closure rules",
     "## Explicit non-goals"
+)
+Assert-RequiredTerms $preflightPath $preflight @(
+    "## Exact-SHA baseline",
+    "## Repository gates before real-Windows acceptance",
+    "## Required physical acceptance protocol",
+    "## Gate before the first commercial vertical slice",
+    "### Outbox maturity boundary",
+    "## Release-only gates",
+    "hosted delivery worker, event-type routing/consumer"
 )
 
 $idMatches = [regex]::Matches($trace, '(?m)^\|\s*(REQ-[A-Z0-9-]+)\s*\|')
@@ -134,4 +146,4 @@ if ($duplicates.Count -gt 0) {
     throw "WORK_ITEM_DOCS_GATE: duplicate requirement IDs: $duplicateNames"
 }
 
-Write-Host "WORK_ITEM_DOCS_GATE PASSED: Ready/Done policy, bug/slice templates and $($ids.Count) unique requirement IDs validated."
+Write-Host "WORK_ITEM_DOCS_GATE PASSED: Ready/Done policy, pre-stage readiness gate, bug/slice templates and $($ids.Count) unique requirement IDs validated."
