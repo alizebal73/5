@@ -4,6 +4,7 @@
         Title="{DynamicResource App.Title}" Width="1180" Height="720" MinWidth="1000" MinHeight="650"
         WindowStartupLocation="CenterScreen" Background="#F3F5F9">
   <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     <Style x:Key="FieldBox" TargetType="TextBox">
       <Setter Property="FontSize" Value="16"/><Setter Property="Padding" Value="12,9"/>
       <Setter Property="Margin" Value="0,6,0,16"/><Setter Property="MinWidth" Value="320"/>
@@ -109,11 +110,11 @@
                   </StackPanel>
                 </Border>
               </Expander>
-              <Grid Grid.Row="3">
+              <Grid Grid.Row="3" Visibility="{Binding CanReadStations, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="0.9*"/></Grid.ColumnDefinitions>
                 <Grid Grid.Column="0" Margin="0,0,12,0">
                   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                  <Border Grid.Row="0" Padding="12" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8" Margin="0,0,0,8">
+                  <Border Grid.Row="0" Padding="12" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8" Margin="0,0,0,8" IsEnabled="{Binding CanOperateStations}">
                     <StackPanel>
                       <TextBlock Text="{DynamicResource Station.CreateSection}" FontWeight="SemiBold" Margin="0,0,0,8"/>
                       <Grid>
@@ -199,11 +200,11 @@
                       <TextBlock Text="{Binding StationBoard.SelectedStation.HeartbeatText}" FontSize="11" Foreground="#667085" TextWrapping="Wrap" Margin="0,3,0,0"/>
                       <Separator Margin="0,10,0,8"/>
                       <TextBlock Text="{DynamicResource Station.Rename}" FontWeight="SemiBold"/>
-                      <TextBox Margin="0,4,0,8" Padding="7" Text="{Binding StationBoard.RenameName, UpdateSourceTrigger=PropertyChanged}"/>
+                      <TextBox Margin="0,4,0,8" Padding="7" IsEnabled="{Binding CanOperateStations}" Text="{Binding StationBoard.RenameName, UpdateSourceTrigger=PropertyChanged}"/>
                       <Button Padding="9,6" Content="{DynamicResource Station.RenameButton}" Command="{Binding StationBoard.RenameCommand}"/>
                       <Separator Margin="0,10,0,8"/>
                       <TextBlock Text="{DynamicResource Station.DeviceId}" FontWeight="SemiBold"/>
-                      <TextBox Margin="0,4,0,8" Padding="7" Text="{Binding StationBoard.DeviceId, UpdateSourceTrigger=PropertyChanged}"/>
+                      <TextBox Margin="0,4,0,8" Padding="7" IsEnabled="{Binding CanOperateStations}" Text="{Binding StationBoard.DeviceId, UpdateSourceTrigger=PropertyChanged}"/>
                       <Button Padding="9,6" Content="{DynamicResource Station.BindAgent}" Command="{Binding StationBoard.BindAgentCommand}"/>
                       <Separator Margin="0,10,0,8"/>
                       <TextBlock Text="{DynamicResource Station.AgentVersion}" FontSize="12" Foreground="#667085"/>
@@ -221,6 +222,20 @@
                   </ScrollViewer>
                 </Border>
               </Grid>
+              <TextBlock Grid.Row="3" Text="{DynamicResource Station.ReadPermissionRequired}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                         Margin="24" Foreground="#667085" FontSize="16" TextAlignment="Center">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding CanReadStations}" Value="False">
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
             </Grid>
           </Border>
         </Grid>

@@ -577,3 +577,103 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
 - Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
 - Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
+
+
+## 2026-10-12 — Add explicit Outbox delivery, retry and dead-letter lifecycle
+
+- Finding: the persisted Outbox had an atomic append/leased-claim/published-marker boundary but no hosted delivery worker, event-type routing, scheduled retry, final-failure state or executable PostgreSQL lifecycle tests. Treating claim/publish storage as end-to-end delivery would have allowed a future Session-to-Agent slice to lose work or replay it without an explicit consumer contract.
+- Change: add a hosted worker with versioned handler routing, lease-guarded completion/failure, attempt counting, capped exponential backoff with jitter, permanent-failure/dead-letter state, validated settings and payload/secret-safe diagnostics. Add a reversible migration and keep the EF model snapshot synchronized. Missing handlers fail explicitly instead of silently "publishing" a no-op.
+- Delivery invariant: at-least-once delivery is explicit. Every handler must be idempotent by stable EventId; external Agent command consumers require their own durable command-id deduplication. This branch does not implement Session-to-Agent commands or claim exactly-once external effects.
+- Regression coverage: unit tests cover attempt counting, handler routing, duplicate handler registration and retry policy. The PostgreSQL Foundation lane now runs disposable-database tests for competing claims, retry scheduling, stale-lease rejection, final failure/dead-letter and successful published marking.
+- Verification status: **pending exact-HEAD CI at the time this entry was created**. Do not mark this work complete until canonical build/tests, EF pending-model check, clean PostgreSQL migration/concurrency and the Outbox PostgreSQL test all pass on one exact candidate SHA.
+- Safety boundary: the change is on an isolated security branch and does not change `main`, `foundation/runtime-final-v2`, or the physical manager PC. Do not merge automatically when CI turns green.
+- Rollback: revert the isolated delivery-worker/migration/test slice as a unit if the exact-SHA verification fails; preserve the existing durable append/claim boundary and do not mark Outbox as end-to-end delivery in the fallback state.
+
+
+## 2026-10-12 — Make Outbox consumer deduplication durable and transactional
+
+- Finding: passing a stable EventId to a handler makes idempotency possible but does not enforce duplicate suppression. A retry after a crash could invoke a local handler more than once, while doing network/SignalR work inside a database transaction would violate the architecture boundary.
+- Change: add `outbox_inbox_receipts` with unique EventId and `IOutboxInbox.ExecuteOnceAsync`. An atomic PostgreSQL `INSERT ... ON CONFLICT DO NOTHING` wins ownership for one delivery; the receipt and handler-local database writes share one transaction. A handler failure rolls the receipt back; a committed receipt suppresses replay even if the Outbox published-marker update was interrupted. Duplicate suppression is observable without logging event payloads.
+- Invariant: Inbox handlers may perform only local database work in the Inbox transaction. Network, SignalR, files and other external effects must be represented by another Outbox row and delivered after commit; the remote consumer (particularly Agent command execution) still needs durable command-id deduplication.
+- Regression coverage: added PostgreSQL tests for two concurrent calls using the same EventId and for rollback/retry after a handler exception. The disposable PostgreSQL gate asserts the Inbox table/columns and now filters all Outbox tests.
+- Verification status: **pending exact-HEAD CI**. A preceding CI attempt correctly caught a missing EF migration Designer artifact; that artifact has been added, and this expanded Inbox revision must pass the full exact-SHA gates anew.
+- Rollback: revert the Inbox entity/table/dispatcher wiring/test/doc slice together if migration/model or transaction tests fail; do not claim duplicate processing is prevented until the final exact-SHA tests pass.
+
+
+## 2026-10-12 — Enforce Outbox attempt limit after a worker crash
+
+- Finding: a worker can crash after Claim and before calling the handler or recording a failure. Without a claim-side terminal transition, the expired lease could be reclaimed repeatedly and bypass the configured MaxAttempts.
+- Change: ClaimBatchAsync now receives the configured attempt budget, terminalizes expired/unowned rows that already exhausted the budget, and excludes exhausted attempts from the subsequent claim query in the same database transaction.
+- Regression: PostgreSQL integration test simulates a worker crash after the last allowed claim and verifies the next claim returns no event and the row has a stable dead-letter failure code with its lease cleared.
+- Verification status: pending exact-HEAD Quick Validation, Full Foundation and runtime payload CI. Earlier missing migration Designer was corrected, and the latest code head still needs to pass all required checks.
+
+
+## 2026-10-12 — Move Agent health polling out of MainWindow and cancel stale refreshes
+
+- Symptom: `MainWindow.xaml.cs` owned the ten-second DispatcherTimer and an async tick handler. The lifecycle was tied to the shell event handler, difficult to unit-test, and did not pass a cancellation token into the in-flight station-list request on logout/window close.
+- Root cause: scheduling, authentication policy, overlap prevention and request cancellation were combined in a view's code-behind rather than a testable feature/coordinator boundary.
+- Fix: introduce `AgentHealthRefreshCoordinator` plus `IAgentHealthRefreshTimer` and a WPF DispatcherTimer adapter. The coordinator starts only for an authenticated session, respects busy state, prevents overlapping refreshes, cancels the active token on logout/dispose and logs only unexpected exception types. Propagate the token into `GetStationsAsync` and check cancellation before mutating the bound station collections.
+- Regression coverage: add desktop tests for authentication-gated scheduling, ten-second interval, non-overlapping refresh, cancellation on logout and cancellation/unsubscription on disposal.
+- Verification status: **pending exact-HEAD Quick Validation and Full Foundation on this isolated candidate**. CI must prove WPF project compilation and all desktop tests on the same SHA; installed UI/Windows Service/LAN acceptance remains a separate gate.
+- Rollback: revert only the coordinator/timer abstraction, cancellable health-refresh overload and their tests/docs if WPF dispatcher/runtime testing exposes a defect. Do not restore an uncancellable async timer tick in MainWindow.
+
+
+## 2026-10-12 — Enforce operator permissions in Station Board commands and visibility
+
+- Finding: the Server already checked `stations.read` and `stations.operate`, but `LoginViewModel` ignored `CurrentOperatorResponse.Permissions`. The Station Board exposed refresh/mutations/probe commands mainly by busy/selection state, leaving a misleading UI and making accidental unauthorized API calls more likely.
+- Root cause: authorization was enforced at the Server boundary but its effective permission snapshot was not wired into the Desktop's command policy. `AsyncUiAction.Execute` invokes the delegate even when `CanExecute` is false, so a CanExecute-only gate would be insufficient.
+- Fix: inject a permission predicate into `StationBoardViewModel`; require StationsRead for listing/probing and both StationsRead + StationsOperate for mutation commands. Guard refresh/create/probe/mutation handlers themselves before making network calls. Consume the current operator's Server-returned permissions during login, clear permissions immediately on logout/login failure, refresh CanExecute state, and clear cached station data when read permission is absent/revoked. The XAML hides the station workspace without read access, disables creation/field editing without operate permission, and shows localized fa-IR/en-US denial text.
+- Authority boundary: these are UX and request-avoidance controls only. The Server's existing permission checks remain authoritative; no client-side value can grant a Server capability.
+- Regression coverage: add Desktop tests for no-read blocking without an HTTP request, read-only operator command matrix, operate permission, direct `ICommand.Execute` bypass attempts, permission-revocation cache clearing/CanExecute notification, and Login/Logout permission lifecycle.
+- Verification status: **pending exact-HEAD Quick Validation and Full Foundation**. The current candidate must pass WPF build, resource/XAML parse, all Desktop tests and Full Foundation on one fixed SHA. Physical station UI / LAN acceptance remains separate.
+- Rollback: revert the permission-provider/command guards/XAML/resource/test slice together only if automated validation shows an incompatible contract. Do not remove Server authorization as a workaround.
+
+
+## 2026-10-12 — Enforce operator permissions in Station Board commands and visibility
+
+- Finding: the Server already checked `stations.read` and `stations.operate`, but `LoginViewModel` ignored `CurrentOperatorResponse.Permissions`. The Station Board exposed refresh/mutations/probe commands mainly by busy/selection state, increasing the chance of unauthorized API attempts and presenting operations the current role could not perform.
+- Root cause: effective permissions were not wired from the authenticated Server response into Desktop command state. `AsyncUiAction.Execute` invokes its delegate even if `CanExecute` is false, so a CanExecute-only guard would be incomplete.
+- Fix: inject an authoritative-permission predicate into `StationBoardViewModel`; require StationsRead for listing/health probe and StationsRead + StationsOperate for changes. Guard Refresh/Create/Probe/Mutate handlers before any HTTP request. Consume CurrentOperator permissions at login, clear them at login start/failure/logout, update CanExecute notifications, clear cached rows when read access is absent and show localized permission-denied UI. Add a generation fence so a list response that started before logout/permission revocation cannot repopulate cached stations or report success afterward.
+- Authority boundary: these are UX and request-avoidance controls only. Existing Server authorization checks remain authoritative; no client state grants Server capability.
+- Regression coverage: add Desktop tests for no-read blocking with zero HTTP requests, read-only vs operate commands, direct `ICommand.Execute` bypass, login/logout permission lifecycle, CanExecute notification/cache clearing on revocation, and a delayed response completing after permission loss.
+- Verification status: **pending exact-HEAD Quick Validation and Full Foundation**. The candidate must pass WPF build, XAML/resources validation, all Desktop tests and Full Foundation on the same exact SHA. Physical station UI/LAN acceptance remains separate.
+- Rollback: revert the permission-provider/command guards/XAML/resource/test slice together only if automated validation shows an incompatibility. Do not remove Server-side authorization as a workaround.
+
+
+## 2026-10-12 — Make Desktop localization and XAML resource references a build-tested contract
+
+- Finding: existing Desktop unit tests covered culture-name resolution and dictionary filename selection, but did not parse the actual XAML dictionaries or verify that every `DynamicResource` used by `MainWindow.xaml` exists in both supported localizations. A typo or one-sided translation could survive a normal compile and fail at runtime.
+- Fix: add `DesktopResourceContractTests` to parse the fa-IR/en-US dictionaries and MainWindow XAML as XML, assert identical localization key sets, assert every referenced dynamic key exists in both dictionaries, and assert every MainWindow static resource reference resolves locally.
+- Coverage boundary: this is a deterministic static contract gate, not proof of RTL layout, keyboard/focus behavior, navigation, password-field clearing or all loading/offline/permission states. Those still require interactive Windows UI tests.
+- Verification status: pending exact-SHA Quick Validation, Desktop tests and Full Foundation on this independent test candidate.
+- Rollback: retain the resource dictionaries and remove only the test if a confirmed legitimate XAML resource pattern requires the parser to be extended; do not bypass a real missing-key failure.
+
+
+## 2026-10-12 — Verify Desktop binding paths and password field lifecycle wiring
+
+- Finding: localization key parity alone does not catch a typo in `{Binding ...}` or a PasswordBox whose `PasswordChanged` handler is missing/misnamed. PasswordBox content is intentionally not a normal TwoWay binding, so its code-behind synchronization and clear-on-success/logout behavior are part of the UI contract.
+- Fix: add `DesktopBindingAndPasswordContractTests` to parse `MainWindow.xaml`, reflect each root binding against `LoginViewModel`/nested ViewModel properties and each DataTemplate binding against `StationBoardItem`, verify all four named PasswordBox controls wire to an existing handler, and assert the code-behind clears the login field on authentication success and all password-change fields after successful change and logout.
+- Verification boundary: static contracts detect missing members, event wiring and clear calls, but do not exercise a running WPF dispatcher, actual password entry, keyboard navigation, visual focus, RTL geometry or network-confirmed UI states.
+- Verification status: pending exact-SHA Quick Validation and Full Foundation on this isolated candidate.
+- Rollback: remove only the test if the supported XAML binding grammar changes; update the test parser to the actual grammar rather than suppressing real binding failures.
+
+
+## 2026-10-12 — Reconcile Outbox and Desktop candidates into one isolated integration candidate
+
+- Baseline: preserved `integration/runtime-operator-v1` at `82d90178c0011c65eef76bd32cc33318d5bbd91c`; the consolidated tree contains 42 changed paths in one new single-parent commit. Existing PRs #35–#39 remain separate and unmerged for traceability.
+- File overlap resolved: `StationBoardViewModel.cs` now combines operator permission gates, command requery, cache clearing/generation fence and cancellable health refresh. `RefreshHealthAsync(CancellationToken)` matches the coordinator's cancellation delegate, and the token is forwarded to the same `LoadCoreAsync` that rejects stale snapshots.
+- Workflow reconciliation: use one Full Foundation workflow with the `refactor/**` push trigger and explicit Desktop source/test paths, so the combined candidate receives the full gate.
+- Documentation reconciliation: keep the Outbox runbook, build/traceability edits and all append-only bug-fix and UX sections; readiness rows G-03, G-04 and G-05 now describe the combined candidate rather than implying the isolated branches are independently integrated.
+- Test inventory: Outbox reliability/real-PostgreSQL tests, Agent health coordinator lifecycle tests, station permission/revocation race tests, XAML resource contract tests and binding/password lifecycle tests are all present in the same tree.
+- Verification: pending CI on the exact consolidated SHA. A green isolated PR run does not prove this combined commit until its own Quick Validation and Full Foundation complete.
+- Safety boundary: no PR was merged and no changes were made to `main`, `foundation/runtime-final-v2` or the Manager PC. Installed Windows Service/DPAPI/TLS identity and LAN acceptance remain outstanding.
+
+
+## 2026-10-12 — Enforce Station Board busy policy in command handlers
+
+- Finding: `AsyncUiAction.Execute` can invoke a delegate even when `CanExecute` is false. Refresh had a handler-level busy check, but Create, Agent health probe and shared mutation paths relied on command availability for overlap prevention.
+- Risk: direct `ICommand.Execute` while another request was in flight could start a second HTTP request, competing refresh/mutation or probe work and corrupt busy-state UX.
+- Fix: add a fail-closed `IsBusy` guard at the start of Create and Agent health probe handlers and in the shared mutation handler. Refresh keeps its existing handler-level guard.
+- Regression: add a Desktop test that holds a station-list refresh open, invokes every command directly while busy, and asserts no additional list, mutation or Agent probe request is sent.
+- Verification: the follow-up candidate must pass Quick Validation, Full Foundation and Runtime payload on its exact new HEAD before PR #40 can be merged. Earlier green runs on SHA `a0944c33...` do not certify this new fix.
+- Rollback: revert only the handler-level guards and associated regression test if verified supported behavior conflicts, while preserving permission checks and server-side authorization. Do not restore CanExecute-only busy enforcement.

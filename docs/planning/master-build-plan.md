@@ -13,20 +13,18 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
-## Current execution sequence lock — 2026-10-10
+## Current execution sequence lock — 2026-10-12
 
-The live risk/state list is [Engineering Readiness Register](engineering-readiness-register.md). This section supersedes older "current step" statements below where dates/status conflict; dated evidence remains as history.
+This is the live execution order; older stage notes below are historical where they disagree.
 
-1. Keep main and foundation/runtime-final-v2 unchanged. The last recorded stable-checkpoint certificate is exact-SHA evidence, not a blanket certificate for a later branch tip; run Foundation on the exact current tip before calling it certified.
-2. Review PR #23 and #24 at their exact tested heads, without direct merge or assuming CI proves service/LAN behavior.
-3. Review/accept ADR-0002 (PR #18), then diff-review and selectively port the protected Server secret-store implementation in PR #20. Before any Manager machine action, review the read-only inspect-manager-runtime-state.ps1 output; do not run provisioning/TLS/cleanup scripts blindly.
-4. Prove real Server/Agent Windows service identities, Service SID/private-key/secret ACLs, DPAPI persistence, authenticated single-use Agent enrollment with atomic redemption/replay protection, lease/heartbeat and service restart/reconnect over normally validated HTTPS with a disposable DB.
-5. Only after runtime boundary acceptance, continue isolated UI boundary refactoring (Agent health timer, Login/Password views, shell/navigation, permission-aware commands and binding/locale tests), then follow the numbered business module order.
-6. Every vertical slice requires an explicit REQ ID mapped to domain invariant, permissions, transaction/idempotency/concurrency, audit, recovery, automated and physical tests as applicable, and exact-SHA evidence.
-7. Setup/updater/repair/rollback remain later release-boundary work but are mandatory before production. A self-contained ZIP is not Setup.exe/MSI, and CI/loopback is not physical-install certification.
-
-Current UI boundary work is an early architecture-hardening slice; it does not replace Stage 14's final design system. Avoid mixing a theme/layout overhaul with TLS, service identity or business-domain changes in one commit.
-
+1. Keep `main` and `foundation/runtime-final-v2` unchanged. The active target is the protected `integration/runtime-operator-v1` branch.
+2. PR #40 is the single reconciled candidate for source PRs #35–#39 (42 paths, exact union). Review found that some Station Board handlers relied only on `CanExecute` for the busy gate; handler-level guards and a direct-`ICommand.Execute` regression test are being added. The follow-up must pass Quick Validation, Full Foundation and Runtime payload on one exact latest SHA before merge.
+3. After exact-head review, Squash-merge #40 only to `integration/runtime-operator-v1`. Do not merge source PRs #35–#39 individually. Confirm the resulting merge SHA and rerun/read back post-merge gates before closing the stage.
+4. PRs #15, #31 and #32 are separate Drafts with overlapping workflow and PostgreSQL verifier changes. Choose an explicit, bounded runner/workflow strategy after #40; do not merge any of them wholesale. The #40 certification currently uses self-hosted Windows and must not be described as hosted-runner certification.
+5. Re-run Full Foundation on the exact current `foundation/runtime-final-v2` tip before treating it as the active certified checkpoint. Keep the last historical Stable Checkpoint tied to its actual recorded SHA.
+6. Installed Server/Agent Windows-service identity, ACLs, DPAPI/TLS private-key access after restart, single-use enrollment/replay/revoke, lease/fencing, reconnect and two-PC physical LAN remain an operational gate. Review the read-only `inspect-manager-runtime-state.ps1` report before touching the existing Manager PC; use isolated test PCs and a disposable DB.
+7. Complete interactive WPF RTL/LTR, keyboard/focus, navigation and error-state acceptance. Only then continue customer/session/finance/inventory vertical slices in the numbered plan, with requirement-to-code/test/evidence traceability.
+8. Setup.exe/MSI, PostgreSQL deployment lifecycle, install/upgrade/repair/uninstall, staged update/rollback, signed release artifacts, SBOM and the 2–3-PC then ~15-station pilot remain mandatory release-boundary work.
 
 ## Work item readiness and closure (mandatory)
 
@@ -157,7 +155,7 @@ Work only in platform infrastructure:
 - implement real PostgreSQL design-time/runtime migration path;
 - implement real audit storage boundary;
 - implement idempotency storage boundary;
-- implement outbox storage and dispatcher boundary;
+- implement durable Outbox append/leased-claim/published-state storage; event delivery also requires a hosted worker, versioned routing, capped retry/backoff, attempt limit/dead-letter and delivery observability; test PostgreSQL concurrent claims, stale leases, retry windows, final failure and recovery before any async-dependent slice;
 - implement correlation/diagnostic context;
 - add transaction/concurrency integration tests;
 - add Agent device identity, authentication, lease/fencing and reconnect transport;
@@ -165,10 +163,10 @@ Work only in platform infrastructure:
 - add fa-IR/en-US localization resources;
 - add native Desktop smoke harness;
 - add backup/restore proof;
-- add updater/rollback proof;
+- keep Setup/updater/repair/uninstall/rollback proof in Stages 15–18 and Gate E; do not pull installer certification into Foundation Gate A;
 - record exact evidence.
 
-Exit condition: Foundation Certification document can honestly be marked green.
+Exit condition: Full Foundation is green on the exact candidate SHA. This closes hosted Foundation only; installed Windows-service/physical-LAN acceptance remains a separate gate required before commercial vertical slices.
 
 ## Stage 2 — Repository and module skeleton
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -5,12 +6,14 @@ using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Shared.Contracts.V1.Identity;
+using GameNet.Shared.Contracts.V1.Security;
 
 namespace GameNet.Desktop.Features.Identity;
 
 public sealed class LoginViewModel : INotifyPropertyChanged
 {
     private readonly IGameNetServerClient serverClient;
+    private HashSet<string> permissions = new(StringComparer.Ordinal);
     private string username = string.Empty, password = string.Empty, errorMessage = string.Empty;
     private string displayName = string.Empty, currentUsername = string.Empty;
     private string currentPassword = string.Empty, newPassword = string.Empty, confirmNewPassword = string.Empty;
@@ -25,7 +28,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
         LogoutCommand = new AsyncUiAction(LogoutAsync, () => !IsBusy && IsAuthenticated);
         ChangePasswordCommand = new AsyncUiAction(ChangePasswordAsync, () => !IsBusy && IsAuthenticated);
-        StationBoard = new StationBoardViewModel(serverClient);
+        StationBoard = new StationBoardViewModel(serverClient, HasPermission);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -44,10 +47,25 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     public string PasswordChangeMessage { get => passwordChangeMessage; private set => SetField(ref passwordChangeMessage, value); }
     public bool PasswordChangeSucceeded { get => passwordChangeSucceeded; private set => SetField(ref passwordChangeSucceeded, value); }
     public bool IsBusy { get => isBusy; private set { if (SetField(ref isBusy, value)) RaiseCommands(); } }
-    public bool IsAuthenticated { get => isAuthenticated; private set { if (SetField(ref isAuthenticated, value)) RaiseCommands(); } }
+    public bool IsAuthenticated
+    {
+        get => isAuthenticated;
+        private set
+        {
+            if (SetField(ref isAuthenticated, value))
+            {
+                RaiseCommands();
+                RaisePermissionStateChanged();
+            }
+        }
+    }
+    public bool CanReadStations => HasPermission(Permissions.StationsRead);
+    public bool CanOperateStations => HasPermission(Permissions.StationsRead) &&
+                                      HasPermission(Permissions.StationsOperate);
 
     private async Task LoginAsync()
     {
+        SetPermissions(Array.Empty<string>());
         ErrorMessage = string.Empty;
         if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
         {
@@ -59,6 +77,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         {
             await serverClient.LoginAsync(new LoginRequest(Username, Password));
             var current = await serverClient.GetCurrentOperatorAsync();
+            SetPermissions(current.Permissions ?? Array.Empty<string>());
             DisplayName = current.DisplayName;
             CurrentUsername = current.Username;
             IsAuthenticated = true;
@@ -68,6 +87,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         catch (GameNetApiException exception)
         {
             serverClient.ClearSession();
+            SetPermissions(Array.Empty<string>());
             ErrorMessage = exception.Code switch
             {
                 "auth.invalid_credentials" => Text("نام کاربری یا گذرواژه نادرست است.", "Username or password is incorrect."),
@@ -80,16 +100,19 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         catch (HttpRequestException)
         {
             serverClient.ClearSession();
+            SetPermissions(Array.Empty<string>());
             ErrorMessage = Text("ارتباط با سرور برقرار نشد. اتصال شبکه را بررسی کنید.", "Could not connect to the Server. Check your network.");
         }
         catch (TaskCanceledException)
         {
             serverClient.ClearSession();
+            SetPermissions(Array.Empty<string>());
             ErrorMessage = Text("پاسخی از سرور دریافت نشد.", "The Server did not respond in time.");
         }
         catch
         {
             serverClient.ClearSession();
+            SetPermissions(Array.Empty<string>());
             ErrorMessage = Text("ورود انجام نشد. وضعیت سرور را بررسی کنید.", "Sign in failed. Check the Server status.");
         }
         finally { IsBusy = false; }
@@ -177,6 +200,8 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     {
         ErrorMessage = string.Empty;
         IsBusy = true;
+        IsAuthenticated = false;
+        SetPermissions(Array.Empty<string>());
         try { await serverClient.LogoutAsync(); }
         catch
         {
@@ -187,6 +212,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         {
             serverClient.ClearSession();
             IsAuthenticated = false;
+            SetPermissions(Array.Empty<string>());
             DisplayName = string.Empty;
             CurrentUsername = string.Empty;
             Password = string.Empty;
@@ -199,6 +225,26 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             ClearPendingPasswordChange();
             IsBusy = false;
         }
+    }
+
+    private bool HasPermission(string permission) =>
+        IsAuthenticated && permissions.Contains(permission);
+
+    private void SetPermissions(IEnumerable<string>? grantedPermissions)
+    {
+        var next = new HashSet<string>(grantedPermissions ?? Array.Empty<string>(), StringComparer.Ordinal);
+        if (permissions.SetEquals(next))
+            return;
+
+        permissions = next;
+        RaisePermissionStateChanged();
+    }
+
+    private void RaisePermissionStateChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanReadStations)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanOperateStations)));
+        StationBoard.NotifyPermissionsChanged();
     }
 
     private void RaiseCommands()

@@ -1,14 +1,14 @@
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Threading;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Stations;
 
 namespace GameNet.Desktop.Shell;
 
 public partial class MainWindow : Window
 {
-    private readonly DispatcherTimer stationHealthRefreshTimer;
+    private readonly AgentHealthRefreshCoordinator stationHealthRefreshCoordinator;
 
     public MainWindow(IGameNetServerClient serverClient)
     {
@@ -17,20 +17,17 @@ public partial class MainWindow : Window
         viewModel.PropertyChanged += ViewModelOnPropertyChanged;
         DataContext = viewModel;
 
-        stationHealthRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-        stationHealthRefreshTimer.Tick += async (_, _) =>
-        {
-            if (DataContext is LoginViewModel { IsAuthenticated: true } current &&
-                !current.IsBusy &&
-                !current.StationBoard.IsBusy)
-            {
-                await current.StationBoard.RefreshHealthAsync();
-            }
-        };
+        stationHealthRefreshCoordinator = new AgentHealthRefreshCoordinator(
+            viewModel,
+            () => viewModel.IsAuthenticated,
+            () => viewModel.IsBusy,
+            () => viewModel.StationBoard.IsBusy,
+            viewModel.StationBoard.RefreshHealthAsync,
+            new DispatcherAgentHealthRefreshTimer());
 
         Closed += (_, _) =>
         {
-            stationHealthRefreshTimer.Stop();
+            stationHealthRefreshCoordinator.Dispose();
             viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
         };
     }
@@ -65,12 +62,7 @@ public partial class MainWindow : Window
             sender is LoginViewModel { IsAuthenticated: true })
         {
             PasswordInput.Clear();
-            stationHealthRefreshTimer.Start();
         }
-
-        if (e.PropertyName == nameof(LoginViewModel.IsAuthenticated) &&
-            sender is LoginViewModel { IsAuthenticated: false })
-            stationHealthRefreshTimer.Stop();
 
         if (e.PropertyName == nameof(LoginViewModel.PasswordChangeSucceeded) &&
             sender is LoginViewModel { PasswordChangeSucceeded: true })
