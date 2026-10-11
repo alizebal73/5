@@ -1,5 +1,7 @@
 # Stable Checkpoint — GameNet 5 Foundation
 
+> **Exact-SHA caveat — 2026-10-10:** this record names the last SHA for which this document holds explicit certification evidence; it does not certify every newer tip of foundation/runtime-final-v2. The observed branch tip is be29687e637b709158a30204bb9213bfa4813950, two commits ahead of this recorded SHA (workflow/marker/log/checkpoint changes). GitHub read-back for that tip was pending and no successful workflow run for that exact SHA was found. Re-run the required Foundation workflow on the exact tip before treating it as the current certified checkpoint. Current Runtime/operator PR evidence is recorded separately in the [Engineering Readiness Register](../planning/engineering-readiness-register.md).
+
 Status: **CERTIFIED**
 
 - Certified code commit: `c3a8ba482548e963479fbdf8538be62c4d15acfe`
