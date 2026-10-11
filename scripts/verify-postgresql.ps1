@@ -354,7 +354,6 @@ try {
 
             Set-Location -LiteralPath $workspacePath
 
-            $ef = "dotnet-ef"
             $args = @(
                 "database", "update",
                 "--configuration", "Release",
@@ -364,7 +363,7 @@ try {
                 "--context", "GameNet.Server.Persistence.GameNetDbContext"
             )
 
-            $output = & $ef @args 2>&1
+            $output = & $dotnet "tool" "run" "dotnet-ef" "--" @args 2>&1
             [pscustomobject]@{
                 Workspace = $workspacePath
                 ExitCode = $LASTEXITCODE

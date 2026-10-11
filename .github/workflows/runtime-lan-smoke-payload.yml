@@ -2,6 +2,34 @@ name: Runtime LAN Smoke Payload
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "security/**"
+    paths:
+      - ".github/workflows/runtime-lan-smoke-payload.yml"
+      - "GameNet.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - "src/Server/**"
+      - "src/Client/**"
+      - "src/Desktop/**"
+      - "src/Shared/**"
+      - "scripts/configure-server-tls.ps1"
+      - "scripts/trust-server-certificate.ps1"
+      - "scripts/configure-runtime-endpoint.ps1"
+      - "scripts/write-protected-server-settings.ps1"
+      - "scripts/finalize-server-setup.ps1"
+      - "scripts/bootstrap-admin.ps1"
+      - "scripts/inspect-manager-runtime-state.ps1"
+      - "docs/operations/initial-admin-setup.md"
+      - "scripts/configure-agent-runtime-state.ps1"
+      - "scripts/provision-agent-enrollment.ps1"
+      - "docs/operations/agent-service-state.md"
+      - "scripts/test-runtime-endpoint.ps1"
+      - "scripts/modules/ServerTlsCertificate.psm1"
+      - "docs/operations/runtime-endpoints.md"
+
   pull_request:
     branches:
       - "foundation/runtime-*"
@@ -41,7 +69,7 @@ concurrency:
 jobs:
   build-payload:
     name: Build portable runtime payload (not Setup)
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     timeout-minutes: 35
     env:
       GAMENET_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
