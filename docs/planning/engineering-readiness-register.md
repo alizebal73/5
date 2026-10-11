@@ -2,7 +2,7 @@
 
 این سند، دفتر زندهٔ ریسک‌ها و ترتیب اجرای کار است. تاریخ snapshot: 2026-10-11. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ آن‌ها را به ترتیب اجرایی و وضعیت واقعی وصل می‌کند. هر ادعای Done باید به commit، آزمون و مدرک همان SHA متصل باشد.
 
-## Evidence baseline — GitHub read-back immediately after PR #42 (2026-10-12; historical snapshot)
+## Current verified baseline — 2026-10-12 (post-merge read-back; historical snapshot, not a live pointer)
 
 This section records evidence and a timestamped ref read-back. It is not a live pointer to the current Integration head: documentation commits advance that branch. Always read the live branch from GitHub before dispatching or merging anything.
 
