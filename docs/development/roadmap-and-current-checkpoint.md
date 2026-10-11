@@ -23,6 +23,15 @@
 - گیت پذیرش فیزیکی Runtime نیز جداست: ابتدا گزارش خواندنی `scripts/inspect-manager-runtime-state.ps1` بررسی شود؛ سپس روی PCهای آزمایشی ایزوله و دیتابیس دورریختنی، Service identity، ACL، DPAPI/TLS پس از restart، enrollment replay/revoke، lease/heartbeat و reconnect LAN آزموده شوند. تغییر Manager واقعی بدون preflight و تأیید ممنوع است.
 - آزمون تعاملی WPF برای RTL/LTR، focus/keyboard/navigation، وضعیت‌های permission/offline/loading/error و نیز نصاب، Update/Rollback، امضای انتشار و pilot گیت‌های مجزا هستند و مرحلهٔ اول را دوباره باز نمی‌کنند.
 
+### رویدادهای تأییدشده پس از snapshot قبلی — 2026-10-12
+
+- [PR #44](https://github.com/alizebal73/5/pull/44) استاندارد CI شاخهٔ Integration را روی Runner میزبانی‌شدهٔ `windows-2025` تثبیت کرد. کاندید `92de1b1fb6002165fc91c7f66b4ecec1c969c0ff` روی [Quick push](https://github.com/alizebal73/5/actions/runs/38183164928)، [Quick PR](https://github.com/alizebal73/5/actions/runs/38183167294)، [Full Foundation](https://github.com/alizebal73/5/actions/runs/38183164941) و [Runtime Payload](https://github.com/alizebal73/5/actions/runs/38183167300) موفق شد.
+- SHA ادغام‌شدهٔ Integration برابر `161b4cbbbe16cd3fd4046f174a1c09380139c67b` است؛ [Quick Validation پس از ادغام](https://github.com/alizebal73/5/actions/runs/38183458461) و [Full Foundation پس از ادغام](https://github.com/alizebal73/5/actions/runs/38183458486) نیز روی همان SHA موفق شدند.
+- شکست ساخت Migration Bundle با تنظیم اتصال طراحیِ غیرقابل‌استفاده و موقتی، بازگرداندن متغیرهای محیطی و الزام بررسی `--connection` رفع شد؛ هیچ اعتبارنامهٔ واقعی دیتابیس وارد ZIP نمی‌شود. ZIP همچنان payload آزمایشی است، نه Setup/MSI.
+- PR #31 به دلیل هم‌پوشانی کارهای Runner با #44 بدون ادغام بسته شد؛ شاخهٔ آن برای استخراج جداگانهٔ ابزار ثبت سرویس آزمایشی و runbook حفظ شده است.
+- این شواهد، پذیرش فیزیکی Windows Service/ACL/DPAPI/TLS/LAN یا آزمون تعاملی WPF را اثبات نمی‌کنند؛ آن‌ها گیت‌های مستقل هستند و مرحلهٔ یکپارچه‌سازی کد را دوباره باز نمی‌کنند.
+
+
 ### نقطهٔ آغاز ثبت‌شده
 
 - مرحلهٔ ۰: تکمیل‌شده برای شکست اخیر. لاگ GitHub Actions، اجرای Foundation شمارهٔ ۱۵۹، نشان داد Build در `Canonical verification` به‌علت تگ XML نادرست در دو فایل منابع WPF متوقف شده است.
