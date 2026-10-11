@@ -518,3 +518,62 @@ When a defect reaches production or certification, fix the root boundary, add re
 - The same exact SHA produced and uploaded payload artifact [gamenet-deployment-payload-7ab5108b342c74d88faf87ba6303a1c08ac9de9b](https://api.github.com/repos/alizebal73/5/actions/artifacts/11632326010) (157,201,938 bytes; digest `sha256:dfe2f180df6d41d3a0526fb4e315785f40f8b28bf913de212fa0ccb953def79b`; expires 2026-10-16). It is still ZIP payloads, not Setup.exe/MSI.
 - Open risks: client-side fingerprint-verified trust installation; external ProgramData runtime configuration for Desktop/Agent; actual Production HTTPS health/login/Agent handshake over LAN; bootstrap-secret erasure after first owner; service installation and physical two-PC validation. Certificate generation is automated-test-certified, not yet certified in a complete on-machine installation.
 
+## 2026-10-10 — Protected Server settings migration validation regression
+
+- Symptom: Quick Validation failed two Server unit tests on merge-checkout SHA `429d764c1529b5a1151e3aac229c27b1f74a0fbc` (PR head `0eaebb4ea656f9298d7301e50c3f0c2613c0127a`; run [38046791986](https://github.com/alizebal73/5/actions/runs/38046791986)). One test exposed a setup-only protected settings file being rejected because the reader indexed missing deployment-secret keys; the other encoded the previous assumption that the database connection string must be present in `GameNetOptions`.
+- Root cause: `ProtectedServerSettings.Read` still unconditionally validated JWT-signing and Agent-provisioning keys after the new secret-store migration made those values optional legacy entries. Separately, the old options test no longer matched the active design, where EF Core receives the PostgreSQL connection string through `IDatabaseConnectionSecret` rather than ordinary configuration.
+- Fix: remove the two leftover unconditional signing/provisioning-key checks while retaining validation for those keys when present in legacy files; rename and update the options test to assert that ordinary `GameNetOptions` configuration can omit deployment credentials.
+- Regression coverage: `Protected_setup_settings_can_omit_runtime_deployment_secrets` and the revised options-validation test.
+- Verification: Quick Validation #196 succeeded on merge checkout `ab46b46` for prior PR head `3b43f269e3bfb42e3b5b52e8df9be887fc68d129` merged with base `55a340305f9eba3bc8f9a1ce65fb37bedbae7580`: [run 38047147586](https://github.com/alizebal73/5/actions/runs/38047147586). Both the PowerShell parser gate and canonical Release build/tests passed. This evidence predates the subsequent bootstrap-settings ACL hardening entry below.
+- Rollback: revert only this bounded validation/test correction if the regression tests expose an incompatibility. Do not reintroduce runtime secrets into the protected setup settings file or `GameNetOptions`.
+
+## 2026-10-10 — Protect bootstrap settings ACL at creation time
+
+- Symptom: `scripts/write-protected-server-settings.ps1` wrote the machine-DPAPI-protected setup settings file using the directory's inherited ACL and restricted the file ACL only after writing the ciphertext. Because the containing configuration directory allows ordinary Users read/execute, this created a short window in which a local user could read the encrypted bootstrap-secret blob.
+- Root cause: file creation and ACL hardening were separate filesystem operations; DPAPI `LocalMachine` protection does not itself restrict which local accounts can read a ciphertext file.
+- Fix: create the file with a protected, explicit DACL from the first filesystem operation: SYSTEM and local Administrators receive FullControl, while the configured Server service identity receives Read. Reject a service-account principal that resolves to SYSTEM or Administrators. Retain the subsequent `icacls` application as defense in depth; no existing file is overwritten.
+- Regression coverage: the canonical PowerShell parser gate must pass on the updated script. CI parsing alone does not prove effective Windows ACL behavior; a dedicated Windows setup/service test remains required.
+- Verification: code committed as `20884b151f6c8dc78c643a5c1eceb3cc6c101a99`; Quick Validation for this updated script and the resulting exact PR head is pending.
+- Rollback: revert only this file-creation ACL change if the Windows/API verification identifies an incompatibility. Never restore create-then-tighten ACL ordering for the DPAPI-protected bootstrap file.
+
+
+## 2026-10-10 — Enforce protected setup settings at Production startup
+
+- Finding: the Server computed `protectedSettingsEnabled` from configuration but did not reject a Production configuration where the flag was missing or false. It also honored `GAMENET_PROTECTED_SETTINGS_FILE` in Production, allowing a noncanonical DPAPI settings-file path even though the deployment contract specifies the ACL-restricted ProgramData location.
+- Risk: Production could start without loading the expected protected setup settings, or use an explicitly supplied alternate path. That weakened the fail-closed boundary for the initial Owner bootstrap secret.
+- Fix: add Production startup policy guards requiring `GameNet:ProtectedSettings:Enabled=true` and rejecting the protected-settings path override in Production. Non-Production test hosts retain the explicit path seam.
+- Regression coverage: added policy tests for Production rejection, valid Production settings, and Development test-path compatibility.
+- Verification: Quick Validation #205 passed for PR head `12e28216968f79b1947ffdc316d4ec1ccdb357f2` on merge checkout `478ccd91fed345880c71c0604993ab9d4897ffdc` (base `55a340305f9eba3bc8f9a1ce65fb37bedbae7580`): [run 38048106104](https://github.com/alizebal73/5/actions/runs/38048106104). PowerShell parsing passed; Release build had 0 warnings/errors; 143 tests passed with 0 failures/skips (Server 64, Agent 22, Desktop 18, Shared 38, Contract 1). Physical service identity, effective ACL, DPAPI restart and TLS private-key checks remain unverified.
+- Rollback: revert only the new Production policy enforcement and its tests if a supported Production configuration proves incompatible. Do not restore an unguarded alternate settings path or permit Production startup without protected settings.
+
+
+## 2026-10-10 — Clear Agent provisioning-key comparison buffers
+
+- Finding: the provisioning-key validator correctly used a fixed-time comparison, but left the UTF-8 byte arrays containing both the protected expected key and the supplied request header to ordinary garbage collection. The credential revoke endpoint also did not consistently set `Cache-Control: no-store` across successful and rejected responses.
+- Fix: zero both comparison buffers in a `finally` block and apply `Cache-Control: no-store` before validating provision, rotate and revoke requests, so secret-bearing responses and authorization failures are not cached.
+- Scope limit: these changes are hygiene hardening only. The provision/rotate/revoke routes still rely on the shared protected provisioning key; the independently authenticated management issue-token flow with atomic single-use redemption remains a separate required slice.
+- Verification: Quick Validation for this code change and the resulting current PR head is pending; prior CI success does not certify this commit.
+- Rollback: revert only the buffer-clearing and cache-policy changes if a verified compatibility issue arises; do not weaken the fixed-time key comparison.
+
+
+## 2026-10-10 — Restore the documented read-only Manager preflight
+
+- Finding: `docs/operations/initial-admin-setup.md` required a read-only preflight from `scripts/inspect-manager-runtime-state.ps1`, but that script did not exist in the active integration target. An operator could not produce the promised evidence before making setup changes.
+- Fix: add the read-only preflight. It reports Server service state/logon account, service SID type and SID, public listener settings, certificate metadata, listener presence, and ACL entries for ProgramData settings/secrets paths and the TLS machine private-key file. It intentionally withholds the raw service command line and never opens/decrypts the protected secret payloads.
+- Safety boundary: the script is observational only. Its report is evidence for human review, not proof of effective service permissions, DPAPI restart access or an HTTPS handshake; provisioning remains a separate explicit step.
+- Verification: the canonical PowerShell parser gate and Release build/tests on the final current PR head are required; prior CI runs do not cover this new script.
+- Rollback: remove this script only if a supported Windows environment demonstrates a concrete compatibility issue; otherwise preserve the read-only preflight and correct it without adding machine-changing behavior.
+
+## 2026-10-10 — Apply no-store to every Agent token response
+
+- Finding: `/api/v1/agent/auth/token` only set `Cache-Control: no-store` after successful authentication. Disabled-authentication and rejected-credential responses took an earlier return path without the same explicit cache policy.
+- Fix: set the response cache policy at the start of the route, before the disabled-authentication check and credential authentication, matching the provision/rotate/revoke endpoints.
+- Verification: Quick Validation must run against the resulting exact PR head. The workflow currently uses a self-hosted Windows runner; queued status is not a pass or failure. No live runtime or installed service was exercised.
+- Rollback: revert only this response-header placement if a supported integration test demonstrates a compatibility issue; retain no-store for responses that may carry credentials or tokens.
+
+## 2026-10-10 — Include Manager parent ACL in the read-only preflight
+
+- Finding: the preflight reported ACLs for the Config and Secrets child paths but omitted the `%ProgramData%\GameNet Manager` parent directory. Parent-level delete-child/write rights can affect whether protected child directories can be replaced even when those children have restrictive DACLs.
+- Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
+- Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
+- Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.

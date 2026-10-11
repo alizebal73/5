@@ -25,6 +25,7 @@ public static class AgentCredentialRoutes
                 HttpResponse response,
                 CancellationToken cancellationToken) =>
             {
+                response.Headers.CacheControl = "no-store";
                 if (!options.Value.Authentication.Enabled)
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 
@@ -32,7 +33,6 @@ public static class AgentCredentialRoutes
                     return Results.Unauthorized();
 
                 var token = tokenIssuer.Issue(request.DeviceId);
-                response.Headers.CacheControl = "no-store";
                 return Results.Ok(token);
             }).AllowAnonymous();
 
@@ -41,16 +41,16 @@ public static class AgentCredentialRoutes
                 HttpContext context,
                 AgentCredentialProvisionRequest request,
                 IAgentCredentialService credentials,
-                IOptions<GameNetOptions> options,
+                IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
-                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                context.Response.Headers.CacheControl = "no-store";
+                var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
                 {
                     var issued = await credentials.ProvisionAsync(request, cancellationToken);
-                    context.Response.Headers.CacheControl = "no-store";
                     return Results.Ok(issued);
                 }
                 catch (AgentCredentialException ex)
@@ -64,16 +64,16 @@ public static class AgentCredentialRoutes
                 HttpContext context,
                 AgentCredentialRotateRequest request,
                 IAgentCredentialService credentials,
-                IOptions<GameNetOptions> options,
+                IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
-                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                context.Response.Headers.CacheControl = "no-store";
+                var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
                 {
                     var issued = await credentials.RotateAsync(request, cancellationToken);
-                    context.Response.Headers.CacheControl = "no-store";
                     return Results.Ok(issued);
                 }
                 catch (AgentCredentialException ex)
@@ -87,10 +87,11 @@ public static class AgentCredentialRoutes
                 HttpContext context,
                 AgentCredentialRevokeRequest request,
                 IAgentCredentialService credentials,
-                IOptions<GameNetOptions> options,
+                IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
-                var denied = ValidateProvisioningKey(context, options.Value.Agent.ProvisioningKey);
+                context.Response.Headers.CacheControl = "no-store";
+                var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
 
                 try
@@ -110,21 +111,30 @@ public static class AgentCredentialRoutes
             new ApiError(exception.Code, "The Agent credential operation was rejected."),
             CorrelationIdMiddleware.GetCurrent(context)));
 
-    private static IResult? ValidateProvisioningKey(HttpContext context, string? expectedKey)
+    private static IResult? ValidateProvisioningKey(HttpContext context, string expectedKey)
     {
-        if (string.IsNullOrWhiteSpace(expectedKey))
-            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-
         var supplied = context.Request.Headers[ProvisioningHeader].ToString();
         if (string.IsNullOrWhiteSpace(supplied))
             return Results.Unauthorized();
 
-        var expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
-        var suppliedBytes = Encoding.UTF8.GetBytes(supplied);
+        byte[]? expectedBytes = null;
+        byte[]? suppliedBytes = null;
+        try
+        {
+            expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
+            suppliedBytes = Encoding.UTF8.GetBytes(supplied);
 
-        return expectedBytes.Length == suppliedBytes.Length &&
-               CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
-            ? null
-            : Results.Unauthorized();
+            return expectedBytes.Length == suppliedBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
+                ? null
+                : Results.Unauthorized();
+        }
+        finally
+        {
+            if (expectedBytes is not null)
+                CryptographicOperations.ZeroMemory(expectedBytes);
+            if (suppliedBytes is not null)
+                CryptographicOperations.ZeroMemory(suppliedBytes);
+        }
     }
 }

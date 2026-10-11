@@ -11,6 +11,7 @@ namespace GameNet.Server.Persistence;
 public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options) : DbContext(options)
 {
     public DbSet<AgentCredential> AgentCredentials => Set<AgentCredential>();
+    public DbSet<AgentEnrollmentToken> AgentEnrollmentTokens => Set<AgentEnrollmentToken>();
     public DbSet<AgentConnectionLease> AgentConnectionLeases => Set<AgentConnectionLease>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
@@ -44,6 +45,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new AgentCredentialConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentEnrollmentTokenConfiguration());
         modelBuilder.ApplyConfiguration(new AgentConnectionLeaseConfiguration());
         modelBuilder.ApplyConfiguration(new AuditEntryConfiguration());
         modelBuilder.ApplyConfiguration(new IdempotencyRecordConfiguration());

@@ -15,11 +15,11 @@ These files contain endpoints and certificate thumbprints, not passwords, provis
 
 Run an elevated PowerShell session on the Server PC. Replace the sample IPv4 address, port, and service account with the actual values for this installation:
 
-    .\scripts\configure-server-tls.ps1 -ServerIp "192.168.0.9" -DnsName "gamenet.local" -HttpsPort 5080 -ServiceAccount "NT AUTHORITY\NETWORK SERVICE"
+    .\scripts\configure-server-tls.ps1 -ServerIp "192.168.0.9" -DnsName "gamenet.local" -HttpsPort 5080 -ServiceAccount "NT SERVICE\GameNet 5 Server"
 
 This creates a machine certificate with a SAN for the provided IP and DNS name, places it in the LocalMachine certificate store, configures the Server endpoint and certificate thumbprint in ProgramData, and exports only the public .cer file for client trust. It also grants the configured Windows service identity access to the private key. The private key is not exported.
 
-The script prints two different identifiers. The 40-character Windows certificate-store thumbprint is used only by the Server to locate the certificate in LocalMachine\My. For client trust, record and independently verify the 64-character SHA-256 fingerprint of the exported public .cer file; do not use the SHA-1 thumbprint as the out-of-band integrity check. The script's service account must match the actual Windows account that runs GameNet 5 Server. When setup registers the service with a different account, pass that account explicitly. Restart the Server service after the configuration is in place.
+The script prints two different identifiers. The 40-character Windows certificate-store thumbprint is used only by the Server to locate the certificate in LocalMachine\My. For client trust, record and independently verify the 64-character SHA-256 fingerprint of the exported public .cer file; do not use the SHA-1 thumbprint as the out-of-band integrity check. The setup script and protected-settings runtime require the dedicated `NT SERVICE\GameNet 5 Server` service SID; a shared `NETWORK SERVICE` account is rejected. Verify both the registered Windows service identity and its service SID before executing this command. Restart the Server service after the configuration is in place.
 
 The configuration binds HTTPS to the selected server IP and port. Production startup refuses a non-loopback HTTP listener or an HTTPS listener without a valid certificate thumbprint.
 
@@ -39,7 +39,11 @@ Run elevated PowerShell on each client PC, using the exact host or IP present in
     .\scripts\test-runtime-endpoint.ps1 -Component Desktop
     .\scripts\test-runtime-endpoint.ps1 -Component Agent
 
-If a computer only needs one component, use -Component Desktop or -Component Agent. Restart the Desktop app and the Agent Windows service to load the files.
+If a computer only needs one component, use -Component Desktop or -Component Agent. On each dedicated Agent client, before starting the Agent Windows service, run the elevated state-provisioning helper described in [Agent Windows Service State Provisioning](agent-service-state.md):
+
+    .\scripts\configure-agent-runtime-state.ps1
+
+That helper requires the registered Agent service to be stopped and running as NT AUTHORITY\LocalService. It enables the dedicated Agent service SID, protects the ProgramData state directory, and verifies its DACL. Do not run it on a Server/Manager machine. Restart the Agent service after service-SID configuration; do not substitute an interactive Agent process for the service test.
 
 The endpoint helper accepts HTTPS for network hosts. Plain HTTP is accepted only for loopback development/certification. Foundation runtime harnesses use the explicit GAMENET_TEST_RUNTIME_CONFIG_DIRECTORY test seam only with Development environment markers; it is rejected when either host environment is Production. This lets CI prove that Server, Desktop, and Agent consume their JSON configuration without writing to real machine ProgramData. URLs containing user information, query strings, fragments, or application paths are rejected. Neither HttpClient nor SignalR has a certificate-validation bypass.
 

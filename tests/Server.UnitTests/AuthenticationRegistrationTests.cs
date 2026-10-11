@@ -24,14 +24,14 @@ public sealed class AuthenticationRegistrationTests
             {
                 Enabled = true,
                 Issuer = issuer,
-                Audience = audience,
-                SigningKey = signingKey
+                Audience = audience
             }
         };
 
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IOptions<GameNetOptions>>(Options.Create(applicationOptions));
+        services.AddSingleton<IJwtSigningKeySecret>(new TestSigningKeySecret(signingKey));
         services.AddGameNetAuthentication();
 
         using var provider = services.BuildServiceProvider();
@@ -47,4 +47,6 @@ public sealed class AuthenticationRegistrationTests
             Convert.ToHexString(((SymmetricSecurityKey)bearerOptions.TokenValidationParameters.IssuerSigningKey!).Key));
         Assert.NotNull(bearerOptions.Events.OnMessageReceived);
     }
+
+    private sealed record TestSigningKeySecret(string SigningKey) : IJwtSigningKeySecret;
 }

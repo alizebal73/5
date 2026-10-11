@@ -3,7 +3,7 @@ param(
     [Parameter()][string]$DestinationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server-secrets.bin"),
     [Parameter()][string]$ServerConfigurationPath = (Join-Path $env:ProgramData "GameNet Manager\Config\server.json"),
     [Parameter()][string]$PublicCertificatePath = (Join-Path $PSScriptRoot "..\artifacts\gamenet-server.cer"),
-    [Parameter()][string]$ServiceAccount = "NT AUTHORITY\NETWORK SERVICE"
+    [Parameter()][string]$ServiceAccount = "NT SERVICE\GameNet 5 Server"
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,20 +72,6 @@ function Clear-ByteArray([byte[]]$Bytes) {
     }
 }
 
-function New-RandomSecret([int]$ByteCount = 48) {
-    $bytes = New-Object byte[] $ByteCount
-    $random = [Security.Cryptography.RandomNumberGenerator]::Create()
-    try {
-        $random.GetBytes($bytes)
-        $value = [Convert]::ToBase64String($bytes)
-        return $value.TrimEnd('=').Replace('+', '-').Replace('/', '_')
-    }
-    finally {
-        $random.Dispose()
-        Clear-ByteArray $bytes
-    }
-}
-
 # TLS is configured separately: its private key stays non-exportable in LocalMachine\My.
 $serverConfiguration = Get-Content -LiteralPath $fullServerConfigurationPath -Raw | ConvertFrom-Json -AsHashtable
 $urls = [string]$serverConfiguration["urls"]
@@ -151,27 +137,7 @@ finally {
     if ($null -ne $certificate) { $certificate.Dispose() }
 }
 
-$hostName = Read-RequiredText "PostgreSQL host (use localhost when PostgreSQL is installed on this PC)" 255
-$portText = Read-RequiredText "PostgreSQL port (normally 5432)" 5
-$port = 0
-if (-not [int]::TryParse($portText, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
-    throw "The PostgreSQL port must be a valid TCP port."
-}
-$database = Read-RequiredText "GameNet database name" 63
-$dbUser = Read-RequiredText "Dedicated PostgreSQL application username" 63
-$dbPassword = Read-SecretText "PostgreSQL application password" 20 256
-$bootstrapSecret = Read-SecretText "Initial owner bootstrap secret (you must re-enter this in bootstrap-admin.ps1)" 32 512
-
-$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-$builder["Host"] = $hostName
-$builder["Port"] = $port
-$builder["Database"] = $database
-$builder["Username"] = $dbUser
-$builder["Password"] = $dbPassword
-$builder["Timeout"] = 10
-$builder["Command Timeout"] = 30
-$builder["Pooling"] = $true
-$connectionString = $builder.ConnectionString
+$bootstrapSecret = Read-SecretText "Initial owner bootstrap secret (re-enter only when prompted by bootstrap-admin.ps1)" 32 512
 
 $settingsFileCreated = $false
 $clearBytes = $null
@@ -179,12 +145,9 @@ $protectedBytes = $null
 $settings = $null
 try {
     $settings = [ordered]@{
-        "GameNet:DatabaseConnectionString" = $connectionString
         "GameNet:Authentication:Enabled" = "true"
         "GameNet:Authentication:Issuer" = "GameNet5.Server"
         "GameNet:Authentication:Audience" = "GameNet5.Desktop"
-        "GameNet:Authentication:SigningKey" = (New-RandomSecret 48)
-        "GameNet:Agent:ProvisioningKey" = (New-RandomSecret 48)
         "GameNet:Setup:BootstrapSecret" = $bootstrapSecret
         "GameNet:ServerTls:CertificateThumbprint" = $thumbprint
     }
@@ -197,11 +160,46 @@ try {
 
     $directory = Split-Path -Parent $fullDestination
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
-    $stream = [System.IO.File]::Open(
-        $fullDestination,
+
+    # Apply the final protected DACL during file creation. LocalMachine DPAPI is
+    # machine-scoped, so creating the ciphertext with inherited Users-read access
+    # and tightening the ACL only afterwards would expose a short read window.
+    $systemSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-18")
+    $administratorsSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544")
+    $serviceSid = ([System.Security.Principal.NTAccount]::new($ServiceAccount)).Translate(
+        [System.Security.Principal.SecurityIdentifier])
+    $expectedServiceSid = ([System.Security.Principal.NTAccount]::new("NT SERVICE\GameNet 5 Server")).Translate(
+        [System.Security.Principal.SecurityIdentifier])
+    if ($serviceSid.Value -ne $expectedServiceSid.Value) {
+        throw "The protected setup file must grant read access to the dedicated GameNet Server service SID, not a shared service account."
+    }
+    if ($serviceSid.Value -eq $systemSid.Value -or $serviceSid.Value -eq $administratorsSid.Value) {
+        throw "The configured Server service account must be distinct from SYSTEM and local Administrators."
+    }
+
+    $fileSecurity = [System.Security.AccessControl.FileSecurity]::new()
+    $fileSecurity.SetAccessRuleProtection($true, $false)
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $systemSid,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $administratorsSid,
+        [System.Security.AccessControl.FileSystemRights]::FullControl,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+    $fileSecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+        $serviceSid,
+        [System.Security.AccessControl.FileSystemRights]::Read,
+        [System.Security.AccessControl.AccessControlType]::Allow))
+
+    $stream = [System.IO.FileSystemAclExtensions]::Create(
+        [System.IO.FileInfo]::new($fullDestination),
         [System.IO.FileMode]::CreateNew,
-        [System.IO.FileAccess]::Write,
-        [System.IO.FileShare]::None)
+        ([System.Security.AccessControl.FileSystemRights]::WriteData -bor [System.Security.AccessControl.FileSystemRights]::ReadAttributes),
+        [System.IO.FileShare]::None,
+        4096,
+        [System.IO.FileOptions]::WriteThrough,
+        $fileSecurity)
     $settingsFileCreated = $true
     try {
         $stream.Write($protectedBytes, 0, $protectedBytes.Length)
@@ -211,17 +209,19 @@ try {
         $stream.Dispose()
     }
 
-    # Only LocalSystem, Administrators, and the configured Server service identity may read the file.
+    # Only LocalSystem, Administrators, and the dedicated GameNet Server service SID may read the file.
     & icacls.exe $fullDestination /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' ("$ServiceAccount`:(R)") | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not restrict protected settings file ACLs." }
 
-    Write-Host "Protected Server secrets were written; the TLS private key remains in the Windows certificate store."
+    Write-Host "Protected Server setup settings were written; deployment secrets are provisioned separately with the dedicated Server secret store."
+    Write-Host "The TLS private key remains in the Windows certificate store."
     Write-Host "Server endpoint: $($serverUri.AbsoluteUri)"
     Write-Host "Public trust certificate: $fullPublicCertificatePath"
     Write-Host ("SHA-256 certificate fingerprint: {0}" -f (Get-FileHash -LiteralPath $fullPublicCertificatePath -Algorithm SHA256).Hash.ToUpperInvariant())
     Write-Host "Verify the fingerprint out of band on every client before trusting the public certificate."
     Write-Host "Never export or distribute the Server TLS private key."
     Write-Host "Re-enter the bootstrap secret when running scripts/bootstrap-admin.ps1."
+    Write-Host "This file does not store the PostgreSQL connection string, JWT signing key, or Agent provisioning key."
 }
 catch {
     if ($settingsFileCreated -and (Test-Path -LiteralPath $fullDestination)) {
@@ -232,8 +232,6 @@ catch {
 finally {
     Clear-ByteArray $clearBytes
     Clear-ByteArray $protectedBytes
-    $connectionString = $null
-    $dbPassword = $null
     $bootstrapSecret = $null
     $settings = $null
 }
