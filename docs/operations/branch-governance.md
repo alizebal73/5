@@ -1,27 +1,28 @@
 # GameNet 5 — Branch governance
 
-## Current GitHub read-back — 2026-10-12 (post-merge)
+## Current GitHub read-back — 2026-10-12 (after PR #40 and docs-only PR #41)
 
-This section reflects GitHub state after PR #40 merge. Older tables below remain historical snapshots.
+This table is the live snapshot. Older tables below remain historical snapshots and must not override these refs. The [Active Execution Control](active-execution-control.md) is the single queue/disposition register.
 
 | Ref | Observed SHA | Protected | Intended use |
 |---|---|---:|---|
 | `main` | `b9288471f2047570eaf8d0d6552cf87bc0ddc214` | yes | Keep unchanged until release is explicitly approved. |
-| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Protected Foundation reference. Exact-current-tip certification remains required; Stable Checkpoint only certifies its recorded historical SHA. |
-| `integration/runtime-operator-v1` | `58717adc6c1553ef21221c3d484f093494ba1ae7` | yes | Active Runtime/operator integration branch. PR #40 merged here; post-merge Quick and Full Foundation are green. |
-| `refactor/outbox-desktop-safety-integration-v1` | `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` | no | Source branch for merged PR #40; retain for traceability until normal branch-cleanup review. |
+| `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Protected Foundation reference. Exact-tip certification must be dispatched; Stable Checkpoint currently records historical SHA `c3a8ba4...`. |
+| `integration/runtime-operator-v1` | `362513ad812aebef4ad22420f9b905d79490219d` | yes | Active Runtime/operator branch. PR #40 integrated code at parent SHA `58717adc...`; docs-only PR #41 advanced the tip. |
+| `refactor/outbox-desktop-safety-integration-v1` | `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` | no | Source branch for merged PR #40; retain for traceability until routine cleanup review. |
 
 ### Active Ruleset read-back
 
 - [protect-main](https://github.com/alizebal73/5/rules/24783754) is active for `refs/heads/main`; requires PR, conversation resolution and `quick-validation`.
 - [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) is active for `refs/heads/foundation/runtime-*`; requires PR, conversation resolution and `foundation`.
 - [protect-integration-runtime](https://github.com/alizebal73/5/rules/24879997) is active for `refs/heads/integration/runtime-operator-v1`; requires PR, conversation resolution and `quick-validation`.
-- All three rulesets return `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains open. This read-only update did not change rulesets.
-- Exact candidate pre-merge gates: [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187), [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104), all successful on `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd`.
-- Post-merge gates: [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446), both successful on `58717adc6c1553ef21221c3d484f093494ba1ae7`.
-- Foundation and payload workflows used `[self-hosted, Windows, X64]`; these runs do not certify hosted-runner migration. PRs #15/#31/#32 overlap on workflow and PostgreSQL verification paths; review them separately.
-- PRs #35–#39 have been closed as superseded by #40; their source branches have not been deleted. Older-base #15/#17/#18/#20/#21/#23/#24 remain separate for unique-diff/evidence disposition.
-- CI still does not prove installed Windows Service identity/effective ACLs, DPAPI/TLS private-key access after restart, physical two-PC LAN/reconnect or interactive WPF RTL/focus behavior. Before any operation on the existing Manager PC, review the read-only `inspect-manager-runtime-state.ps1` result and use isolated test machines plus a disposable DB.
+- All three rulesets return `strict_required_status_checks_policy=false`; up-to-date-before-merge hardening remains open. This docs update did not change Rulesets.
+- Exact code-candidate gates: [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187), [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104), all successful on `654bc6d...`.
+- Code post-merge gates on `58717adc...`: [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446), both successful.
+- Docs-only PR #41 candidate `9aba023fe8ab61b99eca5eb553746194a9defc1e` passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088); current Integration tip `362513ad...` passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). Do not claim Full Foundation ran on the later docs-only SHA.
+- PRs #15/#31/#32 have overlapping workflow/runner edits. Follow their ordered review in `active-execution-control.md`; no bulk merge. Foundation/payload checks run on self-hosted Windows unless an exact run proves otherwise.
+- PRs #35–#39 are superseded by #40 and closed; source branches retained. PR #23 points the active Integration branch into the old feature branch and is not the current delivery direction.
+- CI does not certify installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect or interactive WPF behavior. Before any work on the existing Manager PC, inspect `scripts/inspect-manager-runtime-state.ps1` read-only output and use isolated test machines plus a disposable DB for changes.
 
 ## Historical metadata snapshot (2026-10-09 — superseded by current read-back)
 
