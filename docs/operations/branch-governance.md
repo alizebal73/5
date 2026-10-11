@@ -2,7 +2,7 @@
 
 ## Last GitHub ref read-back — immediately after PR #42 (2026-10-12; historical snapshot)
 
-This table records a read-back event, not a live branch pointer. Subsequent docs PRs advance Integration; get the live head from GitHub before any operation. Older tables below are historical as well. The [Active Execution Control](active-execution-control.md) is the single PR/gate disposition register.
+This table records a read-back event, not a live branch pointer. Subsequent docs PRs advance Integration; get the live head from GitHub before any operation. Older tables below are historical as well. The [Active Execution Control](active-execution-control.md) is the single PR/gate disposition register. The recorded Integration SHA is a timestamped observation, never the live pointer after subsequent docs merges.
 
 | Ref / role | SHA observed | Protected | Meaning |
 |---|---|---:|---|
@@ -24,7 +24,7 @@ This table records a read-back event, not a live branch pointer. Subsequent docs
 - PRs #35–#39 are superseded by #40 and closed; source branches were retained. PR #23 was closed as an obsolete backward PR; its branch was not deleted.
 - CI does not certify installed Windows Service identity/effective ACLs, DPAPI/private-key access after restart, physical two-PC LAN/reconnect or interactive WPF behavior. Before modifying the existing Manager PC, inspect `scripts/inspect-manager-runtime-state.ps1` read-only output and use isolated test machines plus a disposable DB.
 
-## Historical metadata snapshot (2026-10-09 — superseded by current read-back)
+## Historical metadata snapshot (2026-10-09 — superseded by the 2026-10-12 read-back above)
 
 At that earlier read, these refs were reported `protected=false`. Do not treat the table below as the current state:
 
