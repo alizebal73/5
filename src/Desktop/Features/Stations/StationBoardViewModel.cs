@@ -2,36 +2,49 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Protocol;
+using GameNet.Shared.Contracts.V1.Security;
 
 namespace GameNet.Desktop.Features.Stations;
 
 public sealed class StationBoardViewModel : INotifyPropertyChanged
 {
     private readonly IGameNetServerClient api;
+    private readonly Func<string, bool> hasPermission;
     private readonly Dictionary<string, string> pendingKeys = new(StringComparer.Ordinal);
+    private long localStateGeneration;
     private StationBoardItem? selectedStation;
     private string newCode = "", newName = "", newType = "PC", renameName = "", deviceId = "", errorMessage = "", statusMessage = "";
     private string searchText = "", typeFilter = "All", statusFilter = "All";
     private bool isBusy;
 
-    public StationBoardViewModel(IGameNetServerClient api)
+    public StationBoardViewModel(IGameNetServerClient api, Func<string, bool> hasPermission)
     {
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(hasPermission);
+
         this.api = api;
+        this.hasPermission = hasPermission;
         StationTypes = new[] { "PC", "PS5", "Foosball" };
-        RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy);
-        CreateCommand = new AsyncUiAction(CreateAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(NewCode) && !string.IsNullOrWhiteSpace(NewName));
-        RenameCommand = new AsyncUiAction(RenameAsync, () => !IsBusy && SelectedStation is not null && !string.IsNullOrWhiteSpace(RenameName));
-        BindAgentCommand = new AsyncUiAction(BindAgentAsync, () => !IsBusy && SelectedStation is not null && !string.IsNullOrWhiteSpace(DeviceId));
-        MaintenanceCommand = new AsyncUiAction(() => ChangeStatusAsync(StationStatusContract.Maintenance), () => !IsBusy && SelectedStation is not null);
-        AvailableCommand = new AsyncUiAction(() => ChangeStatusAsync(StationStatusContract.Available), () => !IsBusy && SelectedStation is not null);
+        RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanReadStations);
+        CreateCommand = new AsyncUiAction(CreateAsync, () => !IsBusy && CanOperateStations &&
+            !string.IsNullOrWhiteSpace(NewCode) && !string.IsNullOrWhiteSpace(NewName));
+        RenameCommand = new AsyncUiAction(RenameAsync, () => !IsBusy && CanOperateStations &&
+            SelectedStation is not null && !string.IsNullOrWhiteSpace(RenameName));
+        BindAgentCommand = new AsyncUiAction(BindAgentAsync, () => !IsBusy && CanOperateStations &&
+            SelectedStation is not null && !string.IsNullOrWhiteSpace(DeviceId));
+        MaintenanceCommand = new AsyncUiAction(() => ChangeStatusAsync(StationStatusContract.Maintenance),
+            () => !IsBusy && CanOperateStations && SelectedStation is not null);
+        AvailableCommand = new AsyncUiAction(() => ChangeStatusAsync(StationStatusContract.Available),
+            () => !IsBusy && CanOperateStations && SelectedStation is not null);
         AgentHealthProbeCommand = new AsyncUiAction(
             ProbeAgentHealthAsync,
-            () => !IsBusy && SelectedStation is { IsAgentManaged: true } &&
+            () => !IsBusy && CanReadStations && SelectedStation is { IsAgentManaged: true } &&
                   !string.IsNullOrWhiteSpace(SelectedStation.Station.AgentDeviceId));
     }
 
@@ -55,6 +68,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
             if (!SetField(ref selectedStation, value)) return;
             RenameName = value?.Name ?? "";
             DeviceId = value?.Station.AgentDeviceId ?? "";
+            RaiseCommands();
         }
     }
 
@@ -83,32 +97,57 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         Text("{0} از {1} ایستگاه؛ {2} رایانه آنلاین", "{0} of {1} stations; {2} PCs online"),
         VisibleStationCount, StationCount, VisibleOnlinePcCount);
 
-    public string NewCode { get => newCode; set => SetField(ref newCode, value); }
-    public string NewName { get => newName; set => SetField(ref newName, value); }
-    public string NewType { get => newType; set => SetField(ref newType, value); }
-    public string RenameName { get => renameName; set => SetField(ref renameName, value); }
-    public string DeviceId { get => deviceId; set => SetField(ref deviceId, value); }
+    public string NewCode { get => newCode; set { if (SetField(ref newCode, value)) RaiseCommands(); } }
+    public string NewName { get => newName; set { if (SetField(ref newName, value)) RaiseCommands(); } }
+    public string NewType { get => newType; set { if (SetField(ref newType, value)) RaiseCommands(); } }
+    public string RenameName { get => renameName; set { if (SetField(ref renameName, value)) RaiseCommands(); } }
+    public string DeviceId { get => deviceId; set { if (SetField(ref deviceId, value)) RaiseCommands(); } }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
-    public bool IsBusy { get => isBusy; private set => SetField(ref isBusy, value); }
+    public bool IsBusy { get => isBusy; private set { if (SetField(ref isBusy, value)) RaiseCommands(); } }
+    public bool CanReadStations => hasPermission(Permissions.StationsRead);
+    public bool CanOperateStations => CanReadStations && hasPermission(Permissions.StationsOperate);
+
+    public void NotifyPermissionsChanged()
+    {
+        Interlocked.Increment(ref localStateGeneration);
+        if (!CanReadStations)
+            ClearLocalState();
+
+        RaiseCommands();
+    }
 
     public Task RefreshAsync() => RefreshCoreAsync(reportSuccess: true);
 
-    // Used by the periodic health timer; unlike a manual refresh it does not overwrite
-    // the operator's last action/status message every few seconds.
-    public Task RefreshHealthAsync() => RefreshCoreAsync(reportSuccess: false);
+    // Used by the periodic health coordinator. It preserves the operator's status message
+    // and accepts cancellation so logout/window shutdown can stop an in-flight request.
+    public Task RefreshHealthAsync(CancellationToken cancellationToken = default) =>
+        RefreshCoreAsync(reportSuccess: false, cancellationToken);
 
-    private async Task RefreshCoreAsync(bool reportSuccess)
+    private async Task RefreshCoreAsync(
+        bool reportSuccess,
+        CancellationToken cancellationToken = default)
     {
         if (IsBusy) return;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CanReadStations)
+        {
+            ClearLocalState();
+            ErrorMessage = Text("اجازهٔ مشاهدهٔ ایستگاه‌ها را ندارید.", "You do not have permission to view stations.");
+            return;
+        }
 
         ErrorMessage = "";
         IsBusy = true;
         try
         {
-            await LoadCoreAsync();
-            if (reportSuccess)
+            var applied = await LoadCoreAsync(cancellationToken: cancellationToken);
+            if (applied && reportSuccess)
                 StatusMessage = Text("فهرست ایستگاه‌ها به‌روزرسانی شد.", "Station list refreshed.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (GameNetApiException ex) { ErrorMessage = DescribeError(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("ارتباط با سرور برقرار نشد.", "Could not connect to the Server."); }
@@ -119,6 +158,7 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     public void ClearLocalState()
     {
+        Interlocked.Increment(ref localStateGeneration);
         Stations.Clear();
         VisibleStations.Clear();
         SelectedStation = null;
@@ -137,6 +177,11 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     private async Task CreateAsync()
     {
+        if (!CanOperateStations)
+        {
+            ErrorMessage = Text("اجازهٔ تغییر ایستگاه‌ها را ندارید.", "You do not have permission to change stations.");
+            return;
+        }
         if (!TryGetType(NewType, out var type)) { ErrorMessage = Text("نوع ایستگاه معتبر نیست.", "Select a supported station type."); return; }
         ErrorMessage = "";
         const string scope = "create";
@@ -144,7 +189,9 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         try
         {
             var station = await api.CreateStationAsync(new CreateStationRequest(NewCode.Trim(), NewName.Trim(), type), Key(scope));
-            await LoadCoreAsync(station.Id);
+            if (!await LoadCoreAsync(station.Id))
+                return;
+
             pendingKeys.Remove(scope);
             NewCode = "";
             NewName = "";
@@ -179,6 +226,12 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     private async Task ProbeAgentHealthAsync()
     {
+        if (!CanReadStations)
+        {
+            ErrorMessage = Text("اجازهٔ مشاهدهٔ سلامت Agent را ندارید.", "You do not have permission to inspect Agent health.");
+            return;
+        }
+
         var row = SelectedStation;
         if (row is null || !row.IsAgentManaged || string.IsNullOrWhiteSpace(row.Station.AgentDeviceId))
             return;
@@ -188,13 +241,16 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         try
         {
             var acknowledgement = await api.ProbeAgentHealthAsync(row.Id);
-            StatusMessage = acknowledgement.Status == AgentCommandStatus.Succeeded
+            var statusMessage = acknowledgement.Status == AgentCommandStatus.Succeeded
                 ? string.Format(System.Globalization.CultureInfo.CurrentCulture,
                     Text("Agent پاسخ داد؛ نسخه {0}، وضعیت {1}.", "Agent responded; version {0}, state {1}."),
                     acknowledgement.AgentVersion ?? "—", acknowledgement.StationState ?? "—")
                 : Text("Agent فرمان بررسی سلامت را تأیید نکرد: ", "Agent did not accept the health probe: ")
                     + (acknowledgement.ErrorCode ?? "agent.command.rejected");
-            await LoadCoreAsync(row.Id);
+            if (!await LoadCoreAsync(row.Id))
+                return;
+
+            StatusMessage = statusMessage;
         }
         catch (GameNetApiException ex) { ErrorMessage = DescribeError(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("ارتباط با سرور برقرار نشد.", "Could not connect to the Server."); }
@@ -216,12 +272,20 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     private async Task MutateAsync(string scope, Guid stationId, Func<string, Task<StationResponse>> action, string successMessage)
     {
+        if (!CanOperateStations)
+        {
+            ErrorMessage = Text("اجازهٔ تغییر ایستگاه‌ها را ندارید.", "You do not have permission to change stations.");
+            return;
+        }
+
         ErrorMessage = "";
         IsBusy = true;
         try
         {
             await action(Key(scope));
-            await LoadCoreAsync(stationId);
+            if (!await LoadCoreAsync(stationId))
+                return;
+
             pendingKeys.Remove(scope);
             StatusMessage = successMessage;
         }
@@ -232,15 +296,37 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         finally { IsBusy = false; }
     }
 
-    private async Task LoadCoreAsync(Guid? selectId = null)
+    private async Task<bool> LoadCoreAsync(
+        Guid? selectId = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CanReadStations)
+        {
+            ClearLocalState();
+            return false;
+        }
+
+        var generation = Interlocked.Read(ref localStateGeneration);
         var keepId = selectId ?? SelectedStation?.Id;
-        var list = await api.GetStationsAsync();
+        var list = await api.GetStationsAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // A logout, permission update or explicit local-state clear fences off older requests.
+        // Never allow a late response to repopulate station rows after read access is revoked.
+        if (generation != Interlocked.Read(ref localStateGeneration) || !CanReadStations)
+        {
+            if (!CanReadStations)
+                ClearLocalState();
+            return false;
+        }
+
         Stations.Clear();
         foreach (var item in list.OrderBy(x => x.Code, StringComparer.Ordinal))
             Stations.Add(new StationBoardItem(item));
         RebuildVisibleStations();
         SelectedStation = VisibleStations.FirstOrDefault(x => x.Id == keepId) ?? VisibleStations.FirstOrDefault();
+        return true;
     }
 
     private void RebuildVisibleStations()

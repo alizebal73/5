@@ -57,6 +57,24 @@ SELECT CASE WHEN
     to_regclass('public.audit_entries') IS NOT NULL AND
     to_regclass('public.idempotency_records') IS NOT NULL AND
     to_regclass('public.outbox_messages') IS NOT NULL AND
+    to_regclass('public.outbox_inbox_receipts') IS NOT NULL AND
+    (
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'outbox_messages'
+          AND column_name IN (
+              'attempt_count',
+              'next_attempt_at_utc',
+              'last_failure_code',
+              'dead_lettered_at_utc'
+          )
+    ) = 4 AND
+    (
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'outbox_inbox_receipts'
+          AND column_name IN ('event_id', 'type', 'processed_at_utc')
+    ) = 3 AND
     to_regclass('public.agent_credentials') IS NOT NULL AND
     to_regclass('public.agent_connection_leases') IS NOT NULL AND
     EXISTS (
@@ -291,6 +309,24 @@ try {
     }
 
     Assert-FoundationSchema $env:GAMENET_DATABASE_CONNECTION
+
+    $previousOutboxIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_OUTBOX_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_OUTBOX_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~Outbox"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Outbox PostgreSQL delivery/lease/retry integration verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousOutboxIntegrationFlag) {
+            Remove-Item Env:GAMENET_OUTBOX_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_OUTBOX_POSTGRES_TESTS = $previousOutboxIntegrationFlag
+        }
+    }
+
     & "$PSScriptRoot/verify-identity-runtime.ps1"
     Write-Host "Clean PostgreSQL migration/schema/Identity runtime verification passed."
 }

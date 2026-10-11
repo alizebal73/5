@@ -38,6 +38,13 @@ public static class ServiceRegistration
         services.AddSingleton<IRequestFingerprint, HmacRequestFingerprint>();
         services.AddScoped<IOutboxWriter, EfOutboxWriter>();
         services.AddScoped<IOutboxDispatcher, EfOutboxDispatcher>();
+        services.AddScoped<IOutboxInbox, EfOutboxInbox>();
+        services.AddScoped<OutboxHandlerRegistry>();
+        services.AddOptions<OutboxDeliveryOptions>()
+            .BindConfiguration($"{GameNetOptions.SectionName}:OutboxDelivery")
+            .Validate(options => options.IsValid, "GameNet:OutboxDelivery configuration is invalid.")
+            .ValidateOnStart();
+        services.AddHostedService<OutboxDeliveryWorker>();
         services.AddScoped<IAgentConnectionLeaseStore, EfAgentConnectionLeaseStore>();
         services.AddSingleton<AgentCommandResultCoordinator>();
         services.AddScoped<IAgentHealthProbeDispatcher, AgentHealthProbeDispatcher>();

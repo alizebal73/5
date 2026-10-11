@@ -43,4 +43,5 @@
   <system:String x:Key="Station.AgentVersion">نسخه Agent</system:String><system:String x:Key="Station.AgentState">وضعیت گزارش‌شده</system:String>
   <system:String x:Key="Station.HealthProbe">بررسی سلامت Agent</system:String>
   <system:String x:Key="Station.StatusAdmin">وضعیت اداری</system:String>
+  <system:String x:Key="Station.ReadPermissionRequired">برای مشاهدهٔ ایستگاه‌ها، مجوز «مشاهده ایستگاه‌ها» لازم است.</system:String>
 </ResourceDictionary>
