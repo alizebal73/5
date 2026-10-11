@@ -12,16 +12,17 @@
 - اصل کار: هر بار یک نقص یا یک برش قابلیت کوچک؛ علت‌یابی قبل از اصلاح؛ آزمون واقعی؛ ثبت مدرک؛ سپس مرحلهٔ بعد.
 - کیفیت پایه: Server مرجع قواعد تجاری است؛ PostgreSQL مرجع پایدار داده است؛ Desktop و Agent مستقیماً به دیتابیس وصل نمی‌شوند؛ پول/موجودی مبتنی بر ledger هستند؛ تغییرات حساس تراکنشی، قابل حسابرسی و در برابر تکرار/رقابت ایمن‌اند.
 
-## وضعیت اجرایی جاری — 2026-10-11 (مرجع زنده؛ بازخوانی تکمیل شد)
+## وضعیت اجرایی جاری — 2026-10-11 (آخرین وضعیت تأییدشده)
 
-این بخش آخرین وضعیت GitHub را ثبت می‌کند؛ رخدادهای بعدی باید در همین بخش اصلاح شوند و تاریخچهٔ قدیمی زیر آن به‌عنوان تاریخچه باقی بماند.
+این بخش وضعیت زندهٔ GitHub را نشان می‌دهد؛ تاریخچهٔ زیر آن صرفاً سوابق گذشته است.
 
-- PR #31 در شاخهٔ `security/runner-and-stage1-stabilization-v1`، head تأییدشدهٔ پیشین `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`، هنوز Draft و ادغام‌نشده است. Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044)، Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) و Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) موفق‌اند. کاندید کد پیشین `d02192a43722efc1f49bf84fd24af911b3ece7e9` هر پنج گیت را گذرانده بود، از جمله Quick push و PostgreSQL diagnostic.
-- PR #32 یک کاندید نگهداری جدا در شاخهٔ `security/foundation-hosted-runner-isolation-v1`، head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9` است؛ Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) موفق شد. PR Draft و ادغام‌نشده است؛ SHA پایهٔ Foundation `be29687e637b709158a30204bb9213bfa4813950` دست‌نخورده مانده و گواهی پایدار همچنان فقط برای SHA تاریخی `c3a8ba482548e963479fbdf8538be62c4d15acfe` ثبت شده است.
-- Ruleset شاخهٔ Integration اکنون فعال و تأییدشده است: `protect-integration-runtime`، ID `24879997`، با PR، conversation resolution و check اجباری `quick-validation`. شاخهٔ Integration هنوز همان SHA `82d90178c0011c65eef76bd32cc33318d5bbd91c` است؛ ساخت Ruleset خودش چیزی را merge نکرده است.
-- Runner شخصی بنا به تصمیم مالک تا پایان GameNet نگه داشته می‌شود و سپس حذف خواهد شد؛ وضعیت آن در Settings برابر `Idle` دیده شد. محدودسازی Runner-group تأیید نشده است. Workflowهای کاندید #31 و #32 از hosted `windows-2025` استفاده می‌کنند، اما این موضوع را به شاخه‌های قدیمی و باز تعمیم نده. پیگیری حذف Runner در Issue #33 است.
-- ADR-0002 قرارداد پیاده‌سازی Secret Store/Enrollment است؛ آزمون Service SID، ACL، DPAPI پس از restart، کلید TLS زیر هویت واقعی سرویس، Bootstrap cleanup و LAN واقعی هنوز بازند.
-- پیش از هر تغییر روی Manager موجود، `scripts/inspect-manager-runtime-state.ps1` را فقط‌خواندنی اجرا و گزارشش را بازبینی کن. بعد از پذیرش واقعی Runtime، برش تجاری را مطابق DoR/DoD و requirementهای رهگیری آغاز کن.
+- PR #31، SHA `20ba74902fe620f00c58d047427c9f7d12c890f0`، Draft و ادغام‌نشده است. پنج گیت روی همین SHA سبز شده‌اند: Quick push [#38144956137](https://github.com/alizebal73/5/actions/runs/38144956137)، Quick PR [#38144959579](https://github.com/alizebal73/5/actions/runs/38144959579)، Full Foundation [#38144956092](https://github.com/alizebal73/5/actions/runs/38144956092)، Runtime Payload push [#38144956122](https://github.com/alizebal73/5/actions/runs/38144956122) و Runtime Payload PR [#38144959504](https://github.com/alizebal73/5/actions/runs/38144959504).
+- بستهٔ LAN Smoke همچنان ZIP خودکفا و نه Setup/MSI است. یک helper تستی برای ثبت سرویس Server/Agent به بسته اضافه شده؛ manifest/hashes را بررسی می‌کند، سرویس یا state موجود را جایگزین نمی‌کند و service را فقط Manual/Stopped ثبت می‌کند. CI آن را با `-ValidateOnly` اجرا کرده؛ نصب/اجرای واقعی سرویس هنوز انجام نشده است.
+- PR #32 در SHA `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9` و Draft/ادغام‌نشده است؛ Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) موفق شد. این PR پس از بازبینی/ادغام باید trigger لازم را برای Full Foundation روی نوک دقیق Foundation اجرا کند. Foundation فعلاً در SHA `be29687e637b709158a30204bb9213bfa4813950` دست‌نخورده است؛ گواهی Stable فعلی هنوز فقط برای SHA تاریخی `c3a8ba482548e963479fbdf8538be62c4d15acfe` است.
+- Ruleset Integration فعال است: `protect-integration-runtime`، ID `24879997`، با PR، حل conversation و check اجباری `quick-validation`. خود شاخهٔ Integration هنوز روی `82d90178c0011c65eef76bd32cc33318d5bbd91c` است.
+- Runner شخصی بنا به تصمیم مالک تا پایان GameNet حفظ و سپس حذف می‌شود؛ Issue #33 پیگیری می‌کند. Runner-group restrictions تأیید نشده است؛ شاخه‌های قدیمی ممکن است هنوز self-hosted باشند.
+- پذیرش عملی واقعی هنوز باز است: Service SID و ACL مؤثر، DPAPI پس از restart، دسترسی TLS private key زیر identity واقعی سرویس، Bootstrap cleanup، enrollment/replay/revoke/restart، lease/fencing و LAN روی دو کامپیوتر جدا.
+- پیش از هر کار روی Manager موجود، `scripts/inspect-manager-runtime-state.ps1` را فقط‌خواندنی اجرا و نتیجه را بررسی کن. برش تجاری را بعد از پذیرش واقعی Runtime آغاز کن؛ Outbox هنوز end-to-end delivery نیست و worker/retry/final-failure/idempotent consumer برای برش‌های async، مخصوصاً Session-to-Agent، باید تکمیل شود.
 
 ### نقطهٔ آغاز ثبت‌شده
 

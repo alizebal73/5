@@ -4,38 +4,35 @@ Snapshot date: 2026-10-11. This is an execution gate, not a production-release c
 
 ## Exact-SHA baseline
 
-The latest code-bearing CI candidate in PR #31 is `security/runner-and-stage1-stabilization-v1`, head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`, targeting `integration/runtime-operator-v1` at `82d90178c0011c65eef76bd32cc33318d5bbd91c`. PR #31 is still Draft and unmerged.
+Current PR #31 candidate: branch `security/runner-and-stage1-stabilization-v1`, exact head `20ba74902fe620f00c58d047427c9f7d12c890f0`, targeting `integration/runtime-operator-v1` at `82d90178c0011c65eef76bd32cc33318d5bbd91c`. PR #31 remains Draft/open/unmerged.
 
-| Candidate / gate | Exact GitHub run | Result |
+| Gate on exact head `20ba74902fe620f00c58d047427c9f7d12c890f0` | Exact GitHub run | Result |
 |---|---|---|
-| PR #31 head `7a8475bf...`: Quick Validation — PR | [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044) | Passed |
-| PR #31 head `7a8475bf...`: Full Foundation | [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) | Passed |
-| PR #31 head `7a8475bf...`: Runtime payload (not Setup/MSI) | [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) | Passed |
-| Immediately preceding source candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9`: Quick push | [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156) | Passed |
-| Same preceding source candidate: Quick PR | [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693) | Passed |
-| Same preceding source candidate: Full Foundation | [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157) | Passed |
-| Same preceding source candidate: Runtime payload | [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) | Passed |
-| Same preceding source candidate: PostgreSQL diagnostic | [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) | Passed |
-| Separate Foundation maintenance PR #32, head `4fb20dc0...`: Full Foundation | [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) | Passed |
+| Quick Validation — push | [#38144956137](https://github.com/alizebal73/5/actions/runs/38144956137) | Passed |
+| Quick Validation — pull request | [#38144959579](https://github.com/alizebal73/5/actions/runs/38144959579) | Passed |
+| Full Foundation — hosted Windows | [#38144956092](https://github.com/alizebal73/5/actions/runs/38144956092) | Passed |
+| Runtime payload — push (not Setup/MSI) | [#38144956122](https://github.com/alizebal73/5/actions/runs/38144956122) | Passed |
+| Runtime payload — pull request | [#38144959504](https://github.com/alizebal73/5/actions/runs/38144959504) | Passed |
 
-The transition from `d02192a...` to `7a8475b...` was documentation-only. The last three applicable runs above prove the updated PR #31 candidate's PR gate, full Foundation gate, and runtime payload; the Quick push and PostgreSQL diagnostic runs are evidence from the immediately preceding source-identical candidate, not separate runs on `7a8475b...`.
+The hosted gates cover PowerShell parser/canonical build and tests, disposable PostgreSQL migration/concurrency, backup/isolated restore, Desktop and Agent runtime, exact checkout verification, package publication, payload hashes and validation-only checks for the test-service helper. These are hosted tests, not physical Windows Service / LAN acceptance.
 
 Current references and governance:
-- `main`: `b9288471f2047570eaf8d0d6552cf87bc0ddc214`, protected; unchanged.
-- `foundation/runtime-final-v2`: `be29687e637b709158a30204bb9213bfa4813950`, protected and unchanged. Stable Checkpoint still certifies only the historical exact SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`; PR #32's successful check is attached to its review candidate and does not silently certify the base branch tip.
-- `integration/runtime-operator-v1`: `82d90178c0011c65eef76bd32cc33318d5bbd91c`. Active Ruleset `protect-integration-runtime` (ID `24879997`) now targets this exact branch. Read-back confirms pull requests, conversation resolution, required `quick-validation`, no deletion/force-push, Squash-only merging and an empty bypass list.
-- PR #32, `security/foundation-hosted-runner-isolation-v1`, remains Draft/unmerged; Full Foundation passed in run #38143687082. It proposes moving the Foundation workflow set to GitHub-hosted `windows-2025` and fixing the repository-local EF concurrency invocation; it has not changed the Foundation branch.
+- `main`: `b9288471f2047570eaf8d0d6552cf87bc0ddc214`, protected and unchanged.
+- `foundation/runtime-final-v2`: `be29687e637b709158a30204bb9213bfa4813950`, protected and unchanged. Stable Checkpoint remains tied to historical exact SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`; PR #32's candidate run does not silently certify the base tip.
+- `integration/runtime-operator-v1`: `82d90178c0011c65eef76bd32cc33318d5bbd91c`, protected by active Ruleset `protect-integration-runtime` (ID `24879997`) requiring PR, conversation resolution and `quick-validation`, blocking force-push/deletion, Squash-only, with no bypass actor.
+- PR #32: separate Foundation workflow maintenance, current head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9`, Draft/unmerged; Full Foundation passed in [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). It adds push-on-`foundation/runtime-*` recertification so the exact resulting Foundation tip can be checked after merge. Foundation is not changed by PR #32 yet.
+- PR #15 remains a separate older TLS/ProgramData branch on Foundation and is not the selected commercial/test baseline. Its own CI is evidence for its exact older branch only.
+- The personal self-hosted Runner remains registered by owner decision until GameNet is complete; this is tracked in [Issue #33](https://github.com/alizebal73/5/issues/33). Runner-group restrictions are not certified as enforced. Candidate workflows #31/#32 use GitHub-hosted `windows-2025`; don't generalize this to every old/open branch.
 
 ## Repository gates before real-Windows acceptance
 
-- [x] Full hosted Foundation passed on PR #31's latest previously verified head; parser, canonical build/tests, disposable PostgreSQL migration/concurrency, backup/restore, Desktop and Agent runtime, and evidence upload were green.
-- [x] Runtime payload was built and checksummed. It is a self-contained payload, not Setup.exe/MSI and not proof of installation.
-- [x] Integration Ruleset was created and read back as active (ID `24879997`).
-- [x] Full Foundation passed on the separate PR #32 review candidate (run #38143687082); the protected Foundation branch remains unchanged.
-- [ ] Review the full diffs and decide the disposition/order of PR #31 and PR #32. They are still Draft and unmerged; do not auto-merge or treat either as a production release.
-- [~] Personal Runner cleanup is deliberately deferred by the owner until GameNet development is complete. It remains registered and was shown as `Idle`; hosted candidate workflows use `windows-2025`, but this does not establish organization/runner-group restrictions for every older open branch. Avoid running third-party/untrusted code on the personal Runner wherever practical. Track eventual removal in [Issue #33](https://github.com/alizebal73/5/issues/33).
-
-This gate does not claim that real Windows Service ACL/DPAPI, TLS private-key access under the installed service identity, bootstrap cleanup, Agent enrollment/replay/revocation, or physical LAN operation have passed. These are the next hands-on acceptance stage, followed by commercial slices only after the candidate baseline is reviewed and adopted.
+- [x] Quick Validation passed on the exact PR #31 head, both push and PR events.
+- [x] Full Foundation passed on the exact PR #31 head; parser, canonical build/tests, disposable PostgreSQL migration/concurrency, backup/restore, Desktop/Agent runtime and evidence upload succeeded.
+- [x] Runtime payload build passed on the exact PR #31 head from both push and PR events; package manifest and SHA-256 were emitted.
+- [x] Integration Ruleset created and read back as active (ID `24879997`).
+- [x] Test-only Server/Agent service registration helper is included in the payload; hosted build runs it with `-ValidateOnly`, and the helper checks the manifest hashes and role-specific service configuration without querying/changing services.
+- [ ] Review the complete PR #31 diff and decide its disposition; keep it Draft/unmerged until reviewed.
+- [~] Personal Runner cleanup is intentionally deferred per owner decision; remove it after GameNet completion and read back the result. Runner-group access is not claimed as verified.
 
 ## Required physical acceptance protocol
 

@@ -7,12 +7,16 @@
 - Runner شخصی کاربر طبق تصمیم صریح او تا پایان ساخت GameNet نگه داشته می‌شود؛ در Settings با وضعیت `Idle` دیده شد. پس از تکمیل برنامه، پاک‌سازی آن پیگیری می‌شود. دسترسی Runner-group به‌عنوان محدودشده تأیید نشده؛ کاندیدهای PR #31 و #32 از `windows-2025` استفاده می‌کنند، اما این گزاره را به شاخه‌های قدیمی/باز تعمیم نده.
 - هیچ تغییری مستقیم روی `main` یا `foundation/runtime-final-v2` انجام نمی‌شود؛ PR #31 و #32 باز و Draft می‌مانند تا بازبینی شوند.
 
-## آخرین شواهد دقیق — 2026-10-11
-- PR #31 head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`: Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044)، Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159)، Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) موفق شدند.
-- کاندید کد پیشین `d02192a43722efc1f49bf84fd24af911b3ece7e9` هر پنج گیت Quick push، Quick PR، Full Foundation، Runtime Payload و PostgreSQL diagnostic را با موفقیت گذراند؛ SHA و لینک‌ها در handoff gate ثبت شده‌اند. از اجرای آن پنج‌گانه به‌اشتباه ادعا نکن که هر run روی SHA `7a8475b...` بوده است.
-- PR #32، head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9`: Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) موفق شد؛ Foundation مرجع تغییر نکرده است.
+## آخرین شواهد دقیق — 2026-10-11 (همهٔ گیت‌های hosted روی SHA جاری)
 
-این شواهد CI خودکارند؛ جایگزین آزمون واقعی سرویس ویندوز، ACL/DPAPI، کلید TLS، Bootstrap، Agent و LAN نمی‌شوند.
+کاندید PR #31، SHA `20ba74902fe620f00c58d047427c9f7d12c890f0`، همهٔ این پنج run را روی همان SHA با موفقیت گذراند:
+- Quick Validation push [#38144956137](https://github.com/alizebal73/5/actions/runs/38144956137)
+- Quick Validation PR [#38144959579](https://github.com/alizebal73/5/actions/runs/38144959579)
+- Full Foundation [#38144956092](https://github.com/alizebal73/5/actions/runs/38144956092)
+- Runtime payload push [#38144956122](https://github.com/alizebal73/5/actions/runs/38144956122)
+- Runtime payload PR [#38144959504](https://github.com/alizebal73/5/actions/runs/38144959504)
+
+این payload همچنان ZIP خودکفا و **غیر Installer** است. ابزار `register-test-runtime-service.ps1` در مرحلهٔ ساخت بسته با `-ValidateOnly` اجرا شد؛ Service واقعی روی Runner یا رایانهٔ کاربر ثبت/اجرا نشده است.
 
 ## شواهد Runner
 - آزمون GitHub-hosted Windows با SDK دقیق .NET `10.0.401`، PowerShell parser و `scripts/verify.ps1` موفق شد: [Run #38130781617](https://github.com/alizebal73/5/actions/runs/38130781617)، SHA `c80c4dc9bf4050f706f1eb710a57f67201bede79`.
@@ -30,20 +34,18 @@
 ## ترتیب الزامی کار
 
 ### P0 — ایمن‌سازی CI و candidate evidence
-- [x] اثبات Quick Validation روی GitHub-hosted Windows و ثبت نتیجهٔ exact-SHA.
-- [x] Full Foundation روی GitHub-hosted Windows با PostgreSQL دورریختنی، backup/restore، Desktop و Agent runtime موفق شده است.
-- [x] PR #31 کاندید Workflowهای hosted را دارد؛ آخرین کاندید کد تأییدشده `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`، Quick PR #38138211044، Full Foundation #38138208159 و Runtime Payload #38138211061 موفق‌اند. کاندید کد پیشین `d02192a...` هر پنج lane را گذرانده است.
-- [x] Full Foundation روی کاندید نگهداری Foundation در PR #32 نیز موفق شد: [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082).
-- [x] Ruleset شاخهٔ `integration/runtime-operator-v1` ساخته و read-back شد؛ ID `24879997`، check اجباری `quick-validation`، PR، conversation resolution، جلوگیری از deletion/force-push، Squash-only و bypass خالی.
-- [~] Runner شخصی بنا به تصمیم مالک تا پایان GameNet حفظ می‌شود و سپس حذف خواهد شد. Runner-group restriction تأیید نشده و پاک‌سازی در Issue #33 پیگیری می‌شود؛ این مورد را «حل‌شدهٔ امنیتی» تلقی نکن.
-- [ ] PRهای #31 و #32 پس از بازبینی کامل، با ترتیب و Base صحیح تعیین تکلیف شوند؛ ادغام خودکار ممنوع است.
+- [x] Quick push و PR، Full Foundation و Runtime Payload push و PR همگی روی SHA دقیق `20ba74902fe620f00c58d047427c9f7d12c890f0` سبز شدند.
+- [x] Integration Ruleset `protect-integration-runtime`، ID `24879997`، ایجاد و read-back شد؛ check اجباری `quick-validation`.
+- [x] Workflowهای PR #31 از hosted `windows-2025` استفاده می‌کنند؛ Runner guard و exact-checkout assertion سبز است.
+- [x] ابزار تستی ثبت Windows Service به payload اضافه شد. `-ValidateOnly` روی Server و Agent در CI، manifest/هش executable و helper را بررسی می‌کند بدون query یا تغییر سرویس.
+- [~] Runner شخصی بنا به تصمیم مالک تا پایان GameNet حفظ و سپس حذف می‌شود؛ Issue #33 پیگیری می‌کند. Runner-group restriction تأیید نشده است.
+- [ ] PR #31 و #32 پس از بازبینی کامل و با Base صحیح تعیین تکلیف شوند؛ ادغام خودکار ممنوع است.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
-- [x] وضعیت جاری `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با GitHub read-back هماهنگ شد؛ تاریخچهٔ قدیمی به‌عنوان سابقه حفظ می‌شود.
-- [x] Ruleset واقعی برای Integration فعال و تأیید شد؛ شاخهٔ Integration هنوز روی همان SHA قبلی است و ساخت Ruleset خودش commit/merge ایجاد نکرده است.
-- [x] وضعیت PRهای تاریخی #27/#28/#29 به‌عنوان بسته و غیرقابل‌ادغام، PR #25 به‌عنوان ادغام‌شده، و PR #26 به‌عنوان Draftِ superseded مستند شد.
-- [ ] پیش از انتخاب PR #31 به‌عنوان Integration base، آخرین CI روی نوک نهایی آن سبز باشد و diff کامل بررسی شود.
-- [x] برای هر گیت، SHA و Run جدا شده‌اند؛ evidence SHA کد قبلی به اجرای SHA مستندات جدید نسبت داده نمی‌شود.
+- [x] اسناد جاری SHA/Run/PR و Ruleset با GitHub read-back هماهنگ شدند؛ تاریخچهٔ قدیمی به‌عنوان تاریخچه حفظ می‌شود.
+- [x] PRهای #27/#28/#29 فقط سوابق بسته‌اند؛ PR #25 ادغام شده؛ #26 به‌عنوان تکراریِ superseded در Draft مانده است.
+- [ ] قبل از انتخاب PR #31 به‌عنوان Integration base، بازبینی کامل diff و ترتیب ادغام با شرایط Foundation انجام شود.
+- [x] Evidence هر run به SHA دقیق خودش نسبت داده شده است.
 
 ### P1 — قرارداد و پذیرش امنیت Runtime
 - [x] ADR-0002 به‌عنوان قرارداد پیاده‌سازی Secret Store/Enrollment پذیرفته شد؛ پذیرش عملی Windows Service/DPAPI/ACL/TLS/LAN همچنان باز است.

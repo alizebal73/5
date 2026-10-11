@@ -45,16 +45,16 @@
 - هر دکمهٔ عملیاتی باید backend واقعی، مجوز Server، رفتار خطا و آزمون داشته باشد؛ mock، success ساختگی و placeholder در production ممنوع‌اند.
 - فارسی RTL و واحد تومان در کل مسیر UI/گزارش سازگارند؛ محاسبات زمان UTC/business-timezone را از هم جدا می‌کنند.
 
-## وضعیت جاری پیاده‌سازی — 2026-10-11 (به‌روزرسانی وضعیت GitHub)
+## وضعیت جاری پیاده‌سازی — 2026-10-11 (به‌روزرسانی روی SHA جاری)
 
-- **Foundation reference:** Stable Checkpoint همچنان فقط SHA دقیق `c3a8ba482548e963479fbdf8538be62c4d15acfe` را گواهی می‌کند. نوک محافظت‌شدهٔ `foundation/runtime-final-v2` برابر `be29687e637b709158a30204bb9213bfa4813950` است و هنوز اجرای ثبت‌شدهٔ Full Foundation روی خود همان SHA تأیید نشده است.
-- **Integration governance:** شاخهٔ `integration/runtime-operator-v1` روی `82d90178c0011c65eef76bd32cc33318d5bbd91c` است و Ruleset فعال `protect-integration-runtime` با ID `24879997` دارد. PR #31 هنوز Draft و ادغام‌نشده است.
-- **Current hosted candidates:** PR #31 head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` روی Quick PR #38138211044، Full Foundation #38138208159 و Runtime Payload #38138211061 موفق بوده است؛ کاندید کد قبلی `d02192a...` نیز هر پنج گیت را گذرانده بود. PR #32 head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9` نیز Full Foundation #38143687082 را گذرانده است. هر دو PR هنوز Draft و ادغام‌نشده‌اند.
-- **Runner handling:** مالک تصمیم گرفته Runner شخصی را تا پایان GameNet نگه دارد و سپس حذف کند؛ این پاک‌سازی در Issue #33 deferred است. Workflowهای کاندید #31 و #32 از hosted `windows-2025` استفاده می‌کنند، اما نباید نتیجه گرفت همهٔ شاخه‌های قدیمی/باز هم همین تغییر را دارند یا Runner-group محدود شده است.
-- **Runtime / Identity / Stations:** ماژول‌ها و APIها و تست‌های hosted موجودند؛ هویت سرویس نصب‌شده، ACL/DPAPI واقعی، TLS، پذیرش Agent و تست فیزیکی PC/LAN هنوز بازند. PR #24 فقط یک گام استخراج StationBoard است؛ باید جداگانه بازبینی/بازپایه‌گذاری شود و wholesale ادغام نشود.
-- **Protected Server secret lifecycle:** ADR-0002 قرارداد پیاده‌سازی است، نه گواهی عملیاتی یا انتشار. دسترسی واقعی سرویس، Bootstrap cleanup، restart/recovery و ثبت‌نام فیزیکی Agent هنوز نیاز به پذیرش دارند.
-- **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift and Approvals:** نیازمندی‌ها مستند شده‌اند، اما این ماژول‌ها هنوز برش‌های تجاری کامل و قابل‌استفادهٔ عملیاتی نیستند.
-- **Outbox:** append پایدار، claim با lease و published marker وجود دارد؛ worker تحویل، retry/final failure، event consumer و idempotency هنوز پیاده نشده‌اند. قبل از برشی که تحویل async لازم دارد، به‌خصوص Session-to-Agent، این بخش باید کامل و آزموده شود.
-- **Setup/update/repair/rollback:** artifact خودکفا ZIP است، نه Setup.exe/MSI. نصب/بازیابی PostgreSQL، commissioning سرویس، نصب/ارتقا/rollback، امضای package و پایلوت فیزیکی هنوز Release Gate هستند.
+- **Foundation reference:** Stable Checkpoint همچنان فقط SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe` را گواهی می‌کند. نوک محافظت‌شدهٔ `foundation/runtime-final-v2` برابر `be29687e637b709158a30204bb9213bfa4813950` است و اجرای ثبت‌شده روی خود آن SHA هنوز وجود ندارد.
+- **Integration governance:** شاخهٔ `integration/runtime-operator-v1` روی `82d90178c0011c65eef76bd32cc33318d5bbd91c` و زیر Ruleset فعال `protect-integration-runtime` ID `24879997` است.
+- **Current hosted candidate:** PR #31 head `20ba74902fe620f00c58d047427c9f7d12c890f0`، Quick push/PR، Full Foundation و Runtime payload push/PR را روی همان SHA پاس کرده است (لینک‌ها در handoff gate). PR #31 هنوز Draft/ادغام‌نشده است.
+- **Test-only service preparation:** payload شامل `Tools\register-test-runtime-service.ps1` و runbook آن است؛ CI با `-ValidateOnly` manifest/hash را می‌سنجد. این ابزار نصب‌کننده نیست و اثبات نصب Windows Service/LAN هم محسوب نمی‌شود.
+- **Runner policy:** Runner شخصی طبق تصمیم مالک تا پایان GameNet حفظ و سپس حذف می‌شود؛ Issue #33 مسئول پیگیری است. Runner-group restriction تأیید نشده و Workflowهای شاخه‌های قدیمی ممکن است هنوز self-hosted باشند.
+- **Runtime / Identity / Stations:** آزمون hosted سبز است، اما هویت سرویس نصب‌شده، ACL/DPAPI واقعی، TLS، bootstrap، پذیرش Agent و LAN فیزیکی هنوز باز است.
+- **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift and Approvals:** نیازمندی‌ها مستندند، اما برش‌های تجاری کامل و قابل‌استفادهٔ عملیاتی نیستند.
+- **Outbox:** append، claim با lease و published marker وجود دارد؛ worker تحویل، retry/final failure، مصرف‌کنندهٔ رویداد و اثبات idempotency هنوز پیاده نشده‌اند.
+- **Setup/update/repair/rollback:** ZIP خودکفا است نه Setup.exe/MSI. نصب/ارتقا/rollback، lifecycle دیتابیس، package signing و پایلوت فیزیکی Release Gate هستند.
 
 For the mandatory handoff checklist, see [Pre-Windows and Pre-Commercial Readiness Gate](pre-commercial-readiness-gate.md) and [Engineering Readiness Register](engineering-readiness-register.md). A successful older SHA does not certify a later candidate automatically.
