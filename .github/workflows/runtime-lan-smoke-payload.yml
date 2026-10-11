@@ -229,7 +229,14 @@ jobs:
           Copy-Item -LiteralPath "docs/operations/agent-service-state.md" -Destination (Join-Path $toolsOutput "agent-service-state.md")
           Copy-Item -LiteralPath "scripts/test-runtime-endpoint.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
-          Copy-Item -LiteralPath "docs/operations/runtime-endpoints.md" -Destination (Join-Path $toolsOutput "runtime-endpoints.md")
+          # The canonical runbook uses source-tree paths. Rewrite its command paths for the extracted payload layout.
+          $runtimeEndpoints = Get-Content -LiteralPath "docs/operations/runtime-endpoints.md" -Raw
+          $runtimeEndpoints = $runtimeEndpoints.Replace('.\scripts\', '.\Tools\')
+          if ($runtimeEndpoints -match '(?im)^\s*\.\s*\\scripts\\') {
+            throw "Packaged runtime-endpoints.md still contains a source-tree script command."
+          }
+          $runtimeEndpointsPath = Join-Path $toolsOutput "runtime-endpoints.md"
+          [System.IO.File]::WriteAllText($runtimeEndpointsPath, $runtimeEndpoints, [System.Text.UTF8Encoding]::new($false))
 
           $requiredFiles = @(
             (Join-Path $serverOutput "GameNet.Server.exe"),
@@ -245,6 +252,7 @@ jobs:
             (Join-Path $toolsOutput "inspect-manager-runtime-state.ps1"),
             (Join-Path $toolsOutput "register-test-runtime-service.ps1"),
             (Join-Path $toolsOutput "test-runtime-service-registration.md"),
+            (Join-Path $toolsOutput "runtime-endpoints.md"),
             (Join-Path $toolsOutput "initial-admin-setup.md")
           )
           foreach ($file in $requiredFiles) {
