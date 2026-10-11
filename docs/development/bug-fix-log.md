@@ -577,3 +577,13 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
 - Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
 - Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
+
+
+## 2026-10-12 — Move Agent health polling out of MainWindow and cancel stale refreshes
+
+- Symptom: `MainWindow.xaml.cs` owned the ten-second DispatcherTimer and an async tick handler. The lifecycle was tied to the shell event handler, difficult to unit-test, and did not pass a cancellation token into the in-flight station-list request on logout/window close.
+- Root cause: scheduling, authentication policy, overlap prevention and request cancellation were combined in a view's code-behind rather than a testable feature/coordinator boundary.
+- Fix: introduce `AgentHealthRefreshCoordinator` plus `IAgentHealthRefreshTimer` and a WPF DispatcherTimer adapter. The coordinator starts only for an authenticated session, respects busy state, prevents overlapping refreshes, cancels the active token on logout/dispose and logs only unexpected exception types. Propagate the token into `GetStationsAsync` and check cancellation before mutating the bound station collections.
+- Regression coverage: add desktop tests for authentication-gated scheduling, ten-second interval, non-overlapping refresh, cancellation on logout and cancellation/unsubscription on disposal.
+- Verification status: **pending exact-HEAD Quick Validation and Full Foundation on this isolated candidate**. CI must prove WPF project compilation and all desktop tests on the same SHA; installed UI/Windows Service/LAN acceptance remains a separate gate.
+- Rollback: revert only the coordinator/timer abstraction, cancellable health-refresh overload and their tests/docs if WPF dispatcher/runtime testing exposes a defect. Do not restore an uncancellable async timer tick in MainWindow.

@@ -126,3 +126,12 @@ Optimistic UI is allowed only when it cannot contradict an authoritative invaria
 - Views remain presentation.
 - ViewModels coordinate UI state, commands and API calls.
 - Domain/application tests remain outside the WPF project.
+
+
+## Agent health refresh lifecycle
+
+The ten-second Agent health refresh is owned by `AgentHealthRefreshCoordinator`, not by `MainWindow.xaml.cs`. The WPF DispatcherTimer remains a UI-thread adapter so collection/property updates preserve WPF thread affinity; the coordinator itself depends on a timer interface so start/stop/cancel behavior can be tested without a running window.
+
+The coordinator starts only while the operator is authenticated, skips ticks while login/logout or the Station Board is busy, and permits only one refresh at a time. Logout and window close cancel the session token. That token is propagated to the Server client request, and the Station Board checks cancellation before applying the returned snapshot so a late response cannot repopulate UI state after logout. Cancellation is not shown as an ordinary network error.
+
+The regression suite covers authentication-gated start/stop, ten-second cadence, no overlapping refreshes, cancellation on logout, and cleanup/cancellation on disposal. The tests prove client-side lifecycle behavior; they do not substitute for real Windows Service/LAN acceptance.

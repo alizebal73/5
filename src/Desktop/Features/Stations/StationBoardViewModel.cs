@@ -94,21 +94,29 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
 
     public Task RefreshAsync() => RefreshCoreAsync(reportSuccess: true);
 
-    // Used by the periodic health timer; unlike a manual refresh it does not overwrite
-    // the operator's last action/status message every few seconds.
-    public Task RefreshHealthAsync() => RefreshCoreAsync(reportSuccess: false);
+    // Used by the periodic health coordinator. It preserves the operator's status message
+    // and accepts cancellation so logout/window shutdown can stop an in-flight request.
+    public Task RefreshHealthAsync(CancellationToken cancellationToken = default) =>
+        RefreshCoreAsync(reportSuccess: false, cancellationToken);
 
-    private async Task RefreshCoreAsync(bool reportSuccess)
+    private async Task RefreshCoreAsync(
+        bool reportSuccess,
+        CancellationToken cancellationToken = default)
     {
         if (IsBusy) return;
+        cancellationToken.ThrowIfCancellationRequested();
 
         ErrorMessage = "";
         IsBusy = true;
         try
         {
-            await LoadCoreAsync();
+            await LoadCoreAsync(cancellationToken: cancellationToken);
             if (reportSuccess)
                 StatusMessage = Text("فهرست ایستگاه‌ها به‌روزرسانی شد.", "Station list refreshed.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (GameNetApiException ex) { ErrorMessage = DescribeError(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("ارتباط با سرور برقرار نشد.", "Could not connect to the Server."); }
@@ -232,10 +240,13 @@ public sealed class StationBoardViewModel : INotifyPropertyChanged
         finally { IsBusy = false; }
     }
 
-    private async Task LoadCoreAsync(Guid? selectId = null)
+    private async Task LoadCoreAsync(
+        Guid? selectId = null,
+        CancellationToken cancellationToken = default)
     {
         var keepId = selectId ?? SelectedStation?.Id;
-        var list = await api.GetStationsAsync();
+        var list = await api.GetStationsAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         Stations.Clear();
         foreach (var item in list.OrderBy(x => x.Code, StringComparer.Ordinal))
             Stations.Add(new StationBoardItem(item));
