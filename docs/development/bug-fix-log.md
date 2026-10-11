@@ -577,3 +577,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
 - Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
 - Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
+
+
+## 2026-10-12 — Verify Desktop binding paths and password field lifecycle wiring
+
+- Finding: localization key parity alone does not catch a typo in `{Binding ...}` or a PasswordBox whose `PasswordChanged` handler is missing/misnamed. PasswordBox content is intentionally not a normal TwoWay binding, so its code-behind synchronization and clear-on-success/logout behavior are part of the UI contract.
+- Fix: add `DesktopBindingAndPasswordContractTests` to parse `MainWindow.xaml`, reflect each root binding against `LoginViewModel`/nested ViewModel properties and each DataTemplate binding against `StationBoardItem`, verify all four named PasswordBox controls wire to an existing handler, and assert the code-behind clears the login field on authentication success and all password-change fields after successful change and logout.
+- Verification boundary: static contracts detect missing members, event wiring and clear calls, but do not exercise a running WPF dispatcher, actual password entry, keyboard navigation, visual focus, RTL geometry or network-confirmed UI states.
+- Verification status: pending exact-SHA Quick Validation and Full Foundation on this isolated candidate.
+- Rollback: remove only the test if the supported XAML binding grammar changes; update the test parser to the actual grammar rather than suppressing real binding failures.

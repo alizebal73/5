@@ -13,6 +13,7 @@ on:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
       - "security/**"
+      - "refactor/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
       - ".github/workflows/runtime-lan-smoke-payload.yml"
@@ -35,6 +36,8 @@ on:
       - "src/Server/Persistence/**"
       - "src/Shared/Contracts/V1/Security/**"
       - "tests/Server.UnitTests/**"
+      - "tests/Desktop.Tests/**"
+      - "src/Desktop/**"
       - "src/Client/**"
       - "src/Shared/Contracts/V1/Protocol/**"
       - "src/Server/Infrastructure/Realtime/**"

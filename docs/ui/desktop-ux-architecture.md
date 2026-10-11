@@ -126,3 +126,10 @@ Optimistic UI is allowed only when it cannot contradict an authoritative invaria
 - Views remain presentation.
 - ViewModels coordinate UI state, commands and API calls.
 - Domain/application tests remain outside the WPF project.
+
+
+## Binding and password-control contract
+
+The main-window XAML must keep every binding path resolvable from the declared root `LoginViewModel` or the `StationBoardItem` DataTemplate context. Tests reflect the path members so a rename cannot silently leave a blank field or disabled operation. Every PasswordBox is explicitly synchronized by a `PasswordChanged` handler, and the code-behind must clear the login field after successful authentication and clear the three password-change fields after a successful change or logout.
+
+Static contract tests only verify the declared paths, handlers and clearing calls. They do not prove an actual WPF focus/keyboard flow, that the user can visually distinguish success/error states, or that RTL/LTR geometry is usable; interactive acceptance is still required before release.
