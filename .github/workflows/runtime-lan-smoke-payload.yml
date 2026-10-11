@@ -58,7 +58,11 @@ jobs:
             $env:GITHUB_SHA
           }
           $checkoutSha = ((& git rev-parse HEAD) -join "").Trim()
-          if ($LASTEXITCODE -ne 0 -or $checkoutSha -notmatch '^[0-9a-f]{40}
+          if ($LASTEXITCODE -ne 0 -or $checkoutSha -notmatch '^[0-9a-f]{40}$' -or $checkoutSha -ne $expectedSha) {
+            throw "Runtime payload checkout SHA '$checkoutSha' does not match the expected candidate SHA '$expectedSha'."
+          }
+          Write-Host "EXACT_TESTED_CHECKOUT_SHA=$checkoutSha"
+
       - name: Verify pinned .NET SDK
         shell: pwsh
         run: |
@@ -299,10 +303,7 @@ jobs:
             artifacts/runtime-lan-smoke/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
- -or $checkoutSha -ne $expectedSha) {
-            throw "Runtime payload checkout SHA '$checkoutSha' does not match the expected candidate SHA '$expectedSha'."
-          }
-          Write-Host "EXACT_TESTED_CHECKOUT_SHA=$checkoutSha"
+
 
 
       - name: Verify pinned .NET SDK
