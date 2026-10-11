@@ -10,7 +10,7 @@
 ## آخرین شواهد دقیق — 2026-10-11
 - PR #31 head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`: Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044)، Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159)، Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) موفق شدند.
 - کاندید کد پیشین `d02192a43722efc1f49bf84fd24af911b3ece7e9` هر پنج گیت Quick push، Quick PR، Full Foundation، Runtime Payload و PostgreSQL diagnostic را با موفقیت گذراند؛ SHA و لینک‌ها در handoff gate ثبت شده‌اند. از اجرای آن پنج‌گانه به‌اشتباه ادعا نکن که هر run روی SHA `7a8475b...` بوده است.
-- PR #32، head `6e21a42891592ba1c7d75300549cf26068b21c27`: Full Foundation [#38139128433](https://github.com/alizebal73/5/actions/runs/38139128433) موفق شد؛ Foundation مرجع تغییر نکرده است.
+- PR #32، head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9`: Full Foundation [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) موفق شد؛ Foundation مرجع تغییر نکرده است.
 
 این شواهد CI خودکارند؛ جایگزین آزمون واقعی سرویس ویندوز، ACL/DPAPI، کلید TLS، Bootstrap، Agent و LAN نمی‌شوند.
 
@@ -33,7 +33,7 @@
 - [x] اثبات Quick Validation روی GitHub-hosted Windows و ثبت نتیجهٔ exact-SHA.
 - [x] Full Foundation روی GitHub-hosted Windows با PostgreSQL دورریختنی، backup/restore، Desktop و Agent runtime موفق شده است.
 - [x] PR #31 کاندید Workflowهای hosted را دارد؛ آخرین کاندید کد تأییدشده `7a8475bf862d0ecdf4cd70eb12361e0152dd4317`، Quick PR #38138211044، Full Foundation #38138208159 و Runtime Payload #38138211061 موفق‌اند. کاندید کد پیشین `d02192a...` هر پنج lane را گذرانده است.
-- [x] Full Foundation روی کاندید نگهداری Foundation در PR #32 نیز موفق شد: [#38139128433](https://github.com/alizebal73/5/actions/runs/38139128433).
+- [x] Full Foundation روی کاندید نگهداری Foundation در PR #32 نیز موفق شد: [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082).
 - [x] Ruleset شاخهٔ `integration/runtime-operator-v1` ساخته و read-back شد؛ ID `24879997`، check اجباری `quick-validation`، PR، conversation resolution، جلوگیری از deletion/force-push، Squash-only و bypass خالی.
 - [~] Runner شخصی بنا به تصمیم مالک تا پایان GameNet حفظ می‌شود و سپس حذف خواهد شد. Runner-group restriction تأیید نشده و پاک‌سازی در Issue #33 پیگیری می‌شود؛ این مورد را «حل‌شدهٔ امنیتی» تلقی نکن.
 - [ ] PRهای #31 و #32 پس از بازبینی کامل، با ترتیب و Base صحیح تعیین تکلیف شوند؛ ادغام خودکار ممنوع است.

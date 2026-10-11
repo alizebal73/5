@@ -10,7 +10,7 @@ GitHub read-back confirms that Integration protection is now active. Ruleset and
 | `foundation/runtime-final-v2` | `be29687e637b709158a30204bb9213bfa4813950` | yes | Protected Foundation reference; exact stable certificate remains historical SHA `c3a8ba482548e963479fbdf8538be62c4d15acfe`. |
 | `integration/runtime-operator-v1` | `82d90178c0011c65eef76bd32cc33318d5bbd91c` | yes | Active Integration branch; Ruleset `protect-integration-runtime` targets this exact ref. |
 | `security/runner-and-stage1-stabilization-v1` | `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` (last verified head) | no | PR #31 Draft review candidate only. |
-| `security/foundation-hosted-runner-isolation-v1` | `6e21a42891592ba1c7d75300549cf26068b21c27` | no | PR #32 Draft Foundation maintenance candidate only. |
+| `security/foundation-hosted-runner-isolation-v1` | `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9` | no | PR #32 Draft Foundation maintenance candidate only. |
 
 Active Rulesets read-back:
 - `protect-main` (ID `24783754`) targets `refs/heads/main`; requires pull request, conversation resolution and `quick-validation`.
@@ -19,11 +19,11 @@ Active Rulesets read-back:
 
 ## CI Runner policy — 2026-10-11
 
-PR #31's candidate workflow set and PR #32's Foundation workflow set use GitHub-hosted `windows-2025`, each with the in-repository runner-policy guard. Full Foundation passed on PR #31 head's run #38138208159 and PR #32's run #38139128433. The guard is defense in depth, not a security boundary.
+PR #31's candidate workflow set and PR #32's Foundation workflow set use GitHub-hosted `windows-2025`, each with the in-repository runner-policy guard. Full Foundation passed on PR #31 head's run #38138208159 and PR #32's run #38143687082. The guard is defense in depth, not a security boundary.
 
 The personal self-hosted Runner remains registered per owner decision (repository Settings displayed `Server self-hosted Windows X64 — Idle`). The owner intends to remove it after GameNet development is complete. Runner-group restrictions have not been verified; old open feature branches may still carry self-hosted workflow definitions, so do not claim the entire repository history or all open PRs has been migrated. Avoid third-party/untrusted execution on the personal Runner wherever practical. This deferred item is tracked in [Issue #33](https://github.com/alizebal73/5/issues/33).
 
-PR #31 remains Draft/unmerged. Its last verified head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044), Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) and Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061). The preceding code-bearing SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed the five-run set (Quick push, Quick PR, Full Foundation, Payload, PostgreSQL diagnostic). PR #32 remains Draft/unmerged; its Full Foundation run #38139128433 passed after fixing the EF tool invocation within the isolated concurrency worker.
+PR #31 remains Draft/unmerged. Its last verified head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044), Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) and Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061). The preceding code-bearing SHA `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed the five-run set (Quick push, Quick PR, Full Foundation, Payload, PostgreSQL diagnostic). PR #32 remains Draft/unmerged; its Full Foundation run #38143687082 passed after fixing the EF tool invocation within the isolated concurrency worker.
 
 Older records below are preserved as historical audit trail and do not override the current snapshot above.
 

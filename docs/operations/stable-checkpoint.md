@@ -14,7 +14,7 @@ Status: **CERTIFIED — historical exact SHA only; not certification of the curr
 
 PR #31 remains Draft/unmerged and targets Integration. Its last verified head `7a8475bf862d0ecdf4cd70eb12361e0152dd4317` passed Quick PR [#38138211044](https://github.com/alizebal73/5/actions/runs/38138211044), Full Foundation [#38138208159](https://github.com/alizebal73/5/actions/runs/38138208159) and Runtime Payload [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061). The immediately preceding code-bearing candidate `d02192a43722efc1f49bf84fd24af911b3ece7e9` passed Quick push [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156), Quick PR [#38137821693](https://github.com/alizebal73/5/actions/runs/38137821693), Full Foundation [#38137818157](https://github.com/alizebal73/5/actions/runs/38137818157), Runtime Payload [#38137821491](https://github.com/alizebal73/5/actions/runs/38137821491) and PostgreSQL Diagnostic [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186).
 
-PR #32 is a distinct Foundation maintenance candidate at head `6e21a42891592ba1c7d75300549cf26068b21c27`; Full Foundation passed in [run #38139128433](https://github.com/alizebal73/5/actions/runs/38139128433). This validates the PR candidate workflow tree, not an independent certificate for Foundation base tip `be29687e637b709158a30204bb9213bfa4813950`.
+PR #32 is a distinct Foundation maintenance candidate at head `4fb20dc09d1351f6dccdf6c6592a9b6b704e9cf9`; Full Foundation passed in [run #38143687082](https://github.com/alizebal73/5/actions/runs/38143687082). This validates the PR candidate workflow tree, not an independent certificate for Foundation base tip `be29687e637b709158a30204bb9213bfa4813950`.
 
 Integration is now protected by active Ruleset [`protect-integration-runtime` #24879997](https://github.com/alizebal73/5/rules/24879997). The personal Runner remains registered by owner decision and is scheduled for removal after GameNet completion; actual Runner-group access restrictions are not certified. Hosted CI does not prove installed Windows Service identity, effective ACL/DPAPI, TLS key access under the service or physical two-PC LAN behavior.
 
@@ -27,7 +27,7 @@ Integration is now protected by active Ruleset [`protect-integration-runtime` #2
 | PR #31 head `7a8475bf...` | Runtime Payload | [#38138211061](https://github.com/alizebal73/5/actions/runs/38138211061) | Passed |
 | PR #31 previous source candidate `d02192a...` | Quick push | [#38137818156](https://github.com/alizebal73/5/actions/runs/38137818156) | Passed |
 | PR #31 previous source candidate `d02192a...` | PostgreSQL diagnostic | [#38137818186](https://github.com/alizebal73/5/actions/runs/38137818186) | Passed |
-| PR #32 head `6e21a428...` | Full Foundation | [#38139128433](https://github.com/alizebal73/5/actions/runs/38139128433) | Passed |
+| PR #32 head `4fb20dc0...` | Full Foundation | [#38143687082](https://github.com/alizebal73/5/actions/runs/38143687082) | Passed |
 
 ## Historical certified Foundation gates
 
