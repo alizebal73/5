@@ -77,6 +77,9 @@ jobs:
           & $dotnet restore GameNet.slnx
           if ($LASTEXITCODE -ne 0) { throw "Could not restore GameNet solution packages for diagnostic migration." }
 
+          & $dotnet build GameNet.slnx --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Could not build GameNet solution required for diagnostic Agent runtime." }
+
           & $dotnet tool restore
           if ($LASTEXITCODE -ne 0) { throw "Could not restore the local dotnet-ef tool." }
           & $dotnet ef database update --configuration Release --project src/Server/GameNet.Server.csproj --startup-project src/Server/GameNet.Server.csproj --context GameNet.Server.Persistence.GameNetDbContext
