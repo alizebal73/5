@@ -577,3 +577,12 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: include the Manager root's existence, owner, inheritance protection and access-rule list in the same read-only report. The script remains observational; it does not change ACLs or certify their effective safety.
 - Verification: Quick Validation must pass on the resulting exact PR head. The earlier green run does not include this final preflight adjustment.
 - Rollback: remove only the additional Manager-root report if a verified supported Windows environment shows a concrete incompatibility; do not turn the preflight into a machine-changing ACL repair tool.
+
+
+## 2026-10-12 — Make Desktop localization and XAML resource references a build-tested contract
+
+- Finding: existing Desktop unit tests covered culture-name resolution and dictionary filename selection, but did not parse the actual XAML dictionaries or verify that every `DynamicResource` used by `MainWindow.xaml` exists in both supported localizations. A typo or one-sided translation could survive a normal compile and fail at runtime.
+- Fix: add `DesktopResourceContractTests` to parse the fa-IR/en-US dictionaries and MainWindow XAML as XML, assert identical localization key sets, assert every referenced dynamic key exists in both dictionaries, and assert every MainWindow static resource reference resolves locally.
+- Coverage boundary: this is a deterministic static contract gate, not proof of RTL layout, keyboard/focus behavior, navigation, password-field clearing or all loading/offline/permission states. Those still require interactive Windows UI tests.
+- Verification status: pending exact-SHA Quick Validation, Desktop tests and Full Foundation on this independent test candidate.
+- Rollback: retain the resource dictionaries and remove only the test if a confirmed legitimate XAML resource pattern requires the parser to be extended; do not bypass a real missing-key failure.

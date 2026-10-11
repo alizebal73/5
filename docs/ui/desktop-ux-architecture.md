@@ -126,3 +126,8 @@ Optimistic UI is allowed only when it cannot contradict an authoritative invaria
 - Views remain presentation.
 - ViewModels coordinate UI state, commands and API calls.
 - Domain/application tests remain outside the WPF project.
+
+
+## Automated XAML resource contract
+
+Desktop test coverage parses `MainWindow.xaml` and both supported string dictionaries as XML, verifies that fa-IR and en-US expose identical key sets, and checks that every `DynamicResource` used by the main window is present in both localizations. MainWindow's explicit `StaticResource` references must also resolve from its own resource dictionary. This guard prevents missing resource keys from slipping past a successful compile; it does not certify actual RTL geometry, keyboard/focus behavior, password-field lifecycle, or the full set of interactive loading/offline/permission states.
