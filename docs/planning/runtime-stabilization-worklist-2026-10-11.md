@@ -13,7 +13,9 @@
 - اجرای تکراری Quick Validation پس از اصلاح portability نیز موفق شد: [Run #38131165436](https://github.com/alizebal73/5/actions/runs/38131165436)، SHA `636741d82dea5bb8f8f2c269c39784b5739316ee`.
 - اجرای کامل Full Foundation روی GitHub-hosted Windows نیز موفق شد: [Run #38131165423](https://github.com/alizebal73/5/actions/runs/38131165423)، SHA `636741d82dea5bb8f8f2c269c39784b5739316ee`. همهٔ گیت‌ها سبز شدند: parser، build/unit tests، PostgreSQL migration/concurrency، backup/restore، Desktop runtime و Agent runtime.
 - اجرای اول Full Foundation [#38130941325](https://github.com/alizebal73/5/actions/runs/38130941325) وابستگی پنهان به ابزار سراسری `dotnet-ef` را کشف کرد. فراخوانی worker به `dotnet tool run dotnet-ef -- ...` تغییر کرد و اجرای دوم کامل را گذراند. این اصلاح باید در PR اصلی نیز حفظ شود.
-- روی Workflowهای نهایی‌شده در شاخهٔ تثبیت، Quick Validation [#38131514010](https://github.com/alizebal73/5/actions/runs/38131514010) و Full Foundation [#38131514022](https://github.com/alizebal73/5/actions/runs/38131514022) هر دو روی SHA `91b892fedc6c615d4854b7fff78e471386f2b563` موفق شدند. Runtime payload [#38131514035](https://github.com/alizebal73/5/actions/runs/38131514035) به علت نبودن متغیر طراحی `GAMENET_DATABASE_CONNECTION` در مرحلهٔ EF migrations bundle شکست خورد؛ Build سه برنامه موفق بود و Migrationی روی هیچ دیتابیسی اجرا نشد. برای جلوگیری از انتقال هر اتصال واقعی Runner به artifact، build اکنون از مقدار process-only غیرقابل‌استفاده، محیط `Production` و بررسی گزینهٔ `--connection` روی bundle استفاده می‌کند؛ اجرای مجدد لازم است.
+- روی کاندید نهایی شاخهٔ تثبیت، هر سه Workflow با موفقیت و روی SHA یکسان `991152bf60676b2a03c0625780b5dcc16f365032` تمام شدند: Quick Validation [#38131788387](https://github.com/alizebal73/5/actions/runs/38131788387)، Full Foundation [#38131788388](https://github.com/alizebal73/5/actions/runs/38131788388) و Runtime LAN Smoke Payload [#38131788408](https://github.com/alizebal73/5/actions/runs/38131788408). هر سه روی Runnerهای GitHub-hosted اجرا شدند.
+- اجرای قبلی payload روی SHA `91b892...` به‌دلیل نیاز EF design-time factory به `GAMENET_DATABASE_CONNECTION` شکست خورد (#38131514035). در کاندید نهایی، bundle فقط با یک connection ساختگیِ process-only، محیط `Production` و آزمون غیرتغییردهندهٔ `--help` ساخته می‌شود؛ بررسی می‌شود که گزینهٔ `--connection` دارد. اجرای نهایی payload موفق شد و هیچ migration روی دیتابیس واقعی اجرا نشد.
+- Full Foundation نهایی شامل parser، build/unit tests، PostgreSQL migration/concurrency، backup/restore، Desktop و Agent runtime بود و همهٔ گیت‌ها سبز شدند. این مدرک CI روی SHA کاندید است، نه تأیید نصب واقعی Windows Service یا آزمون فیزیکی LAN.
 - در تصویر استاندارد فعلی GitHub-hosted Windows، PostgreSQL 17 موجود است اما سرویس به‌صورت پیش‌فرض متوقف/غیرفعال است؛ Workflow باید دیتابیس دورریختنی را فقط داخل VM همان Job راه‌اندازی کند و از Machine secret یا دیتابیس کامپیوتر مدیر وابسته نباشد.
 
 ## ترتیب الزامی کار
@@ -21,10 +23,10 @@
 ### P0 — ایمن‌سازی CI
 - [x] اثبات Quick Validation روی GitHub-hosted Windows و ثبت نتیجهٔ دقیق (#38130781617 و #38131165436).
 - [x] اثبات Full Foundation روی GitHub-hosted Windows در harness آزمایشی؛ تمام گیت‌ها در #38131165423 سبز شدند.
-- [ ] انتقال Quick Validation و build/package قابل‌تکرار از Runner خودمیزبان به GitHub-hosted Windows.
+- [x] انتقال در کاندید PR به GitHub-hosted Windows انجام و روی یک SHA هر سه مسیر Quick/Full/payload سبز شده است؛ ادغام این تغییر در Integration هنوز منتظر بازبینی PR است.
 - [x] مسیر Full Foundation روی VM موقت GitHub-hosted با PostgreSQL آزمایشی اثبات شد؛ از اتصال DB یا اسرار سیستم Manager استفاده نشد.
 - [ ] Runner خودمیزبان حذف نشود؛ دسترسی واقعی آن از تنظیمات GitHub محدود شود یا فقط هنگام اجرای تست دستی مورداعتماد online باشد. صرفاً hosted کردن YAML فعلی، در یک مخزن عمومی، تضمین نمی‌کند PR بعدی نتواند `runs-on` را تغییر دهد.
-- [ ] PR محدود Workflowها و اصلاح ابزار EF محلی را بازبینی کنیم؛ پس از push، Quick/Full/payload را در Workflowهای نهایی و روی SHA واحد تأیید کنیم؛ هیچ گیتی حذف نشود.
+- [ ] PR محدود Workflowها و اصلاح ابزار EF محلی را بازبینی کنیم؛ پس از بازبینی diff، بررسی امنیت Runner و تأیید CIهای PR تصمیم به ادغام بگیریم؛ هیچ گیتی حذف نشود.
 
 ### P1 — حاکمیت شاخه و وضعیت واقعی
 - [ ] به‌روزرسانی `engineering-readiness-register.md`، `branch-governance.md` و `stable-checkpoint.md` با SHA، PR و Runهای واقعی؛ حذف وضعیت‌های منسوخ و متناقض.
