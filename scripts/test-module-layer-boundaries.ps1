@@ -137,6 +137,58 @@ try {
         Remove-Item -LiteralPath $apiBadFile -Force
     }
 
+    # Regression cases for SDK implicit/global usings: forbidden dependencies must be
+    # rejected even when a layer references short type names without importing a namespace.
+    $forbiddenPersistenceTypes = @(
+        "DbSet<Station> Stations { get; set; }",
+        "IDbContextFactory<GameNetDbContext> Factory { get; set; }"
+    )
+    foreach ($layer in @("Domain", "Application", "Api")) {
+        foreach ($forbiddenType in $forbiddenPersistenceTypes) {
+            $fileName = "ForbiddenImplicitPersistence-$([guid]::NewGuid().ToString('N')).cs"
+            $badFile = Join-Path $moduleRoot "$layer\$fileName"
+            Set-Content -LiteralPath $badFile -Value $forbiddenType
+            Assert-Rejected "$layer implicit/global-using persistence type '$forbiddenType'"
+            Remove-Item -LiteralPath $badFile -Force
+        }
+    }
+
+    $forbiddenImplicitSideEffects = @(
+        "File.ReadAllText(path);",
+        "Directory.CreateDirectory(path);",
+        "Path.Combine(root, name);",
+        "new FileSystemWatcher(path);",
+        "new SmtpClient();",
+        "new Ping();"
+    )
+    foreach ($layer in @("Domain", "Application")) {
+        foreach ($forbiddenType in $forbiddenImplicitSideEffects) {
+            $fileName = "ForbiddenImplicitSideEffect-$([guid]::NewGuid().ToString('N')).cs"
+            $badFile = Join-Path $moduleRoot "$layer\$fileName"
+            Set-Content -LiteralPath $badFile -Value $forbiddenType
+            Assert-Rejected "$layer implicit/global-using side effect '$forbiddenType'"
+            Remove-Item -LiteralPath $badFile -Force
+        }
+    }
+
+    # Application/Domain cannot become ASP.NET endpoint layers merely by relying on
+    # framework implicit usings. API remains the valid inbound HTTP adapter boundary.
+    $forbiddenWebFrameworkTypes = @(
+        "HttpContext Context { get; set; }",
+        "IEndpointRouteBuilder Endpoints { get; set; }",
+        "IResult Handle() => Results.Ok();",
+        "WebApplication.CreateBuilder();"
+    )
+    foreach ($layer in @("Domain", "Application")) {
+        foreach ($forbiddenType in $forbiddenWebFrameworkTypes) {
+            $fileName = "ForbiddenWebFramework-$([guid]::NewGuid().ToString('N')).cs"
+            $badFile = Join-Path $moduleRoot "$layer\$fileName"
+            Set-Content -LiteralPath $badFile -Value $forbiddenType
+            Assert-Rejected "$layer implicit/global-using web framework type '$forbiddenType'"
+            Remove-Item -LiteralPath $badFile -Force
+        }
+    }
+
     Write-Host "MODULE LAYER-BOUNDARY REGRESSION TESTS PASSED."
 }
 finally {
