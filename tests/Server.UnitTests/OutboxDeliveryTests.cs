@@ -222,6 +222,21 @@ public sealed class OutboxDispatcherPostgresTests
                 Assert.Equal("handler_failed", deadLettered.LastFailureCode);
             }
 
+            await using (var inboxContext = CreateContext(connectionString!))
+            {
+                var inbox = new EfOutboxInbox(inboxContext, clock);
+                var processed = await inbox.ExecuteOnceAsync(
+                    secondClaim.Id,
+                    secondClaim.LeaseToken!,
+                    new OutboxDeliveryEnvelope(
+                        secondClaim.EventId,
+                        secondClaim.OccurredAtUtc,
+                        secondClaim.Type,
+                        secondClaim.PayloadJson),
+                    _ => Task.CompletedTask);
+                Assert.True(processed);
+            }
+
             await using (var publishContext = CreateContext(connectionString!))
             {
                 var dispatcher = new EfOutboxDispatcher(publishContext, clock);
@@ -244,10 +259,65 @@ public sealed class OutboxDispatcherPostgresTests
         {
             await using var cleanup = CreateContext(connectionString!);
             await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM outbox_inbox_receipts WHERE event_id = {firstEventId} OR event_id = {secondEventId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
                 $"DELETE FROM outbox_messages WHERE event_id = {firstEventId} OR event_id = {secondEventId}");
         }
     }
 
+
+    [Fact]
+    public async Task Mark_published_requires_a_durable_inbox_receipt()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_OUTBOX_POSTGRES_TESTS"),
+                "true",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+        Assert.False(string.IsNullOrWhiteSpace(connectionString));
+        var clock = new MutableGameClock(DateTimeOffset.UtcNow);
+        var eventId = Guid.NewGuid();
+
+        try
+        {
+            await using (var seed = CreateContext(connectionString!))
+            {
+                seed.OutboxMessages.Add(CreateMessage(eventId, clock.UtcNow));
+                await seed.SaveChangesAsync();
+            }
+
+            var claimed = Assert.Single(await ClaimBatchAsync(
+                connectionString!,
+                clock,
+                batchSize: 1,
+                maxAttempts: 1));
+
+            await using (var context = CreateContext(connectionString!))
+            {
+                var dispatcher = new EfOutboxDispatcher(context, clock);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    dispatcher.MarkPublishedAsync(claimed.Id, claimed.LeaseToken!, clock.UtcNow));
+            }
+
+            await using var verify = CreateContext(connectionString!);
+            var message = await verify.OutboxMessages.SingleAsync(x => x.EventId == eventId);
+            Assert.Null(message.PublishedAtUtc);
+            Assert.Null(message.DeadLetteredAtUtc);
+            Assert.False(await verify.OutboxInboxReceipts.AnyAsync(x => x.EventId == eventId));
+        }
+        finally
+        {
+            await using var cleanup = CreateContext(connectionString!);
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM outbox_inbox_receipts WHERE event_id = {eventId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM outbox_messages WHERE event_id = {eventId}");
+        }
+    }
 
     [Fact]
     public async Task Active_inbox_transaction_is_not_dead_lettered_when_final_attempt_lease_expires()

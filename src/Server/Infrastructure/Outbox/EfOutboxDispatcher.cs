@@ -152,6 +152,12 @@ public sealed class EfOutboxDispatcher(
               AND published_at_utc IS NULL
               AND dead_lettered_at_utc IS NULL
               AND lease_token = {leaseToken}
+              AND EXISTS (
+                  SELECT 1
+                  FROM outbox_inbox_receipts AS receipt
+                  WHERE receipt.event_id = outbox_messages.event_id
+                    AND receipt.type = outbox_messages.type
+              )
             """,
             cancellationToken);
 
