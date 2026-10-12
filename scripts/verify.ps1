@@ -10,6 +10,7 @@ function Invoke-Checked {
 & "$PSScriptRoot/test-business-gate.ps1"
 & "$PSScriptRoot/check-business-gate.ps1"
 & "$PSScriptRoot/check-source-size.ps1"
+& "$PSScriptRoot/test-module-layer-boundaries.ps1"
 & "$PSScriptRoot/check-architecture.ps1"
 & "$PSScriptRoot/check-placeholders.ps1"
 & "$PSScriptRoot/check-work-item-docs.ps1"
