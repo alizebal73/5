@@ -1,6 +1,6 @@
 # Engineering Readiness Register — GameNet 5
 
-این سند، دفتر ریسک‌ها و ترتیب اجرای کار است. تاریخ snapshot: 2026-10-11. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ آن‌ها را به ترتیب اجرایی و وضعیت واقعی وصل می‌کند.
+این سند، دفتر ریسک‌ها و ترتیب اجرای کار است. snapshot اولیهٔ آن مربوط به 2026-10-11 است؛ آخرین بازبینی زندهٔ این نسخه در 2026-10-13 انجام شده است. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ موارد تاریخ‌دار آن باید پیش از اقدام با وضعیت زندهٔ GitHub تطبیق داده شوند.
 
 **سیاست زمان‌بندی پذیرش نهایی (2026-10-12):** آزمون فیزیکی Windows Service/LAN، آزمون تعاملی WPF، نصب/ارتقا/repair/rollback و pilot فقط پس از تکمیل دامنهٔ برنامه‌ریزی‌شده و ساخته‌شدن Setup.exe/MSI اجرا می‌شوند. CI، unit/integration/regression/security tests برای هر برش و هر SHA مرتبط در طول توسعه ادامه دارند؛ این تعویق فقط مربوط به پذیرش یکپارچهٔ نهایی است. هر ادعای Done باید به commit، آزمون و مدرک همان SHA متصل باشد.
 
@@ -47,7 +47,7 @@ This section records evidence and a timestamped ref read-back. It is not a live 
 | G-12 | P0 پیش از Business vertical بعدی | Customer/Session/Tariff/Billing/Wallet/Inventory/Buffet/VIP/Reports/Shift/Approval کامل در snapshot فعال حاضر نیستند. | نیازمندی برنامه‌ریزی‌شده، نه فراموش‌شده | هر module مطابق requirement: مالک داده، permission، state machine، transaction، idempotency/concurrency، audit، failure/recovery، API/UI و تست PostgreSQL واقعی؛ هیچ financial authority در Desktop. |
 | G-19 | P1 قبل از هر برش تجاری | ماتریس ۶۳ requirement ردیف دارد، اما داشتن ID و معیار کلی به‌تنهایی trace کامل requirement→slice→کد/API→تست→شاهد نیست. | باید در هر برش تکمیل شود | برای هر برش، DoR/vertical-slice ثبت کند: REQ IDs، invariant، permission، migration/data owner، transaction/idempotency/race، audit، failure/recovery، آزمون خودکار برای هر برش؛ آزمون فیزیکی/سرتاسری فقط در پذیرش نهایی پس از آماده‌شدن Setup.exe/MSI، exact SHA/evidence؛ هیچ ماژول کامل‌نشده را از روی وجود ردیف/فایل Done اعلام نکنید. |
 | G-13 | P1 | Older-base Draft PRs remain, but #35–#39 were source/traceability records fully represented by merged PR #40. | #35–#39 and backward PR #23 are closed; #31 is also closed as superseded for runner changes. Branches retained. #32/#44 are merged. Six remaining Draft PRs (#15/#17/#18/#20/#21/#24) have explicit later-gate dispositions. | Compare exact diff and preserve unique evidence before closing/deleting any remaining source branch. |
-| G-14 | P1 governance | Rulesets for main, Foundation and Integration are active; the protected Integration branch requires PR + `quick-validation` + conversation resolution. All three rulesets report `strict_required_status_checks_policy=false`. | Hosted Runner migration now merged (#32 Foundation, #44 Integration) and exact post-merge gates passed. Strict/up-to-date-before-merge hardening still needs an administrator-level ruleset change; this connection only permits read access to rulesets. | Review and enable up-to-date-before-merge policy with repository administration access. |
+| G-14 | P1 governance | All three live Rulesets are active and require the expected CI check; latest GitHub read-back confirms `strict_required_status_checks_policy=true`. They still set `required_approving_review_count=0`, so GitHub does not itself enforce a human approval. | Hosted Runner migration merged (#32 Foundation, #44 Integration); required checks are configured and strict. Human review remains an explicit operational gate unless a suitable approval rule is configured. | Continue exact-SHA review of each PR; do not merge without a documented review decision. If an independent reviewer becomes available, configure and verify an approval requirement. |
 | G-15 | P1 security | مخزن عمومی است. این ممیزی ادعا نمی‌کند تمام تاریخچهٔ همهٔ branchها از نظر secret به‌صورت خودکار اسکن شده است. | بررسی مستقل لازم | history/branches/packageها با secret scanner بررسی؛ alerts/push protection فعال در صورت دسترسی؛ اگر secret واقعی یافت شد rotate/revoke اول، بعد پاک‌سازی تاریخچه با برنامه و هماهنگی. |
 | G-16 | Deferred | طرح Steam/GamingAccounts یک ADR پیشنهادی است و PR #19 بسته شده؛ مجازبودن مدل حساب و روش integration هنوز شرط ورود است. | عمداً پیاده‌سازی نشده | نیاز محصول صریح + بررسی برنامهٔ رسمی/اجازهٔ Valve + تصمیم محصول/ADR؛ تا آن زمان هیچ credential injection، MFA bypass یا Auto Login فرضی ساخته نشود. |
 | G-17 | P1 پیش از Release | Foundation برای PostgreSQL/migrations، audit/idempotency/outbox و backup/restore آزمون دارد؛ اما زمان‌بندی/retention، محل امن نسخه‌های پشتیبان و RPO/RTO محصولی هنوز کامل نشده‌اند. | بخشی Foundation موجود؛ عملیات کامل باز | restore دوره‌ای و ایزوله، retention، هشدار شکست، صلاحیت دسترسی، آزمون بازیابی/تطبیق و ثبت زمان/داده از دست‌رفته. |
@@ -103,6 +103,40 @@ This section records evidence and a timestamped ref read-back. It is not a live 
 - اجرای Steam Auto Login قبل از requirement و policy/provider gate.
 
 
-## CI trigger hardening follow-up — 2026-10-10
+## CI trigger hardening follow-up — completed; record refreshed 2026-10-12
 
-PR #25 is open and ready for review (not merged). Its Quick Validation workflow adds `security/**` to the push lane in addition to Pull Request gates targeting the active integration/operator branches. PR #27 still requires exact-head testing once that trigger change is integrated; absence of CI is not a pass.
+The earlier statement that PR #25 remained open and PR #27 still awaited CI was stale and has been superseded:
+
+- PR [#25](https://github.com/alizebal73/5/pull/25) is closed and merged. Merge commit: `82d90178c0011c65eef76bd32cc33318d5bbd91c`.
+- PRs [#27](https://github.com/alizebal73/5/pull/27), [#28](https://github.com/alizebal73/5/pull/28), and [#29](https://github.com/alizebal73/5/pull/29) are closed without merge. The bounded implementation was delivered through [PR #30](https://github.com/alizebal73/5/pull/30), merged at `e1626d7d1f2e62601329604b8823787f2c9597b6`.
+- PR #30's recorded exact-head Quick, Full Foundation and Runtime Payload checks passed, and its post-merge automated checks are recorded in this register and the Active Execution Control. Those checks certify their recorded SHAs only.
+- The six open Draft PRs verified on 2026-10-12 are #15, #17, #18, #20, #21 and #24. Their current dispositions are listed in [Active Execution Control](../operations/active-execution-control.md); do not infer status from this historical follow-up or merge older-base branches wholesale.
+
+## Live branch-ruleset read-back — 2026-10-12
+
+GitHub's live Ruleset responses were re-read for all three protected targets:
+
+| Ruleset | Required status check | Active |
+|---|---|---|
+| `protect-main` | `quick-validation` | Yes |
+| `protect-foundation-runtime` | `foundation` | Yes |
+| `protect-integration-runtime` | `quick-validation` | Yes |
+
+All three require pull requests, block branch deletion and non-fast-forward updates, require review-thread resolution, allow Squash as the only merge method, and report no bypass actors. The latest live GitHub read-back confirms `strict_required_status_checks_policy=true` on all three Rulesets, so the branch must be up to date with its base for required checks. However, every Ruleset has `required_approving_review_count=0`, `require_code_owner_review=false`, `required_reviewers=[]`, and `require_last_push_approval=false`; GitHub does not enforce an approving human review. This remains a governance gap for the no-unreviewed-merge policy, not an application-code defect.
+
+The available GitHub connection can read these Rulesets but does not expose a Ruleset-write operation, so this audit did not change repository settings. Strict/up-to-date-before-merge is already enabled on all three. Before regular feature PR merging expands, enforce the stated no-unreviewed-merge process manually, or configure an appropriate approving-review requirement when a suitable independent reviewer is available. Do not guess required-check names or remove the existing checks.
+
+
+## Post-merge checkpoint — 2026-10-13
+
+The live Integration ref was re-read from GitHub as `16e9abe3ac68885af7f9282c3872e47c13ff19aa`. Protected `main` remains at `b9288471f2047570eaf8d0d6552cf87bc0ddc214` and was not modified by these actions.
+
+- PR [#53](https://github.com/alizebal73/5/pull/53) is merged; the Integration pre-merge PostgreSQL/runtime gate is active for `integration/runtime-*` changes.
+- PR [#56](https://github.com/alizebal73/5/pull/56) is merged at `16e9abe3ac68885af7f9282c3872e47c13ff19aa`. Post-merge Quick Validation [#38315716272](https://github.com/alizebal73/5/actions/runs/38315716272) and Full Foundation [#38315716279](https://github.com/alizebal73/5/actions/runs/38315716279) both succeeded on that exact SHA.
+- PR [#57](https://github.com/alizebal73/5/pull/57) and [#58](https://github.com/alizebal73/5/pull/58) are the original older-base drafts. Refreshed replacements [#59](https://github.com/alizebal73/5/pull/59) and [#60](https://github.com/alizebal73/5/pull/60) have been constructed on the new base with their changed paths compared against the shared merge base. At the time of this snapshot, candidate-specific Full Foundation, Quick Validation and Runtime LAN Smoke Payload runs for these refreshed heads were still in progress; do not merge until all required runs finish successfully on each exact SHA.
+- The readiness and branch-governance snapshots are historical observations. Re-read live refs and run records before future merge decisions.
+- The owner explicitly authorized the PR #56 merge; this was recorded as owner authorization, not independent review. Issue [#54](https://github.com/alizebal73/5/issues/54) remains open because all three Rulesets still require zero approving reviews. Do not treat the PR #56 authorization as blanket approval for other PRs.
+
+## Next engineering action
+
+Finish exact-SHA CI and inspect the final diffs on PRs #59 and #60. Close PRs #57 and #58 as superseded only after their refreshed candidates pass. Continue Stage 3 platform hardening after these security slices are reconciled; installed Windows Service/DPAPI/TLS-after-restart, physical LAN, interactive UI and Setup acceptance remain deferred final-release gates.
