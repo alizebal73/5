@@ -109,8 +109,8 @@ try {
     }
 
     $forbiddenInfrastructureReferences = @(
-        "using GameNet.Server.Infrastructure.Configuration;",
         "using GameNet.Server.Modules.Probe.Infrastructure;",
+        "using GameNet.Server.Modules.Probe.Infrastructure.Adapters;",
         "using GameNet . Server . Modules . Probe . Infrastructure ;"
     )
     foreach ($layer in @("Domain", "Application", "Api")) {
