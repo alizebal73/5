@@ -52,6 +52,7 @@ on:
       - "src/Client/**"
       - "src/Shared/Contracts/V1/Protocol/**"
       - "src/Server/Infrastructure/Realtime/**"
+      - "src/Server/Modules/README.md"
       - "src/Server/Modules/Stations/**"
       - "src/Desktop/Features/Stations/**"
       - "src/Desktop/Shell/MainWindow.xaml.cs"
