@@ -48,18 +48,31 @@ try {
     & $checker -ModulesRoot $fixtureRoot
     Write-Host "PASS: valid Infrastructure persistence/network and API transport access are allowed."
 
+    $forbiddenPersistenceImports = @(
+        "using GameNet.Server.Persistence;",
+        "using GameNet . Server . Persistence ;",
+        "using Microsoft.EntityFrameworkCore;",
+        "using Microsoft . EntityFrameworkCore ;"
+    )
+
     foreach ($layer in @("Domain", "Application", "Api")) {
-        $badFile = Join-Path $moduleRoot "$layer\ForbiddenPersistence.cs"
-        Set-Content -LiteralPath $badFile -Value "using GameNet.Server.Persistence;"
-        Assert-Rejected "$layer direct persistence"
-        Remove-Item -LiteralPath $badFile -Force
+        foreach ($forbiddenImport in $forbiddenPersistenceImports) {
+            $badFile = Join-Path $moduleRoot "$layer\ForbiddenPersistence-$([guid]::NewGuid().ToString('N')).cs"
+            Set-Content -LiteralPath $badFile -Value $forbiddenImport
+            Assert-Rejected "$layer direct persistence import '$forbiddenImport'"
+            Remove-Item -LiteralPath $badFile -Force
+        }
     }
 
     $forbiddenImports = @(
         "using System.Net.Http;",
         "using System.Net;",
         "using System.IO;",
-        "using System.Diagnostics;"
+        "using System.Diagnostics;",
+        "using System . Net . Http ;",
+        "using System . Net ;",
+        "using System . IO ;",
+        "using System . Diagnostics ;"
     )
 
     foreach ($layer in @("Domain", "Application")) {
