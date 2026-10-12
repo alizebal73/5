@@ -43,8 +43,13 @@ $persistencePattern = "Microsoft\.EntityFrameworkCore|\bDbContext\b|\bNpgsql\b|G
 # Domain and Application code may not perform network, filesystem, process, or web-framework
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
 # may not access persistence directly. Infrastructure is intentionally allowed those capabilities.
-$externalSideEffectPattern = "\bHttpClient\b|\bWebSocket\b|\bSignalR\b|System\.Net\.|System\.IO\.|System\.Diagnostics\.Process|\bProcessStartInfo\b|Microsoft\.AspNetCore"
-$apiSideEffectPattern = "\bHttpClient\b|\bWebSocket\b|\bSignalR\b|System\.Net\.|System\.IO\.|System\.Diagnostics\.Process|\bProcessStartInfo\b"
+# Match fully qualified references and namespace imports (including the semicolon form
+# `using System.IO;`), not just qualified names such as `System.IO.File`.
+$networkNamespacePattern = "\bSystem\.Net(?:\.|;)|\bHttpClient\b|\bWebClient\b|\bHttpWebRequest\b|\bHttpWebResponse\b|\bWebSocket\b|\bSignalR\b|\bSocket\b|\bTcpClient\b|\bUdpClient\b"
+$fileSystemNamespacePattern = "\bSystem\.IO(?:\.|;)|\bFileStream\b|\bFileInfo\b|\bDirectoryInfo\b|\bStreamReader\b|\bStreamWriter\b"
+$diagnosticsNamespacePattern = "\bSystem\.Diagnostics(?:\.|;)|\bProcessStartInfo\b|\bProcess\b"
+$externalSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern|Microsoft\.AspNetCore"
+$apiSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern"
 
 foreach ($module in Get-ChildItem -LiteralPath $ModulesRoot -Directory) {
     foreach ($layerName in @("Domain", "Application", "Api")) {
