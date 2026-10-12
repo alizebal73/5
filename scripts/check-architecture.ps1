@@ -36,6 +36,46 @@ Assert-NoMatch "src/Server/Modules" "System.Net.|HttpClient|WebSocket|SignalR|Sy
 # Cross-module internal references are forbidden. A module may reference Shared and explicit public contracts,
 # but never another module's implementation namespace.
 $modulesRoot = "src/Server/Modules"
+$requiredModules = @(
+    "Identity",
+    "Stations",
+    "Agents",
+    "ClientControl",
+    "Customers",
+    "Sessions",
+    "Tariffs",
+    "Billing",
+    "Wallet",
+    "Inventory",
+    "Buffet",
+    "VIP",
+    "Games",
+    "GameAccounts",
+    "Reports",
+    "Shifts",
+    "Settings",
+    "Approvals",
+    "Backup"
+)
+$moduleCatalogPath = Join-Path $modulesRoot "README.md"
+if (-not (Test-Path -LiteralPath $moduleCatalogPath -PathType Leaf)) {
+    throw "Canonical module catalog is missing: $moduleCatalogPath"
+}
+$moduleCatalogText = Get-Content -LiteralPath $moduleCatalogPath -Raw
+foreach ($requiredModule in $requiredModules) {
+    $modulePath = Join-Path $modulesRoot $requiredModule
+    if (-not (Test-Path -LiteralPath $modulePath -PathType Container)) {
+        throw "Required module boundary is missing: $modulePath"
+    }
+    $moduleReadme = Join-Path $modulePath "README.md"
+    if (-not (Test-Path -LiteralPath $moduleReadme -PathType Leaf)) {
+        throw "Required module boundary documentation is missing: $moduleReadme"
+    }
+    $catalogPattern = "(?m)^\|\s*$([regex]::Escape($requiredModule))\s*\|"
+    if ($moduleCatalogText -notmatch $catalogPattern) {
+        throw "Required module '$requiredModule' is missing from the canonical module catalog."
+    }
+}
 if (Test-Path $modulesRoot) {
     $moduleDirs = Get-ChildItem $modulesRoot -Directory
     foreach ($module in $moduleDirs) {
