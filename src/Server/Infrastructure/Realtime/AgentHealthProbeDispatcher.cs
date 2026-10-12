@@ -109,6 +109,18 @@ public sealed class AgentHealthProbeDispatcher(
         var completion = commandResults.Register(command, lease.ConnectionId);
         try
         {
+            // Revalidate the exact lease immediately before the outbound side effect.
+            // Revocation/rotation removes that lease transactionally; a stale snapshot
+            // must not authorize a fresh command dispatch.
+            if (!await leases.IsCurrentLeaseAsync(
+                    lease.DeviceId,
+                    lease.ConnectionId,
+                    lease.LeaseToken,
+                    cancellationToken))
+            {
+                return null;
+            }
+
             await hub.Clients.Client(lease.ConnectionId).SendAsync(
                 "ReceiveCommand", command, cancellationToken);
             return await commandResults.WaitAsync(completion, TimeSpan.FromSeconds(8), cancellationToken);
