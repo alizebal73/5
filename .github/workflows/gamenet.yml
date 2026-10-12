@@ -33,7 +33,7 @@ jobs:
   # reusable full PostgreSQL/runtime certification has succeeded first.
   integration-foundation:
     name: integration-foundation-certification
-    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'integration/runtime-operator-v1' }}
+    if: ${{ github.event_name == 'pull_request' && startsWith(github.base_ref, 'integration/runtime-') }}
     uses: ./.github/workflows/foundation-certification.yml
 
   quick-validation:
@@ -47,7 +47,7 @@ jobs:
         if: >-
           always() &&
           github.event_name == 'pull_request' &&
-          github.base_ref == 'integration/runtime-operator-v1' &&
+          startsWith(github.base_ref, 'integration/runtime-') &&
           needs.integration-foundation.result != 'success'
         shell: pwsh
         run: |
