@@ -44,6 +44,7 @@ $persistencePattern = "Microsoft\.EntityFrameworkCore|\bDbContext\b|\bNpgsql\b|G
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
 # may not access persistence directly. Infrastructure is intentionally allowed those capabilities.
 $externalSideEffectPattern = "\bHttpClient\b|\bWebSocket\b|\bSignalR\b|System\.Net\.|System\.IO\.|System\.Diagnostics\.Process|\bProcessStartInfo\b|Microsoft\.AspNetCore"
+$apiSideEffectPattern = "\bHttpClient\b|\bWebSocket\b|\bSignalR\b|System\.Net\.|System\.IO\.|System\.Diagnostics\.Process|\bProcessStartInfo\b"
 
 foreach ($module in Get-ChildItem -LiteralPath $ModulesRoot -Directory) {
     foreach ($layerName in @("Domain", "Application", "Api")) {
@@ -55,6 +56,11 @@ foreach ($module in Get-ChildItem -LiteralPath $ModulesRoot -Directory) {
         $layerPath = Join-Path $module.FullName $layerName
         Assert-NoMatchInLayer $layerPath $externalSideEffectPattern "$($module.Name) $layerName layer contains infrastructure/external side effects."
     }
+
+    # API may use ASP.NET request/response types, but outbound clients and direct
+    # filesystem/process/network integrations still belong in Infrastructure.
+    $apiPath = Join-Path $module.FullName "Api"
+    Assert-NoMatchInLayer $apiPath $apiSideEffectPattern "$($module.Name) API layer contains outbound infrastructure side effects."
 }
 
 Write-Host "Module layer-boundary check passed."
