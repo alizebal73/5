@@ -29,10 +29,12 @@ public static class AgentCredentialRoutes
                 if (!options.Value.Authentication.Enabled)
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 
-                if (!await credentials.AuthenticateAsync(request.DeviceId, request.Secret, cancellationToken))
+                var credentialId = await credentials.AuthenticateAndGetCredentialIdAsync(
+                    request.DeviceId, request.Secret, cancellationToken);
+                if (credentialId is null)
                     return Results.Unauthorized();
 
-                var token = tokenIssuer.Issue(request.DeviceId);
+                var token = tokenIssuer.Issue(request.DeviceId, credentialId.Value);
                 return Results.Ok(token);
             }).AllowAnonymous();
 

@@ -68,6 +68,7 @@ public sealed class AgentCredentialService(
 
             var now = clock.UtcNow;
             current.Revoke(now);
+            await FenceActiveLeaseAsync(request.DeviceId, ct);
             var secret = AgentCredentialSecretMaterial.Generate();
             var replacement = new AgentCredential
             {
@@ -103,11 +104,19 @@ public sealed class AgentCredentialService(
                 .SingleOrDefaultAsync(ct);
 
             if (current is null)
+            {
+                // A previous version or interrupted operation may have left a stale
+                // lease behind even though no credential remains active. Revoke is
+                // deliberately idempotent and still removes that residual authority.
+                await FenceActiveLeaseAsync(request.DeviceId, ct);
                 return false;
+            }
 
-            current.Revoke(clock.UtcNow);
+            var now = clock.UtcNow;
+            current.Revoke(now);
+            await FenceActiveLeaseAsync(request.DeviceId, ct);
             auditWriter.Append(new AuditRecord(
-                clock.UtcNow,
+                now,
                 "System",
                 request.DeviceId,
                 "AgentCredential.Revoked",
@@ -121,12 +130,22 @@ public sealed class AgentCredentialService(
             return true;
         }, cancellationToken);
 
-    public Task<bool> AuthenticateAsync(string deviceId, string secret, CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+    public async Task<bool> AuthenticateAsync(
+        string deviceId,
+        string secret,
+        CancellationToken cancellationToken = default) =>
+        (await AuthenticateAndGetCredentialIdAsync(deviceId, secret, cancellationToken)) is not null;
+
+    public Task<Guid?> AuthenticateAndGetCredentialIdAsync(
+        string deviceId,
+        string secret,
+        CancellationToken cancellationToken = default) =>
+        transactions.ExecuteAsync<Guid?>(async ct =>
         {
-            ValidateDeviceId(deviceId);
-            if (string.IsNullOrWhiteSpace(secret))
-                return false;
+            // Reject malformed identities and token shapes before hashing or querying storage.
+            if (!AgentDeviceIdentityRules.IsValid(deviceId) ||
+                !AgentCredentialSecretMaterial.IsCanonicalSecret(secret))
+                return null;
 
             var credential = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == deviceId && x.RevokedAtUtc == null)
@@ -164,17 +183,45 @@ public sealed class AgentCredentialService(
                     "foundation",
                     "Server",
                     "Rejected"));
-                return false;
+                return null;
             }
 
             credential!.LastAuthenticatedAtUtc = clock.UtcNow;
-            return true;
+            return credential.Id;
         }, cancellationToken);
+
+    public Task<bool> IsCredentialActiveAsync(
+        Guid credentialId,
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (credentialId == Guid.Empty || !AgentDeviceIdentityRules.IsValid(deviceId))
+            return Task.FromResult(false);
+
+        return dbContext.AgentCredentials
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.Id == credentialId &&
+                     x.DeviceId == deviceId &&
+                     x.RevokedAtUtc == null,
+                cancellationToken);
+    }
+
+    private async Task FenceActiveLeaseAsync(string deviceId, CancellationToken cancellationToken)
+    {
+        // Revoke/rotation must immediately remove this device's authority to receive
+        // commands. The delete participates in the caller's serializable transaction.
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            DELETE FROM agent_connection_leases
+            WHERE device_id = {deviceId}
+            """,
+            cancellationToken);
+    }
 
     private static void ValidateDeviceId(string deviceId)
     {
-        if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128)
-            throw new ArgumentException("DeviceId must be 1-128 non-whitespace characters.", nameof(deviceId));
+        if (!AgentDeviceIdentityRules.IsValid(deviceId))
+            throw new AgentCredentialException("agent.device_id_invalid");
     }
-
 }

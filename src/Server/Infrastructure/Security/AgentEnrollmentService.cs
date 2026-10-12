@@ -347,11 +347,7 @@ public sealed class AgentEnrollmentService(
 
     private static void ValidateDeviceId(string deviceId)
     {
-        if (string.IsNullOrWhiteSpace(deviceId) ||
-            deviceId.Length > 128 ||
-            deviceId != deviceId.Trim() ||
-            deviceId.Any(character =>
-                !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')))
+        if (!AgentDeviceIdentityRules.IsValid(deviceId))
             throw new AgentCredentialException("agent.device_id_invalid");
     }
 }

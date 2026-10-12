@@ -1,4 +1,5 @@
 using GameNet.Server.Infrastructure.Transactions;
+using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Persistence;
 using GameNet.Server.Persistence.Entities;
 using GameNet.Shared.Contracts.V1.Protocol;
@@ -247,9 +248,8 @@ public sealed class EfAgentConnectionLeaseStore(
 
     private static void ValidateDeviceId(string deviceId)
     {
-        ValidateBoundedText(deviceId, nameof(deviceId), 128);
-        if (deviceId.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')))
-            throw new ArgumentException("DeviceId contains unsupported characters.", nameof(deviceId));
+        if (!AgentDeviceIdentityRules.IsValid(deviceId))
+            throw new ArgumentException("DeviceId must contain 1-128 ASCII letters, digits, dashes, underscores or dots.", nameof(deviceId));
     }
 
     private static void ValidateBoundedText(string value, string parameterName, int maximumLength)

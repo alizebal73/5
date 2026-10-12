@@ -640,6 +640,53 @@ try {
         throw "The Agent health-probe command did not return a valid success acknowledgement."
     }
 
+    # Verify the station-to-Agent uniqueness invariant while the credential is still
+    # active. The revocation test below deliberately removes that credential, so after
+    # revocation a later bind attempt should correctly be rejected as not provisioned.
+    $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $secondStationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-create-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $secondStation = Invoke-IdentityRequest "POST" "/api/v1/stations" $secondStationHeaders @{
+        code = $secondStationCode
+        name = "Second CI Station"
+        type = 1
+    }
+    Assert-Status $secondStation 201 "Create second station"
+    $duplicateBinding = Invoke-IdentityRequest "PUT" "/api/v1/stations/$($secondStation.Json.data.id)/agent" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-ErrorCode $duplicateBinding 409 "stations.device_already_bound" "Prevent Agent binding to two stations"
+
+    # Revocation of a live Agent must fence its lease immediately, not wait for the
+    # next heartbeat timeout. This guards the boundary where Server could otherwise
+    # continue routing commands to a still-open SignalR connection.
+    $revokeConnectedAgent = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/revoke" $credentialRevocationHeaders @{
+        deviceId = $stationDeviceId
+        reason = "CI verifies immediate command-lease fencing after active Agent credential revocation."
+    }
+    Assert-Status $revokeConnectedAgent 200 "Revoke a connected Agent credential"
+    if ($revokeConnectedAgent.Json.revoked -ne $true) {
+        throw "The connected Agent credential was not revoked."
+    }
+
+    $stationAfterCredentialRevocation = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+    Assert-Status $stationAfterCredentialRevocation 200 "Read station after connected Agent credential revocation"
+    $revokedStation = @($stationAfterCredentialRevocation.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+    if (-not $revokedStation -or $revokedStation.agentOnline -eq $true) {
+        throw "Server still considered a revoked Agent's connection lease authoritative."
+    }
+
+    $probeAfterCredentialRevocation = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
+    Assert-ErrorCode $probeAfterCredentialRevocation 409 "stations.agent_unavailable" "Prevent new Agent commands after credential revocation"
+
     # The command test has completed. Stop the disposable Agent and prove the Server no longer reports it online.
     Stop-Process -Id $agentProcess.Id -Force -ErrorAction Stop
     $agentProcess.Dispose()
@@ -862,28 +909,6 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
         throw "Station list did not reflect the authoritative offline state after the test Agent disconnected."
     }
 
-    $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
-    $secondStationHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-station-create-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $secondStation = Invoke-IdentityRequest "POST" "/api/v1/stations" $secondStationHeaders @{
-        code = $secondStationCode
-        name = "Second CI Station"
-        type = 1
-    }
-    Assert-Status $secondStation 201 "Create second station"
-    $duplicateBinding = Invoke-IdentityRequest "PUT" "/api/v1/stations/$($secondStation.Json.data.id)/agent" @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
-    } @{
-        deviceId = $stationDeviceId
-        expectedVersion = 1
-    }
-    Assert-ErrorCode $duplicateBinding 409 "stations.device_already_bound" "Prevent Agent binding to two stations"
-
     $staleRename = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId" @{
         "X-GameNet-Contract" = "v1"
         Authorization = "Bearer $accessToken"
@@ -925,7 +950,7 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
         username = $username
         password = $wrongPassword
     }
-    Assert-ErrorCode $locked 423 "auth.locked" "Login after lockout threshold"
+    Assert-ErrorCode $locked 401 "auth.invalid_credentials" "Do not disclose operator lockout state in login response"
 
     Write-Host "IDENTITY / STATIONS / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
     $testSucceeded = $true
