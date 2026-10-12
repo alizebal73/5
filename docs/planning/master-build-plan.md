@@ -168,50 +168,53 @@ The catalogue below records the original Foundation scope, not a live implementa
 
 **Scope boundary:** this closes hosted Foundation certification and automated code verification only. Installed Windows Service identity/ACLs, DPAPI/TLS access after restart, physical two-PC LAN/reconnect, interactive WPF acceptance, Setup/updater/repair/uninstall/rollback and commercial pilot remain separate gates, all deferred until the planned product scope is complete and the Setup.exe/MSI candidate has been built. Automated tests still run throughout development. These final gates do not reopen Stage 1 unless a later change invalidates its tested code.
 
-## Stage 2 — Repository and module skeleton
+## Stage 2 — Canonical module inventory and skeleton
 
-Create the production directory skeleton without placing business logic in composition files.
+**Status: IN PROGRESS — required before new commercial vertical slices.** Foundation Stage 1 remains closed; this is a separate, bounded structure/governance stage.
 
-Server module shape:
+The single canonical list is `src/Server/Modules/README.md`. It must remain aligned with `docs/architecture/repository-tree.md`, this plan, the capability matrix and the requirement owners.
 
-`Modules/<Module>/Domain`
-`Modules/<Module>/Application`
-`Modules/<Module>/Infrastructure`
-`Modules/<Module>/Api`
-`Modules/<Module>/Tests`
+### Canonical modules and ownership
 
-Initial modules:
+- **Existing:** Identity, Stations.
+- **Core runtime/control:** Agents, ClientControl.
+- **Core business:** Customers, Sessions, Tariffs, Billing, Wallet.
+- **Commercial operations:** Inventory, Buffet, VIP, Games, GameAccounts, Shifts, Reports.
+- **Administration/operations:** Settings, Approvals, Backup.
 
-- Identity
-- Customers
-- Stations
-- Agents
-- Sessions
-- Tariffs
-- Billing
-- Wallet
-- Inventory
-- Buffet
-- VIP
-- Games
-- Reports
-- Settings
-- Approvals
-- Backup
+Ownership decisions:
+- Operator accounts, roles and permissions remain in **Identity**; there is no separate Users module.
+- **Agents** owns device identity/enrollment/heartbeat/lease/fencing; **ClientControl** owns permissioned commands and their outcomes.
+- **Customers** owns profile/customer PIN only, not wallet, debt, station or Session ownership.
+- **Sessions** owns lifecycle and timing state; **Tariffs** resolves pricing; **Billing** owns invoices/payment allocation/pending settlement; **Wallet** owns stored-value/free-money/free-time/debt ledgers.
+- **Discounts/promotions** start as capabilities within Billing/Tariffs, not a separate module.
+- **Games** owns catalog/launch policy; **GameAccounts** owns shared-account leases and is blocked until ADR-0003 and secret/recovery requirements are accepted.
+- **Shifts** owns cash opening/reconciliation/close; **Reports** is read-only.
+- Network policy is configured/validated under Settings and executed only via ClientControl/Agent when genuinely supported.
+- Recovery/reconciliation stays with the module that owns the state; Backup owns backup/restore orchestration.
 
-Cross-cutting platform remains outside modules:
+### Module/layer shape
 
-- Persistence
-- Transactions
-- Authentication
-- Authorization
-- Audit
-- Idempotency
-- Outbox
-- Observability
-- Configuration
+`src/Server/Modules/<Module>/Domain`  
+`src/Server/Modules/<Module>/Application`  
+`src/Server/Modules/<Module>/Infrastructure`  
+`src/Server/Modules/<Module>/Api`
 
-Exit condition: all module boundaries exist, dependency rules are guarded, and no module contains fake business behavior.
+These layer folders are created as the first real slice needs them. Each module root has ownership documentation now; no empty C# interfaces, dummy projects, fake endpoints or placeholder-success code is introduced to simulate implementation.
+
+Tests belong in root `tests/` projects under `tests/Server.UnitTests/Modules/<Module>/` and the appropriate contract/PostgreSQL suites. A separate `Server.IntegrationTests` project is added only when a real suite needs it; don't create a dummy project solely to mirror a target diagram.
+
+### Cross-cutting services (not duplicate modules)
+
+Persistence/migrations, transactions/concurrency, authentication/authorization primitives, audit, idempotency, Outbox/Inbox, observability/health, versioned Shared contracts, money/time primitives and release/secret/TLS integration remain platform infrastructure.
+
+### Stage 2 exit conditions
+
+1. All 19 module roots and their ownership READMEs exist and match the canonical inventory.
+2. `scripts/check-architecture.ps1` rejects a missing module root/catalog/README and continues to enforce cross-module implementation isolation, layer and persistence rules.
+3. Requirements remain traceable through `docs/planning/requirements-traceability.md`; each real slice must pass Definition of Ready before coding.
+4. Quick Validation passes after this guard/catalog change. For business-source PRs, full pre-merge PostgreSQL/runtime certification must also pass.
+5. Stage 2 closes only after the exact PR candidate and module inventory are independently reviewed. Then follow Stages 3–14 in order; do not merge an old feature branch wholesale.
 
 ## Stage 3 — Identity and authorization
 
@@ -235,12 +238,13 @@ Acceptance:
 - privileged operations are audited;
 - permission changes have actor + time + reason.
 
-## Stage 4 — Stations and Agents
+## Stage 4 — Stations, Agents and ClientControl
 
 Separate these concepts:
 
 - Station identity and type.
 - Agent device identity and pairing.
+- ClientControl command authorization/result lifecycle; device connectivity does not imply permission to issue a command.
 - Agent connection/heartbeat/lease state.
 - Session occupancy state.
 - Operator availability/health state.
@@ -399,7 +403,17 @@ Implement:
 
 VIP must integrate with tariff resolution and customer/session rules without duplicating pricing logic.
 
-## Stage 11 — Reports
+## Stage 10A — Games and shared game accounts (after core billing; shared accounts are separately gated)
+
+Implement the Games catalog and Server-side launch policy after Sessions, ClientControl and the core tariff/billing path exist. The Agent executes only a Server-authorized, current-session command; it does not own launch policy or credentials.
+
+Implement the GameAccounts/shared-account pool only after ADR-0003 is accepted and the secret lifecycle, account lease, isolation, audit, expiry, release and recovery requirements are READY. Never expose shared account passwords in Desktop/Agent/API logs.
+
+## Stage 11 — Reports and Shifts/Cash
+
+Implement Shifts as a separate write-owning module for opening cash, cash/card reconciliation, expected-vs-counted difference, close/handover and audited correction. Reports remain read-only projections of Billing, Wallet, Inventory, VIP, Sessions, Shifts and Audit; they never change the authoritative ledger.
+
+### Reports
 
 Implement read-only/reporting views:
 
