@@ -68,6 +68,7 @@ public sealed class AgentCredentialService(
 
             var now = clock.UtcNow;
             current.Revoke(now);
+            await FenceActiveLeaseAsync(request.DeviceId, ct);
             var secret = AgentCredentialSecretMaterial.Generate();
             var replacement = new AgentCredential
             {
@@ -105,9 +106,11 @@ public sealed class AgentCredentialService(
             if (current is null)
                 return false;
 
-            current.Revoke(clock.UtcNow);
+            var now = clock.UtcNow;
+            current.Revoke(now);
+            await FenceActiveLeaseAsync(request.DeviceId, ct);
             auditWriter.Append(new AuditRecord(
-                clock.UtcNow,
+                now,
                 "System",
                 request.DeviceId,
                 "AgentCredential.Revoked",
@@ -196,6 +199,18 @@ public sealed class AgentCredentialService(
                      x.DeviceId == deviceId &&
                      x.RevokedAtUtc == null,
                 cancellationToken);
+    }
+
+    private async Task FenceActiveLeaseAsync(string deviceId, CancellationToken cancellationToken)
+    {
+        // Revoke/rotation must immediately remove this device's authority to receive
+        // commands. The delete participates in the caller's serializable transaction.
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            DELETE FROM agent_connection_leases
+            WHERE device_id = {deviceId}
+            """,
+            cancellationToken);
     }
 
     private static void ValidateDeviceId(string deviceId)
