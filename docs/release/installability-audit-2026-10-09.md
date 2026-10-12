@@ -1,5 +1,7 @@
 # GameNet 5 Installability Integration Audit — 2026-10-09
 
+> **Historical audit / sequencing superseded on 2026-10-12:** this document preserves findings from 2026-10-09/10. Its older “Current next boundary” and “Required execution order” are not the active queue. Physical two-PC/Windows-Service acceptance is now deferred until planned product development is complete and a real Setup.exe/MSI candidate exists. See [Active Execution Control](../operations/active-execution-control.md) and [Master Build Plan](../planning/master-build-plan.md). Automated CI and regression tests remain active throughout development.
+
 ## Current reconciliation — 2026-10-10
 
 This update supersedes the old "Current verified state" and the dated findings below where they describe the pre-integration implementation. The original audit evidence is retained as history. Current engineering status is maintained in [Engineering Readiness Register](../planning/engineering-readiness-register.md).
