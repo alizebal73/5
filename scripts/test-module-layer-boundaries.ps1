@@ -59,6 +59,11 @@ try {
         Remove-Item -LiteralPath $badFile -Force
     }
 
+    $apiBadFile = Join-Path $moduleRoot "Api\ForbiddenSideEffect.cs"
+    Set-Content -LiteralPath $apiBadFile -Value "using System.Net.Http;"
+    Assert-Rejected "Api outbound/network side effect"
+    Remove-Item -LiteralPath $apiBadFile -Force
+
     Write-Host "MODULE LAYER-BOUNDARY REGRESSION TESTS PASSED."
 }
 finally {
