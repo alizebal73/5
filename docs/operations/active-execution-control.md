@@ -17,9 +17,9 @@
 
 For execution-time live refs, use [the Integration branch page](https://github.com/alizebal73/5/tree/integration/runtime-operator-v1), [the Foundation branch page](https://github.com/alizebal73/5/tree/foundation/runtime-final-v2), or GitHub's branch list. These links/reads—not a SHA embedded in a Markdown file—are the live authority.
 
-## 2. Stage 1 decision — CLOSED
+## 2. Code-integration checkpoint — CLOSED
 
-Stage 1 means **code integration and its automated verification**, not physical deployment certification or commercial release.
+This checkpoint means **code integration and its automated verification**, not physical deployment certification or commercial release. The numbered **Stage 1 in the Master Build Plan** means Foundation certification; that plan stage is separately closed with exact-SHA evidence in `docs/planning/master-build-plan.md`. These are related but distinct labels, not a moving acceptance criterion.
 
 Evidence:
 - PR [#40](https://github.com/alizebal73/5/pull/40) merged the integrated code. Candidate `654bc6d49dc4fe2935c59cc5039e881e0b7a9edd` passed [Quick Validation #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187) and [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104).
