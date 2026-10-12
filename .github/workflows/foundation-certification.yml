@@ -2,11 +2,12 @@ name: foundation-certification
 
 on:
   workflow_dispatch:
-  # Full certification is required before merging into a protected Foundation branch.
+  # Reusable gate: Integration's required quick-validation job waits on this workflow.
+  workflow_call:
+  # Direct full certification for pull requests into protected Foundation branches.
   pull_request:
     branches:
       - "foundation/runtime-*"
-      - "integration/runtime-operator-v1"
   # Full certification also runs when a runtime harness/gate changes on the active feature branch.
   # Routine product code pushes use the quick lane; a Draft Foundation PR is the normal full-gate path.
   push:
@@ -92,6 +93,11 @@ jobs:
           Set-StrictMode -Version Latest
 
           $eventName = $env:GITHUB_EVENT_NAME
+          # A reusable workflow inherits the caller's event payload. Detect a PR from
+          # its exact base/head fields even if the runner event name is workflow_call.
+          if ($env:PR_BASE_SHA -match '^[0-9a-f]{40}$' -and $env:PR_HEAD_SHA -match '^[0-9a-f]{40}$') {
+            $eventName = "pull_request"
+          }
           $shouldRun = $false
           $changedFiles = @()
 
