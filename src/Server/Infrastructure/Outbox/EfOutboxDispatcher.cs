@@ -181,6 +181,10 @@ public sealed class EfOutboxDispatcher(
         if (maxAttempts is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts));
 
+        // Failure may only be recorded by the current, still-live claim. Unlike
+        // successful completion backed by a committed Inbox receipt, an expired
+        // worker must not reschedule/dead-letter work after losing its lease.
+        var now = clock.UtcNow;
         var updated = await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE outbox_messages
@@ -199,6 +203,7 @@ public sealed class EfOutboxDispatcher(
               AND published_at_utc IS NULL
               AND dead_lettered_at_utc IS NULL
               AND lease_token = {leaseToken}
+              AND lease_expires_at_utc > {now}
             """,
             cancellationToken);
 
