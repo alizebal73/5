@@ -126,6 +126,9 @@ GameNet 5/
 - Composition files register services only.
 - The canonical Server module inventory is enforced by `scripts/check-architecture.ps1`; each module has a root README documenting ownership.
 - A module may not reach into another module's internal implementation.
+- `scripts/check-module-layer-boundaries.ps1` enforces layer-aware dependency rules: Domain/Application/API cannot access EF Core, Npgsql or Server.Persistence directly; Domain/Application also cannot own outbound network, filesystem, process or ASP.NET framework work.
+- Infrastructure is intentionally allowed to implement persistence and external integrations. API is an inbound transport boundary: ASP.NET types are allowed there, but direct persistence access is not.
+- `scripts/test-module-layer-boundaries.ps1` exercises both allowed Infrastructure/API examples and forbidden Domain/Application/API dependencies; `scripts/verify.ps1` runs these regression checks.
 - Cross-module communication uses explicit application contracts/events.
 - Unit/contract/DB-backed tests stay in root `tests/` projects under module-specific paths; do not create nested production test projects inside each module.
 - Server modules do not expose EF entities as API DTOs.
