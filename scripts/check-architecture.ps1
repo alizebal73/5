@@ -81,7 +81,13 @@ if (Test-Path $modulesRoot) {
     foreach ($module in $moduleDirs) {
         $others = $moduleDirs | Where-Object Name -ne $module.Name
         foreach ($other in $others) {
-            Assert-NoMatch (Join-Path $modulesRoot $module.Name) ([regex]::Escape("GameNet.Server.Modules.$($other.Name)")) "Cross-module implementation reference detected: $($module.Name) -> $($other.Name)."
+            # Public cross-module contracts are allowed only through the explicit .Contracts
+            # namespace. References to another module's root types or Domain/Application/
+            # Infrastructure/Api implementations remain forbidden. Allow whitespace around
+            # namespace dots so formatting cannot bypass the guard.
+            $otherNamespace = "GameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*" + [regex]::Escape($other.Name)
+            $implementationPattern = "$otherNamespace(?:\s*;|\s*\.\s*(?!Contracts\b)[A-Za-z_][A-Za-z0-9_]*)"
+            Assert-NoMatch (Join-Path $modulesRoot $module.Name) $implementationPattern "Cross-module implementation reference detected: $($module.Name) -> $($other.Name). Use Shared or the target module's explicit Contracts namespace."
         }
     }
 }
