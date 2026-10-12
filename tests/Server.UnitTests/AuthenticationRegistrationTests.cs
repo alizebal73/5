@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
+using GameNetAuthenticationOptions = GameNet.Server.Infrastructure.Configuration.AuthenticationOptions;
 
 namespace GameNet.Server.UnitTests;
 
@@ -24,7 +25,7 @@ public sealed class AuthenticationRegistrationTests
 
         var applicationOptions = new GameNetOptions
         {
-            Authentication = new AuthenticationOptions
+            Authentication = new GameNetAuthenticationOptions
             {
                 Enabled = true,
                 Issuer = issuer,
@@ -85,7 +86,7 @@ public sealed class AuthenticationRegistrationTests
         var credentialId = Guid.Parse("9ee5f8cb-04d7-43c0-aef2-fca16ca6c0f5");
         var applicationOptions = new GameNetOptions
         {
-            Authentication = new AuthenticationOptions
+            Authentication = new GameNetAuthenticationOptions
             {
                 Enabled = true,
                 Issuer = "GameNet.Foundation.UnitTests",
