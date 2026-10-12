@@ -52,8 +52,28 @@ public static class AuthenticationRegistration
                     {
                         var principal = context.Principal;
                         var actorType = principal?.FindFirst("actor_type")?.Value;
+                        var services = context.HttpContext.RequestServices;
+
                         if (string.Equals(actorType, "Agent", StringComparison.Ordinal))
+                        {
+                            var deviceId = principal?.FindFirst("device_id")?.Value;
+                            var credentialIdText = principal?.FindFirst("credential_id")?.Value;
+                            if (string.IsNullOrWhiteSpace(deviceId) ||
+                                !Guid.TryParse(credentialIdText, out var credentialId) ||
+                                credentialId == Guid.Empty)
+                            {
+                                context.Fail("AUTH_AGENT_CREDENTIAL_MISSING");
+                                return;
+                            }
+
+                            var credentials = services.GetRequiredService<IAgentCredentialService>();
+                            var isCurrentCredential = await credentials.IsCredentialActiveAsync(
+                                credentialId, deviceId, context.HttpContext.RequestAborted);
+                            if (!isCurrentCredential)
+                                context.Fail("AUTH_AGENT_CREDENTIAL_REVOKED");
                             return;
+                        }
+
                         if (!string.Equals(actorType, "Operator", StringComparison.Ordinal))
                         {
                             context.Fail("AUTH_ACTOR_INVALID");
@@ -70,7 +90,6 @@ public static class AuthenticationRegistration
                             return;
                         }
 
-                        var services = context.HttpContext.RequestServices;
                         var repository = services.GetRequiredService<IIdentityRepository>();
                         var clock = services.GetRequiredService<IGameClock>();
                         var session = await repository.FindSessionAsync(jti, context.HttpContext.RequestAborted);
@@ -111,7 +130,8 @@ public static class AuthenticationRegistration
             options.AddPolicy("AgentTransport", policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireClaim("actor_type", "Agent")
-                    .RequireClaim("device_id"));
+                    .RequireClaim("device_id")
+                    .RequireClaim("credential_id"));
 
             foreach (var permission in typeof(Permissions)
                          .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
