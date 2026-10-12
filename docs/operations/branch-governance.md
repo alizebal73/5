@@ -131,3 +131,18 @@ The ancestry/diff audit against that integration ref found:
 The bounded delivery candidate [PR #30](https://github.com/alizebal73/5/pull/30) was merged by squash to `integration/runtime-operator-v1` after all four checks succeeded on exact head `f4387584d6c14fb55cbfca20521e221ea2462a4f`. Merge commit is `e1626d7d1f2e62601329604b8823787f2c9597b6`. The integration preserves a one-commit/67-file functional diff and does not import the 168-commit history of validation PR #29. Exact-head evidence: [Full Foundation #38096870883](https://github.com/alizebal73/5/actions/runs/38096870883), [Quick Validation push #38096870892](https://github.com/alizebal73/5/actions/runs/38096870892), [Quick Validation PR #38096874251](https://github.com/alizebal73/5/actions/runs/38096874251) and [Runtime payload #38096874276](https://github.com/alizebal73/5/actions/runs/38096874276) all succeeded; package SHA-256 is `3a1d51e89be86fb672ecc7d5a7bd65df26caf97244daffc2cb75ad452a60d819`, outer artifact digest is `sha256:f3c6629cdf78a68fa1ea6dafc515114f5538af3787c60c370de8c7e2544b6cc2`. The source candidate #29 at `f5dd302...` also has all four CI runs green. Post-merge branch checks for `e1626d7...` are now green: [Full Foundation #38097484132](https://github.com/alizebal73/5/actions/runs/38097484132), [Quick push #38097484122](https://github.com/alizebal73/5/actions/runs/38097484122) and [Quick PR #38097487320](https://github.com/alizebal73/5/actions/runs/38097487320). Keep #27/#28/#29 as Draft traceability records until the final docs PR #25 validates and merges. Protected `main` and `foundation/runtime-final-v2` remain unchanged.
 
 No merge or deletion was performed. Installed Windows Service/DPAPI identity and physical LAN evidence remain explicitly unverified in this pass.
+
+
+## Live ruleset read-back — 2026-10-12
+
+This is a fresh read-back from GitHub's live Ruleset endpoints, not a branch-SHA snapshot:
+
+| Ruleset | Target | Required check | Enforcement |
+|---|---|---|---|
+| [protect-main](https://github.com/alizebal73/5/rules/24783754) | `refs/heads/main` | `quick-validation` | Active |
+| [protect-foundation-runtime](https://github.com/alizebal73/5/rules/24784035) | `refs/heads/foundation/runtime-*` | `foundation` | Active |
+| [protect-integration-runtime](https://github.com/alizebal73/5/rules/24879997) | `refs/heads/integration/runtime-operator-v1` | `quick-validation` | Active |
+
+All three block deletion and non-fast-forward updates, require a pull request and review-thread resolution, permit Squash only, and have no bypass actors. All three report `strict_required_status_checks_policy=false`. Consequently, the passing required check is not required to be based on a branch updated with the latest base tip. Keep this as an open governance gap until an administrator enables strict checks and the saved rules are re-read from GitHub.
+
+No Ruleset settings were changed as part of this documentation update. The current integration code branch remains the development target; `main` and the protected Foundation branch were not modified.
