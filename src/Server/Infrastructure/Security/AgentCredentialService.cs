@@ -121,12 +121,21 @@ public sealed class AgentCredentialService(
             return true;
         }, cancellationToken);
 
-    public Task<bool> AuthenticateAsync(string deviceId, string secret, CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+    public async Task<bool> AuthenticateAsync(
+        string deviceId,
+        string secret,
+        CancellationToken cancellationToken = default) =>
+        (await AuthenticateAndGetCredentialIdAsync(deviceId, secret, cancellationToken)) is not null;
+
+    public Task<Guid?> AuthenticateAndGetCredentialIdAsync(
+        string deviceId,
+        string secret,
+        CancellationToken cancellationToken = default) =>
+        transactions.ExecuteAsync<Guid?>(async ct =>
         {
             ValidateDeviceId(deviceId);
             if (string.IsNullOrWhiteSpace(secret))
-                return false;
+                return null;
 
             var credential = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == deviceId && x.RevokedAtUtc == null)
@@ -164,17 +173,33 @@ public sealed class AgentCredentialService(
                     "foundation",
                     "Server",
                     "Rejected"));
-                return false;
+                return null;
             }
 
             credential!.LastAuthenticatedAtUtc = clock.UtcNow;
-            return true;
+            return credential.Id;
         }, cancellationToken);
+
+    public Task<bool> IsCredentialActiveAsync(
+        Guid credentialId,
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (credentialId == Guid.Empty || string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128)
+            return Task.FromResult(false);
+
+        return dbContext.AgentCredentials
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.Id == credentialId &&
+                     x.DeviceId == deviceId &&
+                     x.RevokedAtUtc == null,
+                cancellationToken);
+    }
 
     private static void ValidateDeviceId(string deviceId)
     {
         if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128)
             throw new ArgumentException("DeviceId must be 1-128 non-whitespace characters.", nameof(deviceId));
     }
-
 }
