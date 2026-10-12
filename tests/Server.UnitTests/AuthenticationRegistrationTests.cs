@@ -64,7 +64,7 @@ public sealed class AuthenticationRegistrationTests
             currentPermissions: new HashSet<string>([Permissions.StationsRead], StringComparer.Ordinal));
 
         Assert.Null(result.Failure);
-        Assert.Equal([Permissions.StationsRead], result.PermissionClaims);
+        Assert.Equal(new[] { Permissions.StationsRead }, result.PermissionClaims);
         Assert.DoesNotContain(Permissions.StationsOperate, result.PermissionClaims);
         Assert.DoesNotContain(Permissions.IdentityUsersWrite, result.PermissionClaims);
     }
