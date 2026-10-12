@@ -92,6 +92,9 @@ Build the actual Setup.exe/MSI candidate as a deliverable before entering final 
 | [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Closed without merging after #44 superseded overlapping workflow changes; source branch retained for a later focused extraction of the test-only service-registration helper and runbook. |
 | [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; exact post-merge Full Foundation #38182502053 passed. |
 | [#44](https://github.com/alizebal73/5/pull/44) | Integration hosted-Windows CI standardization and safe test-payload migration-bundle build | Merged at `161b4cbbbe16cd3fd4046f174a1c09380139c67b`; candidate Quick push/PR, Full Foundation and Runtime payload passed; post-merge Quick #38183458461 and Full Foundation #38183458486 passed on the exact merge SHA. |
+| [#51](https://github.com/alizebal73/5/pull/51) | Correct stale readiness and branch-governance documentation | Quick Validation passed on its recorded GitHub merge candidate; open for review; docs-only. |
+| [#53](https://github.com/alizebal73/5/pull/53) | Required pre-merge PostgreSQL/runtime certification for Integration | Exact merge candidate `477912e2a6e269cc1a5e2e3ba081728d200c075d` passed Quick + Full Foundation/PostgreSQL + Backup/Restore + Desktop/Agent; open for review, not merged. |
+| [#56](https://github.com/alizebal73/5/pull/56) | Canonical 19-module inventory, ownership docs and architecture guard | Open for review. At original PR head `c86a726d32601e0c4acff73c756e17d41dbef1ee`, Quick Validation and Runtime payload are running; full Foundation has not run on the exact current Stage 2 candidate yet. Always read live head/checks before disposition. |
 
 Closed source PRs #35–#39 remain superseded by #40; their source branches were retained. Do not reopen them or merge their branches separately without a newly demonstrated, unique defect.
 
@@ -111,5 +114,5 @@ Closed source PRs #35–#39 remain superseded by #40; their source branches were
 - Stage 1 remains closed and its evidence links are stable.
 - The current Foundation-tip certification is one explicit action, not a recurring broad review.
 - Hosted Windows runner migration is complete for both Foundation (#32) and Integration (#44); #31 is closed as superseded with its unique service-helper work retained on the source branch. Runtime endpoint/TLS source work (#15) remains separate.
-- The six remaining open Draft PRs (#15, #17, #18, #20, #21 and #24) each have an explicit later-gate disposition; #31 is closed as superseded and #32/#44 are merged.
+- The six older open Draft PRs (#15, #17, #18, #20, #21 and #24) each have an explicit later-gate disposition. The newer review queue is #51 (docs correction), #53 (pre-merge PostgreSQL/runtime gate) and #56 (Stage 2 inventory/skeleton); these are not merged until the required review and exact-candidate checks are satisfied. #31 is closed as superseded and #32/#44 are merged.
 - Future progress reports state only what changed, which exact SHA was tested, which gate is now closed, and the one next action.
