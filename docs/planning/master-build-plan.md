@@ -6,6 +6,91 @@ This is the single delivery plan for building GameNet 5 from the clean foundatio
 
 The plan is intentionally sequential. A later stage cannot silently compensate for an incomplete earlier stage.
 
+## Canonical delivery roadmap — agreed 2026-10-12
+
+This numbered list is the owner-facing, high-level order of delivery. It groups the detailed Stage 1–19 instructions below; it does not replace their detailed acceptance criteria. A phase closes only with requirement-linked evidence on the exact candidate SHA. CI, security, architecture and regression checks continue throughout; physical-machine acceptance is reserved for final release acceptance.
+
+### 0. Lock the version-one product scope
+- Maintain one canonical requirements inventory with stable IDs, priorities, ownership, dependencies, user-visible outcomes, error/recovery behavior and measurable acceptance criteria.
+- Confirm explicit non-goals for version one; do not enable mock or placeholder product paths.
+- Record cross-cutting product constraints, including Persian RTL/Toman, native WPF, configurable installation location, no authoritative hourly price on station cards, and Server-owned business truth.
+- Exit: every planned version-one capability maps to a requirement and owner; open decisions that affect money, security, ownership or release are assigned before dependent work starts.
+
+### 1. Establish and protect the engineering foundation
+- Preserve the closed Foundation certification as evidence for its exact certified SHAs; do not relabel older evidence as a pass for new code.
+- Require the relevant Quick Validation and full PostgreSQL/runtime certification before source-sensitive Integration changes merge.
+- Resolve the branch-governance gap: up-to-date PR policy and a workable independent-review rule for protected branches.
+- Exit: required gates actually run on the intended candidate, failures block merge, and review/merge rules match the agreed no-unreviewed-merge process.
+
+### 2. Close the canonical architecture and module inventory (CURRENT ACTIVE PHASE)
+- Complete PR #56: one canonical module catalog, ownership boundaries, module-root READMEs, traceability, and architecture guards.
+- Correct the architecture guard so it rejects forbidden cross-layer/cross-module access while permitting legitimate Infrastructure responsibilities; add tests for both forbidden and permitted examples.
+- Keep the distinction between a documented module boundary and an implemented business capability explicit.
+- Rebase/update the candidate to the current Integration base after the required CI governance change is resolved. Run all required gates on the exact updated SHA and obtain review before closing the phase.
+- Exit: 19-module inventory is consistent across plan/catalog/tree/requirements; guards are demonstrated to be correct; required CI is green on the exact candidate; review is complete.
+
+### 3. Harden the existing platform; do not rebuild it
+- Compare Identity/operator roles and permissions, Stations, Agent enrollment/credentials, heartbeat/lease/fencing/reconnect, ClientControl authorization/results, audit, idempotency and Outbox against their requirements.
+- Fix only demonstrated gaps; preserve already-working code and its regression coverage.
+- Reconcile and accept/reject the relevant security lifecycle ADRs before building features that depend on those decisions; keep installed Windows Service ACL/DPAPI/TLS proof in the final acceptance gate.
+- Exit: gaps are listed and closed or explicitly deferred with rationale; platform APIs, permissions and recovery contracts are stable enough for business slices.
+
+### 4. Deliver the first complete PC business journey
+- Build one real end-to-end path across WPF, Server and PostgreSQL: operator authorization -> PC/station -> find/create customer -> resolve and snapshot tariff -> start/end Session -> bill preview/checkout -> wallet payment, cash/card payment or explicitly modeled debt -> durable ledger and audit.
+- Keep domain ownership separate: Customers owns profile/PIN; Sessions owns lifecycle/time; Tariffs resolves price; Billing owns invoice/payment allocation; Wallet owns purchased value, free money, free time and debt ledgers.
+- Add the actual API, migrations, validation, permission checks, failure handling, idempotency and relevant concurrency tests as part of the same slice. No UI success state may be fabricated before the Server confirms the result.
+- Exit: an automated end-to-end journey proves the authoritative persisted state and financial invariants; exact-SHA PostgreSQL/runtime gates pass; operator UI is usable for this journey.
+
+### 5. Complete session rules and timed station types
+- Add pause/resume, extension/reduction, transfer/release/recovery, concurrent-session protection, customer multi-device limits and stale-command fencing.
+- Implement PS5 and foosball as timed/non-Agent stations with correct pricing, operator visibility and timer rules.
+- Add tariff variations and discounts/promotions with Server-side permissions, caps, reasons and audit; then implement VIP plans/entitlements and daily-usage limits.
+- Exit: concurrency/reconnect/recovery tests demonstrate no duplicated Session, double charge, wrong ownership or invalid tariff snapshot.
+
+### 6. Add Games and, only after its security gate, GameAccounts
+- Implement the game catalog and Server-authorized launch policy through ClientControl/Agent after Sessions are authoritative.
+- Do not build or expose shared game-account secrets until ADR-0003 and the credential lifecycle/recovery design are accepted.
+- Implement exclusive account lease, allocation, release, expiry/recovery and audit with concurrency/idempotency tests.
+- Exit: a Session can launch/stop only an authorized game on its owning station; any shared account is never concurrently leased twice and is safely released/recovered.
+
+### 7. Deliver inventory and buffet as one financially consistent flow
+- Implement stock locations and immutable stock-movement ledger before connecting sale workflows.
+- Implement warehouse-to-showcase transfer, purchase/receiving, sales, returns, waste, counts, low-stock thresholds and role/approval controls.
+- Connect Buffet orders to Billing and stock movement atomically where required; distinguish a real payment from a wallet transfer or pending customer account.
+- Exit: receive -> transfer -> sell -> refund/return -> reconcile tests preserve stock and money; duplicate requests cannot duplicate sales or movements.
+
+### 8. Finish daily operations and control surfaces
+- Implement Shifts/Cash as a write-owning module for opening, expected-vs-counted reconciliation, closing/handover and audited corrections.
+- Implement Reports as read-only projections of source ledgers/state; complete Server-backed settings, approval workflows, backup/restore orchestration and operator diagnostics.
+- Ensure backup restore is actually tested in an isolated database and that sensitive operations enforce authorization on Server, not only in WPF.
+- Exit: shift totals reconcile with actual payments/refunds; reports do not mutate source state; privileged changes are audited/approved; recovery evidence is retained.
+
+### 9. Complete and harden the WPF operator experience
+- UI is implemented alongside every slice, not postponed until the end. This phase is for full navigation, consistency and acceptance across all implemented domains.
+- Finish scalable station list/filter/grouping, customer/session/finance workflows, loading/empty/offline/error/permission-denied states, keyboard/focus/navigation, PasswordBox clearing, Persian RTL/Toman/Jalali presentation and en-US LTR resources.
+- Exit: automated resource/binding/regression checks and the planned interactive WPF acceptance pass on the release candidate succeed; UI actions use real Server contracts.
+
+### 10. Build, install, update, certify and pilot the release
+- Produce a real Setup.exe/MSI and versioned manifest; declare PostgreSQL provisioning/schema rules, component versions, hashes/signatures, SBOM, protected secrets, service identities, ProgramData paths and install location.
+- Build the separate updater with integrity verification, staged switch, compatibility checks, health confirmation and a documented rollback rule. Test clean install, repair, upgrade, uninstall and failure recovery on isolated machines.
+- After product scope and Setup are complete, run the final Windows Service/TLS/DPAPI/ACL/restart and two-PC LAN acceptance with a disposable database; review the read-only manager-runtime preflight before any machine changes.
+- Run the controlled 2–3-PC pilot first; expand toward the planned ~15 stations only after pilot findings are resolved and recorded.
+- Exit: all release-critical requirements are accepted on the exact candidate, install/update/restore evidence is complete, no unresolved critical defects remain, and pilot sign-off is recorded.
+
+### When code first enters `main`, and how it stays current
+- Keep `main` free of direct development commits and unreviewed changes. Continue day-to-day development on `integration/runtime-operator-v1` through focused PRs.
+- The first promotion to `main` happens only after Phase 2 closes: promote the reviewed, fully gated Foundation/architecture baseline with a PR from Integration to `main`; verify the resulting `main` merge SHA.
+- After that, promote stable, coherent milestones to `main` at defined delivery checkpoints (especially the first usable core journey and later release-ready increments), not after every commit and not only once at the very end.
+- Every promotion is an explicit PR with the required independent review and exact-SHA checks. Never copy files manually, merge backwards from `main` to Integration as a substitute for a promotion, or use a green run on an older SHA as evidence for the new merge.
+- A `main` merge means a reviewed stable development checkpoint; it does not mean the product is ready for the live shop. Production release still requires Phase 10 acceptance.
+
+### Rules that apply to every phase
+- One primary active phase at a time; parallel work is allowed only when dependencies and file ownership do not conflict.
+- Each slice uses Definition of Ready, requirement IDs and Definition of Done. Keep a change/evidence ledger with PR, exact SHA, checks, conclusion and unresolved risks.
+- Run automated unit/integration/contract/security/regression checks throughout development; run PostgreSQL/runtime certification for source-sensitive changes as required by the gate.
+- Do not reopen a closed phase without a specific defect or changed requirement. If later changes affect its invariant, reopen only the affected checks.
+- Do not merge old Draft branches wholesale. Compare each needed change with live Integration and port only unique, reviewed behavior.
+
 ## Product requirements source of truth
 
 - Detailed requirement IDs, acceptance criteria, ownership/dependencies, priority/risk and current implementation status are maintained in docs/planning/requirements-traceability.md.
