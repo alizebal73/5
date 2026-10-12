@@ -23,6 +23,8 @@ Clean-slate Windows GameNet/CyberCafe management platform.
 - No browser dashboard runtime or Node UI toolchain.
 
 ## Build order
-Foundation -> real runtime certification -> stable checkpoint -> vertical slices -> release certification.
+Foundation/automated Runtime certification -> requirement-tracked product vertical slices -> real Setup.exe/MSI candidate -> final physical Windows Service/LAN and interactive UI acceptance -> pilot/release.
+
+Automated CI, unit/integration/regression/security tests continue during development. Physical two-PC acceptance and the final installed-UI smoke are intentionally deferred until the planned product scope and Setup candidate are complete.
 
 No business feature is implemented in the Foundation baseline.
