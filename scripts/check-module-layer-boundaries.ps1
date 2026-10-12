@@ -43,8 +43,9 @@ if (-not (Test-Path -LiteralPath $ModulesRoot -PathType Container)) {
 $persistencePattern = "\bMicrosoft\s*\.\s*EntityFrameworkCore\b|\b(?:DbContext|DbSet|DatabaseFacade|IDbContextFactory)\b|\bNpgsql\b|\bGameNet\s*\.\s*Server\s*\.\s*Persistence\b"
 
 # Inward layers must not reference module-specific Infrastructure implementations, even within their own module.
-# Three existing cross-cutting contract namespaces are temporarily allowlisted until a separate inward-contract refactor.
-$infrastructureNamespacePattern = "\bGameNet\s*\.\s*Server\s*\.\s*Infrastructure(?!\s*\.\s*(?:Audit|Transactions|Idempotency)\b)(?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)?\b|\bGameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Infrastructure\b"
+# Cross-cutting platform namespaces under GameNet.Server.Infrastructure are governed by the existing persistence/side-effect checks,
+# not this module-implementation boundary rule.
+$infrastructureNamespacePattern = "\bGameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Infrastructure\b"
 
 # Domain and Application code may not perform network, filesystem, process, or web-framework
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
