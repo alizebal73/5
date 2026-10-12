@@ -640,6 +640,31 @@ try {
         throw "The Agent health-probe command did not return a valid success acknowledgement."
     }
 
+    # Verify the station-to-Agent uniqueness invariant while the credential is still
+    # active. The revocation test below deliberately removes that credential, so after
+    # revocation a later bind attempt should correctly be rejected as not provisioned.
+    $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $secondStationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-create-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $secondStation = Invoke-IdentityRequest "POST" "/api/v1/stations" $secondStationHeaders @{
+        code = $secondStationCode
+        name = "Second CI Station"
+        type = 1
+    }
+    Assert-Status $secondStation 201 "Create second station"
+    $duplicateBinding = Invoke-IdentityRequest "PUT" "/api/v1/stations/$($secondStation.Json.data.id)/agent" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-ErrorCode $duplicateBinding 409 "stations.device_already_bound" "Prevent Agent binding to two stations"
+
     # Revocation of a live Agent must fence its lease immediately, not wait for the
     # next heartbeat timeout. This guards the boundary where Server could otherwise
     # continue routing commands to a still-open SignalR connection.
@@ -883,28 +908,6 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     if (-not $listedStation -or $listedStation.agentOnline -ne $false) {
         throw "Station list did not reflect the authoritative offline state after the test Agent disconnected."
     }
-
-    $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
-    $secondStationHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-station-create-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $secondStation = Invoke-IdentityRequest "POST" "/api/v1/stations" $secondStationHeaders @{
-        code = $secondStationCode
-        name = "Second CI Station"
-        type = 1
-    }
-    Assert-Status $secondStation 201 "Create second station"
-    $duplicateBinding = Invoke-IdentityRequest "PUT" "/api/v1/stations/$($secondStation.Json.data.id)/agent" @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
-    } @{
-        deviceId = $stationDeviceId
-        expectedVersion = 1
-    }
-    Assert-ErrorCode $duplicateBinding 409 "stations.device_already_bound" "Prevent Agent binding to two stations"
 
     $staleRename = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId" @{
         "X-GameNet-Contract" = "v1"
