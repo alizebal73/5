@@ -3,6 +3,19 @@
 **Snapshot date:** 2026-10-12  
 **Purpose:** Prevent rework loops by separating closed engineering stages from distinct operational/release gates. This is the active execution control document. The master plan remains the product plan; this file governs the current queue and evidence rules.
 
+## Current queue — live audit update (2026-10-12)
+
+The live Integration head at the start of this audit was `cd1f2ecfd0f0c7eb238669198afa8a382e0e2c43`; this is a historical observed SHA, not a permanent pointer.
+
+1. [PR #51](https://github.com/alizebal73/5/pull/51) corrects stale readiness/governance docs. Quick Validation passed on its exact GitHub merge candidate; PR remains open for review.
+2. [PR #53](https://github.com/alizebal73/5/pull/53) wires Full Foundation/PostgreSQL certification into the required Integration `quick-validation` path. Exact tested merge candidate `477912e2a6e269cc1a5e2e3ba081728d200c075d` passed Quick, PostgreSQL/migrations/concurrency, backup/restore, Desktop and Agent checks. PR remains open; merge it after review before persistence-heavy commercial slices.
+3. [Issue #55](https://github.com/alizebal73/5/issues/55) records the Stage 2 inventory mismatch. The canonical inventory is `src/Server/Modules/README.md`; `scripts/check-architecture.ps1` now rejects missing module roots, root READMEs, or catalog entries. Stage 2 must close before new business implementation.
+4. [Issue #54](https://github.com/alizebal73/5/issues/54) tracks the separate governance configuration gap: protected Rulesets still do not require up-to-date branches or an approving human review.
+5. Do not merge older-base feature/secret-store/UI branches wholesale. Carry forward reviewed requirements and rules, not their divergent code tree. Do not change `main`.
+
+No PR is automatically merged here. Every merge requires the repository's intended review decision and exact-candidate CI evidence. Physical service/LAN/UI and installer acceptance remain final-release gates, not Stage 2 blockers.
+
+
 ## 1. SHA evidence versus live branch heads
 
 **Important:** the branch values below are a timestamped historical read-back taken immediately after PR #42 merged on 2026-10-12. They are not a permanent live pointer. Documentation PRs themselves advance Integration's commit SHA, so the live Integration head must always be read from GitHub immediately before an operation; never infer it from a SHA copied into this document.
