@@ -28,7 +28,11 @@ Evidence:
 
 **Do not reopen Stage 1** to repeat completed tests, certify a different Foundation ref, test installed Windows services, perform a visual WPF smoke, migrate runners, or build an installer. Track those under their own gates below. A later source-code change reopens only the gates affected by that code change.
 
-## 3. Single active queue
+## 3. Active development queue and deferred final acceptance
+
+**Scheduling decision (2026-10-12):** Physical Runtime/LAN tests, interactive Windows UI acceptance, and end-to-end installer/release acceptance are deferred until the planned product scope is implemented and a real Setup.exe/MSI candidate has been built. Until then, continue automated CI, unit, integration, regression, and security checks for every applicable code slice and SHA; do not postpone those engineering checks. Do not start physical-machine acceptance now. During final acceptance, use isolated Windows PCs and a disposable database, and first review the read-only output of `scripts/inspect-manager-runtime-state.ps1` before touching any existing Manager machine. This decision does not reopen Master Plan Stage 1 or change its evidence.
+
+The active work remains requirement-tracked product implementation in Master Build Plan order. The physical, interactive, and installer/release gates below are deferred milestones, not the immediate next action.
 
 ### Gate F — Foundation exact-tip certification — CLOSED for the recorded SHA
 
@@ -43,35 +47,35 @@ Both automation branches now use GitHub-hosted `windows-2025`; this gate is clos
 
 1. [PR #32](https://github.com/alizebal73/5/pull/32) moved Foundation automation to `windows-2025`, added the runner-policy guard, isolated PostgreSQL to the disposable runner VM and added push-triggered exact-tip certification. Foundation SHA `71ef6534331e6ba5a8a460fd5b8846fe40e8567a` passed [Full Foundation #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053).
 2. [PR #44](https://github.com/alizebal73/5/pull/44) moved Integration Quick Validation, Full Foundation and Runtime payload to `windows-2025`. Exact candidate `92de1b1fb6002165fc91c7f66b4ecec1c969c0ff` passed [Quick push #38183164928](https://github.com/alizebal73/5/actions/runs/38183164928), [Quick PR #38183167294](https://github.com/alizebal73/5/actions/runs/38183167294), [Full Foundation #38183164941](https://github.com/alizebal73/5/actions/runs/38183164941) and [Runtime payload #38183167300](https://github.com/alizebal73/5/actions/runs/38183167300). The merged Integration SHA `161b4cbbbe16cd3fd4046f174a1c09380139c67b` then passed [post-merge Quick #38183458461](https://github.com/alizebal73/5/actions/runs/38183458461) and [post-merge Full Foundation #38183458486](https://github.com/alizebal73/5/actions/runs/38183458486).
-3. [PR #31](https://github.com/alizebal73/5/pull/31) was closed as superseded for overlapping runner/workflow changes; its branch was retained because it contains separate test-only service-registration tooling/runbook work. Do not merge it; re-cut only the unique helper as a focused PR when Physical Runtime acceptance becomes the active gate.
+3. [PR #31](https://github.com/alizebal73/5/pull/31) was closed as superseded for overlapping runner/workflow changes; its branch was retained because it contains separate test-only service-registration tooling/runbook work. Do not merge it; re-cut only the unique helper as a focused PR when final acceptance begins after the feature-complete Setup candidate exists.
 4. [PR #15](https://github.com/alizebal73/5/pull/15) remains separate: its ProgramData/TLS runtime source is not runner migration. Split and compare source changes before any future merge.
 5. Every runner claim must identify exact SHA, actual runner type, disposable-DB boundary and run result. A status result for another SHA does not certify this SHA.
 
-### Gate P — Physical Runtime acceptance (not executable from GitHub CI alone)
+### Final Gate P — Physical Runtime acceptance (deferred until feature completion and Setup candidate)
 
-Use isolated Windows test machines and a disposable database. First inspect the read-only output from `scripts/inspect-manager-runtime-state.ps1`. Do not provision secrets, clean ACLs, rotate TLS, or otherwise modify the existing Manager PC before preflight review and explicit approval.
+Run this only after the planned product scope is complete and the Setup.exe/MSI candidate exists. Then use isolated Windows test machines and a disposable database. First review the read-only output from `scripts/inspect-manager-runtime-state.ps1`; do not provision secrets, clean ACLs, rotate TLS, or otherwise modify the existing Manager PC before preflight review and explicit approval.
 
-Record evidence for: installed Service identity; effective directory/file ACLs; DPAPI secret retrieval and TLS private-key access after service restart; enrollment replay/expiry/revocation; lease/heartbeat/fencing; and two-PC LAN reconnect. This gate cannot be marked passed from a ZIP artifact or CI result.
+During that final pass, record evidence for: installed Service identity; effective directory/file ACLs; DPAPI secret retrieval and TLS private-key access after service restart; enrollment replay/expiry/revocation; lease/heartbeat/fencing; and two-PC LAN reconnect. This gate cannot be marked passed from a ZIP artifact or CI result.
 
-### Gate U — Interactive Desktop acceptance
+### Final Gate U — Interactive Desktop acceptance (deferred until feature completion and Setup candidate)
 
-On Windows, verify fa-IR RTL and en-US LTR, navigation, focus/keyboard behavior, PasswordBox clearing, loading/offline/error states and permission-denied behavior. Record the build SHA and observed outcomes. Static resource/binding tests are evidence for contracts, not visual interaction.
+After the feature-complete Setup.exe/MSI candidate exists, verify fa-IR RTL and en-US LTR, navigation, focus/keyboard behavior, PasswordBox clearing, loading/offline/error states and permission-denied behavior on Windows. Record the build SHA and observed outcomes. Static resource/binding tests remain part of continuous CI; they do not replace this final interactive pass.
 
-### Gate L — Installer and release
+### Final Gate L — Installer and release acceptance (after the Setup candidate is built)
 
-Installer/setup, PostgreSQL install/upgrade/repair/uninstall, staged update/rollback, signed release artifacts, SBOM, backup/recovery release checks and the staged 2–3-PC then ~15-station pilot remain release gates. None is required to keep Stage 1 closed; none can be claimed complete from the current portable runtime ZIP.
+Build the actual Setup.exe/MSI candidate as a deliverable before entering final acceptance. Once the full planned feature scope and requirement traceability are complete, and automated CI is green on the exact candidate SHA, validate clean install, PostgreSQL install/upgrade/repair/uninstall, staged update/rollback, package signing and manifest/SBOM, backup/recovery, and then the staged 2–3-PC followed by ~15-station pilot. The runtime ZIP is not a substitute for a Setup candidate. These final checks never reopen Stage 1.
 
 ## 4. Open PR disposition register
 
 | PR | Current purpose | Required disposition |
 |---|---|---|
 | [#15](https://github.com/alizebal73/5/pull/15) | ProgramData endpoints, trusted LAN TLS and overlapping workflow files | Keep Draft; separate runtime source from runner/workflow edits; reconcile source against current Integration before review. |
-| [#17](https://github.com/alizebal73/5/pull/17) | Manual LAN smoke evidence from 2026-10-10 | Preserve the historical evidence; do not merge its stale-base planning edits wholesale. Promote/reconcile the evidence on the active branch as a focused docs change when checked. |
+| [#17](https://github.com/alizebal73/5/pull/17) | Manual LAN smoke evidence from 2026-10-10 | Preserve this as historical evidence only; do not count it as final acceptance or merge stale-base planning edits wholesale. Collect fresh controlled evidence against the feature-complete Setup candidate in the final acceptance phase. |
 | [#18](https://github.com/alizebal73/5/pull/18) | Proposed secret lifecycle ADR | Keep as design review only until compared with the current secret-store implementation and ADR naming; do not treat a Proposed ADR as approved policy. |
 | [#20](https://github.com/alizebal73/5/pull/20) | DPAPI Server secret-store implementation | Its `DpapiServerSecretStore.cs` blob is identical to current Integration. Audit every changed path against Integration; if the entire implementation is already present, close as superseded with a comment and retain the branch. Never merge duplicate code. |
 | [#21](https://github.com/alizebal73/5/pull/21) | Initial Desktop operator shell | Keep Draft only if it has unique UI behavior absent from Integration; compare exact XAML/ViewModel/tests before any merge. Do not use an old base as the integration target. |
 | [#23](https://github.com/alizebal73/5/pull/23) | Integration branch proposed back into old `feature/operator-identity-v1` base | Closed as obsolete without merging; source branch retained. Do not reopen or merge backwards without a new, explicit requirement. |
-| [#24](https://github.com/alizebal73/5/pull/24) | StationBoard view extraction | Keep Draft as a later focused UI refactor; rebase/retarget to the current Integration tip only after the runtime acceptance priority is cleared and exact-head gates pass. |
+| [#24](https://github.com/alizebal73/5/pull/24) | StationBoard view extraction | Keep Draft as a focused UI refactor; compare with the integrated UI and port only unique view work during feature completion if needed. Interactive acceptance remains deferred until the feature-complete Setup candidate exists. |
 | [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Closed without merging after #44 superseded overlapping workflow changes; source branch retained for a later focused extraction of the test-only service-registration helper and runbook. |
 | [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; exact post-merge Full Foundation #38182502053 passed. |
 | [#44](https://github.com/alizebal73/5/pull/44) | Integration hosted-Windows CI standardization and safe test-payload migration-bundle build | Merged at `161b4cbbbe16cd3fd4046f174a1c09380139c67b`; candidate Quick push/PR, Full Foundation and Runtime payload passed; post-merge Quick #38183458461 and Full Foundation #38183458486 passed on the exact merge SHA. |

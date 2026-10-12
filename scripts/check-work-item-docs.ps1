@@ -109,9 +109,11 @@ Assert-RequiredTerms $logPath $log @(
     "A defect is not closed"
 )
 Assert-RequiredTerms $planPath $plan @(
-    "docs/planning/definition-of-ready.md",
-    "docs/planning/definition-of-done.md",
-    "docs/development/bug-fix-process.md"
+    "[Definition of Ready](definition-of-ready.md)",
+    "[Definition of Done](definition-of-done.md)",
+    "[bug-fix process](../development/bug-fix-process.md)",
+    "[bug-fix template](../templates/bug-fix-template.md)",
+    "[vertical-slice template](../templates/vertical-slice-template.md)"
 )
 
 Assert-RequiredTerms $readinessPath $readiness @(
