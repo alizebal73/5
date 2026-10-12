@@ -1,3 +1,8 @@
+param(
+    [string]$ModulesRoot = "src/Server/Modules",
+    [switch]$OnlyModuleBoundaries
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -29,27 +34,115 @@ function Assert-NoMatch {
     }
 }
 
-# Layer rules.
-Assert-NoMatch "src/Server/Modules" "Microsoft.EntityFrameworkCore|GameNet.Server.Persistence" "Business module layers may not access EF/Persistence directly."
-Assert-NoMatch "src/Server/Modules" "System.Net.|HttpClient|WebSocket|SignalR|System.IO.|System.Diagnostics.Process" "Domain/Application business code may not own external side effects."
+# Layer boundaries: persistence and external side effects belong behind Infrastructure.
+# Domain/Application own business decisions; API adapts inbound requests and must not query the database.
+& "$PSScriptRoot/check-module-layer-boundaries.ps1" -ModulesRoot $ModulesRoot
 
 # Cross-module internal references are forbidden. A module may reference Shared and explicit public contracts,
 # but never another module's implementation namespace.
-$modulesRoot = "src/Server/Modules"
+$modulesRoot = $ModulesRoot
+$requiredModules = @(
+    "Identity",
+    "Stations",
+    "Agents",
+    "ClientControl",
+    "Customers",
+    "Sessions",
+    "Tariffs",
+    "Billing",
+    "Wallet",
+    "Inventory",
+    "Buffet",
+    "VIP",
+    "Games",
+    "GameAccounts",
+    "Reports",
+    "Shifts",
+    "Settings",
+    "Approvals",
+    "Backup"
+)
+if (-not $OnlyModuleBoundaries) {
+$moduleCatalogPath = Join-Path $modulesRoot "README.md"
+if (-not (Test-Path -LiteralPath $moduleCatalogPath -PathType Leaf)) {
+    throw "Canonical module catalog is missing: $moduleCatalogPath"
+}
+$moduleCatalogText = Get-Content -LiteralPath $moduleCatalogPath -Raw
+foreach ($requiredModule in $requiredModules) {
+    $modulePath = Join-Path $modulesRoot $requiredModule
+    if (-not (Test-Path -LiteralPath $modulePath -PathType Container)) {
+        throw "Required module boundary is missing: $modulePath"
+    }
+    $moduleReadme = Join-Path $modulePath "README.md"
+    if (-not (Test-Path -LiteralPath $moduleReadme -PathType Leaf)) {
+        throw "Required module boundary documentation is missing: $moduleReadme"
+    }
+    $catalogPattern = "(?m)^\|\s*$([regex]::Escape($requiredModule))\s*\|"
+    if ($moduleCatalogText -notmatch $catalogPattern) {
+        throw "Required module '$requiredModule' is missing from the canonical module catalog."
+    }
+}
+
+# The root catalog and actual module directories must be an exact match. This prevents
+# unregistered module folders or undocumented module rows from silently bypassing ownership rules.
+$catalogModuleNames = @(
+    [regex]::Matches($moduleCatalogText, '(?m)^\|\s*([A-Za-z][A-Za-z0-9]*)\s*\|') |
+        ForEach-Object { $_.Groups[1].Value } |
+        Where-Object { $_ -ne "Module" }
+)
+$catalogCounts = @($catalogModuleNames | Group-Object)
+$missingCatalogModules = @($requiredModules | Where-Object { $_ -notin $catalogModuleNames })
+$unexpectedCatalogModules = @($catalogModuleNames | Where-Object { $_ -notin $requiredModules } | Sort-Object -Unique)
+$duplicateCatalogModules = @($catalogCounts | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+$actualModuleNames = @(
+    Get-ChildItem -LiteralPath $modulesRoot -Directory |
+        Select-Object -ExpandProperty Name |
+        Sort-Object
+)
+$unexpectedModuleDirectories = @($actualModuleNames | Where-Object { $_ -notin $requiredModules })
+$catalogIssues = @()
+if ($missingCatalogModules.Count -gt 0) {
+    $catalogIssues += "Missing catalog modules: $($missingCatalogModules -join ', ')"
+}
+if ($unexpectedCatalogModules.Count -gt 0) {
+    $catalogIssues += "Unexpected catalog modules: $($unexpectedCatalogModules -join ', ')"
+}
+if ($duplicateCatalogModules.Count -gt 0) {
+    $catalogIssues += "Duplicate catalog rows: $($duplicateCatalogModules -join ', ')"
+}
+if ($unexpectedModuleDirectories.Count -gt 0) {
+    $catalogIssues += "Unexpected module directories: $($unexpectedModuleDirectories -join ', ')"
+}
+if ($actualModuleNames.Count -ne $requiredModules.Count) {
+    $catalogIssues += "Expected $($requiredModules.Count) module directories but found $($actualModuleNames.Count)"
+}
+if ($catalogIssues.Count -gt 0) {
+    throw "Canonical module catalog and directories must exactly match the approved module list. $($catalogIssues -join '; ')"
+}
+
+}
 if (Test-Path $modulesRoot) {
     $moduleDirs = Get-ChildItem $modulesRoot -Directory
     foreach ($module in $moduleDirs) {
         $others = $moduleDirs | Where-Object Name -ne $module.Name
         foreach ($other in $others) {
-            Assert-NoMatch (Join-Path $modulesRoot $module.Name) ([regex]::Escape("GameNet.Server.Modules.$($other.Name)")) "Cross-module implementation reference detected: $($module.Name) -> $($other.Name)."
+            # Public cross-module contracts are allowed only through the explicit .Contracts
+            # namespace. References to another module's root types or Domain/Application/
+            # Infrastructure/Api implementations remain forbidden. Allow whitespace around
+            # namespace dots so formatting cannot bypass the guard.
+            $otherNamespace = "GameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*" + [regex]::Escape($other.Name)
+            $implementationPattern = "$otherNamespace(?:\s*;|\s*\.\s*(?!Contracts\b)[A-Za-z_][A-Za-z0-9_]*)"
+            Assert-NoMatch (Join-Path $modulesRoot $module.Name) $implementationPattern "Cross-module implementation reference detected: $($module.Name) -> $($other.Name). Use Shared or the target module's explicit Contracts namespace."
         }
     }
 }
 
-# API / application / domain layers must not reach persistence or perform infrastructure work.
-Assert-NoMatch "src/Server/Modules/*/Domain" "DbContext|EntityFrameworkCore|Npgsql|GameNet\.Server\.Persistence|Microsoft\.AspNetCore|HttpClient|System\.Net|System\.IO|System\.Diagnostics" "Domain layer contains infrastructure/runtime access."
-Assert-NoMatch "src/Server/Modules/*/Application" "DbContext|EntityFrameworkCore|Npgsql|GameNet\.Server\.Persistence" "Application layer contains direct persistence access."
-Assert-NoMatch "src/Server/Modules/*/Api" "DbContext|EntityFrameworkCore|Npgsql|GameNet\.Server\.Persistence" "API layer contains direct persistence access."
+if ($OnlyModuleBoundaries) {
+    Write-Host "Cross-module boundary check passed."
+    exit 0
+}
+
+# The detailed Domain/Application/API policy is tested by check-module-layer-boundaries.ps1.
 
 # Client boundaries.
 Assert-NoMatch "src/Desktop" "GameNet\.Server\.(Persistence|Modules|Infrastructure)|Microsoft\.EntityFrameworkCore|Npgsql|DbContext" "Desktop may not reference Server implementation or database."

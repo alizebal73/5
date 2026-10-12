@@ -23,6 +23,32 @@
 - **ریسک بحرانی/زیاد/متوسط:** اثر نقض نیاز بر پول، امنیت، مالکیت Session/Agent، موجودی، داده یا قابلیت بازیابی را نشان می‌دهد.
 - **وضعیت Repo 5** وضعیت کد/شواهد در snapshot فوق است، نه وعده یا گواهی انتشار. گواهی Foundation روی SHA قبلی خود معتبر است؛ کد تجاری جدید نیاز به گواهی دقیق روی همان SHA دارد.
 
+## Canonical module ownership — Stage 2 decision
+
+| Module | Canonical ownership | Boundary / dependency rule |
+|---|---|---|
+| Identity | Operator accounts, roles, permissions and operator authentication | No separate Users module; Customer identity is separate |
+| Stations | Station ID/code/type and administrative status | Not Agent connection or Session occupancy |
+| Agents | Device enrollment/credentials, heartbeat, lease/fencing and device-state reconciliation | Does not decide operator command permissions or billing |
+| ClientControl | Server-authorized PC command policy, lifecycle and result | Dispatches through Agents; must fail closed |
+| Customers | Customer profile/code/PIN and activation state | Does not own wallet/debt/session/station state |
+| Sessions | Session lifecycle, ownership, authoritative timing and recovery state | Consumes Station/Customer/Agent facts; doesn't own pricing or wallet |
+| Tariffs | Rate plans, applicability and immutable price snapshot | No invoice/payment or wallet balance ownership |
+| Billing | Bill preview/checkout, invoices, actual payment records/allocation, pending settlement, refund/reversal workflow | Coordinates Wallet/Inventory through an idempotent transactional boundary where required |
+| Wallet | Purchased balance, free money/time, debt and associated immutable ledgers/projections | Pending invoice is not Debt; actual cash receipt isn't a wallet transfer |
+| Inventory | Locations and stock ledger, receiving, moves, counts, waste, return/correction | Buffet owns order lifecycle |
+| Buffet | Order/sale state and coordination with Billing/Inventory | Does not directly set stock or wallet totals |
+| VIP | Plans, entitlement and usage limits/ledger | Uses Tariffs/Sessions; does not duplicate price calculation |
+| Games | Catalog and Server-authorized launch policy | Agent is executor, not authority |
+| GameAccounts | Shared game-account pool and account lease/release/recovery | Blocked until ADR-0003 and secret lifecycle are accepted |
+| Shifts | Cash opening, reconciliation, shift close/handover | Separate from read-only Reports |
+| Reports | Read-only projections for revenue, sessions, wallet, stock, shifts and audit | Never a source of truth |
+| Settings | Validated/versioned Server-backed policies and configuration | Domain owners still validate their own rules |
+| Approvals | Extra approval requests/decisions for specified high-risk mutations | Owning module performs the actual approved mutation |
+| Backup | Backup/verification/restore orchestration and evidence | Domain modules own their own reconciliation |
+
+Capability decisions: Discounts/promotions are Billing/Tariffs capabilities for version one; Network policy is configured under Settings and executed through ClientControl/Agents only where supported; diagnostics/observability/time/money/transactions/audit/idempotency/outbox/persistence remain cross-cutting platform services. Tests live in root `tests/` projects under module-specific paths.
+
 ## ۱) نیازمندی‌های مشترک، هویت و کنترل دسترسی
 
 | شناسه | نتیجه و معیار پذیرش | مالک و وابستگی | اولویت / ریسک | وضعیت در Repo 5 |
@@ -100,7 +126,7 @@
 | شناسه | نتیجه و معیار پذیرش | مالک و وابستگی | اولویت / ریسک | وضعیت در Repo 5 |
 |---|---|---|---|---|
 | REQ-RPT-001 | گزارش‌های درآمد/Session/مشتری/VIP/Wallet/بوفه/موجودی/operator/audit از Server ledger و state مرجع تولید شوند. بازهٔ زمانی و filter سمت Server اجرا شود؛ تاریخ نمایش فارسی/شمسی و مرز business day ثابت باشد. درآمد نقد/کارت از Wallet/Gift transfer جدا بماند. | Reports + read models همهٔ ماژول‌ها | P1 / زیاد | ماژول Reports حاضر نیست. |
-| REQ-SHIFT-001 | شیفت دارای opening cash، cash/card sales، top-up واقعی، refund، discount، expense، expected cash، counted cash، difference و handover باشد. بستن شیفت summary پایدار ایجاد و شیفت را قفل کند؛ اصلاح پس از بستن فقط با permission/audit انجام شود. Payroll کامل جداگانه و تا تصمیم صریح P2 است. | Shifts/Reports + Billing/Audit | P1 / زیاد | ماژول Shift حاضر نیست. |
+| REQ-SHIFT-001 | شیفت دارای opening cash، cash/card sales، top-up واقعی، refund، discount، expense، expected cash، counted cash، difference و handover باشد. بستن شیفت summary پایدار ایجاد و شیفت را قفل کند؛ اصلاح پس از بستن فقط با permission/audit انجام شود. Payroll کامل جداگانه و تا تصمیم صریح P2 است. | Shifts + Billing/Wallet/Audit | P1 / زیاد | ماژول Shifts هنوز پیاده‌سازی نشده است. |
 | REQ-SET-001 | تنظیمات مؤثر بر رفتار Server (تعرفه، policy مشتری/Agent، شبکه، backup، update، صدا/هشدار و localization) Server-backed، validateشده، versioned و auditشده باشد. UI نباید مقدار local-only را به‌عنوان تنظیم سراسری نشان دهد. | Settings + هر مالک تنظیم | P1 / زیاد | تنظیمات تجاری کامل حاضر نیست. |
 | REQ-APR-001 | Approval برای عملیات مشخص و پرخطر، با requester، approver، reason، expiry/state و audit باشد؛ درخواست‌کننده نتواند خودش approval لازم را دور بزند. | Approvals + Identity/Audit/مالک use case | P1 / بحرانی | ماژول Approvals حاضر نیست. |
 

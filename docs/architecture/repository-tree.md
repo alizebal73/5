@@ -39,22 +39,25 @@ GameNet 5/
 │  │  ├─ Observability/
 │  │  ├─ Persistence/
 │  │  └─ Modules/
-│  │     ├─ Identity/
-│  │     ├─ Customers/
-│  │     ├─ Stations/
-│  │     ├─ Agents/
-│  │     ├─ Sessions/
-│  │     ├─ Tariffs/
-│  │     ├─ Billing/
-│  │     ├─ Wallet/
-│  │     ├─ Inventory/
-│  │     ├─ Buffet/
-│  │     ├─ VIP/
-│  │     ├─ Games/
-│  │     ├─ Reports/
-│  │     ├─ Settings/
-│  │     ├─ Approvals/
-│  │     └─ Backup/
+│  │     ├─ Identity/          # operator users, roles, permissions
+│  │     ├─ Stations/          # station identity/type/administrative state
+│  │     ├─ Agents/            # device identity, enrollment, lease, heartbeat
+│  │     ├─ ClientControl/     # authorized commands sent through Agents
+│  │     ├─ Customers/         # customer profile and customer PIN
+│  │     ├─ Sessions/          # authoritative use/session lifecycle and ownership
+│  │     ├─ Tariffs/           # tariff rules and tariff resolution
+│  │     ├─ Billing/           # invoices, settlement/payment allocation, reversals
+│  │     ├─ Wallet/            # wallet/free value/free time/debt ledgers
+│  │     ├─ Inventory/         # stock locations and stock ledger
+│  │     ├─ Buffet/            # sales/orders; coordinates Billing and Inventory
+│  │     ├─ VIP/               # plans, entitlements and consumption
+│  │     ├─ Games/             # catalog and Server-authorized launch policy
+│  │     ├─ GameAccounts/      # shared account pool and account leases
+│  │     ├─ Reports/           # read models only; never business authority
+│  │     ├─ Shifts/            # cash opening, reconciliation and close
+│  │     ├─ Settings/          # versioned Server-backed operational policy
+│  │     ├─ Approvals/         # privileged-action requests and decisions
+│  │     └─ Backup/            # backup/restore orchestration and evidence
 │  ├─ Desktop/
 │  │  ├─ Shell/
 │  │  ├─ Features/
@@ -103,7 +106,9 @@ GameNet 5/
 │  ├─ Architecture/
 │  ├─ Shared.Tests/
 │  ├─ Server.UnitTests/
-│  ├─ Server.IntegrationTests/
+│  │  ├─ Infrastructure/
+│  │  └─ Modules/<Module>/
+│  ├─ Server.IntegrationTests/ # add when DB-backed suites need a separate project
 │  ├─ ContractTests/
 │  ├─ Desktop.Tests/
 │  ├─ Desktop.IntegrationTests/
@@ -119,8 +124,13 @@ GameNet 5/
 ## Structural rules
 
 - Composition files register services only.
+- The canonical Server module inventory is enforced by `scripts/check-architecture.ps1`; each module has a root README documenting ownership.
 - A module may not reach into another module's internal implementation.
+- `scripts/check-module-layer-boundaries.ps1` enforces layer-aware dependency rules: Domain/Application/API cannot access EF Core, Npgsql or Server.Persistence directly; Domain/Application also cannot own outbound network, filesystem, process or ASP.NET framework work.
+- Infrastructure is intentionally allowed to implement persistence and external integrations. API is an inbound transport boundary: ASP.NET types are allowed there, but direct persistence access is not.
+- `scripts/test-module-layer-boundaries.ps1` exercises both allowed Infrastructure/API examples and forbidden Domain/Application/API dependencies; `scripts/verify.ps1` runs these regression checks.
 - Cross-module communication uses explicit application contracts/events.
+- Unit/contract/DB-backed tests stay in root `tests/` projects under module-specific paths; do not create nested production test projects inside each module.
 - Server modules do not expose EF entities as API DTOs.
 - Desktop feature folders own their view models/state; the shell only composes.
 - Agent folders contain execution/transport concerns, not authoritative billing/session decisions.

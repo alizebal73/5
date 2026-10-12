@@ -7,22 +7,22 @@
 | Foundation/Contracts | Modular Monolith، قرارداد V1، typed errors، migration policy، transaction/idempotency/audit/outbox | Server/Shared | Persistence/Security | P0 |
 | Identity | bootstrap مالک امن، login/logout، password hash، revoke/lockout، نقش و مجوز | Server / Identity | PostgreSQL/Audit | P0 |
 | Stations | PC/PS5/فوتبال‌دستی، وضعیت مدیریتی و online جدا، فهرست/فیلتر/گروه‌بندی | Server / Stations | Sessions/Tariffs/Agents | P0 |
-| Agents | pairing، هویت دستگاه، credential، heartbeat، lease، reconnect/fencing/reconciliation | Server / Agents + مشاهدهٔ Agent | Identity/Stations | P0 |
-| Client Control | فرمان‌های مجاز واقعی، lock/unlock، launch/stop، نتیجهٔ per-PC، Remote maintenance در صورت پشتیبانی | Server / ClientControl | Agent/Permissions/Audit | P0/P1 |
+| Agents | هویت/ثبت دستگاه، credential، heartbeat، lease، fencing، reconnect/reconciliation | Server / Agents | Identity/Stations | P0 |
+| Client Control | سیاست فرمان‌های مجاز PC، چرخهٔ فرمان و نتیجهٔ هر رایانه؛ Remote maintenance فقط با پشتیبانی واقعی | Server / ClientControl | Agents/Identity/Audit | P0/P1 |
 | Customers | شناسه و پروفایل/PIN، جست‌وجو، وضعیت، مالی/VIP/history، قواعد login چنددستگاهی | Server / Customers | Identity/Sessions/Wallet | P0 |
 | Sessions | start/pause/resume/extend/reduce/transfer/end/recovery، ownership اتمیک | Server / Sessions | Stations/Customers/Agents/Tariffs | P0 |
 | Tariffs | تعرفهٔ مجزای PC/PS5/فوتبال‌دستی؛ زمان/روز/نفرات/group/VIP؛ snapshot قیمت | Server / Tariffs | Stations/Sessions/VIP | P0/P1 |
 | Billing/Invoices | preview/checkout، تفکیک اجزای مبلغ، فاکتور و پرداخت چندروش، refund/reverse | Server / Billing | Sessions/Wallet/Buffet | P0 |
 | Wallet/Gifts/Debt | ledger شارژ/مصرف/پرداخت؛ Free Money و Free Time مستقل؛ Debt جدا از PendingPayment | Server / Wallet + Billing | Customers/Audit/Idempotency | P0 |
-| Discounts | تخفیف با سقف، علت، permission و Audit | Server / Billing | Tariffs/Identity/Approvals | P1 |
+| Discounts | قابلیت تخفیف/هدیه با سقف، علت، permission و Audit؛ ماژول جدا نیست | Server / Billing + Tariffs | Identity/Approvals | P1 |
 | VIP | طرح، مدت، سطح، سقف روزانه، مصرف و مازاد | Server / VIP | Customers/Tariffs/Sessions | P1 |
-| Games | catalog، مسیر/پارامتر اجرا و launch policy مجاز | Server / Games | ClientControl/Agent/Stations | P1 |
-| Game Account Pool | lease و تخصیص account به game/session/station، release و audit | Server / GameAccounts | Games/Sessions/Agents | P1 |
-| Network policy | انتخاب مسیر اینترنت ۱/۲ و کنترل آنلاین/آفلاین برای PC، فقط با Agent واقعی | Server / Settings/ClientControl | Agent/Permissions | P1 |
+| Games | کاتالوگ و metadata بازی و سیاست مجاز اجرای Server-side | Server / Games | ClientControl/Agents/Stations | P1 |
+| Game Account Pool | lease و تخصیص حساب به game/session/station، release و audit؛ بعد از تصویب ADR-0003 | Server / GameAccounts | Games/Sessions/Agents/secret lifecycle | P1 / مشروط |
+| Network policy | تنظیم versioned در Settings و اجرای فقط از ClientControl/Agent واقعی؛ بدون رفتار جعلی | Settings + ClientControl | Agents/Permissions/Hardware support | P1 |
 | Inventory | ledger موجودی، انبار/ویترین، خرید، انتقال، شمارش، ضایعات، برگشت | Server / Inventory | Audit/Approvals | P1 |
 | Buffet/POS | سفارش، فروش مستقل یا مرتبط به Session/Customer Account، پرداخت و برگشت | Server / Buffet | Inventory/Billing/Customers | P1 |
-| Reports | گزارش درآمد/Session/Wallet/VIP/Inventory/Operators/Audit، فیلتر Server-side و تاریخ فارسی | Server / Reports | Ledgerها و read modelها | P1 |
-| Shift/Cash | cash opening، فروش واقعی، refund/discount/expense، expected-vs-counted و close lock | Server / Shift/Reports | Billing/Audit | P1 |
+| Reports | گزارش فقط‌خواندنی درآمد/Session/Wallet/VIP/Inventory/Operators/Audit و شیفت، فیلتر Server-side | Server / Reports | Ledgerها و read modelهای Shifts | P1 |
+| Shift/Cash | افتتاح صندوق، expected-vs-counted، reconciliation، بستن/تحویل شیفت؛ موجودی مستقل | Server / Shifts | Billing/Wallet/Audit | P1 |
 | Settings | تنظیمات مؤثر و versioned سمت Server، validation و Audit | Server / Settings | Identity/هر ماژول | P1 |
 | Approvals | درخواست/تأیید/رد عملیات حساس با actor/reason/expiry/Audit | Server / Approvals | Identity/Audit | P1 |
 | Audit | actor/action/target/time/reason/correlation/reference، تغییرناپذیری | Server / Platform Audit | همهٔ mutationها | P0 |
@@ -31,7 +31,7 @@
 | Setup/Update | نصب Windows service، secret provisioning، LAN binding، data root، signed/hash-checked update، repair/rollback | Platform Release | Server/Desktop/Agent/Database | P0 پیش از release |
 | Localization | فارسی RTL، تومان، تاریخ نمایشی شمسی، منابع en-US | Desktop/Shared | تمام صفحات | P0 |
 | Reservation/Waitlist | نوبت و ظرفیت/لغو/no-show | Server / Reservations | Stations/Sessions | P2 |
-| Payroll | دفتر حقوق/پیش‌پرداخت/طلب کارکنان | در صورت تأیید، ماژول مستقل | Shift/Reports/Audit | P2 |
+| Payroll | دفتر حقوق/پیش‌پرداخت/طلب کارکنان | در صورت تأیید، ماژول مستقل و خارج از دامنهٔ V1 | Identity/Shifts/Audit | P2 |
 | Tournament/Mobile/SMS/Multi-shop | امکانات تمایزدهندهٔ آتی | ماژول/Integration مستقل | تصمیم محصول و ADR | Deferred |
 | CCBOOT/PXE/Printer/External gateway | فقط بعد از نیاز مشخص، سخت‌افزار/Provider و آزمون واقعی | Integration مستقل | Security/Release | Deferred |
 
@@ -51,7 +51,7 @@
 - **Runtime / Identity / Stations / Outbox:** کد اصلی Runtime/Operator در PR #40 ادغام شد؛ SHA کد `58717adc6c1553ef21221c3d484f093494ba1ae7` آزمون‌های Quick و Full Foundation را گذراند. تغییرات CI در PR #44 ادغام شد؛ SHA ادغام `161b4cbbbe16cd3fd4046f174a1c09380139c67b` نیز Quick و Full Foundation را گذراند. این شواهد آزمون خودکارند، نه گواهی نصب واقعی یا نمایش تعاملی نهایی.
 - **Agent credentials/enrollment و Server secret store:** مسیر کد ثبت Agent یک‌بارمصرف، جلوگیری از replay، ذخیرهٔ protected و DPAPI secret-store در شاخهٔ Integration وجود دارد و پوشش خودکار دارد. ADR-0002 هنوز Proposed است؛ مجوز مؤثر Windows Service، DPAPI/TLS private-key زیر هویت سرویس و رفتار بعد از restart تا پذیرش واقعی مرحلهٔ آخر اثبات نشده‌اند.
 - **Desktop:** پوستهٔ WPF، Login و StationBoard پایه، resourceهای `fa-IR`/`en-US`، بررسی‌های binding/resource و کنترل‌های permission موجودند. استخراج کامل viewها، همهٔ صفحه‌های تجاری و پذیرش تعاملی RTL/LTR، keyboard/focus و وضعیت‌های offline/error تکمیل نشده‌اند. PR #24 همچنان یک تغییر جداگانه برای مقایسه/استخراج view است و نباید کورکورانه ادغام شود.
-- **ماژول‌های تجاری باقی‌مانده:** Customers، Sessions، Tariffs، Billing، Wallet/Debt، Discounts، Inventory، Buffet، VIP، Reports، Shift، Settings و Approvals هنوز به‌عنوان قابلیت‌های کامل و تأییدشده موجود نیستند. باید به‌ترتیب نقشهٔ راه، با رهگیری نیازمندی→کد/API→تست/شاهد پیاده‌سازی شوند؛ صفحه یا mock به معنی تکمیل نیست.
+- **ماژول‌های تجاری باقی‌مانده:** Customers، Sessions، Tariffs، Billing، Wallet/Debt، ClientControl، Games/GameAccounts، Inventory، Buffet، VIP، Reports، Shifts، Settings و Approvals هنوز به‌عنوان قابلیت‌های کامل و تأییدشده موجود نیستند. باید به‌ترتیب نقشهٔ راه، با رهگیری نیازمندی→کد/API→تست/شاهد پیاده‌سازی شوند؛ صفحه یا mock به معنی تکمیل نیست.
 - **نصاب و انتشار:** ZIP دارای hash/manifest با Setup.exe/MSI برابر نیست. Setup واقعی، provisioning مدل PostgreSQL، نصب/repair/upgrade، updater/rollback، امضای انتشار، SBOM و مسیر بازیابی هنوز تکمیل/گواهی نشده‌اند.
 - **زمان‌بندی آزمایش‌های واقعی:** بر اساس تصمیم 2026-10-12، آزمایش فیزیکی Windows Service/LAN، پذیرش دستی WPF و پذیرش یکپارچهٔ نصب فقط پس از تکمیل دامنهٔ برنامه‌ریزی‌شده و ساخت Setup.exe/MSI انجام می‌شوند. CI، unit/integration/regression/security tests در طول توسعه ادامه دارد.
 - **موارد عمداً Deferred:** Reservations/Waitlist، Tournament، موبایل/SMS، چندشعبه‌ای، CCBOOT/PXE، چاپگر و درگاه بیرونی تا تصمیم مستقل محصول/امنیت/مجوز پیاده‌سازی نمی‌شوند.

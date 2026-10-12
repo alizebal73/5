@@ -3,6 +3,21 @@
 **Snapshot date:** 2026-10-12  
 **Purpose:** Prevent rework loops by separating closed engineering stages from distinct operational/release gates. This is the active execution control document. The master plan remains the product plan; this file governs the current queue and evidence rules.
 
+## Current queue — live audit update (2026-10-12)
+
+The live Integration head at the start of this audit was `cd1f2ecfd0f0c7eb238669198afa8a382e0e2c43`; this is a historical observed SHA, not a permanent pointer.
+
+1. [PR #51](https://github.com/alizebal73/5/pull/51) corrects stale readiness/governance docs. Latest PR head `aca93aa29fa2538c37afbf07d508cdeedc434409` passed `quick-validation`; the runtime payload was intentionally skipped for this documentation-only change. PR remains open without an approving review; its merge decision must remain explicit.
+2. [PR #53](https://github.com/alizebal73/5/pull/53) wires Full Foundation/PostgreSQL certification as a prerequisite for the required Integration `quick-validation` status. Current PR head `2c52b7c4edf4e06b653b01e67e33f4bbea70a226` and its current GitHub merge candidate `477912e2a6e269cc1a5e2e3ba081728d200c075d` have successful Quick Validation and Full Foundation/PostgreSQL checks, including the reusable gate. PR remains open without a human review. Do not merge it until its independent review is recorded.
+3. [PR #56](https://github.com/alizebal73/5/pull/56) and [Issue #55](https://github.com/alizebal73/5/issues/55) track Stage 2. Current PR head `ba5b68c8161a277b2380f3b0c779171e4e563d6f` and merge candidate `e2bb73f203c4e3a5bf3e038fec6bb6efa0bbe536` passed Quick Validation, Full Foundation/PostgreSQL certification and related runtime payload checks. The 19-module catalog and ownership READMEs are present; architecture/layer-boundary guards and regression tests are wired into verification. However, PR #56 and #53 both change `.github/workflows/foundation-certification.yml` and `.github/workflows/gamenet.yml`. Stage 2 stays open until the workflow overlap is reconciled on an updated candidate, all required exact-candidate checks pass again, and the intended review is complete.
+4. [Issue #54](https://github.com/alizebal73/5/issues/54) now tracks only the remaining human-approval policy. Live read-back confirms `strict_required_status_checks_policy=true` on all three Rulesets; however, their required approving-review count is still zero. Until a feasible review rule is configured, do not merge without a documented review decision.
+5. Do not merge older-base feature/secret-store/UI branches wholesale. Carry forward reviewed requirements and rules, not their divergent code tree. Do not change `main`.
+
+No PR is automatically merged here. Every merge requires the repository's intended review decision and exact-candidate CI evidence. Physical service/LAN/UI and installer acceptance remain final-release gates, not Stage 2 blockers.
+
+**Stage 2 closeout rule:** never mark it complete from a stale green run. Read the live PR head after the final branch update; record the exact SHA, Quick Validation, Runtime payload, Full Foundation/PostgreSQL result, and review status. If a required check or independent review cannot be obtained with current repository permissions, document that as an open gate rather than bypassing it.
+
+
 ## 1. SHA evidence versus live branch heads
 
 **Important:** the branch values below are a timestamped historical read-back taken immediately after PR #42 merged on 2026-10-12. They are not a permanent live pointer. Documentation PRs themselves advance Integration's commit SHA, so the live Integration head must always be read from GitHub immediately before an operation; never infer it from a SHA copied into this document.
@@ -79,6 +94,9 @@ Build the actual Setup.exe/MSI candidate as a deliverable before entering final 
 | [#31](https://github.com/alizebal73/5/pull/31) | Integration runner/CI and readiness consolidation | Closed without merging after #44 superseded overlapping workflow changes; source branch retained for a later focused extraction of the test-only service-registration helper and runbook. |
 | [#32](https://github.com/alizebal73/5/pull/32) | Foundation hosted-Windows runner isolation | Merged at `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; exact post-merge Full Foundation #38182502053 passed. |
 | [#44](https://github.com/alizebal73/5/pull/44) | Integration hosted-Windows CI standardization and safe test-payload migration-bundle build | Merged at `161b4cbbbe16cd3fd4046f174a1c09380139c67b`; candidate Quick push/PR, Full Foundation and Runtime payload passed; post-merge Quick #38183458461 and Full Foundation #38183458486 passed on the exact merge SHA. |
+| [#51](https://github.com/alizebal73/5/pull/51) | Correct stale readiness and branch-governance documentation | Quick Validation passed on its recorded GitHub merge candidate; open for review; docs-only. |
+| [#53](https://github.com/alizebal73/5/pull/53) | Required pre-merge PostgreSQL/runtime certification for Integration | Exact merge candidate `477912e2a6e269cc1a5e2e3ba081728d200c075d` passed Quick + Full Foundation/PostgreSQL + Backup/Restore + Desktop/Agent; open for review, not merged. |
+| [#56](https://github.com/alizebal73/5/pull/56) | Canonical 19-module inventory, ownership docs and architecture guard | Open for review. At original PR head `c86a726d32601e0c4acff73c756e17d41dbef1ee`, Quick Validation and Runtime payload runs were started; those results do not certify a later head. Full Foundation has not yet been demonstrated on the current Stage 2 candidate. Always read live head/checks before disposition. |
 
 Closed source PRs #35–#39 remain superseded by #40; their source branches were retained. Do not reopen them or merge their branches separately without a newly demonstrated, unique defect.
 
@@ -98,5 +116,5 @@ Closed source PRs #35–#39 remain superseded by #40; their source branches were
 - Stage 1 remains closed and its evidence links are stable.
 - The current Foundation-tip certification is one explicit action, not a recurring broad review.
 - Hosted Windows runner migration is complete for both Foundation (#32) and Integration (#44); #31 is closed as superseded with its unique service-helper work retained on the source branch. Runtime endpoint/TLS source work (#15) remains separate.
-- The six remaining open Draft PRs (#15, #17, #18, #20, #21 and #24) each have an explicit later-gate disposition; #31 is closed as superseded and #32/#44 are merged.
+- The six older open Draft PRs (#15, #17, #18, #20, #21 and #24) each have an explicit later-gate disposition. The newer review queue is #51 (docs correction), #53 (pre-merge PostgreSQL/runtime gate) and #56 (Stage 2 inventory/skeleton); these are not merged until the required review and exact-candidate checks are satisfied. #31 is closed as superseded and #32/#44 are merged.
 - Future progress reports state only what changed, which exact SHA was tested, which gate is now closed, and the one next action.
