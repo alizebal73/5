@@ -14,8 +14,11 @@ public sealed class AgentAccessTokenIssuer(
     IGameClock clock,
     IJwtSigningKeySecret signingSecret) : IAgentAccessTokenIssuer
 {
-    public AgentTokenResponse Issue(string deviceId)
+    public AgentTokenResponse Issue(string deviceId, Guid credentialId)
     {
+        if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128 || credentialId == Guid.Empty)
+            throw new ArgumentException("A valid DeviceId and persisted credential id are required.");
+
         var auth = options.Value.Authentication;
         if (!auth.Enabled ||
             string.IsNullOrWhiteSpace(auth.Issuer) ||
@@ -36,6 +39,7 @@ public sealed class AgentAccessTokenIssuer(
             new Claim(JwtRegisteredClaimNames.Sub, deviceId),
             new Claim("actor_type", "Agent"),
             new Claim("device_id", deviceId),
+            new Claim("credential_id", credentialId.ToString("D")),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
         };
 
