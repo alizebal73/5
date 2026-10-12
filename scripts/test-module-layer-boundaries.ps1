@@ -2,8 +2,12 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $checker = Join-Path $PSScriptRoot "check-module-layer-boundaries.ps1"
+$architectureChecker = Join-Path $PSScriptRoot "check-architecture.ps1"
 if (-not (Test-Path -LiteralPath $checker -PathType Leaf)) {
     throw "Module layer-boundary checker is missing: $checker"
+}
+if (-not (Test-Path -LiteralPath $architectureChecker -PathType Leaf)) {
+    throw "Architecture checker is missing: $architectureChecker"
 }
 
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("gamenet-architecture-guard-" + [guid]::NewGuid().ToString("N"))
@@ -11,6 +15,10 @@ $moduleRoot = Join-Path $fixtureRoot "Probe"
 foreach ($layer in @("Domain", "Application", "Api", "Infrastructure")) {
     New-Item -ItemType Directory -Force -Path (Join-Path $moduleRoot $layer) | Out-Null
 }
+$otherModuleRoot = Join-Path $fixtureRoot "Other"
+New-Item -ItemType Directory -Force -Path (Join-Path $otherModuleRoot "Contracts") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $otherModuleRoot "Domain") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $otherModuleRoot "Infrastructure") | Out-Null
 
 function Assert-Rejected {
     param([string]$CaseName)
@@ -27,6 +35,23 @@ function Assert-Rejected {
         throw "Architecture guard regression: expected rejection for '$CaseName'."
     }
     Write-Host "PASS: forbidden dependency rejected ($CaseName)."
+}
+
+function Assert-CrossModuleRejected {
+    param([string]$CaseName)
+
+    $rejected = $false
+    try {
+        & $architectureChecker -ModulesRoot $fixtureRoot -OnlyModuleBoundaries
+    }
+    catch {
+        $rejected = $true
+    }
+
+    if (-not $rejected) {
+        throw "Cross-module architecture regression: expected rejection for '$CaseName'."
+    }
+    Write-Host "PASS: cross-module implementation dependency rejected ($CaseName)."
 }
 
 try {
@@ -47,6 +72,25 @@ try {
     )
     & $checker -ModulesRoot $fixtureRoot
     Write-Host "PASS: valid Infrastructure persistence/network and API transport access are allowed."
+
+    # Cross-module public contracts are the only permitted namespace reference.
+    $contractReference = Join-Path $moduleRoot "Application\AllowedContract.cs"
+    Set-Content -LiteralPath $contractReference -Value "using GameNet.Server.Modules.Other.Contracts;"
+    & $architectureChecker -ModulesRoot $fixtureRoot -OnlyModuleBoundaries
+    Write-Host "PASS: explicit public module Contracts namespace is allowed."
+    Remove-Item -LiteralPath $contractReference -Force
+
+    foreach ($forbiddenReference in @(
+        "using GameNet.Server.Modules.Other;",
+        "using GameNet.Server.Modules.Other.Domain;",
+        "using GameNet.Server.Modules.Other.Infrastructure;",
+        "using GameNet . Server . Modules . Other . Application ;"
+    )) {
+        $referenceFile = Join-Path $moduleRoot "Application\CrossModuleReference.cs"
+        Set-Content -LiteralPath $referenceFile -Value $forbiddenReference
+        Assert-CrossModuleRejected $forbiddenReference
+        Remove-Item -LiteralPath $referenceFile -Force
+    }
 
     $forbiddenPersistenceImports = @(
         "using GameNet.Server.Persistence;",
