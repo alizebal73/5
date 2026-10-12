@@ -40,16 +40,19 @@ if (-not (Test-Path -LiteralPath $ModulesRoot -PathType Container)) {
 # must use module-owned interfaces/services instead of reaching directly into EF/PostgreSQL.
 # Permit formatting whitespace around namespace separators so the guard cannot be
 # bypassed by legal but unusual C# formatting (for example, "using Microsoft . EntityFrameworkCore;").
-$persistencePattern = "\bMicrosoft\s*\.\s*EntityFrameworkCore\b|\bDbContext\b|\bNpgsql\b|\bGameNet\s*\.\s*Server\s*\.\s*Persistence\b"
+$persistencePattern = "\bMicrosoft\s*\.\s*EntityFrameworkCore\b|\b(?:DbContext|DbSet|DatabaseFacade|IDbContextFactory)\b|\bNpgsql\b|\bGameNet\s*\.\s*Server\s*\.\s*Persistence\b"
 
 # Domain and Application code may not perform network, filesystem, process, or web-framework
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
 # may not access persistence directly. Infrastructure is intentionally allowed those capabilities.
 # Match fully qualified references, namespace imports, aliases, and whitespace around dots.
-$networkNamespacePattern = "\bSystem\s*\.\s*Net(?:\s*\.|\s*;|\s*=)|\bHttpClient\b|\bWebClient\b|\bHttpWebRequest\b|\bHttpWebResponse\b|\bWebSocket\b|\bSignalR\b|\bSocket\b|\bTcpClient\b|\bUdpClient\b"
-$fileSystemNamespacePattern = "\bSystem\s*\.\s*IO(?:\s*\.|\s*;|\s*=)|\bFileStream\b|\bFileInfo\b|\bDirectoryInfo\b|\bStreamReader\b|\bStreamWriter\b"
+$networkNamespacePattern = "\bSystem\s*\.\s*Net(?:\s*\.|\s*;|\s*=)|\b(?:HttpClient|HttpMessageInvoker|WebClient|WebRequest|HttpWebRequest|HttpWebResponse|FtpWebRequest|SmtpClient|Ping|NetworkStream|WebSocket|SignalR|Socket|TcpClient|UdpClient)\b"
+$fileSystemNamespacePattern = "\bSystem\s*\.\s*IO(?:\s*\.|\s*;|\s*=)|\b(?:File|Directory|Path|DriveInfo|FileSystemWatcher|FileSystemInfo|FileStream|FileInfo|DirectoryInfo|StreamReader|StreamWriter)\s*\.|\bFileSystemWatcher\b|\bFileStream\b|\bFileInfo\b|\bDirectoryInfo\b|\bStreamReader\b|\bStreamWriter\b"
 $diagnosticsNamespacePattern = "\bSystem\s*\.\s*Diagnostics(?:\s*\.|\s*;|\s*=)|\bProcessStartInfo\b|\bProcess\b"
-$externalSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern|\bMicrosoft\s*\.\s*AspNetCore\b"
+# SDK implicit/global usings can make framework types usable without any namespace import.
+# Catch common ASP.NET transport types even when Application/Domain only use short names.
+$webFrameworkTypePattern = "\b(?:HttpContext|HttpRequest|HttpResponse|RequestDelegate|IEndpointRouteBuilder|IResult|Results|StatusCodes|WebApplication|IApplicationBuilder|IHostApplicationBuilder|ControllerBase|IActionResult|IFormFile|ProblemDetails|EndpointDataSource|RouteHandlerBuilder)\b"
+$externalSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern|$webFrameworkTypePattern|\bMicrosoft\s*\.\s*AspNetCore\b"
 $apiSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern"
 
 foreach ($module in Get-ChildItem -LiteralPath $ModulesRoot -Directory) {
