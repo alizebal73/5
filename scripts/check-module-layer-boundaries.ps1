@@ -38,17 +38,18 @@ if (-not (Test-Path -LiteralPath $ModulesRoot -PathType Container)) {
 
 # Persistence is available only to Infrastructure. Domain, Application, and API code
 # must use module-owned interfaces/services instead of reaching directly into EF/PostgreSQL.
-$persistencePattern = "Microsoft\.EntityFrameworkCore|\bDbContext\b|\bNpgsql\b|GameNet\.Server\.Persistence"
+# Permit formatting whitespace around namespace separators so the guard cannot be
+# bypassed by legal but unusual C# formatting (for example, "using Microsoft . EntityFrameworkCore;").
+$persistencePattern = "\bMicrosoft\s*\.\s*EntityFrameworkCore\b|\bDbContext\b|\bNpgsql\b|\bGameNet\s*\.\s*Server\s*\.\s*Persistence\b"
 
 # Domain and Application code may not perform network, filesystem, process, or web-framework
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
 # may not access persistence directly. Infrastructure is intentionally allowed those capabilities.
-# Match fully qualified references and namespace imports (including the semicolon form
-# `using System.IO;`), not just qualified names such as `System.IO.File`.
-$networkNamespacePattern = "\bSystem\.Net(?:\.|;)|\bHttpClient\b|\bWebClient\b|\bHttpWebRequest\b|\bHttpWebResponse\b|\bWebSocket\b|\bSignalR\b|\bSocket\b|\bTcpClient\b|\bUdpClient\b"
-$fileSystemNamespacePattern = "\bSystem\.IO(?:\.|;)|\bFileStream\b|\bFileInfo\b|\bDirectoryInfo\b|\bStreamReader\b|\bStreamWriter\b"
-$diagnosticsNamespacePattern = "\bSystem\.Diagnostics(?:\.|;)|\bProcessStartInfo\b|\bProcess\b"
-$externalSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern|Microsoft\.AspNetCore"
+# Match fully qualified references, namespace imports, aliases, and whitespace around dots.
+$networkNamespacePattern = "\bSystem\s*\.\s*Net(?:\s*\.|\s*;|\s*=)|\bHttpClient\b|\bWebClient\b|\bHttpWebRequest\b|\bHttpWebResponse\b|\bWebSocket\b|\bSignalR\b|\bSocket\b|\bTcpClient\b|\bUdpClient\b"
+$fileSystemNamespacePattern = "\bSystem\s*\.\s*IO(?:\s*\.|\s*;|\s*=)|\bFileStream\b|\bFileInfo\b|\bDirectoryInfo\b|\bStreamReader\b|\bStreamWriter\b"
+$diagnosticsNamespacePattern = "\bSystem\s*\.\s*Diagnostics(?:\s*\.|\s*;|\s*=)|\bProcessStartInfo\b|\bProcess\b"
+$externalSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern|\bMicrosoft\s*\.\s*AspNetCore\b"
 $apiSideEffectPattern = "$networkNamespacePattern|$fileSystemNamespacePattern|$diagnosticsNamespacePattern"
 
 foreach ($module in Get-ChildItem -LiteralPath $ModulesRoot -Directory) {
