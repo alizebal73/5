@@ -48,7 +48,7 @@ jobs:
       GAMENET_PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
     steps:
       - name: Checkout exact candidate
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
