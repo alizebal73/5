@@ -133,8 +133,9 @@ public sealed class AgentCredentialService(
         CancellationToken cancellationToken = default) =>
         transactions.ExecuteAsync<Guid?>(async ct =>
         {
-            ValidateDeviceId(deviceId);
-            if (string.IsNullOrWhiteSpace(secret))
+            // Reject malformed identities and token shapes before hashing or querying storage.
+            if (!AgentDeviceIdentityRules.IsValid(deviceId) ||
+                !AgentCredentialSecretMaterial.IsCanonicalSecret(secret))
                 return null;
 
             var credential = await dbContext.AgentCredentials
@@ -185,7 +186,7 @@ public sealed class AgentCredentialService(
         string deviceId,
         CancellationToken cancellationToken = default)
     {
-        if (credentialId == Guid.Empty || string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128)
+        if (credentialId == Guid.Empty || !AgentDeviceIdentityRules.IsValid(deviceId))
             return Task.FromResult(false);
 
         return dbContext.AgentCredentials
@@ -199,7 +200,7 @@ public sealed class AgentCredentialService(
 
     private static void ValidateDeviceId(string deviceId)
     {
-        if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128)
-            throw new ArgumentException("DeviceId must be 1-128 non-whitespace characters.", nameof(deviceId));
+        if (!AgentDeviceIdentityRules.IsValid(deviceId))
+            throw new AgentCredentialException("agent.device_id_invalid");
     }
 }
