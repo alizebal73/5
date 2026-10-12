@@ -3,7 +3,8 @@ namespace GameNet.Server.Infrastructure.Outbox;
 public sealed class OutboxDeliveryOptions
 {
     public int BatchSize { get; init; } = 10;
-    public int MaxConcurrentHandlers { get; init; } = 4;
+    // Preserve claim order by default; opt into parallel handlers only when event consumers are order-safe.
+    public int MaxConcurrentHandlers { get; init; } = 1;
     public int PollIntervalSeconds { get; init; } = 2;
     public int LeaseDurationSeconds { get; init; } = 120;
     public int MaxAttempts { get; init; } = 10;

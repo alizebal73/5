@@ -10,6 +10,15 @@ namespace GameNet.Server.UnitTests;
 public sealed class OutboxDeliveryWorkerConcurrencyTests
 {
     [Fact]
+    public void Outbox_delivery_defaults_to_order_preserving_single_handler()
+    {
+        var options = new OutboxDeliveryOptions();
+
+        Assert.Equal(1, options.MaxConcurrentHandlers);
+        Assert.True(options.IsValid);
+    }
+
+    [Fact]
     public async Task Worker_starts_claimed_handlers_concurrently_within_configured_limit()
     {
         var now = DateTimeOffset.UtcNow;
