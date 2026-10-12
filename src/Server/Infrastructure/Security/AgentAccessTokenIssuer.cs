@@ -16,8 +16,10 @@ public sealed class AgentAccessTokenIssuer(
 {
     public AgentTokenResponse Issue(string deviceId, Guid credentialId)
     {
-        if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128 || credentialId == Guid.Empty)
-            throw new ArgumentException("A valid DeviceId and persisted credential id are required.");
+        // Token issuance is a security boundary of its own: do not rely only on
+        // today's callers having validated the device identity correctly.
+        if (!AgentDeviceIdentityRules.IsValid(deviceId) || credentialId == Guid.Empty)
+            throw new ArgumentException("A canonical DeviceId and persisted credential id are required.");
 
         var auth = options.Value.Authentication;
         if (!auth.Enabled ||
