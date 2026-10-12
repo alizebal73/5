@@ -1,5 +1,9 @@
 # GameNet 5 — Branch governance
 
+> **Current execution note — 2026-10-12:** This file contains dated repository-governance history. Statements later in the historical log such as “Stage 4 is next: consolidate product requirements” refer to the old governance-stage sequence; that requirements consolidation is complete and is **not** the next product stage. Do not use those lines as the live product roadmap. The current authority is [Active Execution Control](active-execution-control.md) plus the [Master Build Plan](../planning/master-build-plan.md). Master Build Plan Stage 1 (Foundation certification) is closed. The next product step is Stage 2 module/repository skeleton, followed by completing the partially implemented Identity and Stations/Agent capabilities and the business modules. Physical Windows Service/LAN, interactive WPF, Setup/update/rollback and pilot acceptance remain deferred until planned product scope is complete and the Setup.exe/MSI candidate exists; automated CI and regression tests continue throughout.
+
+> **Latest ref snapshot at PR #47 merge:** Integration was advanced by documentation/validator PR #47, squash merge SHA `a2b986865a19b2e2c48e1e414311afda19cdc0b6`. This is an immutable event SHA, not a permanent live pointer; query GitHub for live branch heads before any operation. The post-merge Quick Validation was still running at the snapshot and must be judged only from its exact-run result.
+
 ## Last GitHub ref read-back — immediately after PR #42 (2026-10-12; historical snapshot)
 
 This table records a read-back event, not a live branch pointer. Subsequent docs PRs advance Integration; get the live head from GitHub before any operation. Older tables below are historical as well. The [Active Execution Control](active-execution-control.md) is the single PR/gate disposition register. The recorded Integration SHA is a timestamped observation, never the live pointer after subsequent docs merges.
