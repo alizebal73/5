@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
+using GameNetAuthenticationOptions = GameNet.Server.Infrastructure.Configuration.AuthenticationOptions;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Modules.Identity.Application;
 using GameNet.Server.Modules.Identity.Domain;
@@ -28,7 +29,7 @@ public sealed class AuthenticationRegistrationTests
 
         var applicationOptions = new GameNetOptions
         {
-            Authentication = new AuthenticationOptions
+            Authentication = new GameNetAuthenticationOptions
             {
                 Enabled = true,
                 Issuer = issuer,
@@ -113,7 +114,7 @@ public sealed class AuthenticationRegistrationTests
         var repository = new TestIdentityRepository(user, session, permissions);
         var applicationOptions = new GameNetOptions
         {
-            Authentication = new AuthenticationOptions
+            Authentication = new GameNetAuthenticationOptions
             {
                 Enabled = true,
                 Issuer = "GameNet.Foundation.UnitTests",
