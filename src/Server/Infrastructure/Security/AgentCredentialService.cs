@@ -104,7 +104,13 @@ public sealed class AgentCredentialService(
                 .SingleOrDefaultAsync(ct);
 
             if (current is null)
+            {
+                // A previous version or interrupted operation may have left a stale
+                // lease behind even though no credential remains active. Revoke is
+                // deliberately idempotent and still removes that residual authority.
+                await FenceActiveLeaseAsync(request.DeviceId, ct);
                 return false;
+            }
 
             var now = clock.UtcNow;
             current.Revoke(now);
