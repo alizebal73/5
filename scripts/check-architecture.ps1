@@ -82,6 +82,44 @@ foreach ($requiredModule in $requiredModules) {
         throw "Required module '$requiredModule' is missing from the canonical module catalog."
     }
 }
+
+# The root catalog and actual module directories must be an exact match. This prevents
+# unregistered module folders or undocumented module rows from silently bypassing ownership rules.
+$catalogModuleNames = @(
+    [regex]::Matches($moduleCatalogText, '(?m)^\|\s*([A-Za-z][A-Za-z0-9]*)\s*\|') |
+        ForEach-Object { $_.Groups[1].Value } |
+        Where-Object { $_ -ne "Module" }
+)
+$catalogCounts = @($catalogModuleNames | Group-Object)
+$missingCatalogModules = @($requiredModules | Where-Object { $_ -notin $catalogModuleNames })
+$unexpectedCatalogModules = @($catalogModuleNames | Where-Object { $_ -notin $requiredModules } | Sort-Object -Unique)
+$duplicateCatalogModules = @($catalogCounts | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+$actualModuleNames = @(
+    Get-ChildItem -LiteralPath $modulesRoot -Directory |
+        Select-Object -ExpandProperty Name |
+        Sort-Object
+)
+$unexpectedModuleDirectories = @($actualModuleNames | Where-Object { $_ -notin $requiredModules })
+$catalogIssues = @()
+if ($missingCatalogModules.Count -gt 0) {
+    $catalogIssues += "Missing catalog modules: $($missingCatalogModules -join ', ')"
+}
+if ($unexpectedCatalogModules.Count -gt 0) {
+    $catalogIssues += "Unexpected catalog modules: $($unexpectedCatalogModules -join ', ')"
+}
+if ($duplicateCatalogModules.Count -gt 0) {
+    $catalogIssues += "Duplicate catalog rows: $($duplicateCatalogModules -join ', ')"
+}
+if ($unexpectedModuleDirectories.Count -gt 0) {
+    $catalogIssues += "Unexpected module directories: $($unexpectedModuleDirectories -join ', ')"
+}
+if ($actualModuleNames.Count -ne $requiredModules.Count) {
+    $catalogIssues += "Expected $($requiredModules.Count) module directories but found $($actualModuleNames.Count)"
+}
+if ($catalogIssues.Count -gt 0) {
+    throw "Canonical module catalog and directories must exactly match the approved module list. $($catalogIssues -join '; ')"
+}
+
 }
 if (Test-Path $modulesRoot) {
     $moduleDirs = Get-ChildItem $modulesRoot -Directory

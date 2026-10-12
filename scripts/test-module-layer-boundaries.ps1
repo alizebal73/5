@@ -54,7 +54,63 @@ function Assert-CrossModuleRejected {
     Write-Host "PASS: cross-module implementation dependency rejected ($CaseName)."
 }
 
+function Assert-CatalogRejected {
+    param([string]$CaseName, [string]$ExpectedMessage)
+
+    $rejected = $false
+    $actualMessage = ""
+    try {
+        & $architectureChecker -ModulesRoot $catalogFixtureRoot
+    }
+    catch {
+        $rejected = $true
+        $actualMessage = $_.Exception.Message
+    }
+
+    if (-not $rejected) {
+        throw "Canonical module catalog regression: expected rejection for '$CaseName'."
+    }
+    if ($actualMessage -notmatch [regex]::Escape($ExpectedMessage)) {
+        throw "Canonical module catalog regression: '$CaseName' failed for an unexpected reason: $actualMessage"
+    }
+    Write-Host "PASS: non-canonical module inventory rejected ($CaseName)."
+}
+
+$canonicalModules = @(
+    "Identity", "Stations", "Agents", "ClientControl", "Customers",
+    "Sessions", "Tariffs", "Billing", "Wallet", "Inventory",
+    "Buffet", "VIP", "Games", "GameAccounts", "Reports",
+    "Shifts", "Settings", "Approvals", "Backup"
+)
+$catalogFixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("gamenet-canonical-catalog-" + [guid]::NewGuid().ToString("N"))
+
 try {
+    New-Item -ItemType Directory -Force -Path $catalogFixtureRoot | Out-Null
+    $catalogRows = @(
+        "# Canonical module catalog",
+        "",
+        "| Module | Owns | Explicitly does not own |",
+        "|---|---|---|"
+    ) + @($canonicalModules | ForEach-Object { "| $_ | Defined ownership | Other module's state |" })
+    Set-Content -LiteralPath (Join-Path $catalogFixtureRoot "README.md") -Value $catalogRows
+    foreach ($moduleName in $canonicalModules) {
+        $modulePath = Join-Path $catalogFixtureRoot $moduleName
+        New-Item -ItemType Directory -Force -Path $modulePath | Out-Null
+        Set-Content -LiteralPath (Join-Path $modulePath "README.md") -Value "# $moduleName module boundary"
+    }
+
+    & $architectureChecker -ModulesRoot $catalogFixtureRoot
+    Write-Host "PASS: exact canonical module inventory and catalog are accepted."
+
+    $unexpectedDirectory = Join-Path $catalogFixtureRoot "UnregisteredModule"
+    New-Item -ItemType Directory -Force -Path $unexpectedDirectory | Out-Null
+    Set-Content -LiteralPath (Join-Path $unexpectedDirectory "README.md") -Value "# Unregistered"
+    Assert-CatalogRejected "unexpected module directory" "Unexpected module directories"
+    Remove-Item -LiteralPath $unexpectedDirectory -Recurse -Force
+
+    Add-Content -LiteralPath (Join-Path $catalogFixtureRoot "README.md") -Value "| UnregisteredModule | Unapproved ownership | None |"
+    Assert-CatalogRejected "unexpected catalog row" "Unexpected catalog modules"
+
     # Infrastructure is allowed to use persistence and outbound integration libraries.
     Set-Content -LiteralPath (Join-Path $moduleRoot "Infrastructure\PersistenceAdapter.cs") -Value @(
         "using Microsoft.EntityFrameworkCore;",
@@ -218,7 +274,9 @@ try {
     Write-Host "MODULE LAYER-BOUNDARY REGRESSION TESTS PASSED."
 }
 finally {
-    if (Test-Path -LiteralPath $fixtureRoot) {
-        Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
+    foreach ($rootToClean in @($fixtureRoot, $catalogFixtureRoot)) {
+        if ($rootToClean -and (Test-Path -LiteralPath $rootToClean)) {
+            Remove-Item -LiteralPath $rootToClean -Recurse -Force
+        }
     }
 }
