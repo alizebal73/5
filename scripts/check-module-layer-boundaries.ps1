@@ -42,9 +42,9 @@ if (-not (Test-Path -LiteralPath $ModulesRoot -PathType Container)) {
 # bypassed by legal but unusual C# formatting (for example, "using Microsoft . EntityFrameworkCore;").
 $persistencePattern = "\bMicrosoft\s*\.\s*EntityFrameworkCore\b|\b(?:DbContext|DbSet|DatabaseFacade|IDbContextFactory)\b|\bNpgsql\b|\bGameNet\s*\.\s*Server\s*\.\s*Persistence\b"
 
-# Domain/Application/API code must not depend directly on platform or module Infrastructure namespaces.
-# Infrastructure implements ports and is composed at the host boundary.
-$infrastructureNamespacePattern = "\bGameNet\s*\.\s*Server\s*\.\s*Infrastructure\b|\bGameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Infrastructure\b"
+# Inward layers must not reference module-specific Infrastructure implementations, even within their own module.
+# Shared platform contracts currently live under GameNet.Server.Infrastructure; relocating those contracts is separate focused work.
+$infrastructureNamespacePattern = "\bGameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Infrastructure\b"
 
 # Domain and Application code may not perform network, filesystem, process, or web-framework
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
