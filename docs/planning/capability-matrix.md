@@ -45,14 +45,15 @@
 - هر دکمهٔ عملیاتی باید backend واقعی، مجوز Server، رفتار خطا و آزمون داشته باشد؛ mock، success ساختگی و placeholder در production ممنوع‌اند.
 - فارسی RTL و واحد تومان در کل مسیر UI/گزارش سازگارند؛ محاسبات زمان UTC/business-timezone را از هم جدا می‌کنند.
 
-## وضعیت جاری پیاده‌سازی — 2026-10-10
+## وضعیت جاری پیاده‌سازی — بازبینی 2026-10-12 (snapshot تاریخی، نه اشاره‌گر زنده)
 
-- **Foundation reference:** آخرین stable-checkpoint ثبت‌شده برای SHA دقیق c3a8ba482548e963479fbdf8538be62c4d15acfe است. Tip فعلی Foundation branch برابر be29687e637b709158a30204bb9213bfa4813950 است و باید روی همان SHA مجدداً full certification شود؛ این دو status یکی نیستند.
-- **Runtime / Identity / Stations:** integration/runtime-operator-v1 روی SHA 55a340305f9eba3bc8f9a1ce65fb37bedbae7580 از Quick Validation و Full Foundation عبور کرده است؛ PR #23 Draft است و physical Windows-Service/LAN gate هنوز باز است.
-- **Desktop UI boundary:** PR #24 اولین استخراج StationBoardView را روی SHA 9a058043ca8ba69f2b0bd23777263063ee681c92 با Quick و Full Foundation سبز کرده است؛ ادغام نشده و جداسازی timer/Login/Shell/command permissions و UI interaction tests باقی‌اند.
-- **Customers, Sessions, Tariffs, Billing, Wallet/Debt, Inventory, Buffet, VIP, Reports, Shift, Approvals:** نیازمندی‌های محصولی‌اند؛ در snapshot یکپارچهٔ جاری ماژول‌های کامل و تأییدشدهٔ آن‌ها وجود ندارد. تا عبور cross-PC Foundation runtime gate نباید با دکمه/صفحهٔ نمایشی به‌عنوان قابلیت آماده عرضه شوند.
-- **Protected Server secret lifecycle:** ADR-0002/PR #18 هنوز Proposed و پیاده‌سازی PR #20 هنوز Draft/stacked است؛ production secret store یا Windows-service secret access را کامل فرض نکنید.
-- **Setup/update/repair/rollback:** خروجی ZIP با manifest با Setup.exe/MSI برابر نیست. Windows Service commissioning، انتخاب مدل PostgreSQL provisioning، دو-PC install/restart/reconnect و Release gate هنوز باز هستند.
-- **Steam/GamingAccounts:** خارج از اجرای فعلی و Deferred است تا requirement محصولی و مدل integration مجاز/پشتیبانی‌شده به‌صورت روشن تأیید شود؛ branch آزمایشی قدیمی مجوز پیاده‌سازی خودکار نیست.
+- **Foundation:** شاخهٔ `foundation/runtime-final-v2` روی SHA دقیق `71ef6534331e6ba5a8a460fd5b8846fe40e8567a` گواهی Full Foundation دارد ([run #38182502053](https://github.com/alizebal73/5/actions/runs/38182502053)). این گواهی مربوط به همان SHA است.
+- **Runtime / Identity / Stations / Outbox:** کد اصلی Runtime/Operator در PR #40 ادغام شد؛ SHA کد `58717adc6c1553ef21221c3d484f093494ba1ae7` آزمون‌های Quick و Full Foundation را گذراند. تغییرات CI در PR #44 ادغام شد؛ SHA ادغام `161b4cbbbe16cd3fd4046f174a1c09380139c67b` نیز Quick و Full Foundation را گذراند. این شواهد آزمون خودکارند، نه گواهی نصب واقعی یا نمایش تعاملی نهایی.
+- **Agent credentials/enrollment و Server secret store:** مسیر کد ثبت Agent یک‌بارمصرف، جلوگیری از replay، ذخیرهٔ protected و DPAPI secret-store در شاخهٔ Integration وجود دارد و پوشش خودکار دارد. ADR-0002 هنوز Proposed است؛ مجوز مؤثر Windows Service، DPAPI/TLS private-key زیر هویت سرویس و رفتار بعد از restart تا پذیرش واقعی مرحلهٔ آخر اثبات نشده‌اند.
+- **Desktop:** پوستهٔ WPF، Login و StationBoard پایه، resourceهای `fa-IR`/`en-US`، بررسی‌های binding/resource و کنترل‌های permission موجودند. استخراج کامل viewها، همهٔ صفحه‌های تجاری و پذیرش تعاملی RTL/LTR، keyboard/focus و وضعیت‌های offline/error تکمیل نشده‌اند. PR #24 همچنان یک تغییر جداگانه برای مقایسه/استخراج view است و نباید کورکورانه ادغام شود.
+- **ماژول‌های تجاری باقی‌مانده:** Customers، Sessions، Tariffs، Billing، Wallet/Debt، Discounts، Inventory، Buffet، VIP، Reports، Shift، Settings و Approvals هنوز به‌عنوان قابلیت‌های کامل و تأییدشده موجود نیستند. باید به‌ترتیب نقشهٔ راه، با رهگیری نیازمندی→کد/API→تست/شاهد پیاده‌سازی شوند؛ صفحه یا mock به معنی تکمیل نیست.
+- **نصاب و انتشار:** ZIP دارای hash/manifest با Setup.exe/MSI برابر نیست. Setup واقعی، provisioning مدل PostgreSQL، نصب/repair/upgrade، updater/rollback، امضای انتشار، SBOM و مسیر بازیابی هنوز تکمیل/گواهی نشده‌اند.
+- **زمان‌بندی آزمایش‌های واقعی:** بر اساس تصمیم 2026-10-12، آزمایش فیزیکی Windows Service/LAN، پذیرش دستی WPF و پذیرش یکپارچهٔ نصب فقط پس از تکمیل دامنهٔ برنامه‌ریزی‌شده و ساخت Setup.exe/MSI انجام می‌شوند. CI، unit/integration/regression/security tests در طول توسعه ادامه دارد.
+- **موارد عمداً Deferred:** Reservations/Waitlist، Tournament، موبایل/SMS، چندشعبه‌ای، CCBOOT/PXE، چاپگر و درگاه بیرونی تا تصمیم مستقل محصول/امنیت/مجوز پیاده‌سازی نمی‌شوند.
 
-مبنای مرجع وضعیت و ترتیب: [Engineering Readiness Register](engineering-readiness-register.md). اجرای موفق روی SHA قبلی، وضعیت candidate فعلی یا Release را خودکار گواهی نمی‌کند.
+مبنای وضعیت و ترتیب: [Active Execution Control](../operations/active-execution-control.md)، [Master Build Plan](master-build-plan.md) و [Requirements Traceability](requirements-traceability.md). SHAهای بالا شواهد تاریخی دقیق‌اند؛ برای عملیات بعدی همیشه head زندهٔ شاخه را از GitHub بخوانید.
