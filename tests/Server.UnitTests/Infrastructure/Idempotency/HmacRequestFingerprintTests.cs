@@ -1,6 +1,5 @@
-using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Server.Infrastructure.Idempotency;
-using Microsoft.Extensions.Options;
+using GameNet.Server.Infrastructure.Security;
 using Xunit;
 
 namespace GameNet.Server.UnitTests.Infrastructure.Idempotency;
@@ -10,10 +9,7 @@ public sealed class HmacRequestFingerprintTests
     [Fact]
     public void Fingerprint_is_stable_for_same_payload_and_never_contains_password()
     {
-        var fingerprint = new HmacRequestFingerprint(Options.Create(new GameNetOptions
-        {
-            Authentication = new AuthenticationOptions { SigningKey = new string('k', 48) }
-        }));
+        var fingerprint = new HmacRequestFingerprint(new TestSigningKeySecret(new string('k', 48)));
 
         var first = fingerprint.Compute(new { Username = "operator", Password = "Sensitive-Password-123" });
         var replay = fingerprint.Compute(new { Username = "operator", Password = "Sensitive-Password-123" });
@@ -37,16 +33,12 @@ public sealed class HmacRequestFingerprintTests
     [Fact]
     public void Fingerprinting_fails_closed_without_a_strong_key()
     {
-        Assert.Throws<InvalidOperationException>(() => new HmacRequestFingerprint(
-            Options.Create(new GameNetOptions
-            {
-                Authentication = new AuthenticationOptions { SigningKey = "short" }
-            })));
+        Assert.Throws<InvalidOperationException>(() =>
+            new HmacRequestFingerprint(new TestSigningKeySecret("short")));
     }
 
     private static HmacRequestFingerprint Create(char key) =>
-        new(Options.Create(new GameNetOptions
-        {
-            Authentication = new AuthenticationOptions { SigningKey = new string(key, 48) }
-        }));
+        new(new TestSigningKeySecret(new string(key, 48)));
+
+    private sealed record TestSigningKeySecret(string SigningKey) : IJwtSigningKeySecret;
 }
