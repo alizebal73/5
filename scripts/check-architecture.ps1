@@ -29,9 +29,9 @@ function Assert-NoMatch {
     }
 }
 
-# Layer rules.
-Assert-NoMatch "src/Server/Modules" "Microsoft.EntityFrameworkCore|GameNet.Server.Persistence" "Business module layers may not access EF/Persistence directly."
-Assert-NoMatch "src/Server/Modules" "System.Net.|HttpClient|WebSocket|SignalR|System.IO.|System.Diagnostics.Process" "Domain/Application business code may not own external side effects."
+# Layer boundaries: persistence and external side effects belong behind Infrastructure.
+# Domain/Application own business decisions; API adapts inbound requests and must not query the database.
+& "$PSScriptRoot/check-module-layer-boundaries.ps1" -ModulesRoot "src/Server/Modules"
 
 # Cross-module internal references are forbidden. A module may reference Shared and explicit public contracts,
 # but never another module's implementation namespace.
@@ -86,10 +86,7 @@ if (Test-Path $modulesRoot) {
     }
 }
 
-# API / application / domain layers must not reach persistence or perform infrastructure work.
-Assert-NoMatch "src/Server/Modules/*/Domain" "DbContext|EntityFrameworkCore|Npgsql|GameNet\.Server\.Persistence|Microsoft\.AspNetCore|HttpClient|System\.Net|System\.IO|System\.Diagnostics" "Domain layer contains infrastructure/runtime access."
-Assert-NoMatch "src/Server/Modules/*/Application" "DbContext|EntityFrameworkCore|Npgsql|GameNet\.Server\.Persistence" "Application layer contains direct persistence access."
-Assert-NoMatch "src/Server/Modules/*/Api" "DbContext|EntityFrameworkCore|Npgsql|GameNet\.Server\.Persistence" "API layer contains direct persistence access."
+# The detailed Domain/Application/API policy is tested by check-module-layer-boundaries.ps1.
 
 # Client boundaries.
 Assert-NoMatch "src/Desktop" "GameNet\.Server\.(Persistence|Modules|Infrastructure)|Microsoft\.EntityFrameworkCore|Npgsql|DbContext" "Desktop may not reference Server implementation or database."
