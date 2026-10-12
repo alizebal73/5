@@ -134,7 +134,7 @@ jobs:
           }
 
           $sensitivePrefixes = @(
-            ".github/workflows/",
+            ".github/",
             "scripts/",
             "src/",
             "tests/",
