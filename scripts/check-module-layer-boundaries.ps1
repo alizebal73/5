@@ -42,6 +42,10 @@ if (-not (Test-Path -LiteralPath $ModulesRoot -PathType Container)) {
 # bypassed by legal but unusual C# formatting (for example, "using Microsoft . EntityFrameworkCore;").
 $persistencePattern = "\bMicrosoft\s*\.\s*EntityFrameworkCore\b|\b(?:DbContext|DbSet|DatabaseFacade|IDbContextFactory)\b|\bNpgsql\b|\bGameNet\s*\.\s*Server\s*\.\s*Persistence\b"
 
+# Domain/Application/API code must not depend directly on platform or module Infrastructure namespaces.
+# Infrastructure implements ports and is composed at the host boundary.
+$infrastructureNamespacePattern = "\bGameNet\s*\.\s*Server\s*\.\s*Infrastructure\b|\bGameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Infrastructure\b"
+
 # Domain and Application code may not perform network, filesystem, process, or web-framework
 # work. API is an inbound transport boundary, so ASP.NET types are expected there; API still
 # may not access persistence directly. Infrastructure is intentionally allowed those capabilities.
@@ -59,6 +63,7 @@ foreach ($module in Get-ChildItem -LiteralPath $ModulesRoot -Directory) {
     foreach ($layerName in @("Domain", "Application", "Api")) {
         $layerPath = Join-Path $module.FullName $layerName
         Assert-NoMatchInLayer $layerPath $persistencePattern "$($module.Name) $layerName layer contains direct persistence access."
+        Assert-NoMatchInLayer $layerPath $infrastructureNamespacePattern "$($module.Name) $layerName layer directly references Infrastructure implementation. Depend on module-owned abstractions/contracts instead."
     }
 
     foreach ($layerName in @("Domain", "Application")) {
