@@ -1,3 +1,8 @@
+param(
+    [string]$ModulesRoot = "src/Server/Modules",
+    [switch]$OnlyModuleBoundaries
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -31,11 +36,11 @@ function Assert-NoMatch {
 
 # Layer boundaries: persistence and external side effects belong behind Infrastructure.
 # Domain/Application own business decisions; API adapts inbound requests and must not query the database.
-& "$PSScriptRoot/check-module-layer-boundaries.ps1" -ModulesRoot "src/Server/Modules"
+& "$PSScriptRoot/check-module-layer-boundaries.ps1" -ModulesRoot $ModulesRoot
 
 # Cross-module internal references are forbidden. A module may reference Shared and explicit public contracts,
 # but never another module's implementation namespace.
-$modulesRoot = "src/Server/Modules"
+$modulesRoot = $ModulesRoot
 $requiredModules = @(
     "Identity",
     "Stations",
@@ -57,6 +62,7 @@ $requiredModules = @(
     "Approvals",
     "Backup"
 )
+if (-not $OnlyModuleBoundaries) {
 $moduleCatalogPath = Join-Path $modulesRoot "README.md"
 if (-not (Test-Path -LiteralPath $moduleCatalogPath -PathType Leaf)) {
     throw "Canonical module catalog is missing: $moduleCatalogPath"
@@ -76,6 +82,7 @@ foreach ($requiredModule in $requiredModules) {
         throw "Required module '$requiredModule' is missing from the canonical module catalog."
     }
 }
+}
 if (Test-Path $modulesRoot) {
     $moduleDirs = Get-ChildItem $modulesRoot -Directory
     foreach ($module in $moduleDirs) {
@@ -90,6 +97,11 @@ if (Test-Path $modulesRoot) {
             Assert-NoMatch (Join-Path $modulesRoot $module.Name) $implementationPattern "Cross-module implementation reference detected: $($module.Name) -> $($other.Name). Use Shared or the target module's explicit Contracts namespace."
         }
     }
+}
+
+if ($OnlyModuleBoundaries) {
+    Write-Host "Cross-module boundary check passed."
+    exit 0
 }
 
 # The detailed Domain/Application/API policy is tested by check-module-layer-boundaries.ps1.
