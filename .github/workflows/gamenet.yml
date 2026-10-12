@@ -18,6 +18,7 @@ on:
     branches:
       - main
       - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
       - "feature/operator-identity-v1"
 
 concurrency:
