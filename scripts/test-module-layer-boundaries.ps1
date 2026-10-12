@@ -116,7 +116,7 @@ try {
     foreach ($layer in @("Domain", "Application", "Api")) {
         foreach ($forbiddenReference in $forbiddenInfrastructureReferences) {
             $fileName = "ForbiddenInfrastructureReference-$([guid]::NewGuid().ToString('N')).cs"
-            $badFile = Join-Path $moduleRoot "$layer\\$fileName"
+            $badFile = Join-Path $moduleRoot "$layer\$fileName"
             Set-Content -LiteralPath $badFile -Value $forbiddenReference
             Assert-Rejected "$layer direct Infrastructure reference '$forbiddenReference'"
             Remove-Item -LiteralPath $badFile -Force
