@@ -14,8 +14,13 @@ public sealed class AgentAccessTokenIssuer(
     IGameClock clock,
     IJwtSigningKeySecret signingSecret) : IAgentAccessTokenIssuer
 {
-    public AgentTokenResponse Issue(string deviceId)
+    public AgentTokenResponse Issue(string deviceId, Guid credentialId)
     {
+        // Token issuance is a security boundary of its own: do not rely only on
+        // today's callers having validated the device identity correctly.
+        if (!AgentDeviceIdentityRules.IsValid(deviceId) || credentialId == Guid.Empty)
+            throw new ArgumentException("A canonical DeviceId and persisted credential id are required.");
+
         var auth = options.Value.Authentication;
         if (!auth.Enabled ||
             string.IsNullOrWhiteSpace(auth.Issuer) ||
@@ -36,6 +41,7 @@ public sealed class AgentAccessTokenIssuer(
             new Claim(JwtRegisteredClaimNames.Sub, deviceId),
             new Claim("actor_type", "Agent"),
             new Claim("device_id", deviceId),
+            new Claim("credential_id", credentialId.ToString("D")),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
         };
 
