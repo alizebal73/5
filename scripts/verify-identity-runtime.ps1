@@ -925,7 +925,7 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
         username = $username
         password = $wrongPassword
     }
-    Assert-ErrorCode $locked 423 "auth.locked" "Login after lockout threshold"
+    Assert-ErrorCode $locked 401 "auth.invalid_credentials" "Do not disclose operator lockout state in login response"
 
     Write-Host "IDENTITY / STATIONS / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
     $testSucceeded = $true
