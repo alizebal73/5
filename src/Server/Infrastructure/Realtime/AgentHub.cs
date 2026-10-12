@@ -34,12 +34,32 @@ public sealed class AgentHub(
         if (lease is null)
             throw new HubException("AGENT_LEASE_ACQUISITION_FAILED");
 
-        if (!lease.IsAuthoritative ||
-            !string.Equals(lease.DeviceId, deviceId, StringComparison.Ordinal) ||
-            !string.Equals(lease.ConnectionId, Context.ConnectionId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(lease.LeaseToken))
+        try
         {
-            throw new HubException("AGENT_LEASE_ALREADY_HELD");
+            if (!lease.IsAuthoritative ||
+                !string.Equals(lease.DeviceId, deviceId, StringComparison.Ordinal) ||
+                !string.Equals(lease.ConnectionId, Context.ConnectionId, StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(lease.LeaseToken))
+            {
+                throw new HubException("AGENT_LEASE_ALREADY_HELD");
+            }
+
+            // Re-check after acquiring the lease. If a credential was revoked or
+            // rotated between the first check and lease acquisition, release only
+            // this connection's lease and fail closed.
+            await EnsureCredentialActiveAsync(deviceId);
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(lease.LeaseToken))
+            {
+                await leases.ReleaseIfOwnerAsync(
+                    deviceId,
+                    Context.ConnectionId,
+                    lease.LeaseToken,
+                    CancellationToken.None);
+            }
+            throw;
         }
 
         Context.Items[LeaseTokenKey] = lease.LeaseToken;
