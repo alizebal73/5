@@ -38,15 +38,21 @@ public sealed class AgentIdentityInputValidationTests
     }
 
     [Fact]
-    public void Only_generated_base64url_credential_and_enrollment_secrets_are_accepted_for_authentication()
+    public void Only_canonical_32_byte_base64url_credential_and_enrollment_secrets_are_accepted()
     {
-        Assert.True(AgentCredentialSecretMaterial.IsCanonicalSecret(new string('A', 43)));
-        Assert.True(AgentCredentialSecretMaterial.IsCanonicalSecret(new string('_', 43)));
+        var validPrefix = new string('A', 42);
+
+        Assert.True(AgentCredentialSecretMaterial.IsCanonicalSecret(validPrefix + 'A'));
+        Assert.True(AgentCredentialSecretMaterial.IsCanonicalSecret(validPrefix + '8'));
+
         Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(null));
         Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret("short"));
         Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(new string('A', 44)));
         Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(new string('+', 43)));
         Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(new string('=', 43)));
         Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(new string(' ', 43)));
+        Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(validPrefix + 'B'));
+        Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(validPrefix + '_'));
+        Assert.False(AgentCredentialSecretMaterial.IsCanonicalSecret(new string('_', 43)));
     }
 }
