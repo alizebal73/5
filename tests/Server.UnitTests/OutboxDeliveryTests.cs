@@ -51,6 +51,8 @@ public sealed class OutboxDeliveryTests
         var handler = new CapturingHandler("station.changed.v1");
         var registry = new OutboxHandlerRegistry([handler], new InlineInbox());
         var message = CreateMessage(eventId, now, "station.changed.v1");
+        message.Id = 101;
+        message.Claim("unit-test-lease", now.AddMinutes(1));
 
         await registry.DispatchAsync(message);
 
@@ -93,10 +95,14 @@ public sealed class OutboxDeliveryTests
     private sealed class InlineInbox : IOutboxInbox
     {
         public async Task<bool> ExecuteOnceAsync(
+            long outboxMessageId,
+            string leaseToken,
             OutboxDeliveryEnvelope message,
             Func<CancellationToken, Task> operation,
             CancellationToken cancellationToken = default)
         {
+            Assert.True(outboxMessageId > 0);
+            Assert.False(string.IsNullOrWhiteSpace(leaseToken));
             await operation(cancellationToken);
             return true;
         }
@@ -244,6 +250,106 @@ public sealed class OutboxDispatcherPostgresTests
 
 
     [Fact]
+    public async Task Active_inbox_transaction_is_not_dead_lettered_when_final_attempt_lease_expires()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_OUTBOX_POSTGRES_TESTS"),
+                "true",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+        Assert.False(string.IsNullOrWhiteSpace(connectionString));
+        var clock = new MutableGameClock(DateTimeOffset.UtcNow);
+        var eventId = Guid.NewGuid();
+        var enteredHandler = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHandler = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<bool>? processing = null;
+
+        try
+        {
+            await using (var seed = CreateContext(connectionString!))
+            {
+                seed.OutboxMessages.Add(CreateMessage(eventId, clock.UtcNow));
+                await seed.SaveChangesAsync();
+            }
+
+            var claimed = Assert.Single(await ClaimBatchAsync(
+                connectionString!,
+                clock,
+                batchSize: 1,
+                maxAttempts: 1));
+
+            processing = Task.Run(async () =>
+            {
+                await using var db = CreateContext(connectionString!);
+                var inbox = new EfOutboxInbox(db, clock);
+                return await inbox.ExecuteOnceAsync(
+                    claimed.Id,
+                    claimed.LeaseToken!,
+                    new OutboxDeliveryEnvelope(eventId, clock.UtcNow, claimed.Type, claimed.PayloadJson),
+                    async token =>
+                    {
+                        enteredHandler.TrySetResult(true);
+                        await releaseHandler.Task.WaitAsync(token);
+                    });
+            });
+
+            await enteredHandler.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            // Advance beyond the lease while the Inbox transaction intentionally still
+            // holds the Outbox row lock. Recovery must skip it rather than dead-letter it.
+            clock.UtcNow = clock.UtcNow.AddMinutes(3);
+
+            var concurrentClaim = await ClaimBatchAsync(
+                connectionString!,
+                clock,
+                batchSize: 1,
+                maxAttempts: 1);
+            Assert.Empty(concurrentClaim);
+
+            await using (var interim = CreateContext(connectionString!))
+            {
+                var state = await interim.OutboxMessages.SingleAsync(x => x.EventId == eventId);
+                Assert.Null(state.DeadLetteredAtUtc);
+                Assert.Null(state.PublishedAtUtc);
+            }
+
+            releaseHandler.TrySetResult(true);
+            Assert.True(await processing.WaitAsync(TimeSpan.FromSeconds(10)));
+
+            // Expiry alone does not revoke this owner if no new claim replaced its token.
+            // The committed Inbox receipt proves local work completed successfully.
+            await using (var publishContext = CreateContext(connectionString!))
+            {
+                var dispatcher = new EfOutboxDispatcher(publishContext, clock);
+                await dispatcher.MarkPublishedAsync(claimed.Id, claimed.LeaseToken!, clock.UtcNow);
+            }
+
+            await using var verify = CreateContext(connectionString!);
+            var completed = await verify.OutboxMessages.SingleAsync(x => x.EventId == eventId);
+            Assert.NotNull(completed.PublishedAtUtc);
+            Assert.Null(completed.DeadLetteredAtUtc);
+            Assert.True(await verify.OutboxInboxReceipts.AnyAsync(x => x.EventId == eventId));
+        }
+        finally
+        {
+            releaseHandler.TrySetResult(true);
+            if (processing is not null)
+            {
+                try { await processing.WaitAsync(TimeSpan.FromSeconds(10)); }
+                catch { /* Preserve the assertion failure; cleanup still must run. */ }
+            }
+            await using var cleanup = CreateContext(connectionString!);
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM outbox_inbox_receipts WHERE event_id = {eventId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM outbox_messages WHERE event_id = {eventId}");
+        }
+    }
+
+    [Fact]
     public async Task Expired_lease_after_max_attempts_dead_letters_instead_of_reclaiming_forever()
     {
         if (!string.Equals(
@@ -324,6 +430,8 @@ public sealed class OutboxDispatcherPostgresTests
             {
                 var inbox = new EfOutboxInbox(inboxContext, clock);
                 var processed = await inbox.ExecuteOnceAsync(
+                    claimed.Id,
+                    claimed.LeaseToken!,
                     new OutboxDeliveryEnvelope(
                         eventId,
                         clock.UtcNow,

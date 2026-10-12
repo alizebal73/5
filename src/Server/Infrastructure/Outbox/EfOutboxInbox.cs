@@ -9,10 +9,15 @@ public sealed class EfOutboxInbox(
     IGameClock clock) : IOutboxInbox
 {
     public async Task<bool> ExecuteOnceAsync(
+        long outboxMessageId,
+        string leaseToken,
         OutboxDeliveryEnvelope message,
         Func<CancellationToken, Task> operation,
         CancellationToken cancellationToken = default)
     {
+        if (outboxMessageId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(outboxMessageId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(leaseToken);
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentException.ThrowIfNullOrWhiteSpace(message.Type);
@@ -22,7 +27,49 @@ public sealed class EfOutboxInbox(
             throw new ArgumentOutOfRangeException(nameof(message), "Outbox event type exceeds the storage contract.");
 
         await using var transaction =
-            await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+
+        // Lock the Outbox row before local work. A lease that expired while waiting in a
+        // batch must not execute, and recovery/reclaim must skip a row with an active handler.
+        var lockedIds = await dbContext.Database.SqlQueryRaw<long>(
+            """
+            SELECT id AS "Value"
+            FROM outbox_messages
+            WHERE id = {0} AND event_id = {1}
+            FOR UPDATE
+            """,
+            outboxMessageId,
+            message.EventId).ToListAsync(cancellationToken);
+
+        if (lockedIds.Count != 1 || lockedIds[0] != outboxMessageId)
+            throw new InvalidOperationException("OUTBOX_MESSAGE_NOT_FOUND");
+
+        // A FOR UPDATE query can wait for another transaction. Read owner and expiry
+        // only after the row lock is acquired so a stale claimant cannot start local work.
+        var lease = await dbContext.OutboxMessages
+            .AsNoTracking()
+            .Where(x => x.Id == outboxMessageId)
+            .Select(x => new
+            {
+                x.EventId,
+                x.Type,
+                x.LeaseToken,
+                x.LeaseExpiresAtUtc,
+                x.PublishedAtUtc,
+                x.DeadLetteredAtUtc
+            })
+            .SingleAsync(cancellationToken);
+
+        if (lease.EventId != message.EventId ||
+            !string.Equals(lease.Type, message.Type, StringComparison.Ordinal))
+            throw new OutboxPermanentDeliveryException("inbox_outbox_type_mismatch");
+
+        if (!string.Equals(lease.LeaseToken, leaseToken, StringComparison.Ordinal) ||
+            lease.LeaseExpiresAtUtc is null ||
+            lease.LeaseExpiresAtUtc <= clock.UtcNow ||
+            lease.PublishedAtUtc is not null ||
+            lease.DeadLetteredAtUtc is not null)
+            throw new InvalidOperationException("OUTBOX_LEASE_NOT_OWNED_OR_EXPIRED");
 
         // The unique primary key and ON CONFLICT make the claim atomic between concurrent workers.
         // If an earlier operation is still running, PostgreSQL waits for its transaction to commit

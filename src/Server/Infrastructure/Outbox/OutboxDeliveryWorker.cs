@@ -24,8 +24,10 @@ public sealed class OutboxDeliveryWorker(
             {
                 await using var claimScope = scopeFactory.CreateAsyncScope();
                 var dispatcher = claimScope.ServiceProvider.GetRequiredService<IOutboxDispatcher>();
+                // Do not put more unstarted work under fixed leases than this worker can
+                // start concurrently. Inbox locks the claimed row for the local handler transaction.
                 batch = await dispatcher.ClaimBatchAsync(
-                    settings.BatchSize,
+                    Math.Min(settings.BatchSize, settings.MaxConcurrentHandlers),
                     TimeSpan.FromSeconds(settings.LeaseDurationSeconds),
                     stoppingToken,
                     settings.MaxAttempts);
@@ -62,29 +64,41 @@ public sealed class OutboxDeliveryWorker(
                 continue;
             }
 
-            foreach (var message in batch)
+            try
             {
-                if (stoppingToken.IsCancellationRequested)
-                    break;
-
-                try
-                {
-                    await ProcessMessageAsync(message, stoppingToken);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception exception)
-                {
-                    // A lost lease is intentionally not force-completed. It becomes claimable
-                    // after expiry and the consumer's EventId idempotency protects redelivery.
-                    logger.LogError(
-                        "Outbox processing step failed ({FailureType}) for event {EventId}; lease recovery will handle it.",
-                        exception.GetType().Name,
-                        message.EventId);
-                }
+                await Task.WhenAll(batch.Select(message =>
+                    ProcessMessageSafelyAsync(message, stoppingToken)));
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+        }
+    }
+
+    private async Task ProcessMessageSafelyAsync(
+        OutboxMessage message,
+        CancellationToken stoppingToken)
+    {
+        if (stoppingToken.IsCancellationRequested)
+            return;
+
+        try
+        {
+            await ProcessMessageAsync(message, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // A lost lease is never force-completed; recovery relies on the current token
+            // and the durable Inbox receipt to decide whether to retry or publish.
+            logger.LogError(
+                "Outbox processing step failed ({FailureType}) for event {EventId}; lease recovery will handle it.",
+                exception.GetType().Name,
+                message.EventId);
         }
     }
 
