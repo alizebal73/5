@@ -1,6 +1,6 @@
 # Engineering Readiness Register — GameNet 5
 
-این سند، دفتر ریسک‌ها و ترتیب اجرای کار است. تاریخ snapshot: 2026-10-11. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ آن‌ها را به ترتیب اجرایی و وضعیت واقعی وصل می‌کند.
+این سند، دفتر ریسک‌ها و ترتیب اجرای کار است. snapshot اولیهٔ آن مربوط به 2026-10-11 است و چند ثبت تکمیلی تا 2026-10-12 دارد. این دفتر جایگزین Requirementها، ADRها یا گواهی Foundation نیست؛ موارد تاریخ‌دار آن باید پیش از اقدام با وضعیت زندهٔ GitHub تطبیق داده شوند.
 
 **سیاست زمان‌بندی پذیرش نهایی (2026-10-12):** آزمون فیزیکی Windows Service/LAN، آزمون تعاملی WPF، نصب/ارتقا/repair/rollback و pilot فقط پس از تکمیل دامنهٔ برنامه‌ریزی‌شده و ساخته‌شدن Setup.exe/MSI اجرا می‌شوند. CI، unit/integration/regression/security tests برای هر برش و هر SHA مرتبط در طول توسعه ادامه دارند؛ این تعویق فقط مربوط به پذیرش یکپارچهٔ نهایی است. هر ادعای Done باید به commit، آزمون و مدرک همان SHA متصل باشد.
 
@@ -103,6 +103,25 @@ This section records evidence and a timestamped ref read-back. It is not a live 
 - اجرای Steam Auto Login قبل از requirement و policy/provider gate.
 
 
-## CI trigger hardening follow-up — 2026-10-10
+## CI trigger hardening follow-up — completed; record refreshed 2026-10-12
 
-PR #25 is open and ready for review (not merged). Its Quick Validation workflow adds `security/**` to the push lane in addition to Pull Request gates targeting the active integration/operator branches. PR #27 still requires exact-head testing once that trigger change is integrated; absence of CI is not a pass.
+The earlier statement that PR #25 remained open and PR #27 still awaited CI was stale and has been superseded:
+
+- PR [#25](https://github.com/alizebal73/5/pull/25) is closed and merged. Merge commit: `82d90178c0011c65eef76bd32cc33318d5bbd91c`.
+- PRs [#27](https://github.com/alizebal73/5/pull/27), [#28](https://github.com/alizebal73/5/pull/28), and [#29](https://github.com/alizebal73/5/pull/29) are closed without merge. The bounded implementation was delivered through [PR #30](https://github.com/alizebal73/5/pull/30), merged at `e1626d7d1f2e62601329604b8823787f2c9597b6`.
+- PR #30's recorded exact-head Quick, Full Foundation and Runtime Payload checks passed, and its post-merge automated checks are recorded in this register and the Active Execution Control. Those checks certify their recorded SHAs only.
+- The six open Draft PRs verified on 2026-10-12 are #15, #17, #18, #20, #21 and #24. Their current dispositions are listed in [Active Execution Control](../operations/active-execution-control.md); do not infer status from this historical follow-up or merge older-base branches wholesale.
+
+## Live branch-ruleset read-back — 2026-10-12
+
+GitHub's live Ruleset responses were re-read for all three protected targets:
+
+| Ruleset | Required status check | Active |
+|---|---|---|
+| `protect-main` | `quick-validation` | Yes |
+| `protect-foundation-runtime` | `foundation` | Yes |
+| `protect-integration-runtime` | `quick-validation` | Yes |
+
+All three require pull requests, block branch deletion and non-fast-forward updates, require review-thread resolution, allow Squash as the only merge method, and report no bypass actors. **All three currently have `strict_required_status_checks_policy=false`**; therefore GitHub does not require the PR branch to be up to date with its base before accepting a passing required check. This is a real, still-open protection gap, not a code defect.
+
+The available GitHub connection can read these Rulesets but does not expose a Ruleset-write operation, so this audit did not change repository settings. Before regular feature PR merging expands, an administrator should enable strict/up-to-date-before-merge on all three Rulesets, save, and read the live definitions back to verify the change. Do not guess required-check names or remove the existing checks.
