@@ -34,6 +34,9 @@ try {
     Set-Content -LiteralPath (Join-Path $moduleRoot "Infrastructure\PersistenceAdapter.cs") -Value @(
         "using Microsoft.EntityFrameworkCore;",
         "using System.Net.Http;",
+        "using System.IO;",
+        "using System.Net;",
+        "using System.Diagnostics;",
         "namespace GameNet.Server.Modules.Probe.Infrastructure;"
     )
 
@@ -52,17 +55,30 @@ try {
         Remove-Item -LiteralPath $badFile -Force
     }
 
+    $forbiddenImports = @(
+        "using System.Net.Http;",
+        "using System.Net;",
+        "using System.IO;",
+        "using System.Diagnostics;"
+    )
+
     foreach ($layer in @("Domain", "Application")) {
-        $badFile = Join-Path $moduleRoot "$layer\ForbiddenSideEffect.cs"
-        Set-Content -LiteralPath $badFile -Value "using System.Net.Http;"
-        Assert-Rejected "$layer outbound/network side effect"
-        Remove-Item -LiteralPath $badFile -Force
+        foreach ($forbiddenImport in $forbiddenImports) {
+            $fileName = "ForbiddenSideEffect-$([guid]::NewGuid().ToString('N')).cs"
+            $badFile = Join-Path $moduleRoot "$layer\$fileName"
+            Set-Content -LiteralPath $badFile -Value $forbiddenImport
+            Assert-Rejected "$layer external side effect import '$forbiddenImport'"
+            Remove-Item -LiteralPath $badFile -Force
+        }
     }
 
-    $apiBadFile = Join-Path $moduleRoot "Api\ForbiddenSideEffect.cs"
-    Set-Content -LiteralPath $apiBadFile -Value "using System.Net.Http;"
-    Assert-Rejected "Api outbound/network side effect"
-    Remove-Item -LiteralPath $apiBadFile -Force
+    foreach ($forbiddenImport in $forbiddenImports) {
+        $fileName = "ForbiddenSideEffect-$([guid]::NewGuid().ToString('N')).cs"
+        $apiBadFile = Join-Path $moduleRoot "Api\$fileName"
+        Set-Content -LiteralPath $apiBadFile -Value $forbiddenImport
+        Assert-Rejected "Api outbound side effect import '$forbiddenImport'"
+        Remove-Item -LiteralPath $apiBadFile -Force
+    }
 
     Write-Host "MODULE LAYER-BOUNDARY REGRESSION TESTS PASSED."
 }
