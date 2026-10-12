@@ -108,6 +108,21 @@ try {
         }
     }
 
+    $forbiddenInfrastructureReferences = @(
+        "using GameNet.Server.Infrastructure.Configuration;",
+        "using GameNet.Server.Modules.Probe.Infrastructure;",
+        "using GameNet . Server . Modules . Probe . Infrastructure ;"
+    )
+    foreach ($layer in @("Domain", "Application", "Api")) {
+        foreach ($forbiddenReference in $forbiddenInfrastructureReferences) {
+            $fileName = "ForbiddenInfrastructureReference-$([guid]::NewGuid().ToString('N')).cs"
+            $badFile = Join-Path $moduleRoot "$layer\\$fileName"
+            Set-Content -LiteralPath $badFile -Value $forbiddenReference
+            Assert-Rejected "$layer direct Infrastructure reference '$forbiddenReference'"
+            Remove-Item -LiteralPath $badFile -Force
+        }
+    }
+
     $forbiddenImports = @(
         "using System.Net.Http;",
         "using System.Net;",
