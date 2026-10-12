@@ -3,9 +3,12 @@ name: foundation-certification
 on:
   workflow_dispatch:
   # Full certification is required before merging into a protected Foundation branch.
+  # Stage 2 also opts in so architecture/verification changes are certified on
+  # the exact PR candidate rather than relying only on a push-triggered run.
   pull_request:
     branches:
       - "foundation/runtime-*"
+      - "integration/runtime-operator-v1"
   # Full certification also runs when a runtime harness/gate changes on the active feature branch.
   # Routine product code pushes use the quick lane; a Draft Foundation PR is the normal full-gate path.
   push:
