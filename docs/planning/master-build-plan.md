@@ -6,6 +6,8 @@ This is the single delivery plan for building GameNet 5 from the clean foundatio
 
 The plan is intentionally sequential. A later stage cannot silently compensate for an incomplete earlier stage.
 
+> **CI runner policy checkpoint — 2026-10-13:** current workflows use `windows-2025`; `scripts/check-ci-runner-policy.ps1` fails closed for other labels. The owner previously specified local self-hosted execution. This conflict is tracked in [Issue #67](https://github.com/alizebal73/5/issues/67). Existing green run evidence is hosted `windows-2025` evidence. Do not change runner labels, weaken the guard, or route untrusted PR code to a persistent self-hosted Runner until the owner confirms the trust boundary and a dedicated guarded change is validated. This policy follow-up does not reopen Foundation certification.
+
 ## Canonical delivery roadmap — agreed 2026-10-12
 
 This numbered list is the owner-facing, high-level order of delivery. It groups the detailed Stage 1–19 instructions below; it does not replace their detailed acceptance criteria. A phase closes only with requirement-linked evidence on the exact candidate SHA. CI, security, architecture and regression checks continue throughout; physical-machine acceptance is reserved for final release acceptance.
