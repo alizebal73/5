@@ -7,6 +7,7 @@ on:
     branches:
       - "feature/operator-identity-v1"
       - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
       - "docs/engineering-readiness-audit-v1"
       - "security/**"
     paths-ignore:
@@ -17,6 +18,7 @@ on:
     branches:
       - main
       - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
       - "feature/operator-identity-v1"
 
 concurrency:
@@ -27,11 +29,31 @@ permissions:
   contents: read
 
 jobs:
+  # On Integration PRs, the existing required status must not pass unless the
+  # reusable full PostgreSQL/runtime certification has succeeded first.
+  integration-foundation:
+    name: integration-foundation-certification
+    if: ${{ github.event_name == 'pull_request' && startsWith(github.base_ref, 'integration/runtime-') }}
+    uses: ./.github/workflows/foundation-certification.yml
+
   quick-validation:
     name: quick-validation
+    needs: integration-foundation
+    if: always()
     timeout-minutes: 20
     runs-on: windows-2025
     steps:
+      - name: Enforce PostgreSQL/runtime certification before the required status can pass
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          startsWith(github.base_ref, 'integration/runtime-') &&
+          needs.integration-foundation.result != 'success'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          throw "Integration PostgreSQL/runtime certification did not succeed. Refusing a green required quick-validation status."
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
