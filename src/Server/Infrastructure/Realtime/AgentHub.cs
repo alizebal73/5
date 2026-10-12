@@ -9,6 +9,7 @@ namespace GameNet.Server.Infrastructure.Realtime;
 
 [Authorize(Policy = "AgentTransport")]
 public sealed class AgentHub(
+    IAgentCredentialService credentials,
     IAgentConnectionLeaseStore leases,
     AgentCommandResultCoordinator commandResults,
     GameNet.Shared.Primitives.IGameClock clock,
@@ -20,6 +21,8 @@ public sealed class AgentHub(
     public async Task<AgentConnectionLeaseState> ConnectAsync(AgentConnectionLeaseRequest request)
     {
         var deviceId = RequireDeviceId();
+        await EnsureCredentialActiveAsync(deviceId);
+
         if (!string.Equals(deviceId, request.DeviceId, StringComparison.Ordinal))
             throw new HubException("AGENT_DEVICE_ID_MISMATCH");
 
@@ -31,12 +34,32 @@ public sealed class AgentHub(
         if (lease is null)
             throw new HubException("AGENT_LEASE_ACQUISITION_FAILED");
 
-        if (!lease.IsAuthoritative ||
-            !string.Equals(lease.DeviceId, deviceId, StringComparison.Ordinal) ||
-            !string.Equals(lease.ConnectionId, Context.ConnectionId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(lease.LeaseToken))
+        try
         {
-            throw new HubException("AGENT_LEASE_ALREADY_HELD");
+            if (!lease.IsAuthoritative ||
+                !string.Equals(lease.DeviceId, deviceId, StringComparison.Ordinal) ||
+                !string.Equals(lease.ConnectionId, Context.ConnectionId, StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(lease.LeaseToken))
+            {
+                throw new HubException("AGENT_LEASE_ALREADY_HELD");
+            }
+
+            // Re-check after acquiring the lease. If a credential was revoked or
+            // rotated between the first check and lease acquisition, release only
+            // this connection's lease and fail closed.
+            await EnsureCredentialActiveAsync(deviceId);
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(lease.LeaseToken))
+            {
+                await leases.ReleaseIfOwnerAsync(
+                    deviceId,
+                    Context.ConnectionId,
+                    lease.LeaseToken,
+                    CancellationToken.None);
+            }
+            throw;
         }
 
         Context.Items[LeaseTokenKey] = lease.LeaseToken;
@@ -47,6 +70,7 @@ public sealed class AgentHub(
     public async Task<bool> HeartbeatAsync(AgentHeartbeat heartbeat)
     {
         var deviceId = RequireDeviceId();
+        await EnsureCredentialActiveAsync(deviceId);
         var token = RequireLeaseToken();
 
         if (!string.Equals(deviceId, heartbeat.DeviceId, StringComparison.Ordinal))
@@ -60,26 +84,31 @@ public sealed class AgentHub(
             Context.ConnectionAborted);
     }
 
-    public Task<AgentReconciliationResponse> ReconcileAsync(AgentReconciliationRequest request)
+    public async Task<AgentReconciliationResponse> ReconcileAsync(AgentReconciliationRequest request)
     {
         var deviceId = RequireDeviceId();
-        _ = RequireLeaseToken();
+        await EnsureCredentialActiveAsync(deviceId);
+        var token = RequireLeaseToken();
 
         if (!string.Equals(deviceId, request.DeviceId, StringComparison.Ordinal))
             throw new HubException("AGENT_DEVICE_ID_MISMATCH");
 
-        return Task.FromResult(new AgentReconciliationResponse(
+        if (!await leases.IsCurrentLeaseAsync(deviceId, Context.ConnectionId, token, Context.ConnectionAborted))
+            throw new HubException("AGENT_LEASE_NOT_AUTHORITATIVE");
+
+        return new AgentReconciliationResponse(
             deviceId,
             clock.UtcNow,
             AgentProtocolVersions.V1,
             true,
-            AgentReconciliationScope.LeaseAndIdentity));
+            AgentReconciliationScope.LeaseAndIdentity);
     }
 
     public async Task<bool> AcknowledgeCommandAsync(AgentCommandAcknowledgement acknowledgement)
     {
         ArgumentNullException.ThrowIfNull(acknowledgement);
         var deviceId = RequireDeviceId();
+        await EnsureCredentialActiveAsync(deviceId);
         var token = RequireLeaseToken();
 
         if (!string.Equals(deviceId, acknowledgement.DeviceId, StringComparison.Ordinal))
@@ -104,9 +133,22 @@ public sealed class AgentHub(
         await base.OnDisconnectedAsync(exception);
     }
 
+    private async Task EnsureCredentialActiveAsync(string deviceId)
+    {
+        var credentialId = RequireCredentialId();
+        if (!await credentials.IsCredentialActiveAsync(credentialId, deviceId, Context.ConnectionAborted))
+            throw new HubException("AGENT_CREDENTIAL_REVOKED");
+    }
+
     private string RequireDeviceId() =>
         Context.User?.FindFirst("device_id")?.Value
         ?? throw new HubException("AGENT_DEVICE_ID_CLAIM_MISSING");
+
+    private Guid RequireCredentialId() =>
+        Guid.TryParse(Context.User?.FindFirst("credential_id")?.Value, out var credentialId) &&
+        credentialId != Guid.Empty
+            ? credentialId
+            : throw new HubException("AGENT_CREDENTIAL_ID_MISSING");
 
     private string RequireLeaseToken() =>
         Context.Items.TryGetValue(LeaseTokenKey, out var tokenValue) &&

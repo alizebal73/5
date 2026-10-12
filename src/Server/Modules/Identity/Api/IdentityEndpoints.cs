@@ -46,7 +46,7 @@ public static class IdentityEndpoints
                 ? Results.Ok(new ApiEnvelope<LoginResponse>(new LoginResponse(result.Value.Token.AccessToken, "Bearer",
                     result.Value.Token.ExpiresAtUtc, result.Value.UserId, result.Value.Username, result.Value.DisplayName,
                     result.Value.Permissions), CorrelationIdMiddleware.GetCurrent(context)))
-                : Failure(result.Error, context);
+                : LoginFailure(result.Error, context);
         }).AllowAnonymous();
 
         group.MapGet("/auth/me", async (IdentityService service, HttpContext context, CancellationToken ct) =>
@@ -87,6 +87,18 @@ public static class IdentityEndpoints
         if (expectedBytes.Length != suppliedBytes.Length || !CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes))
             return Failure(new Error("bootstrap.secret_invalid", "The setup secret was not accepted."), context);
         return null;
+    }
+
+    private static IResult LoginFailure(Error error, HttpContext context)
+    {
+        // Keep account existence, disabled state, and lockout status out of the unauthenticated response.
+        // IdentityService still records the precise rejection reason in the server-side audit stream.
+        if (error.Code is "auth.invalid_credentials" or "auth.disabled" or "auth.locked")
+            return Failure(
+                new Error("auth.invalid_credentials", "Username or password is incorrect."),
+                context);
+
+        return Failure(error, context);
     }
 
     private static IResult Failure(Error error, HttpContext context)
