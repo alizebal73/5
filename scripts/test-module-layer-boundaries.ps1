@@ -73,6 +73,17 @@ try {
     & $checker -ModulesRoot $fixtureRoot
     Write-Host "PASS: valid Infrastructure persistence/network and API transport access are allowed."
 
+    # Existing shared cross-cutting contracts are an explicit compatibility allowlist.
+    $allowedPlatformContracts = Join-Path $moduleRoot "Application\AllowedPlatformContracts.cs"
+    Set-Content -LiteralPath $allowedPlatformContracts -Value @(
+        "using GameNet.Server.Infrastructure.Audit;",
+        "using GameNet.Server.Infrastructure.Transactions;",
+        "using GameNet.Server.Infrastructure.Idempotency;"
+    )
+    & $checker -ModulesRoot $fixtureRoot
+    Write-Host "PASS: explicitly allowlisted cross-cutting contract namespaces remain available."
+    Remove-Item -LiteralPath $allowedPlatformContracts -Force
+
     # Cross-module public contracts are the only permitted namespace reference.
     $contractReference = Join-Path $moduleRoot "Application\AllowedContract.cs"
     Set-Content -LiteralPath $contractReference -Value "using GameNet.Server.Modules.Other.Contracts;"
@@ -109,6 +120,9 @@ try {
     }
 
     $forbiddenInfrastructureReferences = @(
+        "using GameNet.Server.Infrastructure;",
+        "using GameNet.Server.Infrastructure.Configuration;",
+        "using GameNet.Server.Infrastructure.Security;",
         "using GameNet.Server.Modules.Probe.Infrastructure;",
         "using GameNet.Server.Modules.Probe.Infrastructure.Adapters;",
         "using GameNet . Server . Modules . Probe . Infrastructure ;"
