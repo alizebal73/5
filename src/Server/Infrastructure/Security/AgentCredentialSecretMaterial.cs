@@ -39,10 +39,13 @@ internal static class AgentCredentialSecretMaterial
         }
     }
 
+    internal static bool IsCanonicalSecret(string? secret) =>
+        secret is { Length: 43 } &&
+        secret.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_');
+
     internal static string HashEnrollmentToken(string token)
     {
-        if (string.IsNullOrWhiteSpace(token) || token.Length != 43 ||
-            token.Any(ch => !(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_')))
+        if (!IsCanonicalSecret(token))
             throw new ArgumentException("Enrollment token format is invalid.", nameof(token));
 
         return Hash(token);
