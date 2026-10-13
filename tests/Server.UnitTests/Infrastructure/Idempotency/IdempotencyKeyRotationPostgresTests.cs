@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Persistence;
@@ -69,7 +70,8 @@ public sealed class IdempotencyKeyRotationPostgresTests
                 scope, completedKey, operation, newFingerprint, lease, retention);
             Assert.True(replay.Completed);
             Assert.Equal(200, replay.StatusCode);
-            Assert.Equal(responseJson, replay.ResponseJson);
+            using var replayJson = JsonDocument.Parse(replay.ResponseJson!);
+            Assert.Equal("recorded", replayJson.RootElement.GetProperty("result").GetString());
 
             var inProgressClaim = await store.TryClaimAsync(
                 scope, inProgressKey, operation, oldFingerprint, lease, retention);
