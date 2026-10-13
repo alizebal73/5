@@ -15,3 +15,16 @@ Changing the dedicated fingerprint key also changes fingerprints. Until versione
 ## Scope
 
 This contract covers fingerprint generation for operator-management mutations. The current Station mutations use SHA-256 over non-secret station fields; their hash format is intentionally unchanged here to preserve their existing idempotency replay behavior. Any new financial mutation must use the protected IRequestFingerprint contract and include retry/concurrency tests before money-moving behavior is enabled.
+
+## Migrating a legacy protected Server store
+
+For an existing pre-release installation, the migration command adds the new field without changing the effective fingerprint root. It intentionally copies the existing JWT signing-key value into the dedicated fingerprint-key field once; this is required because stored rows contain a hash, not the original request payload, so a new random key cannot reproduce retained fingerprints.
+
+1. Back up the Server secret-store file and confirm that the backup is in a restricted location.
+2. On the manager Server, run an elevated PowerShell/terminal with the Server installation directory as the working directory:
+   `GameNet.Server.exe --migrate-idempotency-fingerprint-key`
+3. The command validates the existing DPAPI store and ACLs, writes a new encrypted payload to a restricted temporary file, atomically replaces the original while retaining a restricted encrypted backup, and verifies the result by reloading it. It does not connect to PostgreSQL or change operator/session data.
+4. Check the restricted audit records under `%ProgramData%\GameNet Manager\Audit`. Do not delete the encrypted pre-migration backup until the replacement store has been verified and the normal backup/restore procedure has been exercised.
+5. After migration, manage the dedicated fingerprint field independently. A future JWT signing-key change must not modify the fingerprint key. Do not randomize the fingerprint key during active idempotency retention; the retention window for current operator mutations is 24 hours.
+
+This command is deliberately separate from secret provisioning and is idempotent: when the dedicated field already exists and is valid, it reports that no change was made. It is not a JWT rotation command and does not close the broader operational key-rotation lifecycle by itself.
