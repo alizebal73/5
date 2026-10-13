@@ -31,6 +31,7 @@ public sealed class AgentHealthProbeDispatchFenceTests
 
         public Task<AgentConnectionLeaseState?> TryAcquireAsync(
             AgentConnectionLeaseRequest request,
+            Guid credentialId,
             TimeSpan leaseDuration,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<AgentConnectionLeaseState?>(null);
