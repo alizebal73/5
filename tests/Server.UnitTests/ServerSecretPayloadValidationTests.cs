@@ -78,6 +78,7 @@ public sealed class ServerSecretPayloadValidationTests
                 () => DpapiServerSecretStore.ParsePayload(payloadBytes));
 
             Assert.DoesNotContain(fixture.ConnectionString, exception.Message);
+            Assert.DoesNotContain("connection-password-sentinel", exception.Message);
             Assert.DoesNotContain(fixture.SigningKey, exception.Message);
             Assert.DoesNotContain(fixture.ProvisioningKey, exception.Message);
             Assert.DoesNotContain("fingerprint-sentinel-not-valid-base64", exception.Message);
@@ -107,6 +108,7 @@ public sealed class ServerSecretPayloadValidationTests
                 () => DpapiServerSecretStore.ParsePayload(payloadBytes));
 
             Assert.DoesNotContain(fixture.ConnectionString, exception.Message);
+            Assert.DoesNotContain("connection-password-sentinel", exception.Message);
             Assert.DoesNotContain(fixture.SigningKey, exception.Message);
             Assert.DoesNotContain(fixture.ProvisioningKey, exception.Message);
             Assert.DoesNotContain(fixture.FingerprintKey, exception.Message);
@@ -136,6 +138,7 @@ public sealed class ServerSecretPayloadValidationTests
                 () => DpapiServerSecretStore.ParsePayload(payloadBytes));
 
             Assert.DoesNotContain(fixture.ConnectionString, exception.Message);
+            Assert.DoesNotContain("connection-password-sentinel", exception.Message);
             Assert.DoesNotContain(fixture.SigningKey, exception.Message);
             Assert.DoesNotContain(fixture.ProvisioningKey, exception.Message);
             Assert.DoesNotContain(fixture.FingerprintKey, exception.Message);
