@@ -16,8 +16,7 @@ public static class ProtectedServerSettings
     {
         "GameNet:DatabaseConnectionString",
         "GameNet:Authentication:SigningKey",
-        "GameNet:Agent:ProvisioningKey",
-        "GameNet:Idempotency:FingerprintKey"
+        "GameNet:Agent:ProvisioningKey"
     };
 
     private static readonly HashSet<string> AllowedKeys = new(StringComparer.OrdinalIgnoreCase)
