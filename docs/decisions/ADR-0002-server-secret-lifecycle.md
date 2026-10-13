@@ -3,7 +3,7 @@
 - Status: Accepted — architecture decision approved by the product owner on 2026-10-13
 - Decision scope: security architecture and required implementation contracts
 - Related decision: [ADR-0001 — Server TLS Certificate Lifecycle](ADR-0001-server-tls-certificate-lifecycle.md)
-- Implementation and release status: Incomplete; see “Required work and acceptance gates” below and Issues [#16](https://github.com/alizebal73/5/issues/16) and [#34](https://github.com/alizebal73/5/issues/34).
+- Implementation and release status: Incomplete; rotation/recovery/redaction work is tracked separately in [Issue #74](https://github.com/alizebal73/5/issues/74); Setup/release implementation remains under [Issue #16](https://github.com/alizebal73/5/issues/16), and final installed-Service/Windows/LAN acceptance remains under [Issue #34](https://github.com/alizebal73/5/issues/34).
 
 ## 1. Context
 
