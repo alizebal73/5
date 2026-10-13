@@ -116,6 +116,9 @@ internal static class DpapiServerSecretStore
     {
         try
         {
+            // Keep the legacy fallback exclusive to payloads where the field is genuinely absent.
+            // An explicit null, non-string value, empty value, or duplicate key is malformed and fails closed.
+            var hasDedicatedFingerprintKey = HasValidDedicatedFingerprintField(plaintext);
             var payload = JsonSerializer.Deserialize<ServerSecretPayload>(plaintext);
             if (payload is null ||
                 payload.SchemaVersion != SchemaVersion ||
@@ -126,7 +129,7 @@ internal static class DpapiServerSecretStore
                 payload.DatabaseConnectionString,
                 payload.JwtSigningKeyBase64,
                 payload.AgentProvisioningKeyBase64,
-                payload.IdempotencyFingerprintKeyBase64);
+                hasDedicatedFingerprintKey ? payload.IdempotencyFingerprintKeyBase64 : null);
         }
         catch (ServerSecretStoreException)
         {
@@ -136,6 +139,35 @@ internal static class DpapiServerSecretStore
         {
             throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
         }
+    }
+
+    private static bool HasValidDedicatedFingerprintField(ReadOnlySpan<byte> plaintext)
+    {
+        var reader = new Utf8JsonReader(plaintext);
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
+
+        var found = false;
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject)
+                return found;
+            if (reader.TokenType != JsonTokenType.PropertyName || !reader.Read())
+                throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
+
+            if (reader.ValueTextEquals("idempotencyFingerprintKeyBase64"))
+            {
+                if (found ||
+                    reader.TokenType != JsonTokenType.String ||
+                    string.IsNullOrWhiteSpace(reader.GetString()))
+                    throw new ServerSecretStoreException("Required Server secret material is missing or invalid.");
+                found = true;
+            }
+
+            reader.Skip();
+        }
+
+        throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
     }
 
     /// <summary>
