@@ -1,4 +1,5 @@
 using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
 using GameNet.Server.Persistence.Entities;
@@ -111,6 +112,10 @@ public sealed class AgentEnrollmentService(
         {
             return await transactions.ExecuteAsync(async ct =>
             {
+                // Recovery can revoke a never-authenticated credential. It must share
+                // the same per-device fence as lease acquisition and outbound dispatch.
+                await AgentDeviceFenceLock.AcquireAsync(dbContext, command.DeviceId, ct);
+
                 var now = clock.UtcNow;
                 var credential = await dbContext.AgentCredentials.SingleOrDefaultAsync(
                     x => x.DeviceId == command.DeviceId && x.RevokedAtUtc == null, ct);
@@ -133,6 +138,12 @@ public sealed class AgentEnrollmentService(
                 // expired/unredeemed token when no credential was ever authenticated.
                 if (hasPreviouslyAuthenticatedCredential)
                     throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
+
+                // Recovery is allowed only before the credential was ever used. Clear any
+                // residual lease under the same device fence before issuing a replacement token.
+                await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"DELETE FROM agent_connection_leases WHERE device_id = {command.DeviceId}",
+                    ct);
 
                 if (credential is not null)
                 {
