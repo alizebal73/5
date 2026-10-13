@@ -33,17 +33,19 @@ public sealed class OutboxInboxPostgresTests
         var rolledBackSideEffectId = Guid.NewGuid();
         var duplicateEnvelope = CreateEnvelope(duplicateEventId, clock.UtcNow);
         var retryEnvelope = CreateEnvelope(failedThenRetriedEventId, clock.UtcNow);
+        var duplicateClaim = await SeedClaimedMessageAsync(connectionString!, duplicateEnvelope, clock);
+        var retryClaim = await SeedClaimedMessageAsync(connectionString!, retryEnvelope, clock);
         var handlerInvocations = 0;
 
         try
         {
             var results = await Task.WhenAll(
-                ProcessAsync(connectionString!, clock, duplicateEnvelope, async token =>
+                ProcessAsync(connectionString!, clock, duplicateClaim, duplicateEnvelope, async token =>
                 {
                     Interlocked.Increment(ref handlerInvocations);
                     await Task.Delay(TimeSpan.FromMilliseconds(50), token);
                 }),
-                ProcessAsync(connectionString!, clock, duplicateEnvelope, async token =>
+                ProcessAsync(connectionString!, clock, duplicateClaim, duplicateEnvelope, async token =>
                 {
                     Interlocked.Increment(ref handlerInvocations);
                     await Task.Delay(TimeSpan.FromMilliseconds(50), token);
@@ -59,13 +61,13 @@ public sealed class OutboxInboxPostgresTests
                 "inbox.other-version.v1",
                 "{\"version\":1}");
             await Assert.ThrowsAsync<OutboxPermanentDeliveryException>(() =>
-                ProcessAsync(connectionString!, clock, typeMismatch, _ => Task.CompletedTask));
+                ProcessAsync(connectionString!, clock, duplicateClaim, typeMismatch, _ => Task.CompletedTask));
 
             await using (var failingContext = CreateContext(connectionString!))
             {
                 var failingInbox = new EfOutboxInbox(failingContext, clock);
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    failingInbox.ExecuteOnceAsync(retryEnvelope, async token =>
+                    failingInbox.ExecuteOnceAsync(retryClaim.Id, retryClaim.LeaseToken, retryEnvelope, async token =>
                     {
                         // Simulate a consumer saving a local side effect before failing.
                         failingContext.OutboxMessages.Add(new OutboxMessage
@@ -91,6 +93,7 @@ public sealed class OutboxInboxPostgresTests
             var retryResult = await ProcessAsync(
                 connectionString!,
                 clock,
+                retryClaim,
                 retryEnvelope,
                 _ =>
                 {
@@ -115,19 +118,39 @@ public sealed class OutboxInboxPostgresTests
             await cleanup.Database.ExecuteSqlInterpolatedAsync(
                 $"DELETE FROM outbox_inbox_receipts WHERE event_id = {duplicateEventId} OR event_id = {failedThenRetriedEventId}");
             await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM outbox_messages WHERE event_id = {rolledBackSideEffectId}");
+                $"DELETE FROM outbox_messages WHERE event_id = {duplicateEventId} OR event_id = {failedThenRetriedEventId} OR event_id = {rolledBackSideEffectId}");
         }
+    }
+
+    private static async Task<ClaimedOutboxMessage> SeedClaimedMessageAsync(
+        string connectionString,
+        OutboxDeliveryEnvelope envelope,
+        IGameClock clock)
+    {
+        await using var db = CreateContext(connectionString);
+        var message = new OutboxMessage
+        {
+            EventId = envelope.EventId,
+            OccurredAtUtc = envelope.OccurredAtUtc,
+            Type = envelope.Type,
+            PayloadJson = envelope.PayloadJson
+        };
+        message.Claim(Guid.NewGuid().ToString("N"), clock.UtcNow.AddMinutes(5));
+        db.OutboxMessages.Add(message);
+        await db.SaveChangesAsync();
+        return new ClaimedOutboxMessage(message.Id, message.LeaseToken!);
     }
 
     private static async Task<bool> ProcessAsync(
         string connectionString,
         IGameClock clock,
+        ClaimedOutboxMessage claim,
         OutboxDeliveryEnvelope message,
         Func<CancellationToken, Task> operation)
     {
         await using var db = CreateContext(connectionString);
         var inbox = new EfOutboxInbox(db, clock);
-        return await inbox.ExecuteOnceAsync(message, operation);
+        return await inbox.ExecuteOnceAsync(claim.Id, claim.LeaseToken, message, operation);
     }
 
     private static GameNetDbContext CreateContext(string connectionString)
@@ -140,6 +163,8 @@ public sealed class OutboxInboxPostgresTests
 
     private static OutboxDeliveryEnvelope CreateEnvelope(Guid eventId, DateTimeOffset occurredAt) =>
         new(eventId, occurredAt, "inbox.test.v1", "{\"version\":1}");
+
+    private sealed record ClaimedOutboxMessage(long Id, string LeaseToken);
 
     private sealed class TestGameClock(DateTimeOffset utcNow) : IGameClock
     {
