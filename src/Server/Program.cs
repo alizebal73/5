@@ -50,6 +50,7 @@ var serverSecrets = ServerSecretBootstrap.Load(builder.Environment, builder.Conf
 builder.Services.AddSingleton<IDatabaseConnectionSecret>(serverSecrets);
 builder.Services.AddSingleton<IJwtSigningKeySecret>(serverSecrets);
 builder.Services.AddSingleton<IAgentProvisioningKeySecret>(serverSecrets);
+builder.Services.AddSingleton<IIdempotencyFingerprintSecret>(serverSecrets);
 
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
 builder.Services.AddGameNetServer();
