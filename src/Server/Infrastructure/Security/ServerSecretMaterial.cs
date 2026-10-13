@@ -32,18 +32,21 @@ internal sealed class ServerSecretMaterial :
         string connectionString,
         string signingKey,
         string provisioningKey,
-        string fingerprintKey)
+        string fingerprintKey,
+        bool hasDedicatedFingerprintKey)
     {
         ConnectionString = connectionString;
         SigningKey = signingKey;
         ProvisioningKey = provisioningKey;
         FingerprintKey = fingerprintKey;
+        HasDedicatedFingerprintKey = hasDedicatedFingerprintKey;
     }
 
     public string ConnectionString { get; }
     public string SigningKey { get; }
     public string ProvisioningKey { get; }
     public string FingerprintKey { get; }
+    internal bool HasDedicatedFingerprintKey { get; }
 
     // The optional final argument preserves compatibility with pre-release/test
     // stores that only have the original three secrets. New provisioning always
@@ -72,7 +75,8 @@ internal sealed class ServerSecretMaterial :
             connectionString,
             signingKeyBase64!,
             provisioningKeyBase64!,
-            fingerprintKey!);
+            fingerprintKey!,
+            idempotencyFingerprintKeyBase64 is not null);
     }
 
     private static void ValidateBase64Key(string? value)
