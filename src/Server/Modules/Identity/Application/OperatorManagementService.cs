@@ -35,12 +35,15 @@ public sealed class OperatorManagementService(
     }
 
     public Task<Result<RoleManagedDto>> CreateRoleAsync(CreateRoleCommand command, CancellationToken ct) =>
-        MutateAsync("roles.create", command.IdempotencyKey, new { command.Code, command.Name, command.Permissions }, command.Actor, 201,
+        MutateAsync("roles.create", command.IdempotencyKey, new { command.Code, command.Name, command.Permissions, command.Reason }, command.Actor, 201,
             async token =>
             {
                 var actorPermissions = await identityRepository.GetPermissionsAsync(command.Actor.UserId, token);
                 if (!actorPermissions.Contains(Permissions.IdentityRolesManage))
                     return Fail<RoleManagedDto>("identity.forbidden", "Not allowed to manage role definitions.");
+                var normalizedReason = NormalizeRequiredReason(command.Reason);
+                if (normalizedReason is null)
+                    return Fail<RoleManagedDto>("identity.invalid", "A reason of 3-256 characters is required for this change.");
                 Role role;
                 try { role = Role.Create(Guid.NewGuid(), command.Code, command.Name); }
                 catch (ArgumentException ex) { return Fail<RoleManagedDto>("identity.invalid", ex.Message); }
@@ -56,19 +59,22 @@ public sealed class OperatorManagementService(
                     await repository.AddRolePermissionAsync(new RolePermission(role.Id, permission), token);
                 var dto = new RoleManagedDto(role.Id, role.Code, role.Name, values, false);
                 audit.Append(new AuditRecord(clock.UtcNow, "Operator", command.Actor.UserId.ToString("D"),
-                    "identity.role_create", "Role", role.Id.ToString("D"), "Role created",
+                    "identity.role_create", "Role", role.Id.ToString("D"), normalizedReason,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     AfterJson: JsonSerializer.Serialize(dto)));
                 return Result<RoleManagedDto>.Success(dto);
             }, ct);
 
     public Task<Result<RoleManagedDto>> UpdateRolePermissionsAsync(UpdateRolePermissionsCommand command, CancellationToken ct) =>
-        MutateAsync("roles.permissions", command.IdempotencyKey, new { command.RoleId, command.Permissions }, command.Actor, 200,
+        MutateAsync("roles.permissions", command.IdempotencyKey, new { command.RoleId, command.Permissions, command.Reason }, command.Actor, 200,
             async token =>
             {
                 var actorPermissions = await identityRepository.GetPermissionsAsync(command.Actor.UserId, token);
                 if (!actorPermissions.Contains(Permissions.IdentityRolesManage))
                     return Fail<RoleManagedDto>("identity.forbidden", "Not allowed to manage role definitions.");
+                var normalizedReason = NormalizeRequiredReason(command.Reason);
+                if (normalizedReason is null)
+                    return Fail<RoleManagedDto>("identity.invalid", "A reason of 3-256 characters is required for this change.");
                 var role = await repository.FindRoleByIdAsync(command.RoleId, token);
                 if (role is null) return Fail<RoleManagedDto>("identity.role_not_found", "Role was not found.");
                 if (role.Code == "owner")
@@ -83,7 +89,7 @@ public sealed class OperatorManagementService(
                 await repository.ReplaceRolePermissionsAsync(role.Id, values, token);
                 var after = before with { Permissions = values };
                 audit.Append(new AuditRecord(clock.UtcNow, "Operator", command.Actor.UserId.ToString("D"),
-                    "identity.role_permissions_update", "Role", role.Id.ToString("D"), "Role permissions updated",
+                    "identity.role_permissions_update", "Role", role.Id.ToString("D"), normalizedReason,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
                 return Result<RoleManagedDto>.Success(after);
@@ -91,12 +97,15 @@ public sealed class OperatorManagementService(
 
     public Task<Result<OperatorManagedDto>> CreateOperatorAsync(CreateOperatorCommand command, CancellationToken ct) =>
         MutateAsync("users.create", command.IdempotencyKey,
-            new { command.Username, command.DisplayName, command.Password, command.RoleId }, command.Actor, 201,
+            new { command.Username, command.DisplayName, command.Password, command.RoleId, command.Reason }, command.Actor, 201,
             async token =>
             {
                 var actorPermissions = await identityRepository.GetPermissionsAsync(command.Actor.UserId, token);
                 if (!actorPermissions.Contains(Permissions.IdentityUsersWrite))
                     return Fail<OperatorManagedDto>("identity.forbidden", "Not allowed to create operator accounts.");
+                var normalizedReason = NormalizeRequiredReason(command.Reason);
+                if (normalizedReason is null)
+                    return Fail<OperatorManagedDto>("identity.invalid", "A reason of 3-256 characters is required for this change.");
                 var role = await repository.FindRoleByIdAsync(command.RoleId, token);
                 if (role is null) return Fail<OperatorManagedDto>("identity.role_not_found", "Role was not found.");
                 var owner = await repository.IsOwnerAsync(command.Actor.UserId, token);
@@ -125,14 +134,14 @@ public sealed class OperatorManagementService(
                     user.FailedLoginCount, user.CreatedAtUtc, user.LastLoginAtUtc,
                     new[] { role.Id }, new[] { role.Code }, role.Code == "owner");
                 audit.Append(new AuditRecord(clock.UtcNow, "Operator", command.Actor.UserId.ToString("D"),
-                    "identity.user_create", "OperatorUser", user.Id.ToString("D"), "Operator account created",
+                    "identity.user_create", "OperatorUser", user.Id.ToString("D"), normalizedReason,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     AfterJson: JsonSerializer.Serialize(dto)));
                 return Result<OperatorManagedDto>.Success(dto);
             }, ct);
 
     public Task<Result<OperatorManagedDto>> AssignOperatorRoleAsync(AssignOperatorRoleCommand command, CancellationToken ct) =>
-        MutateAsync("users.assign-role", command.IdempotencyKey, new { command.OperatorId, command.RoleId }, command.Actor, 200,
+        MutateAsync("users.assign-role", command.IdempotencyKey, new { command.OperatorId, command.RoleId, command.Reason }, command.Actor, 200,
             async token =>
             {
                 if (command.Actor.UserId == command.OperatorId)
@@ -140,6 +149,9 @@ public sealed class OperatorManagementService(
                 var actorPermissions = await identityRepository.GetPermissionsAsync(command.Actor.UserId, token);
                 if (!actorPermissions.Contains(Permissions.IdentityUsersWrite))
                     return Fail<OperatorManagedDto>("identity.forbidden", "Not allowed to change operator roles.");
+                var normalizedReason = NormalizeRequiredReason(command.Reason);
+                if (normalizedReason is null)
+                    return Fail<OperatorManagedDto>("identity.invalid", "A reason of 3-256 characters is required for this change.");
                 var user = await repository.FindUserByIdAsync(command.OperatorId, token);
                 if (user is null) return Fail<OperatorManagedDto>("identity.user_not_found", "Operator was not found.");
                 var snapshot = (await repository.ListUsersAsync(token)).Single(x => x.Id == user.Id);
@@ -165,19 +177,22 @@ public sealed class OperatorManagementService(
                 await repository.RevokeActiveSessionsAsync(user.Id, clock.UtcNow, token);
                 var after = before with { RoleIds = new[] { role.Id }, RoleCodes = new[] { role.Code }, IsOwner = role.Code == "owner" };
                 audit.Append(new AuditRecord(clock.UtcNow, "Operator", command.Actor.UserId.ToString("D"),
-                    "identity.user_role_assign", "OperatorUser", user.Id.ToString("D"), "Operator role changed",
+                    "identity.user_role_assign", "OperatorUser", user.Id.ToString("D"), normalizedReason,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
                 return Result<OperatorManagedDto>.Success(after);
             }, ct);
 
     public Task<Result<OperatorManagedDto>> SetOperatorActiveAsync(SetOperatorActiveCommand command, CancellationToken ct) =>
-        MutateAsync("users.active", command.IdempotencyKey, new { command.OperatorId, command.IsActive }, command.Actor, 200,
+        MutateAsync("users.active", command.IdempotencyKey, new { command.OperatorId, command.IsActive, command.Reason }, command.Actor, 200,
             async token =>
             {
                 var actorPermissions = await identityRepository.GetPermissionsAsync(command.Actor.UserId, token);
                 if (!actorPermissions.Contains(Permissions.IdentityUsersWrite))
                     return Fail<OperatorManagedDto>("identity.forbidden", "Not allowed to change operator status.");
+                var normalizedReason = NormalizeRequiredReason(command.Reason);
+                if (normalizedReason is null)
+                    return Fail<OperatorManagedDto>("identity.invalid", "A reason of 3-256 characters is required for this change.");
                 var user = await repository.FindUserByIdAsync(command.OperatorId, token);
                 if (user is null) return Fail<OperatorManagedDto>("identity.user_not_found", "Operator was not found.");
                 var snapshot = (await repository.ListUsersAsync(token)).Single(x => x.Id == user.Id);
@@ -195,7 +210,7 @@ public sealed class OperatorManagementService(
                 var after = before with { IsActive = command.IsActive };
                 audit.Append(new AuditRecord(clock.UtcNow, "Operator", command.Actor.UserId.ToString("D"),
                     "identity.user_status", "OperatorUser", user.Id.ToString("D"),
-                    command.IsActive ? "Operator account enabled" : "Operator account disabled",
+                    normalizedReason,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
                 return Result<OperatorManagedDto>.Success(after);
@@ -321,6 +336,13 @@ public sealed class OperatorManagementService(
         catch (AbortMutation ex) { return Fail<T>(ex.Error.Code, ex.Error.Message); }
         catch (IdempotencyKeyConflictException) { return Fail<T>("idempotency.key_reused", "Idempotency-Key was used for a different request."); }
         catch (PersistenceConflictException) { return Fail<T>("identity.conflict", "The requested identity change conflicts with current data."); }
+    }
+
+    private static string? NormalizeRequiredReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return null;
+        var normalized = reason.Trim();
+        return normalized.Length is >= 3 and <= 256 ? normalized : null;
     }
 
     private static Error? ValidatePermissions(string[]? requested, IReadOnlySet<string> actorPermissions, bool owner, out string[] values)
