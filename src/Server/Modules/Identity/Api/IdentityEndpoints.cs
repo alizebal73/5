@@ -82,11 +82,25 @@ public static class IdentityEndpoints
         var supplied = context.Request.Headers[BootstrapSecretHeader].ToString();
         if (string.IsNullOrWhiteSpace(supplied))
             return Failure(new Error("bootstrap.secret_invalid", "The setup secret was not accepted."), context);
-        var expectedBytes = Encoding.UTF8.GetBytes(expectedSecret);
-        var suppliedBytes = Encoding.UTF8.GetBytes(supplied);
-        if (expectedBytes.Length != suppliedBytes.Length || !CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes))
-            return Failure(new Error("bootstrap.secret_invalid", "The setup secret was not accepted."), context);
-        return null;
+        byte[]? expectedBytes = null;
+        byte[]? suppliedBytes = null;
+        try
+        {
+            expectedBytes = Encoding.UTF8.GetBytes(expectedSecret);
+            suppliedBytes = Encoding.UTF8.GetBytes(supplied);
+            if (expectedBytes.Length != suppliedBytes.Length ||
+                !CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes))
+                return Failure(new Error("bootstrap.secret_invalid", "The setup secret was not accepted."), context);
+
+            return null;
+        }
+        finally
+        {
+            if (expectedBytes is not null)
+                CryptographicOperations.ZeroMemory(expectedBytes);
+            if (suppliedBytes is not null)
+                CryptographicOperations.ZeroMemory(suppliedBytes);
+        }
     }
 
     private static IResult LoginFailure(Error error, HttpContext context)
