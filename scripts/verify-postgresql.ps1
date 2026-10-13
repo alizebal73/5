@@ -327,8 +327,25 @@ try {
         }
     }
 
+    $previousIdempotencyIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_IDEMPOTENCY_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_IDEMPOTENCY_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~IdempotencyKeyRotationPostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Idempotency key-rotation PostgreSQL replay verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousIdempotencyIntegrationFlag) {
+            Remove-Item Env:GAMENET_IDEMPOTENCY_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_IDEMPOTENCY_POSTGRES_TESTS = $previousIdempotencyIntegrationFlag
+        }
+    }
+
     & "$PSScriptRoot/verify-identity-runtime.ps1"
-    Write-Host "Clean PostgreSQL migration/schema/Identity runtime verification passed."
+    Write-Host "Clean PostgreSQL migration/schema/Idempotency/Identity runtime verification passed."
 }
 finally {
     if ($null -eq $previousProcessConnection) {
