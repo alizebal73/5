@@ -14,6 +14,17 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
+if (args.Any(argument => string.Equals(argument, "--migrate-idempotency-fingerprint-key", StringComparison.Ordinal)))
+{
+    if (args.Length != 1)
+        throw new InvalidOperationException("Run fingerprint-key migration with --migrate-idempotency-fingerprint-key as the only argument.");
+    if (!OperatingSystem.IsWindows())
+        throw new ServerSecretStoreException("Fingerprint-key migration requires Windows.");
+
+    ServerSecretProvisioning.RunMigrateLegacyFingerprintKey();
+    return;
+}
+
 if (args.Any(argument => string.Equals(argument, "--provision-secrets", StringComparison.Ordinal)))
 {
     if (args.Length != 1)
