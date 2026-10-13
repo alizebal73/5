@@ -46,7 +46,8 @@ internal static class ServerSecretProvisioning
 
             var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
             var provisioningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
-            DpapiServerSecretStore.Provision(connection, signingKey, provisioningKey);
+            var fingerprintKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+            DpapiServerSecretStore.Provision(connection, signingKey, provisioningKey, fingerprintKey);
             storeCreated = true;
 
             ServerSecretProvisioningAuditLog.RecordSucceeded(operationId);
