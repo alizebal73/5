@@ -73,8 +73,8 @@ public sealed class OperatorManagementPostgresTests
             Assert.Equal(2, barrier.InitialReadCount);
             Assert.True(barrier.TotalReadCount >= 3,
                 "The serialized race should cause one transaction to retry and observe the remaining Owner.");
-            Assert.Single(outcomes.Where(result => result.IsSuccess));
-            var rejected = Assert.Single(outcomes.Where(result => !result.IsSuccess));
+            Assert.Single(outcomes, result => result.IsSuccess);
+            var rejected = Assert.Single(outcomes, result => !result.IsSuccess);
             Assert.Equal("identity.last_owner_required", rejected.Error.Code);
 
             await using var verifyDb = CreateContext(connectionString);
