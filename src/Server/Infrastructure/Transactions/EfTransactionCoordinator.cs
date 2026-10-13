@@ -54,9 +54,16 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
         {
             await transaction.RollbackAsync(cancellationToken);
         }
-        catch (InvalidOperationException) when (dbTransaction.Connection is null)
+        catch (InvalidOperationException ex) when (
+            string.Equals(
+                ex.Message,
+                "This NpgsqlTransaction has completed; it is no longer usable.",
+                StringComparison.Ordinal))
         {
-            // The provider completed the transaction between the state check and rollback.
+            // Npgsql can retain the connection while its internal transaction status is
+            // already Idle. In that case Connection is non-null, but a second rollback
+            // still throws this specific InvalidOperationException. Preserve the original
+            // PostgreSQL error that caused the rollback/retry; do not mask it with cleanup.
         }
     }
 
