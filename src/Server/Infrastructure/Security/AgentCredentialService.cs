@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
 using GameNet.Server.Persistence.Entities;
@@ -22,6 +23,7 @@ public sealed class AgentCredentialService(
         transactions.ExecuteAsync(async ct =>
         {
             ValidateDeviceId(request.DeviceId);
+            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
             var exists = await dbContext.AgentCredentials.AnyAsync(
                 x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null, ct);
 
@@ -59,6 +61,7 @@ public sealed class AgentCredentialService(
         transactions.ExecuteAsync(async ct =>
         {
             ValidateDeviceId(request.DeviceId);
+            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
@@ -99,6 +102,7 @@ public sealed class AgentCredentialService(
         transactions.ExecuteAsync(async ct =>
         {
             ValidateDeviceId(request.DeviceId);
+            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
