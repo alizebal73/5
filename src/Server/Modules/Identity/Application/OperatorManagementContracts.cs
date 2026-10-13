@@ -33,15 +33,15 @@ public sealed record OperatorManagedDto(
 public sealed record RoleManagedDto(Guid Id, string Code, string Name, string[] Permissions, bool IsSystemRole);
 public sealed record IdentityActor(Guid UserId, string CorrelationId, string Source, string? CurrentSessionJti = null);
 public sealed record CreateOperatorCommand(
-    string Username, string DisplayName, string Password, Guid RoleId, string IdempotencyKey, IdentityActor Actor);
+    string Username, string DisplayName, string Password, Guid RoleId, string Reason, string IdempotencyKey, IdentityActor Actor);
 public sealed record AssignOperatorRoleCommand(
-    Guid OperatorId, Guid RoleId, string IdempotencyKey, IdentityActor Actor);
+    Guid OperatorId, Guid RoleId, string Reason, string IdempotencyKey, IdentityActor Actor);
 public sealed record SetOperatorActiveCommand(
-    Guid OperatorId, bool IsActive, string IdempotencyKey, IdentityActor Actor);
+    Guid OperatorId, bool IsActive, string Reason, string IdempotencyKey, IdentityActor Actor);
 public sealed record CreateRoleCommand(
-    string Code, string Name, string[]? Permissions, string IdempotencyKey, IdentityActor Actor);
+    string Code, string Name, string[]? Permissions, string Reason, string IdempotencyKey, IdentityActor Actor);
 public sealed record UpdateRolePermissionsCommand(
-    Guid RoleId, string[]? Permissions, string IdempotencyKey, IdentityActor Actor);
+    Guid RoleId, string[]? Permissions, string Reason, string IdempotencyKey, IdentityActor Actor);
 public sealed record ChangeOwnPasswordCommand(
     string CurrentPassword, string NewPassword, string IdempotencyKey, IdentityActor Actor);
 public sealed record ResetOperatorPasswordCommand(
