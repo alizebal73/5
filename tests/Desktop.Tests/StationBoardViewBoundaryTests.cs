@@ -46,7 +46,7 @@ public sealed class StationBoardViewBoundaryTests
 
         var serialized = view.ToString();
         Assert.Contains("StationBoard.CreateCommand", serialized, System.StringComparison.Ordinal);
-        Assert.Contains("StationBoard.RefreshCommand", serialized, System.StringComparison.Ordinal);
+        Assert.Contains("StationBoard.RenameCommand", serialized, System.StringComparison.Ordinal);
         Assert.Contains("StationBoard.SelectedStation", serialized, System.StringComparison.Ordinal);
         Assert.Contains("Station.ReadPermissionRequired", serialized, System.StringComparison.Ordinal);
         Assert.Contains("CanReadStations", serialized, System.StringComparison.Ordinal);
