@@ -58,7 +58,12 @@ public sealed class OutboxHandlerRegistry
             message.Type,
             message.PayloadJson);
 
+        if (message.Id <= 0 || string.IsNullOrWhiteSpace(message.LeaseToken))
+            throw new InvalidOperationException("OUTBOX_CLAIM_RETURNED_NO_LEASE");
+
         return inbox.ExecuteOnceAsync(
+            message.Id,
+            message.LeaseToken,
             envelope,
             token => handler.HandleAsync(envelope, token),
             cancellationToken);
