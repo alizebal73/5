@@ -50,7 +50,7 @@ public static class OperatorManagementEndpoints
         {
             if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
             var result = await service.CreateOperatorAsync(new CreateOperatorCommand(request.Username, request.DisplayName,
-                request.Password, request.RoleId, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
+                request.Password, request.RoleId, request.Reason, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
             return result.IsSuccess
                 ? Results.Created($"/api/v1/identity/users/{result.Value.Id:D}",
                     new ApiEnvelope<OperatorAdminResponse>(ToResponse(result.Value), CorrelationIdMiddleware.GetCurrent(context)))
@@ -60,7 +60,7 @@ public static class OperatorManagementEndpoints
         group.MapPut("/users/{id:guid}/role", async (Guid id, AssignOperatorRoleRequest request, OperatorManagementService service, HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
-            var result = await service.AssignOperatorRoleAsync(new AssignOperatorRoleCommand(id, request.RoleId,
+            var result = await service.AssignOperatorRoleAsync(new AssignOperatorRoleCommand(id, request.RoleId, request.Reason,
                 context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<OperatorAdminResponse>(ToResponse(result.Value), CorrelationIdMiddleware.GetCurrent(context)))
@@ -70,7 +70,7 @@ public static class OperatorManagementEndpoints
         group.MapPut("/users/{id:guid}/active", async (Guid id, SetOperatorActiveRequest request, OperatorManagementService service, HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
-            var result = await service.SetOperatorActiveAsync(new SetOperatorActiveCommand(id, request.IsActive,
+            var result = await service.SetOperatorActiveAsync(new SetOperatorActiveCommand(id, request.IsActive, request.Reason,
                 context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<OperatorAdminResponse>(ToResponse(result.Value), CorrelationIdMiddleware.GetCurrent(context)))
@@ -89,7 +89,7 @@ public static class OperatorManagementEndpoints
         group.MapPost("/roles", async (CreateRoleRequest request, OperatorManagementService service, HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
-            var result = await service.CreateRoleAsync(new CreateRoleCommand(request.Code, request.Name, request.Permissions,
+            var result = await service.CreateRoleAsync(new CreateRoleCommand(request.Code, request.Name, request.Permissions, request.Reason,
                 context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
             return result.IsSuccess
                 ? Results.Created($"/api/v1/identity/roles/{result.Value.Id:D}",
@@ -100,7 +100,7 @@ public static class OperatorManagementEndpoints
         group.MapPut("/roles/{id:guid}/permissions", async (Guid id, UpdateRolePermissionsRequest request, OperatorManagementService service, HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor)) return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
-            var result = await service.UpdateRolePermissionsAsync(new UpdateRolePermissionsCommand(id, request.Permissions,
+            var result = await service.UpdateRolePermissionsAsync(new UpdateRolePermissionsCommand(id, request.Permissions, request.Reason,
                 context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor), ct);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<RoleAdminResponse>(ToResponse(result.Value), CorrelationIdMiddleware.GetCurrent(context)))
