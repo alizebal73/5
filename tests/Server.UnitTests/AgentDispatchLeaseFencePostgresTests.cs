@@ -58,6 +58,21 @@ public sealed class AgentDispatchLeaseFencePostgresTests
 
             Assert.False(accepted);
             Assert.Equal(0, Volatile.Read(ref sends));
+
+            await using var verifyDb = CreateContext(connectionString);
+            Assert.False(await verifyDb.AgentConnectionLeases.AnyAsync(x => x.DeviceId == deviceId));
+            Assert.True(await verifyDb.AgentCredentials.AnyAsync(
+                x => x.DeviceId == deviceId && x.RevokedAtUtc != null));
+            Assert.True(await verifyDb.AgentEnrollmentTokens.AnyAsync(
+                x => x.Id == seeded.PendingTokenId && x.RevokedAtUtc != null));
+
+            await using var redeemDb = CreateContext(connectionString);
+            var enrollment = new AgentEnrollmentService(
+                redeemDb, new EfTransactionCoordinator(redeemDb), new EfAuditWriter(redeemDb), clock);
+            var redemption = await enrollment.RedeemAsync(
+                new AgentEnrollmentRedeemRequest(deviceId, seeded.PendingTokenText),
+                "agent-dispatch-fence-test");
+            Assert.Null(redemption);
         }
         finally
         {
@@ -124,6 +139,8 @@ public sealed class AgentDispatchLeaseFencePostgresTests
             Assert.Equal(0, Volatile.Read(ref sends));
             Assert.False(await dispatchDb.AgentCredentials.AnyAsync(
                 x => x.DeviceId == deviceId && x.RevokedAtUtc == null));
+            Assert.True(await dispatchDb.AgentEnrollmentTokens.AnyAsync(
+                x => x.Id == seeded.PendingTokenId && x.RevokedAtUtc != null));
         }
         finally
         {
@@ -207,16 +224,6 @@ public sealed class AgentDispatchLeaseFencePostgresTests
                 x => x.DeviceId == deviceId && x.RevokedAtUtc != null));
             Assert.True(await verifyDb.AgentEnrollmentTokens.AnyAsync(
                 x => x.Id == seeded.PendingTokenId && x.RevokedAtUtc != null));
-            Assert.True(await verifyDb.AgentEnrollmentTokens.AnyAsync(
-                x => x.Id == seeded.PendingTokenId && x.RevokedAtUtc != null));
-
-            await using var redeemDb = CreateContext(connectionString);
-            var enrollment = new AgentEnrollmentService(
-                redeemDb, new EfTransactionCoordinator(redeemDb), new EfAuditWriter(redeemDb), clock);
-            var redemption = await enrollment.RedeemAsync(
-                new AgentEnrollmentRedeemRequest(deviceId, seeded.PendingTokenText),
-                "agent-dispatch-fence-test");
-            Assert.Null(redemption);
         }
         finally
         {
