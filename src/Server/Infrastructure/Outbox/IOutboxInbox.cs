@@ -9,6 +9,8 @@ namespace GameNet.Server.Infrastructure.Outbox;
 public interface IOutboxInbox
 {
     Task<bool> ExecuteOnceAsync(
+        long outboxMessageId,
+        string leaseToken,
         OutboxDeliveryEnvelope message,
         Func<CancellationToken, Task> operation,
         CancellationToken cancellationToken = default);
