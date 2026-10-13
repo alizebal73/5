@@ -4,6 +4,7 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
+using GameNet.Server.Modules.Identity.Domain;
 using GameNet.Server.Persistence;
 using GameNet.Server.Persistence.Entities;
 using GameNet.Shared.Contracts.V1.Security;
@@ -76,7 +77,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         }
         finally
         {
-            await CleanupAsync(connectionString, deviceId);
+            await CleanupAsync(connectionString, deviceId, seeded.OperatorId);
         }
     }
 
@@ -288,8 +289,15 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         var pendingTokenHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(pendingTokenText)));
         var pendingTokenId = Guid.NewGuid();
+        var operatorId = Guid.NewGuid();
 
         await using var db = CreateContext(connectionString);
+        db.OperatorUsers.Add(OperatorUser.Create(
+            operatorId,
+            "fence-" + Guid.NewGuid().ToString("N")[..16],
+            "Dispatch Fence Test",
+            new string('c', 64),
+            now));
         db.AgentCredentials.Add(new AgentCredential
         {
             DeviceId = deviceId,
@@ -311,14 +319,14 @@ public sealed class AgentDispatchLeaseFencePostgresTests
             pendingTokenId,
             deviceId,
             pendingTokenHash,
-            Guid.NewGuid(),
+            operatorId,
             now,
             now.AddMinutes(15)));
         await db.SaveChangesAsync();
-        return new SeededDevice(pendingTokenId, pendingTokenText);
+        return new SeededDevice(pendingTokenId, pendingTokenText, operatorId);
     }
 
-    private sealed record SeededDevice(Guid PendingTokenId, string PendingTokenText);
+    private sealed record SeededDevice(Guid PendingTokenId, string PendingTokenText, Guid OperatorId);
 
     private static async Task AssertBackendIsBlockedOnLockAsync(
         string connectionString,
@@ -342,7 +350,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         }
     }
 
-    private static async Task CleanupAsync(string connectionString, string deviceId)
+    private static async Task CleanupAsync(string connectionString, string deviceId, Guid operatorId)
     {
         await using var db = CreateContext(connectionString);
         await db.Database.ExecuteSqlInterpolatedAsync(
@@ -352,7 +360,11 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"DELETE FROM audit_entries WHERE actor_id = {deviceId}");
+            $"DELETE FROM audit_entries WHERE actor_id = {deviceId} OR actor_id = {operatorId.ToString("D")}");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM user_roles WHERE user_id = {operatorId}");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM operator_users WHERE id = {operatorId}");
     }
 
     private sealed class FixedClock(DateTimeOffset utcNow) : IGameClock
