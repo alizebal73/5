@@ -108,7 +108,9 @@ public sealed class OperatorManagementPostgresTests
                 ? "PostgreSQL concurrent last-Owner protection test A"
                 : "PostgreSQL concurrent last-Owner protection test B", audit.Reason);
             Assert.Equal("Succeeded", audit.Outcome);
-            Assert.Equal(clock.UtcNow, audit.OccurredAtUtc);
+            // PostgreSQL timestamptz stores microsecond precision (10 DateTime ticks).
+            var expectedAuditTicks = clock.UtcNow.UtcDateTime.Ticks - (clock.UtcNow.UtcDateTime.Ticks % 10);
+            Assert.Equal(new DateTimeOffset(expectedAuditTicks, TimeSpan.Zero), audit.OccurredAtUtc);
             Assert.False(string.IsNullOrWhiteSpace(audit.CorrelationId));
         }
         finally
@@ -237,7 +239,7 @@ public sealed class OperatorManagementPostgresTests
     }
 
     [Fact]
-    public async Task Serializable_retry_exhaustion_returns_stable_diagnostic_after_three_attempts()
+    public async Task Injected_serialization_failures_exhaust_retries_with_stable_diagnostic()
     {
         if (!IsExplicitlyEnabled()) return;
 
@@ -247,13 +249,17 @@ public sealed class OperatorManagementPostgresTests
         var attempts = 0;
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            coordinator.ExecuteAsync<int>(async cancellationToken =>
+            coordinator.ExecuteAsync<int>(cancellationToken =>
             {
                 Interlocked.Increment(ref attempts);
-                await db.Database.ExecuteSqlRawAsync(
-                    "DO $ BEGIN RAISE EXCEPTION 'forced serialization retry exhaustion test' USING ERRCODE = '40001'; END $;",
-                    cancellationToken);
-                return 1;
+                // Inject the provider exception deterministically; each attempt still opens
+                // a real transaction against the disposable PostgreSQL database, which the
+                // coordinator must dispose before beginning the next attempt.
+                return Task.FromException<int>(new Npgsql.PostgresException(
+                    "Forced serializable retry exhaustion test",
+                    "ERROR",
+                    "ERROR",
+                    Npgsql.PostgresErrorCodes.SerializationFailure));
             }));
 
         Assert.Equal("TRANSACTION_RETRY_EXHAUSTED", failure.Message);
