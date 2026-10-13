@@ -39,7 +39,7 @@ public sealed class DesktopBindingAndPasswordContractTests
 
             foreach (var attribute in view.Descendants().Attributes())
             {
-                foreach (Match match in Regex.Matches(attribute.Value, @"\\{Binding(?:\\s+([^}]+))?\\}"))
+                foreach (Match match in Regex.Matches(attribute.Value, @"\{Binding(?:\s+([^}]+))?\}"))
                 {
                     var bindingBody = match.Groups.Count > 1 && match.Groups[1].Success
                         ? match.Groups[1].Value
