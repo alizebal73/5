@@ -59,6 +59,15 @@ public sealed class HmacRequestFingerprintTests
             new HmacRequestFingerprint(new TestFingerprintSecret("short")));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("short")]
+    public void Malformed_explicit_fingerprint_key_fails_closed(string fingerprintKey)
+    {
+        Assert.Throws<ServerSecretStoreException>(() =>
+            ServerSecretMaterial.Create(ConnectionString, Key('a'), Key('b'), fingerprintKey));
+    }
+
     private static string Key(char character) => new(character, 64);
 
     private sealed record TestFingerprintSecret(string FingerprintKey) : IIdempotencyFingerprintSecret;
