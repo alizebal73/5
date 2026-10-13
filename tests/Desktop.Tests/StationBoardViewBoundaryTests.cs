@@ -17,7 +17,7 @@ public sealed class StationBoardViewBoundaryTests
         var mainPath = Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml");
         var main = XDocument.Load(mainPath);
 
-        var host = Assert.Single(main.Descendants().Where(element => element.Name.LocalName == "StationBoardView"));
+        var host = Assert.Single(main.Descendants(), element => element.Name.LocalName == "StationBoardView");
         Assert.Equal("3", (string?)host.Attribute("Grid.Row"));
         Assert.Equal("clr-namespace:GameNet.Desktop.Features.Stations",
             (string?)main.Root?.Attribute(XNamespace.Xmlns + "stations"));
