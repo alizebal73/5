@@ -5,8 +5,8 @@ public sealed record OperatorAdminResponse(
     DateTimeOffset CreatedAtUtc, DateTimeOffset? LastLoginAtUtc,
     Guid[] RoleIds, string[] RoleCodes, bool IsOwner);
 public sealed record RoleAdminResponse(Guid Id, string Code, string Name, string[] Permissions, bool IsSystemRole);
-public sealed record CreateOperatorRequest(string Username, string DisplayName, string Password, Guid RoleId);
-public sealed record AssignOperatorRoleRequest(Guid RoleId);
-public sealed record SetOperatorActiveRequest(bool IsActive);
-public sealed record CreateRoleRequest(string Code, string Name, string[]? Permissions);
-public sealed record UpdateRolePermissionsRequest(string[]? Permissions);
+public sealed record CreateOperatorRequest(string Username, string DisplayName, string Password, Guid RoleId, string Reason);
+public sealed record AssignOperatorRoleRequest(Guid RoleId, string Reason);
+public sealed record SetOperatorActiveRequest(bool IsActive, string Reason);
+public sealed record CreateRoleRequest(string Code, string Name, string[]? Permissions, string Reason);
+public sealed record UpdateRolePermissionsRequest(string[]? Permissions, string Reason);
