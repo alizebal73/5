@@ -139,8 +139,16 @@ public sealed class HmacRequestFingerprintTests
             "\",\"agentProvisioningKeyBase64\":\"" + Key('b') +
             "\",\"IdempotencyFingerprintKeyBase64\":null}";
 
-        Assert.Throws<ServerSecretStoreException>(() =>
-            DpapiServerSecretStore.ParsePayload(System.Text.Encoding.UTF8.GetBytes(malformedJson)));
+        ServerSecretStoreException? thrown = null;
+        try
+        {
+            DpapiServerSecretStore.ParsePayload(System.Text.Encoding.UTF8.GetBytes(malformedJson));
+        }
+        catch (ServerSecretStoreException exception)
+        {
+            thrown = exception;
+        }
+        Assert.NotNull(thrown);
     }
 
     [Fact]
