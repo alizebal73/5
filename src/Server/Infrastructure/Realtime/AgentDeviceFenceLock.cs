@@ -1,37 +1,82 @@
+using System.Data;
 using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace GameNet.Server.Infrastructure.Realtime;
 
 /// <summary>
-/// Serializes lease acquisition, outbound dispatch, and credential revocation/rotation
-/// for one device across every Server process sharing PostgreSQL.
+/// Holds a PostgreSQL session-level advisory lock for one device. The lock must be
+/// acquired before starting any transaction so a waiting SERIALIZABLE transaction
+/// does not retain a snapshot from before the preceding fenced operation committed.
 /// </summary>
-internal static class AgentDeviceFenceLock
+internal sealed class AgentDeviceFenceLock : IAsyncDisposable
 {
-    public static async Task AcquireAsync(
+    private readonly GameNetDbContext dbContext;
+    private readonly string lockKey;
+    private bool disposed;
+
+    private AgentDeviceFenceLock(GameNetDbContext dbContext, string lockKey)
+    {
+        this.dbContext = dbContext;
+        this.lockKey = lockKey;
+    }
+
+    public static async Task<AgentDeviceFenceLock> AcquireAsync(
         GameNetDbContext dbContext,
         string deviceId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
+        if (dbContext.Database.CurrentTransaction is not null)
+            throw new InvalidOperationException("AGENT_DEVICE_FENCE_MUST_PRECEDE_TRANSACTION");
 
-        var transaction = dbContext.Database.CurrentTransaction
-            ?? throw new InvalidOperationException("AGENT_DEVICE_FENCE_REQUIRES_TRANSACTION");
+        var key = "GameNet.Agent.Device:" + deviceId;
+        await dbContext.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            var connection = dbContext.Database.GetDbConnection();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT pg_advisory_lock(hashtextextended(@lockKey, 0))";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "lockKey";
+            parameter.Value = key;
+            command.Parameters.Add(parameter);
+            await command.ExecuteScalarAsync(cancellationToken);
 
-        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-        command.Transaction = transaction.GetDbTransaction();
-        command.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@lockKey, 0))";
+            return new AgentDeviceFenceLock(dbContext, key);
+        }
+        catch
+        {
+            await dbContext.Database.CloseConnectionAsync();
+            throw;
+        }
+    }
 
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = "lockKey";
-        parameter.Value = "GameNet.Agent.Device:" + deviceId;
-        command.Parameters.Add(parameter);
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed)
+            return;
+        disposed = true;
 
-        // Transaction-level advisory locks are released automatically on commit/rollback.
-        // The key is namespaced to avoid sharing a lock domain with unrelated app locks.
-        await command.ExecuteScalarAsync(cancellationToken);
+        try
+        {
+            var connection = dbContext.Database.GetDbConnection();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT pg_advisory_unlock(hashtextextended(@lockKey, 0))";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "lockKey";
+            parameter.Value = lockKey;
+            command.Parameters.Add(parameter);
+            var released = await command.ExecuteScalarAsync(CancellationToken.None);
+            if (released is not true && released is not bool)
+                throw new InvalidOperationException("AGENT_DEVICE_FENCE_UNLOCK_FAILED");
+            if (released is bool didRelease && !didRelease)
+                throw new InvalidOperationException("AGENT_DEVICE_FENCE_UNLOCK_FAILED");
+        }
+        finally
+        {
+            await dbContext.Database.CloseConnectionAsync();
+        }
     }
 }
