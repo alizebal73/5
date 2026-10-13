@@ -17,6 +17,16 @@
 - [ ] رفتار با دادهٔ قبلی/ناقص و نسخهٔ قدیمی مشخص است.
 - [ ] تعامل بین ماژول‌ها از قرارداد صریح می‌گذرد، نه دسترسی به داخلی‌های همدیگر.
 
+
+## UI و اتصال عملیات (در صورت اثر بر Desktop)
+- [ ] View/XAML، ViewModel/Command، API client و Server boundary مشخص‌اند؛ هیچ قانون تجاری/مالی در UI تعریف نمی‌شود.
+- [ ] هر عملیات کاربرمحور/حساس در Action Catalog با مالک، قرارداد، Permission، پیش‌شرط، خطا، idempotency، Audit و محل‌های ارائهٔ UI ثبت/به‌روزرسانی شده است.
+- [ ] اگر عملیات از چند محل UI در دسترس است، همه به use case و قرارداد معتبر یکسان وصل می‌شوند؛ قانون تجاری تکراری ساخته نمی‌شود.
+- [ ] وضعیت‌های loading/empty/error/offline/timeout/denied/conflict و بازخورد موفقیتِ تأییدشده تعریف شده‌اند.
+- [ ] سیاست منابع مشترک، فارسی RTL/Toman و en-US LTR، navigation، keyboard/focus و design-time data (در صورت نیاز) روشن است.
+- [ ] اگر قطع ارتباط/زمان/Agent بر رفتار اثر دارد، سیاست زمان authoritative، مدت/مالکیت Session، reconnect و reconciliation پیش از پیاده‌سازی مشخص شده است.
+- [ ] [قرارداد UI و برش عمودی](../development/ui-architecture-and-vertical-slice-policy.md) بررسی شده است.
+
 ## قرارداد، persistence و تراکنش
 - [ ] قراردادهای Server/Desktop/Agent/Shared و اثر versioning روشن‌اند.
 - [ ] اثر schema، migration، نصب، upgrade و rollback بررسی شده است.
