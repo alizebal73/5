@@ -145,7 +145,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         }
         finally
         {
-            await CleanupAsync(connectionString, deviceId);
+            await CleanupAsync(connectionString, deviceId, seeded.OperatorId);
         }
     }
 
@@ -240,7 +240,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
                 try { await revokeTask.WaitAsync(TimeSpan.FromSeconds(7)); }
                 catch { /* Preserve the original test failure; cleanup follows. */ }
             }
-            await CleanupAsync(connectionString, deviceId);
+            await CleanupAsync(connectionString, deviceId, seeded.OperatorId);
         }
     }
 
@@ -359,8 +359,9 @@ public sealed class AgentDispatchLeaseFencePostgresTests
             $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
+        var operatorActorId = operatorId.ToString("D");
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"DELETE FROM audit_entries WHERE actor_id = {deviceId} OR actor_id = {operatorId.ToString("D")}");
+            $"DELETE FROM audit_entries WHERE actor_id = {deviceId} OR actor_id = {operatorActorId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM user_roles WHERE user_id = {operatorId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
