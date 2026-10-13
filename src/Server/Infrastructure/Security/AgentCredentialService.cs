@@ -17,13 +17,15 @@ public sealed class AgentCredentialService(
     IAuditWriter auditWriter,
     IGameClock clock) : IAgentCredentialService
 {
-    public Task<AgentCredentialSecretResponse> ProvisionAsync(
+    public async Task<AgentCredentialSecretResponse> ProvisionAsync(
         AgentCredentialProvisionRequest request,
-        CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(request.DeviceId);
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+        return await transactions.ExecuteAsync(async ct =>
         {
-            ValidateDeviceId(request.DeviceId);
-            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
             var exists = await dbContext.AgentCredentials.AnyAsync(
                 x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null, ct);
 
@@ -56,14 +58,17 @@ public sealed class AgentCredentialService(
 
             return new AgentCredentialSecretResponse(entity.Id, entity.DeviceId, secret, now);
         }, cancellationToken);
+    }
 
-    public Task<AgentCredentialSecretResponse> RotateAsync(
+    public async Task<AgentCredentialSecretResponse> RotateAsync(
         AgentCredentialRotateRequest request,
-        CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(request.DeviceId);
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+        return await transactions.ExecuteAsync(async ct =>
         {
-            ValidateDeviceId(request.DeviceId);
-            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
@@ -99,14 +104,17 @@ public sealed class AgentCredentialService(
 
             return new AgentCredentialSecretResponse(replacement.Id, replacement.DeviceId, secret, now);
         }, cancellationToken);
+    }
 
-    public Task<bool> RevokeAsync(
+    public async Task<bool> RevokeAsync(
         AgentCredentialRevokeRequest request,
-        CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(request.DeviceId);
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+        return await transactions.ExecuteAsync(async ct =>
         {
-            ValidateDeviceId(request.DeviceId);
-            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
@@ -139,6 +147,7 @@ public sealed class AgentCredentialService(
 
             return true;
         }, cancellationToken);
+    }
 
     public async Task<bool> AuthenticateAsync(
         string deviceId,
