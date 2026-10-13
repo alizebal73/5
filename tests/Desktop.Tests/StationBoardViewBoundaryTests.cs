@@ -29,8 +29,8 @@ public sealed class StationBoardViewBoundaryTests
 
         // Login, PasswordBox handlers, password-change controls, and shell status messages remain in MainWindow.
         Assert.Contains(main.Descendants(), element => element.Name.LocalName == "PasswordBox");
-        Assert.Contains(serialized, "PasswordChanged=\"PasswordInput_OnPasswordChanged\"", System.StringComparison.Ordinal);
-        Assert.Contains(serialized, "StationBoard.StatusMessage", System.StringComparison.Ordinal);
+        Assert.Contains("PasswordChanged=\"PasswordInput_OnPasswordChanged\"", serialized, System.StringComparison.Ordinal);
+        Assert.Contains("StationBoard.StatusMessage", serialized, System.StringComparison.Ordinal);
     }
 
     [Fact]
