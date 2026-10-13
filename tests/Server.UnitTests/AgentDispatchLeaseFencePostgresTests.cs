@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Security;
@@ -30,7 +32,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         var deviceId = DeviceId();
         var connectionId = "connection-" + Guid.NewGuid().ToString("N");
         var leaseToken = Guid.NewGuid().ToString("N");
-        await SeedAsync(connectionString, deviceId, connectionId, leaseToken, clock.UtcNow);
+        var seeded = await SeedAsync(connectionString, deviceId, connectionId, leaseToken, clock.UtcNow);
 
         try
         {
@@ -74,7 +76,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         var deviceId = DeviceId();
         var initialConnectionId = "connection-" + Guid.NewGuid().ToString("N");
         var initialLeaseToken = Guid.NewGuid().ToString("N");
-        await SeedAsync(connectionString, deviceId, initialConnectionId, initialLeaseToken, clock.UtcNow);
+        var seeded = await SeedAsync(connectionString, deviceId, initialConnectionId, initialLeaseToken, clock.UtcNow);
 
         try
         {
@@ -140,7 +142,7 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         var deviceId = DeviceId();
         var connectionId = "connection-" + Guid.NewGuid().ToString("N");
         var leaseToken = Guid.NewGuid().ToString("N");
-        await SeedAsync(connectionString, deviceId, connectionId, leaseToken, clock.UtcNow);
+        var seeded = await SeedAsync(connectionString, deviceId, connectionId, leaseToken, clock.UtcNow);
 
         var sendEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var allowSendToFinish = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -203,6 +205,18 @@ public sealed class AgentDispatchLeaseFencePostgresTests
             Assert.False(await verifyDb.AgentConnectionLeases.AnyAsync(x => x.DeviceId == deviceId));
             Assert.True(await verifyDb.AgentCredentials.AnyAsync(
                 x => x.DeviceId == deviceId && x.RevokedAtUtc != null));
+            Assert.True(await verifyDb.AgentEnrollmentTokens.AnyAsync(
+                x => x.Id == seeded.PendingTokenId && x.RevokedAtUtc != null));
+            Assert.True(await verifyDb.AgentEnrollmentTokens.AnyAsync(
+                x => x.Id == seeded.PendingTokenId && x.RevokedAtUtc != null));
+
+            await using var redeemDb = CreateContext(connectionString);
+            var enrollment = new AgentEnrollmentService(
+                redeemDb, new EfTransactionCoordinator(redeemDb), new EfAuditWriter(redeemDb), clock);
+            var redemption = await enrollment.RedeemAsync(
+                new AgentEnrollmentRedeemRequest(deviceId, seeded.PendingTokenText),
+                "agent-dispatch-fence-test");
+            Assert.Null(redemption);
         }
         finally
         {
@@ -255,13 +269,19 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         IGameClock clock) =>
         new(db, new EfTransactionCoordinator(db), new EfAuditWriter(db), clock);
 
-    private static async Task SeedAsync(
+    private static async Task<SeededDevice> SeedAsync(
         string connectionString,
         string deviceId,
         string connectionId,
         string leaseToken,
         DateTimeOffset now)
     {
+        var pendingTokenText = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var pendingTokenHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(pendingTokenText)));
+        var pendingTokenId = Guid.NewGuid();
+
         await using var db = CreateContext(connectionString);
         db.AgentCredentials.Add(new AgentCredential
         {
@@ -280,8 +300,18 @@ public sealed class AgentDispatchLeaseFencePostgresTests
             AgentVersion = "fence-test",
             StationState = "Ready"
         });
+        db.AgentEnrollmentTokens.Add(AgentEnrollmentToken.Create(
+            pendingTokenId,
+            deviceId,
+            pendingTokenHash,
+            Guid.NewGuid(),
+            now,
+            now.AddMinutes(15)));
         await db.SaveChangesAsync();
+        return new SeededDevice(pendingTokenId, pendingTokenText);
     }
+
+    private sealed record SeededDevice(Guid PendingTokenId, string PendingTokenText);
 
     private static async Task AssertBackendIsBlockedOnLockAsync(
         string connectionString,
@@ -310,6 +340,8 @@ public sealed class AgentDispatchLeaseFencePostgresTests
         await using var db = CreateContext(connectionString);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM agent_connection_leases WHERE device_id = {deviceId}");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
         await db.Database.ExecuteSqlInterpolatedAsync(
