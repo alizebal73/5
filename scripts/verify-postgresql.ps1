@@ -347,6 +347,23 @@ try {
         }
     }
 
+    $previousOperatorManagementIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_OPERATOR_MANAGEMENT_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_OPERATOR_MANAGEMENT_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~OperatorManagementPostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Operator management Owner-concurrency/session/idempotency PostgreSQL verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousOperatorManagementIntegrationFlag) {
+            Remove-Item Env:GAMENET_OPERATOR_MANAGEMENT_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_OPERATOR_MANAGEMENT_POSTGRES_TESTS = $previousOperatorManagementIntegrationFlag
+        }
+    }
+
     $previousAgentDispatchIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_AGENT_DISPATCH_POSTGRES_TESTS", "Process")
     try {
         $env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS = "true"
