@@ -69,6 +69,41 @@ public sealed class HmacRequestFingerprintTests
     }
 
     [Fact]
+    public void Legacy_protected_payload_migration_round_trips_and_preserves_fingerprints()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var signingKey = Key('a');
+        var provisioningKey = Key('b');
+        var generationId = Guid.NewGuid().ToString("N");
+        var legacyJson = "{\"schemaVersion\":1,\"generationId\":\"" + generationId +
+            "\",\"databaseConnectionString\":\"" + ConnectionString +
+            "\",\"jwtSigningKeyBase64\":\"" + signingKey +
+            "\",\"agentProvisioningKeyBase64\":\"" + provisioningKey + "\"}";
+
+        var legacy = DpapiServerSecretStore.ParsePayload(System.Text.Encoding.UTF8.GetBytes(legacyJson));
+        Assert.False(legacy.HasDedicatedFingerprintKey);
+        var payload = new { Operation = "users.create", Password = "Sensitive-Password-123" };
+        var priorFingerprint = new HmacRequestFingerprint(legacy).Compute(payload);
+
+        // Migration material uses the prior root, not a new random key, so stored rows still replay.
+        var migrated = ServerSecretMaterial.Create(
+            legacy.ConnectionString, legacy.SigningKey, legacy.ProvisioningKey, legacy.SigningKey);
+        var protectedBytes = DpapiServerSecretStore.ProtectPayload(migrated);
+        try
+        {
+            var reloaded = DpapiServerSecretStore.UnprotectPayload(protectedBytes);
+            Assert.True(reloaded.HasDedicatedFingerprintKey);
+            Assert.Equal(priorFingerprint, new HmacRequestFingerprint(reloaded).Compute(payload));
+        }
+        finally
+        {
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(protectedBytes);
+        }
+    }
+
+    [Fact]
     public void Fingerprinting_fails_closed_without_a_strong_key()
     {
         Assert.Throws<InvalidOperationException>(() =>
