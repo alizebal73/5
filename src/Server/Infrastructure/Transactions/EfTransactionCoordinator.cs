@@ -21,17 +21,18 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
             }
             catch (Exception ex) when (ContainsUniqueViolation(ex))
             {
-                await RollbackIfActiveAsync(tx, cancellationToken);
+                await tx.RollbackAsync(cancellationToken);
                 db.ChangeTracker.Clear();
                 throw new PersistenceConflictException("persistence.unique", ex);
             }
             catch (PostgresException ex) when (
                 ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
             {
-                // PostgreSQL/Npgsql may already have completed the transaction after a
-                // serialization failure. Do not let a secondary rollback exception mask
-                // the concurrency failure or prevent a bounded retry.
-                await RollbackIfActiveAsync(tx, cancellationToken);
+                // Npgsql may already have completed a transaction after a serialization
+                // failure. Do not explicitly roll it back here: leaving this attempt's
+                // await-using scope disposes the provider transaction, which rolls back
+                // when still active and safely no-ops when the provider already completed it.
+                // This preserves the original PostgreSQL error and allows bounded retry.
                 db.ChangeTracker.Clear();
 
                 if (attempt == 3)
@@ -40,31 +41,6 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
         }
 
         throw new InvalidOperationException("TRANSACTION_RETRY_EXHAUSTED");
-    }
-
-    private static async Task RollbackIfActiveAsync(
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        var dbTransaction = transaction.GetDbTransaction();
-        if (dbTransaction.Connection is null)
-            return;
-
-        try
-        {
-            await transaction.RollbackAsync(cancellationToken);
-        }
-        catch (InvalidOperationException ex) when (
-            string.Equals(
-                ex.Message,
-                "This NpgsqlTransaction has completed; it is no longer usable.",
-                StringComparison.Ordinal))
-        {
-            // Npgsql can retain the connection while its internal transaction status is
-            // already Idle. In that case Connection is non-null, but a second rollback
-            // still throws this specific InvalidOperationException. Preserve the original
-            // PostgreSQL error that caused the rollback/retry; do not mask it with cleanup.
-        }
     }
 
     private static bool ContainsUniqueViolation(Exception exception)
