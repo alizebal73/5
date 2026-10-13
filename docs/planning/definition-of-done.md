@@ -19,6 +19,17 @@ Done فقط زمانی ثبت می‌شود که شواهد دقیقاً با ا
 - [ ] failure/recovery/reconciliation برای state پایدار بررسی شده است.
 - [ ] اثر update/rollback و سازگاری Server/Desktop/Agent مشخص است.
 
+
+## UI و اتصال عملیات (در صورت اثر بر Desktop)
+- [ ] View فقط presentation/Binding است؛ قانون تجاری، مالی، permission یا دسترسی PostgreSQL به XAML/code-behind منتقل نشده است.
+- [ ] Command/ ViewModelها از قرارداد typed و API client استفاده می‌کنند؛ چند نقطهٔ ورود UI قانون دامنه را تکثیر نمی‌کنند.
+- [ ] code-behind به رفتار محدود WPF نیازمند آن محدود است؛ مسیر موفقیت جعلی و mock ماندگار در production وجود ندارد.
+- [ ] وضعیت‌های loading/empty/offline/timeout/denied/conflict و خطاهای فارسی مطابق نیازمندی پیاده شده‌اند.
+- [ ] Binding/Resource/localization و ViewModel/Command tests متناسب با تغییر اجرا شده‌اند؛ سطح RTL/LTR، keyboard/focus و PasswordBox در صورت اثر بررسی شده است.
+- [ ] عملیات موفقیت مالی/نشست فقط بعد از تأیید معتبر Server نمایش داده می‌شود؛ رفتار retry/timeout با idempotency/reload معتبر است.
+- [ ] اگر UI چند محل دسترسی به یک عملیات دارد، هرکدام به use case/contract واحد متصل است و regression آن‌ها بررسی شده است.
+- [ ] [قرارداد UI و برش عمودی](../development/ui-architecture-and-vertical-slice-policy.md) و Action Catalog (در صورت کاربرد) به‌روز است.
+
 ## شواهد آزمون
 - [ ] unit tests پاس‌اند.
 - [ ] PostgreSQL integration/migration/concurrency tests در صورت کاربرد پاس‌اند.
