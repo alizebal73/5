@@ -138,6 +138,128 @@ internal static class DpapiServerSecretStore
         }
     }
 
+    /// <summary>
+    /// Adds the dedicated fingerprint-key field to a legacy protected payload without
+    /// changing its effective fingerprint root. Existing replay hashes therefore remain valid.
+    /// </summary>
+    /// <returns>The encrypted backup path, or null when the store was already migrated.</returns>
+    internal static string? MigrateLegacyFingerprintKey()
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new ServerSecretStoreException("The protected Server secret store requires Windows DPAPI.");
+        EnsureElevatedAdministrator();
+
+        var path = GetDefaultPath();
+        var directory = GetDefaultDirectory();
+        var current = LoadFromPath(path);
+        if (current.HasDedicatedFingerprintKey)
+            return null;
+
+        // For a legacy store the old fingerprint HMAC root was the JWT signing key.
+        // Persist that exact value as the new dedicated root to preserve retained replay hashes.
+        // It becomes independently managed: future JWT rotation must not update this field.
+        var migrated = ServerSecretMaterial.Create(
+            current.ConnectionString,
+            current.SigningKey,
+            current.ProvisioningKey,
+            current.SigningKey);
+        var serviceSid = ResolveServerServiceSid();
+        var operationId = Guid.NewGuid().ToString("N");
+        var tempPath = Path.Combine(directory, ".server-secrets-fingerprint-migration-" + operationId + ".tmp");
+        var backupPath = Path.Combine(directory, "server-secrets.pre-idempotency-migration-" + operationId + ".dpapi");
+        var failedPath = Path.Combine(directory, ".server-secrets-failed-migration-" + operationId + ".dpapi");
+        byte[]? protectedBytes = null;
+        var replaced = false;
+
+        try
+        {
+            protectedBytes = ProtectPayload(migrated);
+            using (var stream = System.IO.FileSystemAclExtensions.Create(
+                new FileInfo(tempPath),
+                FileMode.CreateNew,
+                FileSystemRights.ReadAndExecute | FileSystemRights.WriteData,
+                FileShare.None,
+                bufferSize: 4096,
+                FileOptions.WriteThrough,
+                CreateFileSecurity(serviceSid)))
+            {
+                stream.Write(protectedBytes);
+                stream.Flush(flushToDisk: true);
+            }
+
+            RejectReparsePoint(tempPath, isDirectory: false);
+            ValidateAccessControl(tempPath, isDirectory: false, serviceSid);
+
+            // Re-read immediately before replacement. If another admin already migrated the store,
+            // or changed any secret, do not overwrite that newer state.
+            var latest = LoadFromPath(path);
+            if (latest.HasDedicatedFingerprintKey)
+                return null;
+            if (!string.Equals(latest.ConnectionString, current.ConnectionString, StringComparison.Ordinal) ||
+                !string.Equals(latest.SigningKey, current.SigningKey, StringComparison.Ordinal) ||
+                !string.Equals(latest.ProvisioningKey, current.ProvisioningKey, StringComparison.Ordinal))
+                throw new ServerSecretStoreException(
+                    "The protected Server secret store changed during migration. No replacement was made.");
+
+            // Keep a machine-DPAPI-protected, ACL-validated copy of the exact prior payload.
+            // File.Replace performs the same-volume replacement atomically.
+            File.Replace(tempPath, path, backupPath, ignoreMetadataErrors: false);
+            replaced = true;
+
+            ValidateAccessControl(path, isDirectory: false, serviceSid);
+            ValidateAccessControl(backupPath, isDirectory: false, serviceSid);
+
+            var verified = LoadFromPath(path);
+            if (!verified.HasDedicatedFingerprintKey ||
+                !string.Equals(verified.FingerprintKey, current.SigningKey, StringComparison.Ordinal) ||
+                !string.Equals(verified.SigningKey, current.SigningKey, StringComparison.Ordinal) ||
+                !string.Equals(verified.ProvisioningKey, current.ProvisioningKey, StringComparison.Ordinal) ||
+                !string.Equals(verified.ConnectionString, current.ConnectionString, StringComparison.Ordinal))
+                throw new ServerSecretStoreException(
+                    "The migrated protected Server secret store failed read-after-write validation.");
+
+            return backupPath;
+        }
+        catch (Exception exception)
+        {
+            if (replaced && File.Exists(backupPath))
+            {
+                try
+                {
+                    File.Replace(backupPath, path, failedPath, ignoreMetadataErrors: false);
+                    ValidateAccessControl(path, isDirectory: false, serviceSid);
+                    if (File.Exists(failedPath))
+                        File.Delete(failedPath);
+                }
+                catch
+                {
+                    throw new ServerSecretStoreException(
+                        "Secret-store migration failed and automatic rollback could not be verified. Keep the GameNet Server stopped and inspect the restricted backup at " +
+                        backupPath + ".");
+                }
+            }
+
+            if (exception is ServerSecretStoreException storeException)
+                throw storeException;
+            throw new ServerSecretStoreException(
+                "Legacy idempotency fingerprint migration failed. The original protected payload was preserved.");
+        }
+        finally
+        {
+            if (protectedBytes is not null)
+                CryptographicOperations.ZeroMemory(protectedBytes);
+            try
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+            catch
+            {
+                // A leftover file is encrypted and has a validated restrictive DACL.
+            }
+        }
+    }
+
     internal static void Provision(
         string connectionString,
         string jwtSigningKeyBase64,
