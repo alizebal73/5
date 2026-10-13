@@ -21,13 +21,15 @@ public sealed class AgentHub(
     public async Task<AgentConnectionLeaseState> ConnectAsync(AgentConnectionLeaseRequest request)
     {
         var deviceId = RequireDeviceId();
-        await EnsureCredentialActiveAsync(deviceId);
+        var credentialId = RequireCredentialId();
+        await EnsureCredentialActiveAsync(deviceId, credentialId);
 
         if (!string.Equals(deviceId, request.DeviceId, StringComparison.Ordinal))
             throw new HubException("AGENT_DEVICE_ID_MISMATCH");
 
         var lease = await leases.TryAcquireAsync(
             request with { ConnectionId = Context.ConnectionId },
+            credentialId,
             TimeSpan.FromSeconds(options.Value.Agent.LeaseDurationSeconds),
             Context.ConnectionAborted);
 
@@ -47,7 +49,7 @@ public sealed class AgentHub(
             // Re-check after acquiring the lease. If a credential was revoked or
             // rotated between the first check and lease acquisition, release only
             // this connection's lease and fail closed.
-            await EnsureCredentialActiveAsync(deviceId);
+            await EnsureCredentialActiveAsync(deviceId, credentialId);
         }
         catch
         {
@@ -133,9 +135,11 @@ public sealed class AgentHub(
         await base.OnDisconnectedAsync(exception);
     }
 
-    private async Task EnsureCredentialActiveAsync(string deviceId)
+    private Task EnsureCredentialActiveAsync(string deviceId) =>
+        EnsureCredentialActiveAsync(deviceId, RequireCredentialId());
+
+    private async Task EnsureCredentialActiveAsync(string deviceId, Guid credentialId)
     {
-        var credentialId = RequireCredentialId();
         if (!await credentials.IsCredentialActiveAsync(credentialId, deviceId, Context.ConnectionAborted))
             throw new HubException("AGENT_CREDENTIAL_REVOKED");
     }
