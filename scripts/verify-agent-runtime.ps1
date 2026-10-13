@@ -224,10 +224,28 @@ WHERE device_id = '$deviceId';
 
     $heartbeatTimeQuery = "SELECT last_heartbeat_at_utc::text FROM agent_connection_leases WHERE device_id = '$deviceId';"
     $heartbeatBefore = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
-    Start-Sleep -Seconds 6
-    $heartbeatAfter = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
-    if ([string]::IsNullOrWhiteSpace($heartbeatBefore) -or [string]::IsNullOrWhiteSpace($heartbeatAfter) -or $heartbeatBefore.Trim() -eq $heartbeatAfter.Trim()) {
-        throw "Agent heartbeat timestamp did not advance while the Agent remained connected. See $agentLog."
+    if ([string]::IsNullOrWhiteSpace($heartbeatBefore)) {
+        throw "Agent heartbeat timestamp was unavailable while the Agent remained connected. See $agentLog."
+    }
+
+    # Heartbeat is scheduled every five seconds, but a hosted Windows runner can be delayed
+    # while the Agent completes its heartbeat/reconciliation cycle. Poll for the next durable
+    # timestamp rather than assuming that one fixed six-second sleep must include a new cycle.
+    # The bounded 12-second window remains shorter than the configured 15-second lease.
+    $heartbeatAdvanced = $false
+    $heartbeatAfter = $heartbeatBefore
+    for ($i = 0; $i -lt 12; $i++) {
+        Start-Sleep -Seconds 1
+        $heartbeatAfter = (& (Join-Path $env:ProgramFiles "PostgreSQL\17\bin\psql.exe") @pgBase "--dbname=$pgDatabase" "-Atc" $heartbeatTimeQuery 2>$null) -join ""
+        if ($LASTEXITCODE -eq 0 -and
+            -not [string]::IsNullOrWhiteSpace($heartbeatAfter) -and
+            $heartbeatBefore.Trim() -ne $heartbeatAfter.Trim()) {
+            $heartbeatAdvanced = $true
+            break
+        }
+    }
+    if (-not $heartbeatAdvanced) {
+        throw "Agent heartbeat timestamp did not advance within the bounded 12-second window while the Agent remained connected. See $agentLog."
     }
 
     $healthFieldsQuery = "SELECT COALESCE(agent_version,'') || '|' || COALESCE(station_state,'') FROM agent_connection_leases WHERE device_id = '$deviceId';"
