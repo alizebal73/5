@@ -6,6 +6,7 @@ public interface IAgentConnectionLeaseStore
 {
     Task<AgentConnectionLeaseState?> TryAcquireAsync(
         AgentConnectionLeaseRequest request,
+        Guid credentialId,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
 
