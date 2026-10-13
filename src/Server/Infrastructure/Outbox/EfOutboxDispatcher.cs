@@ -32,21 +32,30 @@ public sealed class EfOutboxDispatcher(
         // Heal that state before applying the attempt-limit dead-letter transition.
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
+            WITH candidates AS (
+                SELECT message.id
+                FROM outbox_messages AS message
+                WHERE message.published_at_utc IS NULL
+                  AND message.dead_lettered_at_utc IS NULL
+                  AND (message.lease_expires_at_utc IS NULL OR message.lease_expires_at_utc <= {now})
+                  AND EXISTS (
+                      SELECT 1
+                      FROM outbox_inbox_receipts AS receipt
+                      WHERE receipt.event_id = message.event_id
+                        AND receipt.type = message.type
+                  )
+                ORDER BY message.id
+                FOR UPDATE SKIP LOCKED
+                LIMIT 500
+            )
             UPDATE outbox_messages AS message
             SET published_at_utc = {now},
                 next_attempt_at_utc = NULL,
                 last_failure_code = NULL,
                 lease_token = NULL,
                 lease_expires_at_utc = NULL
-            WHERE message.published_at_utc IS NULL
-              AND message.dead_lettered_at_utc IS NULL
-              AND (message.lease_expires_at_utc IS NULL OR message.lease_expires_at_utc <= {now})
-              AND EXISTS (
-                  SELECT 1
-                  FROM outbox_inbox_receipts AS receipt
-                  WHERE receipt.event_id = message.event_id
-                    AND receipt.type = message.type
-              )
+            FROM candidates
+            WHERE message.id = candidates.id
             """,
             cancellationToken);
 
@@ -55,16 +64,37 @@ public sealed class EfOutboxDispatcher(
         // more work; otherwise MaxAttempts could be bypassed by repeated process crashes.
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            UPDATE outbox_messages
+            WITH candidates AS (
+                SELECT message.id
+                FROM outbox_messages AS message
+                WHERE message.published_at_utc IS NULL
+                  AND message.dead_lettered_at_utc IS NULL
+                  AND message.attempt_count >= {maxAttempts}
+                  AND (message.lease_expires_at_utc IS NULL OR message.lease_expires_at_utc <= {now})
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM outbox_inbox_receipts AS receipt
+                      WHERE receipt.event_id = message.event_id
+                        AND receipt.type = message.type
+                  )
+                ORDER BY message.id
+                FOR UPDATE SKIP LOCKED
+                LIMIT 500
+            )
+            UPDATE outbox_messages AS message
             SET dead_lettered_at_utc = {now},
                 next_attempt_at_utc = NULL,
                 last_failure_code = 'max_attempts_exhausted_after_lease_expiry',
                 lease_token = NULL,
                 lease_expires_at_utc = NULL
-            WHERE published_at_utc IS NULL
-              AND dead_lettered_at_utc IS NULL
-              AND attempt_count >= {maxAttempts}
-              AND (lease_expires_at_utc IS NULL OR lease_expires_at_utc <= {now})
+            FROM candidates
+            WHERE message.id = candidates.id
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM outbox_inbox_receipts AS receipt
+                  WHERE receipt.event_id = message.event_id
+                    AND receipt.type = message.type
+              )
             """,
             cancellationToken);
 
@@ -110,7 +140,6 @@ public sealed class EfOutboxDispatcher(
         DateTimeOffset publishedAtUtc,
         CancellationToken cancellationToken = default)
     {
-        var now = clock.UtcNow;
         var updated = await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE outbox_messages
@@ -121,8 +150,14 @@ public sealed class EfOutboxDispatcher(
                 lease_expires_at_utc = NULL
             WHERE id = {messageId}
               AND published_at_utc IS NULL
+              AND dead_lettered_at_utc IS NULL
               AND lease_token = {leaseToken}
-              AND lease_expires_at_utc > {now}
+              AND EXISTS (
+                  SELECT 1
+                  FROM outbox_inbox_receipts AS receipt
+                  WHERE receipt.event_id = outbox_messages.event_id
+                    AND receipt.type = outbox_messages.type
+              )
             """,
             cancellationToken);
 
@@ -152,6 +187,9 @@ public sealed class EfOutboxDispatcher(
         if (maxAttempts is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts));
 
+        // Failure may only be recorded by the current, still-live claim. Unlike
+        // successful completion backed by a committed Inbox receipt, an expired
+        // worker must not reschedule/dead-letter work after losing its lease.
         var now = clock.UtcNow;
         var updated = await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
