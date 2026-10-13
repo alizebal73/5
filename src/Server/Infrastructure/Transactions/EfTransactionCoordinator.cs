@@ -1,5 +1,6 @@
 using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace GameNet.Server.Infrastructure.Transactions;
@@ -24,12 +25,21 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
                 db.ChangeTracker.Clear();
                 throw new PersistenceConflictException("persistence.unique", ex);
             }
-            catch (PostgresException ex) when ((ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected) && attempt < 3)
+            catch (PostgresException ex) when (
+                ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
             {
-                await tx.RollbackAsync(cancellationToken);
+                // Npgsql may already have completed a transaction after a serialization
+                // failure. Do not explicitly roll it back here: leaving this attempt's
+                // await-using scope disposes the provider transaction, which rolls back
+                // when still active and safely no-ops when the provider already completed it.
+                // This preserves the original PostgreSQL error and allows bounded retry.
                 db.ChangeTracker.Clear();
+
+                if (attempt == 3)
+                    throw new InvalidOperationException("TRANSACTION_RETRY_EXHAUSTED", ex);
             }
         }
+
         throw new InvalidOperationException("TRANSACTION_RETRY_EXHAUSTED");
     }
 
