@@ -20,6 +20,7 @@ $envNames = @(
     "GameNet__Authentication__Issuer",
     "GameNet__Authentication__Audience",
     "GameNet__Authentication__SigningKey",
+    "GameNet__Idempotency__FingerprintKey",
     "GameNet__Agent__ProvisioningKey",
     "GameNet__AgentIdentity__RootPath",
     "GameNet__AgentTransport__ServerBaseUrl",
@@ -126,6 +127,7 @@ $testSucceeded = $false
 $bootstrapSecret = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $signingKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$fingerprintKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 $username = "ci-owner-" + [Guid]::NewGuid().ToString("N").Substring(0, 16)
 $password = "CI-owner-" + [Guid]::NewGuid().ToString("N")
 $wrongPassword = "wrong-" + [Guid]::NewGuid().ToString("N")
@@ -157,6 +159,7 @@ try {
     $env:GameNet__Authentication__Issuer = "GameNet5.Identity.RuntimeCertification"
     $env:GameNet__Authentication__Audience = "GameNet5.Identity.RuntimeCertification.Client"
     $env:GameNet__Authentication__SigningKey = $signingKey
+    $env:GameNet__Idempotency__FingerprintKey = $fingerprintKey
     $env:GameNet__Agent__ProvisioningKey = $provisioningKey
     Remove-Item Env:GAMENET_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
     Remove-Item Env:GameNet__Setup__BootstrapSecret -ErrorAction SilentlyContinue
@@ -975,15 +978,15 @@ finally {
     else {
         $stdout = Read-DiagnosticText $serverLog
         $stderr = Read-DiagnosticText $serverErrorLog
-        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken, $stationEnrollmentToken)) {
+        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $fingerprintKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken, $stationEnrollmentToken)) {
             if (-not [string]::IsNullOrWhiteSpace([string]$secretValue)) {
                 $stdout = $stdout.Replace([string]$secretValue, "<redacted>")
                 $stderr = $stderr.Replace([string]$secretValue, "<redacted>")
                 $failureMessage = $failureMessage.Replace([string]$secretValue, "<redacted>")
             }
         }
-        $stdout = [Regex]::Replace($stdout, '(?i)(password|secret|token|signingkey|provisioningkey)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
-        $stderr = [Regex]::Replace($stderr, '(?i)(password|secret|token|signingkey|provisioningkey)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+        $stdout = [Regex]::Replace($stdout, '(?i)(password|secret|token|signingkey|provisioningkey|fingerprintkey)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+        $stderr = [Regex]::Replace($stderr, '(?i)(password|secret|token|signingkey|provisioningkey|fingerprintkey)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
 
         New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
         $diagnosticPath = Join-Path $diagnosticRoot "identity-runtime-diagnostic-$runToken.txt"
