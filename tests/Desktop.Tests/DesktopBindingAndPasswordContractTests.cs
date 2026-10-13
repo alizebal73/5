@@ -23,41 +23,50 @@ public sealed class DesktopBindingAndPasswordContractTests
         "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Fact]
-    public void Every_main_window_binding_path_resolves_on_its_expected_data_context()
+    public void Every_main_window_and_station_board_binding_path_resolves_on_its_expected_data_context()
     {
         var root = FindRepositoryRoot();
-        var view = XDocument.Load(Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"));
-        var failures = new List<string>();
-
-        foreach (var attribute in view.Descendants().Attributes())
+        var viewPaths = new[]
         {
-            foreach (Match match in Regex.Matches(attribute.Value, @"\{Binding(?:\s+([^}]+))?\}"))
+            Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+        };
+
+        foreach (var viewPath in viewPaths)
+        {
+            var view = XDocument.Load(viewPath);
+            var failures = new List<string>();
+
+            foreach (var attribute in view.Descendants().Attributes())
             {
-                var bindingBody = match.Groups.Count > 1 && match.Groups[1].Success
-                    ? match.Groups[1].Value
-                    : string.Empty;
-                var path = bindingBody.Split(',')[0].Trim();
-                if (path.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
-                    path = path["Path=".Length..].Trim();
-                if (string.IsNullOrWhiteSpace(path) || path == ".")
-                    continue;
-
-                var dataTemplateBinding = attribute.Parent?.AncestorsAndSelf()
-                    .Any(element => element.Name.LocalName == "DataTemplate") == true;
-                var rootType = dataTemplateBinding ? typeof(StationBoardItem) : typeof(LoginViewModel);
-
-                if (!TryResolvePath(rootType, path, out var unresolvedSegment))
+                foreach (Match match in Regex.Matches(attribute.Value, @"\{Binding(?:\s+([^}]+))?\}"))
                 {
-                    failures.Add(
-                        $"{attribute.Parent?.Name.LocalName}.{attribute.Name.LocalName}: '{path}' " +
-                        $"does not resolve at segment '{unresolvedSegment}' on {rootType.Name}.");
+                    var bindingBody = match.Groups.Count > 1 && match.Groups[1].Success
+                        ? match.Groups[1].Value
+                        : string.Empty;
+                    var path = bindingBody.Split(',')[0].Trim();
+                    if (path.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
+                        path = path["Path=".Length..].Trim();
+                    if (string.IsNullOrWhiteSpace(path) || path == ".")
+                        continue;
+
+                    var dataTemplateBinding = attribute.Parent?.AncestorsAndSelf()
+                        .Any(element => element.Name.LocalName == "DataTemplate") == true;
+                    var rootType = dataTemplateBinding ? typeof(StationBoardItem) : typeof(LoginViewModel);
+
+                    if (!TryResolvePath(rootType, path, out var unresolvedSegment))
+                    {
+                        failures.Add(
+                            $"{attribute.Parent?.Name.LocalName}.{attribute.Name.LocalName}: '{path}' " +
+                            $"does not resolve at segment '{unresolvedSegment}' on {rootType.Name}.");
+                    }
                 }
             }
-        }
 
-        Assert.True(failures.Count == 0,
-            "MainWindow contains invalid WPF binding paths:" + Environment.NewLine +
-            string.Join(Environment.NewLine, failures));
+            Assert.True(failures.Count == 0,
+                $"{Path.GetFileName(viewPath)} contains invalid WPF binding paths:" + Environment.NewLine +
+                string.Join(Environment.NewLine, failures));
+        }
     }
 
     [Fact]
