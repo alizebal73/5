@@ -154,7 +154,14 @@ internal static class DpapiServerSecretStore
                 return found;
             if (reader.TokenType != JsonTokenType.PropertyName)
                 throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
-            var isDedicatedFingerprintField = reader.ValueTextEquals("idempotencyFingerprintKeyBase64");
+            var propertyName = reader.GetString();
+            var isDedicatedFingerprintField = string.Equals(
+                propertyName, "idempotencyFingerprintKeyBase64", StringComparison.Ordinal);
+            var isMisCasedFingerprintField = string.Equals(
+                propertyName, "idempotencyFingerprintKeyBase64", StringComparison.OrdinalIgnoreCase) &&
+                !isDedicatedFingerprintField;
+            if (isMisCasedFingerprintField)
+                throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
             if (!reader.Read())
                 throw new ServerSecretStoreException("The protected Server secret store format is unsupported or invalid.");
 
