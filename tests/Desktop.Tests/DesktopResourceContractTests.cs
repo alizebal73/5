@@ -37,41 +37,55 @@ public sealed class DesktopResourceContractTests
     }
 
     [Fact]
-    public void Every_dynamic_resource_in_main_window_exists_in_both_localizations()
+    public void Every_dynamic_resource_in_main_window_and_station_board_exists_in_both_localizations()
     {
         var root = FindRepositoryRoot();
-        var viewPath = Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml");
+        var viewPaths = new[]
+        {
+            Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+        };
         var faPath = Path.Combine(root, "src", "Desktop", "Resources", "Strings.fa-IR.xaml");
         var enPath = Path.Combine(root, "src", "Desktop", "Resources", "Strings.en-US.xaml");
-
-        var view = XDocument.Load(viewPath);
         var faKeys = GetResourceKeys(XDocument.Load(faPath));
         var enKeys = GetResourceKeys(XDocument.Load(enPath));
 
-        var referencedKeys = GetResourceReferences(view, "DynamicResource");
-        Assert.NotEmpty(referencedKeys);
+        foreach (var viewPath in viewPaths)
+        {
+            var view = XDocument.Load(viewPath);
+            var referencedKeys = GetResourceReferences(view, "DynamicResource");
+            Assert.NotEmpty(referencedKeys);
 
-        var missingFa = referencedKeys.Except(faKeys, StringComparer.Ordinal).OrderBy(key => key).ToArray();
-        var missingEn = referencedKeys.Except(enKeys, StringComparer.Ordinal).OrderBy(key => key).ToArray();
+            var missingFa = referencedKeys.Except(faKeys, StringComparer.Ordinal).OrderBy(key => key).ToArray();
+            var missingEn = referencedKeys.Except(enKeys, StringComparer.Ordinal).OrderBy(key => key).ToArray();
 
-        Assert.True(missingFa.Length == 0,
-            $"Missing fa-IR resource keys: {string.Join(", ", missingFa)}");
-        Assert.True(missingEn.Length == 0,
-            $"Missing en-US resource keys: {string.Join(", ", missingEn)}");
+            Assert.True(missingFa.Length == 0,
+                $"{Path.GetFileName(viewPath)} missing fa-IR resource keys: {string.Join(", ", missingFa)}");
+            Assert.True(missingEn.Length == 0,
+                $"{Path.GetFileName(viewPath)} missing en-US resource keys: {string.Join(", ", missingEn)}");
+        }
     }
 
     [Fact]
-    public void Static_resources_used_by_main_window_resolve_in_the_window_resource_dictionary()
+    public void Static_resources_used_by_each_view_resolve_in_that_view_resources()
     {
         var root = FindRepositoryRoot();
-        var viewPath = Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml");
-        var view = XDocument.Load(viewPath);
-        var localKeys = GetResourceKeys(view);
-        var referencedKeys = GetResourceReferences(view, "StaticResource");
+        var viewPaths = new[]
+        {
+            Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+        };
 
-        var missing = referencedKeys.Except(localKeys, StringComparer.Ordinal).OrderBy(key => key).ToArray();
-        Assert.True(missing.Length == 0,
-            $"Unresolved MainWindow static resources: {string.Join(", ", missing)}");
+        foreach (var viewPath in viewPaths)
+        {
+            var view = XDocument.Load(viewPath);
+            var localKeys = GetResourceKeys(view);
+            var referencedKeys = GetResourceReferences(view, "StaticResource");
+
+            var missing = referencedKeys.Except(localKeys, StringComparer.Ordinal).OrderBy(key => key).ToArray();
+            Assert.True(missing.Length == 0,
+                $"{Path.GetFileName(viewPath)} has unresolved static resources: {string.Join(", ", missing)}");
+        }
     }
 
     private static HashSet<string> GetResourceKeys(XDocument document) =>
