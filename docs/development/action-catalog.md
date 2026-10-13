@@ -58,7 +58,7 @@
 - **Permission / preconditions:** authenticated `Operator` plus Server-side `stations.read`.
 - **Idempotency / concurrency:** read-only; no idempotency key. A generation fence prevents a late response repopulating local station data after logout/permission revocation.
 - **Audit:** no mutation Audit expected.
-- **UI entry / states:** `RefreshCommand), post-login initial load, and re-read following successful station mutations/probes; busy, empty/no-results, denied, offline, timeout and success.
+- **UI entry / states:** `RefreshCommand`, post-login initial load, and re-read following successful station mutations/probes; busy, empty/no-results, denied, offline, timeout and success.
 - **Evidence:** `StationBoardViewModel`, `StationBoardPermissionTests`, `StationBoardFilterTests`, `StationEndpoints`, `StationService`.
 
 ### `stations.create`
