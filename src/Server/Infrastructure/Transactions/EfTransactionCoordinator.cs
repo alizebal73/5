@@ -1,5 +1,6 @@
 using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace GameNet.Server.Infrastructure.Transactions;
@@ -20,17 +21,43 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
             }
             catch (Exception ex) when (ContainsUniqueViolation(ex))
             {
-                await tx.RollbackAsync(cancellationToken);
+                await RollbackIfActiveAsync(tx, cancellationToken);
                 db.ChangeTracker.Clear();
                 throw new PersistenceConflictException("persistence.unique", ex);
             }
-            catch (PostgresException ex) when ((ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected) && attempt < 3)
+            catch (PostgresException ex) when (
+                ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
             {
-                await tx.RollbackAsync(cancellationToken);
+                // PostgreSQL/Npgsql may already have completed the transaction after a
+                // serialization failure. Do not let a secondary rollback exception mask
+                // the concurrency failure or prevent a bounded retry.
+                await RollbackIfActiveAsync(tx, cancellationToken);
                 db.ChangeTracker.Clear();
+
+                if (attempt == 3)
+                    throw new InvalidOperationException("TRANSACTION_RETRY_EXHAUSTED", ex);
             }
         }
+
         throw new InvalidOperationException("TRANSACTION_RETRY_EXHAUSTED");
+    }
+
+    private static async Task RollbackIfActiveAsync(
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var dbTransaction = transaction.GetDbTransaction();
+        if (dbTransaction.Connection is null)
+            return;
+
+        try
+        {
+            await transaction.RollbackAsync(cancellationToken);
+        }
+        catch (InvalidOperationException) when (dbTransaction.Connection is null)
+        {
+            // The provider completed the transaction between the state check and rollback.
+        }
     }
 
     private static bool ContainsUniqueViolation(Exception exception)
