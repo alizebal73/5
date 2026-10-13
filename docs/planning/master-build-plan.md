@@ -19,17 +19,16 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 ### 1. Establish and protect the engineering foundation
 - Preserve the closed Foundation certification as evidence for its exact certified SHAs; do not relabel older evidence as a pass for new code.
 - Require the relevant Quick Validation and full PostgreSQL/runtime certification before source-sensitive Integration changes merge.
-- Resolve the branch-governance gap: up-to-date PR policy and a workable independent-review rule for protected branches.
+- Keep protected-branch policy and CI evidence accurate: require the observed exact checks, document the owner-authorized delegated technical-review process where used, and never describe that as independent human approval.
 - Exit: required gates actually run on the intended candidate, failures block merge, and review/merge rules match the agreed no-unreviewed-merge process.
 
-### 2. Close the canonical architecture and module inventory (CURRENT ACTIVE PHASE)
-- Complete PR #56: one canonical module catalog, ownership boundaries, module-root READMEs, traceability, and architecture guards.
-- Correct the architecture guard so it rejects forbidden cross-layer/cross-module access while permitting legitimate Infrastructure responsibilities; add tests for both forbidden and permitted examples.
-- Keep the distinction between a documented module boundary and an implemented business capability explicit.
-- Rebase/update the candidate to the current Integration base after the required CI governance change is resolved. Run all required gates on the exact updated SHA and obtain review before closing the phase.
-- Exit: 19-module inventory is consistent across plan/catalog/tree/requirements; guards are demonstrated to be correct; required CI is green on the exact candidate; review is complete.
+### 2. Close the canonical architecture and module inventory — COMPLETED (2026-10-12)
+- PR #56 merged and [Issue #55](https://github.com/alizebal73/5/issues/55) closed after the canonical 19-module catalog, ownership boundaries, module-root READMEs, requirements alignment and architecture guards were integrated.
+- The guard and inventory are ongoing regression requirements; any future change must keep them green.
+- **Scope boundary:** Stage 2 completion certifies the module inventory/architecture controls only. It does not claim that Customers, Sessions, Tariffs, Billing/Wallet, Inventory/Buffet, VIP, Reports or other listed business capabilities are implemented.
+- Exit: satisfied by merged PR #56 and the recorded Stage 2 closeout; continue following the product roadmap below.
 
-### 3. Harden the existing platform; do not rebuild it
+### 3. Harden the existing platform; do not rebuild it (CURRENT ACTIVE PHASE — 2026-10-13)
 - Compare Identity/operator roles and permissions, Stations, Agent enrollment/credentials, heartbeat/lease/fencing/reconnect, ClientControl authorization/results, audit, idempotency and Outbox against their requirements.
 - Fix only demonstrated gaps; preserve already-working code and its regression coverage.
 - ADR-0002 is accepted as the architecture contract as of 2026-10-13 ([canonical decision](../decisions/ADR-0002-server-secret-lifecycle.md)); this is not an implementation or release pass. Keep rotation, recovery, redaction, and their automated regression tests as explicit open work, and do not expose dependent capabilities for operational use before their required gates pass. Accept/reconcile other security ADRs before building features that depend on them; keep installed Windows Service ACL/DPAPI/TLS proof in the final acceptance gate.
@@ -79,7 +78,7 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 
 ### When code first enters `main`, and how it stays current
 - Keep `main` free of direct development commits and unreviewed changes. Continue day-to-day development on `integration/runtime-operator-v1` through focused PRs.
-- The first promotion to `main` happens only after Phase 2 closes: promote the reviewed, fully gated Foundation/architecture baseline with a PR from Integration to `main`; verify the resulting `main` merge SHA.
+- Stage 2 is closed, but that alone does not trigger a promotion. Keep `main` at its intentionally empty starter commit until the owner explicitly authorizes a coherent, reviewed promotion milestone and its exact-SHA gates pass; then use a PR and verify the merge SHA.
 - After that, promote stable, coherent milestones to `main` at defined delivery checkpoints (especially the first usable core journey and later release-ready increments), not after every commit and not only once at the very end.
 - Every promotion is an explicit PR with the required independent review and exact-SHA checks. Never copy files manually, merge backwards from `main` to Integration as a substitute for a promotion, or use a green run on an older SHA as evidence for the new merge.
 - A `main` merge means a reviewed stable development checkpoint; it does not mean the product is ready for the live shop. Production release still requires Phase 10 acceptance.
@@ -98,18 +97,19 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 - Before implementing a slice, complete its traceability row and Definition of Ready. Before marking it Done, attach tests and exact-SHA evidence according to the row and the current checkpoint.
 - The engineering roadmap's governance stages (Foundation/CI/requirements consolidation) are separate from the implementation-stage numbers below; do not confuse the stage numbering.
 
-## Current execution sequence lock — 2026-10-12 (post-merge)
+## Current execution sequence lock — 2026-10-13 (post-merge evidence snapshot)
 
-This is the active sequence of work, not a live branch-pointer feed. SHA values below identify specific evidence events. The detailed gate rules, current Draft PR dispositions and anti-loop policy are maintained in [Active Execution Control](../operations/active-execution-control.md). Always read live branch heads from GitHub before taking action; a documentation PR itself advances the Integration SHA.
+This is a dated evidence snapshot, not a live branch pointer. Always read GitHub before an operation; this documentation PR will advance Integration again.
 
-1. **Code-integration checkpoint — CLOSED.** This is separate from the numbered Master Plan Stage 1, which means Foundation certification (also closed, with exact-SHA evidence below). PR #40 merged runtime/operator code at `58717adc6c1553ef21221c3d484f093494ba1ae7`; exact candidate checks [Quick #38180651116](https://github.com/alizebal73/5/actions/runs/38180651116), [Full Foundation #38180646187](https://github.com/alizebal73/5/actions/runs/38180646187) and [Runtime payload #38180651104](https://github.com/alizebal73/5/actions/runs/38180651104) passed. The source merge passed [Quick #38181118466](https://github.com/alizebal73/5/actions/runs/38181118466) and [Full Foundation #38181118446](https://github.com/alizebal73/5/actions/runs/38181118446).
-2. PR #41 then made documentation-only changes and merged at `362513ad812aebef4ad22420f9b905d79490219d` (the Integration SHA observed at that event, not a permanent live pointer). The docs candidate passed [Quick #38181520088](https://github.com/alizebal73/5/actions/runs/38181520088); the pre-control Integration SHA `362513ad812aebef4ad22420f9b905d79490219d` passed [Quick #38181599202](https://github.com/alizebal73/5/actions/runs/38181599202). No runtime-source changes were added after the Full Foundation pass on `58717adc...`.
-3. Keep `main` at `b9288471f2047570eaf8d0d6552cf87bc0ddc214` unchanged. PR #32 moved `foundation/runtime-final-v2` to `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; post-merge Full Foundation [#38182502053](https://github.com/alizebal73/5/actions/runs/38182502053) passed on this exact SHA via the push trigger. This is now the latest certified Foundation checkpoint. Future protected Foundation pushes auto-trigger the same gate.
-4. Hosted Windows CI standardization is merged on both streams: Foundation PR #32 passed exact-tip Full Foundation [#38182502053](https://github.com/alizebal73/5/actions/runs/38182502053); Integration PR #44 candidate passed Quick push/PR, Full Foundation and Runtime payload; merged Integration SHA `161b4cbbbe16cd3fd4046f174a1c09380139c67b` passed post-merge Quick [#38183458461](https://github.com/alizebal73/5/actions/runs/38183458461) and Full Foundation [#38183458486](https://github.com/alizebal73/5/actions/runs/38183458486). PR #31 is closed as superseded for runner changes with its source branch retained for separate test-only service tooling. PR #15 contains separate endpoint/TLS runtime work; do not merge it wholesale or edit overlapping workflow files in parallel.
-5. **Active development — finish the planned product scope now.** Follow Master Build Plan order and maintain REQ-to-code/API/test/evidence traceability for every slice. Do not wait for physical or interactive acceptance before completing Customers, Tariffs, Sessions, Billing/Wallet/Debt, Inventory/Buffet/VIP/Reports/Shifts/Approvals and the other planned modules. Automated tests and exact-SHA CI continue throughout.
-6. **Build the real Setup.exe/MSI candidate after feature completion.** Resolve the PostgreSQL provisioning/upgrade contract, service identity, package manifest/signing/SBOM and backup/recovery requirements needed for the release candidate. A portable runtime ZIP is not a Setup deliverable.
-7. **Run final acceptance only after that Setup candidate exists.** On isolated Windows test PCs and a disposable DB, validate installer lifecycle first, then Runtime service identity/effective ACLs, DPAPI/TLS access after restart, enrollment replay/revoke, lease/heartbeat and two-PC LAN reconnect, followed by interactive WPF RTL/LTR, keyboard/focus/navigation, PasswordBox clearing and permission/offline/loading/error states. Review the read-only `scripts/inspect-manager-runtime-state.ps1` output before any machine changes; never provision secrets or change ACL/TLS on the existing Manager PC without preflight review and explicit approval. Final acceptance also includes update/rollback, signed packages, SBOM, backup recovery and only then the staged 2–3-PC and ~15-station pilots.
-8. Docs-control PR #42 was merged as `d2d8c626c678078c52b840fd0c9c751e7583fa91` and its Quick Validation passed on head `623bb678263e0d42bafa35efd7c5ca0afc6064fa`: [run #38182154397](https://github.com/alizebal73/5/actions/runs/38182154397). This is an immutable evidence event, not a live Integration pointer. Use the [active execution control](../operations/active-execution-control.md) as the single register for Draft PR disposition and repeat-test policy. Never let a new gate silently move the exit criteria of a closed stage.
+- **Live read-back before this docs-only PR:** `integration/runtime-operator-v1` was exactly `610ad37739e4ea32ee4e0d4d24d011b8e413e908`, the squash-merge SHA for PR #82. The current Foundation branch read-back was `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; `main` remains at its deliberately unchanged starter SHA `b9288471f2047570eaf8d0d6552cf87bc0ddc214`.
+- **Master Plan Stage 1 — Foundation certification: CLOSED.** The certified Foundation checkpoint remains linked in [Stable Checkpoint](../operations/stable-checkpoint.md); final installed-Service/release acceptance is a separate gate.
+- **Master Plan Stage 2 — module inventory/architecture guard: CLOSED.** PR #56 merged and [Issue #55](https://github.com/alizebal73/5/issues/55) closed. The 19-module ownership/catalog and architecture-guard work is complete; this does not mean the listed business modules are implemented.
+- **Identity audit invariant gap: implementation/tests complete, documentation closure in progress.** PR #82 merged at `610ad37739e4ea32ee4e0d4d24d011b8e413e908`. Its PR-head Quick Validation and Full Foundation passed in [run #38461912514](https://github.com/alizebal73/5/actions/runs/38461912514). The post-merge Quick Validation [#38462799723](https://github.com/alizebal73/5/actions/runs/38462799723) and Full Foundation [#38462799563](https://github.com/alizebal73/5/actions/runs/38462799563) also passed on the exact merge SHA. These tests cover normalized audit reasons, actor/correlation/source/outcome metadata, before/after role permissions and plaintext-password exclusion.
+- **Master Plan Stage 3 — platform/security hardening: ACTIVE.** ADR-0002 is accepted through PR #73 as an architecture decision, not an implementation/release certificate. Secret rotation, recovery and redaction remain open under [Issue #74](https://github.com/alizebal73/5/issues/74). Do not claim Stage 4's first complete PC business journey is active until Stage 3 exit criteria have exact-SHA evidence or the owner explicitly defers named remaining gates.
+- **Next non-overlapping preparation:** after the current status reconciliation closes, proceed with [Issue #79](https://github.com/alizebal73/5/issues/79) to extract StationBoard presentation and seed the Action Catalog. This is UI-boundary preparation, not the first PC business journey and not a declaration that Stage 4 has started.
+- **Runner evidence:** current CI uses GitHub-hosted `windows-2025`, not the local self-hosted runner. [Issue #67](https://github.com/alizebal73/5/issues/67) remains the authority for reconciling the owner's local-runner preference with the established trust boundary. Never relabel hosted results as local-runner evidence or run untrusted PR code on the persistent personal runner.
+- **Open Draft PRs at the read-back:** #15 (ProgramData/TLS source mixed with stale workflow changes), #17 (historical process-based LAN smoke evidence only) and #21 (older-base Desktop shell). Keep them for comparison; do not merge their stale bases wholesale. Older candidates #18, #20 and #24 are closed/superseded; branches remain for history.
+- **Final acceptance remains deferred** until planned product scope and a real Setup.exe/MSI candidate exist. [Issue #16](https://github.com/alizebal73/5/issues/16) owns Setup/update/rollback; [Issue #34](https://github.com/alizebal73/5/issues/34) owns installed-Service/TLS/DPAPI/ACL/LAN acceptance. Do not modify the existing Manager PC.
 
 ## Work item readiness and closure (mandatory)
 
@@ -255,7 +255,7 @@ The catalogue below records the original Foundation scope, not a live implementa
 
 ## Stage 2 — Canonical module inventory and skeleton
 
-**Status: IN PROGRESS — required before new commercial vertical slices.** Foundation Stage 1 remains closed; this is a separate, bounded structure/governance stage.
+**Status: COMPLETE (2026-10-12; PR #56 merged; Issue #55 closed).** Foundation Stage 1 is a separate closed gate. Stage 2 completion covers only the module inventory, ownership documentation and architecture guards; product capability work remains in the later roadmap steps.
 
 The single canonical list is `src/Server/Modules/README.md`. It must remain aligned with `docs/architecture/repository-tree.md`, this plan, the capability matrix and the requirement owners.
 
@@ -299,9 +299,11 @@ Persistence/migrations, transactions/concurrency, authentication/authorization p
 2. `scripts/check-architecture.ps1` rejects a missing module root/catalog/README and continues to enforce cross-module implementation isolation, layer and persistence rules.
 3. Requirements remain traceable through `docs/planning/requirements-traceability.md`; each real slice must pass Definition of Ready before coding.
 4. Quick Validation passes after this guard/catalog change. For business-source PRs, full pre-merge PostgreSQL/runtime certification must also pass.
-5. Stage 2 closes only after the exact PR candidate and module inventory are independently reviewed. Then follow Stages 3–14 in order; do not merge an old feature branch wholesale.
+5. Stage 2 is closed after PR #56 merged and Issue #55 closed. Preserve exact-SHA review/CI evidence for future changes; do not merge an old feature branch wholesale.
 
 ## Stage 3 — Identity and authorization
+
+**Status: ACTIVE (2026-10-13).** The privileged-reason contract and direct Audit test gap are covered by PRs #76/#81/#82; exact post-merge Quick Validation and Full Foundation passed for PR #82. Secret rotation/recovery/redaction remains open under [Issue #74](https://github.com/alizebal73/5/issues/74). ADR-0002 acceptance is an architecture decision, not proof that those lifecycle guarantees are implemented.
 
 Implement:
 
