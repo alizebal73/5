@@ -104,6 +104,22 @@ public sealed class HmacRequestFingerprintTests
     }
 
     [Fact]
+    public void Explicit_null_fingerprint_field_in_legacy_payload_fails_closed()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var malformedJson = "{\"schemaVersion\":1,\"generationId\":\"" + Guid.NewGuid().ToString("N") +
+            "\",\"databaseConnectionString\":\"" + ConnectionString +
+            "\",\"jwtSigningKeyBase64\":\"" + Key('a') +
+            "\",\"agentProvisioningKeyBase64\":\"" + Key('b') +
+            "\",\"idempotencyFingerprintKeyBase64\":null}";
+
+        Assert.Throws<ServerSecretStoreException>(() =>
+            DpapiServerSecretStore.ParsePayload(System.Text.Encoding.UTF8.GetBytes(malformedJson)));
+    }
+
+    [Fact]
     public void Fingerprinting_fails_closed_without_a_strong_key()
     {
         Assert.Throws<InvalidOperationException>(() =>
