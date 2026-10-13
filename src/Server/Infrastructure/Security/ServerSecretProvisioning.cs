@@ -7,6 +7,28 @@ namespace GameNet.Server.Infrastructure.Security;
 
 internal static class ServerSecretProvisioning
 {
+    internal static bool TryHandleSpecialCommand(string[] arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        var migrateFingerprintKey = arguments.Any(argument =>
+            string.Equals(argument, "--migrate-idempotency-fingerprint-key", StringComparison.Ordinal));
+        var provisionSecrets = arguments.Any(argument =>
+            string.Equals(argument, "--provision-secrets", StringComparison.Ordinal));
+
+        if (!migrateFingerprintKey && !provisionSecrets)
+            return false;
+        if (arguments.Length != 1)
+            throw new InvalidOperationException("A Server secret maintenance command must be the only command-line argument.");
+        if (!OperatingSystem.IsWindows())
+            throw new ServerSecretStoreException("Server secret maintenance commands require Windows.");
+
+        if (migrateFingerprintKey)
+            RunMigrateLegacyFingerprintKey();
+        else
+            RunInteractive();
+        return true;
+    }
+
     internal static void RunInteractive()
     {
         if (!OperatingSystem.IsWindows())
