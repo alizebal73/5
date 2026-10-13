@@ -1,4 +1,3 @@
-using System.Data;
 using GameNet.Server.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -69,9 +68,7 @@ internal sealed class AgentDeviceFenceLock : IAsyncDisposable
             parameter.Value = lockKey;
             command.Parameters.Add(parameter);
             var released = await command.ExecuteScalarAsync(CancellationToken.None);
-            if (released is not true && released is not bool)
-                throw new InvalidOperationException("AGENT_DEVICE_FENCE_UNLOCK_FAILED");
-            if (released is bool didRelease && !didRelease)
+            if (released is not bool didRelease || !didRelease)
                 throw new InvalidOperationException("AGENT_DEVICE_FENCE_UNLOCK_FAILED");
         }
         finally
