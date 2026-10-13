@@ -31,6 +31,8 @@ public sealed class AgentCredentialService(
                 throw new AgentCredentialException("agent.credential_exists");
 
             var now = clock.UtcNow;
+            await RevokePendingEnrollmentTokensAsync(
+                request.DeviceId, now, "Agent credential provisioned; prior pending enrollment token retired.", ct);
             var secret = AgentCredentialSecretMaterial.Generate();
             var entity = new AgentCredential
             {
@@ -70,6 +72,8 @@ public sealed class AgentCredentialService(
                 throw new AgentCredentialException("agent.credential_not_found");
 
             var now = clock.UtcNow;
+            await RevokePendingEnrollmentTokensAsync(
+                request.DeviceId, now, "Agent credential rotated; prior pending enrollment token retired.", ct);
             current.Revoke(now);
             await FenceActiveLeaseAsync(request.DeviceId, ct);
             var secret = AgentCredentialSecretMaterial.Generate();
@@ -107,16 +111,18 @@ public sealed class AgentCredentialService(
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
 
+            var now = clock.UtcNow;
+            var revokedPendingTokens = await RevokePendingEnrollmentTokensAsync(
+                request.DeviceId, now, request.Reason, ct);
+
             if (current is null)
             {
-                // A previous version or interrupted operation may have left a stale
-                // lease behind even though no credential remains active. Revoke is
-                // deliberately idempotent and still removes that residual authority.
+                // Revoke remains safe/idempotent even when only pending enrollment authority
+                // or a stale lease remains from an older version.
                 await FenceActiveLeaseAsync(request.DeviceId, ct);
-                return false;
+                return revokedPendingTokens > 0;
             }
 
-            var now = clock.UtcNow;
             current.Revoke(now);
             await FenceActiveLeaseAsync(request.DeviceId, ct);
             auditWriter.Append(new AuditRecord(
@@ -209,6 +215,43 @@ public sealed class AgentCredentialService(
                      x.DeviceId == deviceId &&
                      x.RevokedAtUtc == null,
                 cancellationToken);
+    }
+
+    private async Task<int> RevokePendingEnrollmentTokensAsync(
+        string deviceId,
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var pending = await dbContext.AgentEnrollmentTokens
+            .Where(x => x.DeviceId == deviceId &&
+                        x.RedeemedAtUtc == null &&
+                        x.RevokedAtUtc == null)
+            .ToListAsync(cancellationToken);
+
+        var revokedCount = 0;
+        foreach (var token in pending)
+        {
+            if (!token.Revoke(revokedAtUtc))
+                continue;
+
+            revokedCount++;
+            auditWriter.Append(new AuditRecord(
+                revokedAtUtc,
+                "System",
+                deviceId,
+                "agent.enrollment_token_invalidated_by_credential_change",
+                "AgentEnrollmentToken",
+                token.Id.ToString("N"),
+                string.IsNullOrWhiteSpace(reason)
+                    ? "Credential authority changed; pending enrollment token retired."
+                    : reason.Trim(),
+                "foundation",
+                "Server",
+                "Revoked"));
+        }
+
+        return revokedCount;
     }
 
     private async Task FenceActiveLeaseAsync(string deviceId, CancellationToken cancellationToken)
