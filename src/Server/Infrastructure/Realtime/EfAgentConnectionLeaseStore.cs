@@ -15,7 +15,7 @@ public sealed class EfAgentConnectionLeaseStore(
     IGameClock clock,
     ITransactionCoordinator transactions) : IAgentConnectionLeaseStore
 {
-    public Task<AgentConnectionLeaseState?> TryAcquireAsync(
+    public async Task<AgentConnectionLeaseState?> TryAcquireAsync(
         AgentConnectionLeaseRequest request,
         Guid credentialId,
         TimeSpan leaseDuration,
@@ -25,14 +25,15 @@ public sealed class EfAgentConnectionLeaseStore(
         if (credentialId == Guid.Empty)
             throw new ArgumentException("An active persisted credential id is required.", nameof(credentialId));
 
-        return transactions.ExecuteAsync(async ct =>
-        {
-            // Acquisition uses the same per-device fence as revocation and dispatch.
-            // This prevents a connection that authenticated before a revoke/rotate
-            // from creating a late lease after the credential's authority was removed.
-            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
-            return await TryAcquireWithinTransactionAsync(request, credentialId, leaseDuration, ct);
-        }, cancellationToken);
+        // Acquire the session-level device fence before the Serializable transaction
+        // starts, so its database snapshot is created only after any preceding revoke
+        // or rotation commits.
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+
+        return await transactions.ExecuteAsync(
+            ct => TryAcquireWithinTransactionAsync(request, credentialId, leaseDuration, ct),
+            cancellationToken);
     }
 
     public async Task<bool> RenewAsync(
@@ -172,10 +173,13 @@ public sealed class EfAgentConnectionLeaseStore(
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, sendTimeout.Token);
         var token = linkedCancellation.Token;
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(dbContext, deviceId, token);
 
+        // Start the short transaction only after the per-device fence is held. Its
+        // READ COMMITTED snapshot must observe any credential revoke/rotation that
+        // completed while this dispatcher was waiting for the fence.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(
             IsolationLevel.ReadCommitted, token);
-        await AgentDeviceFenceLock.AcquireAsync(dbContext, deviceId, token);
         var connection = dbContext.Database.GetDbConnection();
         string? currentConnectionId = null;
         string? currentLeaseToken = null;
