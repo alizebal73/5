@@ -1,8 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using GameNet.Server.Infrastructure.Configuration;
-using Microsoft.Extensions.Options;
+using GameNet.Server.Infrastructure.Security;
 
 namespace GameNet.Server.Infrastructure.Idempotency;
 
@@ -11,9 +10,10 @@ public sealed class HmacRequestFingerprint : IRequestFingerprint
     private const string KeyPurpose = "GameNet.Idempotency.RequestFingerprint.v1";
     private readonly byte[] key;
 
-    public HmacRequestFingerprint(IOptions<GameNetOptions> options)
+    public HmacRequestFingerprint(IIdempotencyFingerprintSecret fingerprintSecret)
     {
-        key = DeriveKey(options.Value.Authentication.SigningKey);
+        ArgumentNullException.ThrowIfNull(fingerprintSecret);
+        key = DeriveKey(fingerprintSecret.FingerprintKey);
     }
 
     public string Compute(object payload)
@@ -27,9 +27,10 @@ public sealed class HmacRequestFingerprint : IRequestFingerprint
     private static byte[] DeriveKey(string? rootSecret)
     {
         if (string.IsNullOrWhiteSpace(rootSecret) || Encoding.UTF8.GetByteCount(rootSecret) < 32)
-            throw new InvalidOperationException("Request fingerprinting requires a configured 32+ character authentication signing key.");
+            throw new InvalidOperationException("Request fingerprinting requires a configured 32+ character protected idempotency fingerprint key.");
 
-        // Purpose-specific derivation prevents the fingerprinting operation from reusing the raw JWT signing key.
+        // A separate protected root key prevents JWT signing-key rotation from
+        // changing idempotency fingerprints for requests already recorded.
         return HMACSHA256.HashData(Encoding.UTF8.GetBytes(rootSecret), Encoding.UTF8.GetBytes(KeyPurpose));
     }
 }

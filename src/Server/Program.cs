@@ -14,16 +14,8 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.System;
 
-if (args.Any(argument => string.Equals(argument, "--provision-secrets", StringComparison.Ordinal)))
-{
-    if (args.Length != 1)
-        throw new InvalidOperationException("Run secret provisioning with --provision-secrets as the only argument.");
-    if (!OperatingSystem.IsWindows())
-        throw new ServerSecretStoreException("Server secret-store provisioning requires Windows.");
-
-    ServerSecretProvisioning.RunInteractive();
+if (ServerSecretProvisioning.TryHandleSpecialCommand(args))
     return;
-}
 
 var migrateOnly = args.Contains("--migrate-only", StringComparer.Ordinal);
 var hostArguments = args
@@ -50,6 +42,7 @@ var serverSecrets = ServerSecretBootstrap.Load(builder.Environment, builder.Conf
 builder.Services.AddSingleton<IDatabaseConnectionSecret>(serverSecrets);
 builder.Services.AddSingleton<IJwtSigningKeySecret>(serverSecrets);
 builder.Services.AddSingleton<IAgentProvisioningKeySecret>(serverSecrets);
+builder.Services.AddSingleton<IIdempotencyFingerprintSecret>(serverSecrets);
 
 builder.Host.UseWindowsService(options => options.ServiceName = "GameNet 5 Server");
 builder.Services.AddGameNetServer();

@@ -218,6 +218,7 @@ try {
     $previousConfigConnection = [Environment]::GetEnvironmentVariable("GameNet__DatabaseConnectionString", "Process")
     $previousAuthEnabled = [Environment]::GetEnvironmentVariable("GameNet__Authentication__Enabled", "Process")
     $previousSigningKey = [Environment]::GetEnvironmentVariable("GameNet__Authentication__SigningKey", "Process")
+    $previousFingerprintKey = [Environment]::GetEnvironmentVariable("GameNet__Idempotency__FingerprintKey", "Process")
     $previousProvisioningKey = [Environment]::GetEnvironmentVariable("GameNet__Agent__ProvisioningKey", "Process")
     $previousSecretTestOptIn = [Environment]::GetEnvironmentVariable("GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS", "Process")
     $previousProtectedPath = [Environment]::GetEnvironmentVariable("GAMENET_PROTECTED_SETTINGS_FILE", "Process")
@@ -225,6 +226,7 @@ try {
         $env:GameNet__DatabaseConnectionString = $env:GAMENET_DATABASE_CONNECTION
         $env:GameNet__Authentication__Enabled = "false"
         $env:GameNet__Authentication__SigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+        $env:GameNet__Idempotency__FingerprintKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
         $env:GameNet__Agent__ProvisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
         $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
         $env:ASPNETCORE_ENVIRONMENT = "Development"
@@ -301,6 +303,7 @@ try {
         if ($null -eq $previousConfigConnection) { Remove-Item Env:GameNet__DatabaseConnectionString -ErrorAction SilentlyContinue } else { $env:GameNet__DatabaseConnectionString = $previousConfigConnection }
         if ($null -eq $previousAuthEnabled) { Remove-Item Env:GameNet__Authentication__Enabled -ErrorAction SilentlyContinue } else { $env:GameNet__Authentication__Enabled = $previousAuthEnabled }
         if ($null -eq $previousSigningKey) { Remove-Item Env:GameNet__Authentication__SigningKey -ErrorAction SilentlyContinue } else { $env:GameNet__Authentication__SigningKey = $previousSigningKey }
+        if ($null -eq $previousFingerprintKey) { Remove-Item Env:GameNet__Idempotency__FingerprintKey -ErrorAction SilentlyContinue } else { $env:GameNet__Idempotency__FingerprintKey = $previousFingerprintKey }
         if ($null -eq $previousProvisioningKey) { Remove-Item Env:GameNet__Agent__ProvisioningKey -ErrorAction SilentlyContinue } else { $env:GameNet__Agent__ProvisioningKey = $previousProvisioningKey }
         if ($null -eq $previousSecretTestOptIn) { Remove-Item Env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS -ErrorAction SilentlyContinue } else { $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = $previousSecretTestOptIn }
         if ($null -eq $previousAppEnvironment) { Remove-Item Env:ASPNETCORE_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:ASPNETCORE_ENVIRONMENT = $previousAppEnvironment }
@@ -327,8 +330,25 @@ try {
         }
     }
 
+    $previousIdempotencyIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_IDEMPOTENCY_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_IDEMPOTENCY_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~IdempotencyKeyRotationPostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Idempotency key-rotation PostgreSQL replay verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousIdempotencyIntegrationFlag) {
+            Remove-Item Env:GAMENET_IDEMPOTENCY_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_IDEMPOTENCY_POSTGRES_TESTS = $previousIdempotencyIntegrationFlag
+        }
+    }
+
     & "$PSScriptRoot/verify-identity-runtime.ps1"
-    Write-Host "Clean PostgreSQL migration/schema/Identity runtime verification passed."
+    Write-Host "Clean PostgreSQL migration/schema/Idempotency/Identity runtime verification passed."
 }
 finally {
     if ($null -eq $previousProcessConnection) {

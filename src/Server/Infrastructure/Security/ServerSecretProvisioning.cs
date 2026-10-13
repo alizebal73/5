@@ -7,6 +7,28 @@ namespace GameNet.Server.Infrastructure.Security;
 
 internal static class ServerSecretProvisioning
 {
+    internal static bool TryHandleSpecialCommand(string[] arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        var migrateFingerprintKey = arguments.Any(argument =>
+            string.Equals(argument, "--migrate-idempotency-fingerprint-key", StringComparison.Ordinal));
+        var provisionSecrets = arguments.Any(argument =>
+            string.Equals(argument, "--provision-secrets", StringComparison.Ordinal));
+
+        if (!migrateFingerprintKey && !provisionSecrets)
+            return false;
+        if (arguments.Length != 1)
+            throw new InvalidOperationException("A Server secret maintenance command must be the only command-line argument.");
+        if (!OperatingSystem.IsWindows())
+            throw new ServerSecretStoreException("Server secret maintenance commands require Windows.");
+
+        if (migrateFingerprintKey)
+            RunMigrateLegacyFingerprintKey();
+        else
+            RunInteractive();
+        return true;
+    }
+
     internal static void RunInteractive()
     {
         if (!OperatingSystem.IsWindows())
@@ -46,7 +68,8 @@ internal static class ServerSecretProvisioning
 
             var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
             var provisioningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
-            DpapiServerSecretStore.Provision(connection, signingKey, provisioningKey);
+            var fingerprintKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+            DpapiServerSecretStore.Provision(connection, signingKey, provisioningKey, fingerprintKey);
             storeCreated = true;
 
             ServerSecretProvisioningAuditLog.RecordSucceeded(operationId);
@@ -80,6 +103,58 @@ internal static class ServerSecretProvisioning
         Console.WriteLine("Protected Server secret store created.");
         Console.WriteLine("Secret values were not printed; retain the store on the manager Server only.");
         Console.WriteLine("Provisioning audit operation: " + operationId);
+    }
+
+    internal static void RunMigrateLegacyFingerprintKey()
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new ServerSecretStoreException("Fingerprint-key migration requires Windows.");
+
+        var operationId = Guid.NewGuid().ToString("N");
+        ServerSecretProvisioningAuditLog.RecordMigrationStarted(operationId);
+        string? backupPath = null;
+        var completionAudited = false;
+
+        try
+        {
+            backupPath = DpapiServerSecretStore.MigrateLegacyFingerprintKey();
+            ServerSecretProvisioningAuditLog.RecordMigrationSucceeded(operationId);
+            completionAudited = true;
+        }
+        catch (ServerSecretStoreException)
+        {
+            if (backupPath is not null && !completionAudited)
+                throw new ServerSecretStoreException(
+                    "The protected secret-store migration completed, but its success audit record could not be written. Do not rerun it; inspect the restricted audit directory and backup.");
+
+            if (!ServerSecretProvisioningAuditLog.TryRecordMigrationFailed(
+                    operationId,
+                    ServerSecretProvisioningFailureCode.MigrationRejected))
+                throw new ServerSecretStoreException(
+                    "Fingerprint-key migration did not complete and its failure audit record could not be written. Inspect the restricted audit directory before retrying.");
+            throw;
+        }
+        catch
+        {
+            if (backupPath is not null && !completionAudited)
+                throw new ServerSecretStoreException(
+                    "The protected secret-store migration completed, but its success audit record could not be written. Do not rerun it; inspect the restricted audit directory and backup.");
+
+            if (!ServerSecretProvisioningAuditLog.TryRecordMigrationFailed(
+                    operationId,
+                    ServerSecretProvisioningFailureCode.MigrationFailed))
+                throw new ServerSecretStoreException(
+                    "Fingerprint-key migration failed and its failure audit record could not be written. Inspect the restricted audit directory before retrying.");
+            throw new ServerSecretStoreException(
+                "Fingerprint-key migration failed. Review the restricted audit records; no secret values were recorded.");
+        }
+
+        Console.WriteLine(backupPath is null
+            ? "The protected Server secret store already has a dedicated fingerprint key; no change was made."
+            : "Legacy fingerprint compatibility was preserved and the dedicated fingerprint-key field was added.");
+        if (backupPath is not null)
+            Console.WriteLine("An encrypted, ACL-restricted pre-migration backup was retained at: " + backupPath);
+        Console.WriteLine("Migration audit operation: " + operationId);
     }
 
     private static string ReadHiddenValue(string prompt)
