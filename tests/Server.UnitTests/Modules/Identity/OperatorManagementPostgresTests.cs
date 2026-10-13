@@ -236,6 +236,31 @@ public sealed class OperatorManagementPostgresTests
         }
     }
 
+    [Fact]
+    public async Task Serializable_retry_exhaustion_returns_stable_diagnostic_after_three_attempts()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        await using var db = CreateContext(connectionString);
+        var coordinator = new EfTransactionCoordinator(db);
+        var attempts = 0;
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            coordinator.ExecuteAsync<int>(async cancellationToken =>
+            {
+                Interlocked.Increment(ref attempts);
+                await db.Database.ExecuteSqlRawAsync(
+                    "DO $ BEGIN RAISE EXCEPTION 'forced serialization retry exhaustion test' USING ERRCODE = '40001'; END $;",
+                    cancellationToken);
+                return 1;
+            }));
+
+        Assert.Equal("TRANSACTION_RETRY_EXHAUSTED", failure.Message);
+        Assert.Equal(3, attempts);
+        Assert.IsType<Npgsql.PostgresException>(failure.InnerException);
+    }
+
     private static bool IsExplicitlyEnabled() =>
         string.Equals(
             Environment.GetEnvironmentVariable("GAMENET_OPERATOR_MANAGEMENT_POSTGRES_TESTS"),
