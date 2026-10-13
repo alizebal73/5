@@ -175,6 +175,7 @@ public sealed class EfAgentConnectionLeaseStore(
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(
             IsolationLevel.ReadCommitted, token);
+        await AgentDeviceFenceLock.AcquireAsync(dbContext, deviceId, token);
         var connection = dbContext.Database.GetDbConnection();
         string? currentConnectionId = null;
         string? currentLeaseToken = null;
