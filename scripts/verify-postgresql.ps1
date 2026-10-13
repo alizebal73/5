@@ -347,8 +347,25 @@ try {
         }
     }
 
+    $previousAgentDispatchIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_AGENT_DISPATCH_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~AgentDispatchLeaseFencePostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Agent credential-revocation/dispatch-fence PostgreSQL verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousAgentDispatchIntegrationFlag) {
+            Remove-Item Env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS = $previousAgentDispatchIntegrationFlag
+        }
+    }
+
     & "$PSScriptRoot/verify-identity-runtime.ps1"
-    Write-Host "Clean PostgreSQL migration/schema/Idempotency/Identity runtime verification passed."
+    Write-Host "Clean PostgreSQL migration/schema/Idempotency/Outbox/Agent-dispatch/Identity runtime verification passed."
 }
 finally {
     if ($null -eq $previousProcessConnection) {
