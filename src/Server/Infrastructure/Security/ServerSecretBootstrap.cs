@@ -13,6 +13,7 @@ internal static class ServerSecretBootstrap
         "GameNet:DatabaseConnectionString",
         "GameNet:Authentication:SigningKey",
         "GameNet:Agent:ProvisioningKey",
+        "GameNet:Idempotency:FingerprintKey",
         "GAMENET_DATABASE_CONNECTION"
     };
 
@@ -62,7 +63,8 @@ internal static class ServerSecretBootstrap
             return ServerSecretMaterial.Create(
                 FindEnvironmentValue(processEnvironment, "GAMENET_DATABASE_CONNECTION"),
                 FindEnvironmentValue(processEnvironment, "GameNet:Authentication:SigningKey"),
-                FindEnvironmentValue(processEnvironment, "GameNet:Agent:ProvisioningKey"));
+                FindEnvironmentValue(processEnvironment, "GameNet:Agent:ProvisioningKey"),
+                FindEnvironmentValue(processEnvironment, "GameNet:Idempotency:FingerprintKey"));
         }
 
         RejectSecretEnvironmentOverrides(processEnvironment);
