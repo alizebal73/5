@@ -32,7 +32,7 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 ### 3. Harden the existing platform; do not rebuild it
 - Compare Identity/operator roles and permissions, Stations, Agent enrollment/credentials, heartbeat/lease/fencing/reconnect, ClientControl authorization/results, audit, idempotency and Outbox against their requirements.
 - Fix only demonstrated gaps; preserve already-working code and its regression coverage.
-- Reconcile and accept/reject the relevant security lifecycle ADRs before building features that depend on those decisions; keep installed Windows Service ACL/DPAPI/TLS proof in the final acceptance gate.
+- ADR-0002 is accepted as the architecture contract as of 2026-10-13 ([canonical decision](../decisions/ADR-0002-server-secret-lifecycle.md)); this is not an implementation or release pass. Keep rotation, recovery, redaction, and their automated regression tests as explicit open work, and do not expose dependent capabilities for operational use before their required gates pass. Accept/reconcile other security ADRs before building features that depend on them; keep installed Windows Service ACL/DPAPI/TLS proof in the final acceptance gate.
 - Exit: gaps are listed and closed or explicitly deferred with rationale; platform APIs, permissions and recovery contracts are stable enough for business slices.
 
 ### 4. Deliver the first complete PC business journey
