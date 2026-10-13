@@ -6,6 +6,7 @@ public interface IAgentConnectionLeaseStore
 {
     Task<AgentConnectionLeaseState?> TryAcquireAsync(
         AgentConnectionLeaseRequest request,
+        Guid credentialId,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default);
 
@@ -32,6 +33,17 @@ public interface IAgentConnectionLeaseStore
         string deviceId,
         string connectionId,
         string leaseToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes one bounded outbound send attempt while holding the current lease row lock.
+    /// This method must not automatically retry because the callback performs an external side effect.
+    /// </summary>
+    Task<bool> SendIfCurrentLeaseAsync(
+        string deviceId,
+        string connectionId,
+        string leaseToken,
+        Func<CancellationToken, Task> send,
         CancellationToken cancellationToken = default);
 
     Task ReleaseIfOwnerAsync(

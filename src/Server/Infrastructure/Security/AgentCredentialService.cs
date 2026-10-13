@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
 using GameNet.Server.Persistence.Entities;
@@ -16,12 +17,15 @@ public sealed class AgentCredentialService(
     IAuditWriter auditWriter,
     IGameClock clock) : IAgentCredentialService
 {
-    public Task<AgentCredentialSecretResponse> ProvisionAsync(
+    public async Task<AgentCredentialSecretResponse> ProvisionAsync(
         AgentCredentialProvisionRequest request,
-        CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(request.DeviceId);
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+        return await transactions.ExecuteAsync(async ct =>
         {
-            ValidateDeviceId(request.DeviceId);
             var exists = await dbContext.AgentCredentials.AnyAsync(
                 x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null, ct);
 
@@ -29,6 +33,8 @@ public sealed class AgentCredentialService(
                 throw new AgentCredentialException("agent.credential_exists");
 
             var now = clock.UtcNow;
+            await RevokePendingEnrollmentTokensAsync(
+                request.DeviceId, now, "Agent credential provisioned; prior pending enrollment token retired.", ct);
             var secret = AgentCredentialSecretMaterial.Generate();
             var entity = new AgentCredential
             {
@@ -52,13 +58,17 @@ public sealed class AgentCredentialService(
 
             return new AgentCredentialSecretResponse(entity.Id, entity.DeviceId, secret, now);
         }, cancellationToken);
+    }
 
-    public Task<AgentCredentialSecretResponse> RotateAsync(
+    public async Task<AgentCredentialSecretResponse> RotateAsync(
         AgentCredentialRotateRequest request,
-        CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(request.DeviceId);
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+        return await transactions.ExecuteAsync(async ct =>
         {
-            ValidateDeviceId(request.DeviceId);
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
@@ -67,6 +77,8 @@ public sealed class AgentCredentialService(
                 throw new AgentCredentialException("agent.credential_not_found");
 
             var now = clock.UtcNow;
+            await RevokePendingEnrollmentTokensAsync(
+                request.DeviceId, now, "Agent credential rotated; prior pending enrollment token retired.", ct);
             current.Revoke(now);
             await FenceActiveLeaseAsync(request.DeviceId, ct);
             var secret = AgentCredentialSecretMaterial.Generate();
@@ -92,27 +104,33 @@ public sealed class AgentCredentialService(
 
             return new AgentCredentialSecretResponse(replacement.Id, replacement.DeviceId, secret, now);
         }, cancellationToken);
+    }
 
-    public Task<bool> RevokeAsync(
+    public async Task<bool> RevokeAsync(
         AgentCredentialRevokeRequest request,
-        CancellationToken cancellationToken = default) =>
-        transactions.ExecuteAsync(async ct =>
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(request.DeviceId);
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
+        return await transactions.ExecuteAsync(async ct =>
         {
-            ValidateDeviceId(request.DeviceId);
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null)
                 .SingleOrDefaultAsync(ct);
 
+            var now = clock.UtcNow;
+            var revokedPendingTokens = await RevokePendingEnrollmentTokensAsync(
+                request.DeviceId, now, request.Reason, ct);
+
             if (current is null)
             {
-                // A previous version or interrupted operation may have left a stale
-                // lease behind even though no credential remains active. Revoke is
-                // deliberately idempotent and still removes that residual authority.
+                // Revoke remains safe/idempotent even when only pending enrollment authority
+                // or a stale lease remains from an older version.
                 await FenceActiveLeaseAsync(request.DeviceId, ct);
-                return false;
+                return revokedPendingTokens > 0;
             }
 
-            var now = clock.UtcNow;
             current.Revoke(now);
             await FenceActiveLeaseAsync(request.DeviceId, ct);
             auditWriter.Append(new AuditRecord(
@@ -129,6 +147,7 @@ public sealed class AgentCredentialService(
 
             return true;
         }, cancellationToken);
+    }
 
     public async Task<bool> AuthenticateAsync(
         string deviceId,
@@ -205,6 +224,43 @@ public sealed class AgentCredentialService(
                      x.DeviceId == deviceId &&
                      x.RevokedAtUtc == null,
                 cancellationToken);
+    }
+
+    private async Task<int> RevokePendingEnrollmentTokensAsync(
+        string deviceId,
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var pending = await dbContext.AgentEnrollmentTokens
+            .Where(x => x.DeviceId == deviceId &&
+                        x.RedeemedAtUtc == null &&
+                        x.RevokedAtUtc == null)
+            .ToListAsync(cancellationToken);
+
+        var revokedCount = 0;
+        foreach (var token in pending)
+        {
+            if (!token.Revoke(revokedAtUtc))
+                continue;
+
+            revokedCount++;
+            auditWriter.Append(new AuditRecord(
+                revokedAtUtc,
+                "System",
+                deviceId,
+                "agent.enrollment_token_invalidated_by_credential_change",
+                "AgentEnrollmentToken",
+                token.Id.ToString("N"),
+                string.IsNullOrWhiteSpace(reason)
+                    ? "Credential authority changed; pending enrollment token retired."
+                    : reason.Trim(),
+                "foundation",
+                "Server",
+                "Revoked"));
+        }
+
+        return revokedCount;
     }
 
     private async Task FenceActiveLeaseAsync(string deviceId, CancellationToken cancellationToken)

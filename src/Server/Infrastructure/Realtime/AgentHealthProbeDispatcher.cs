@@ -13,6 +13,8 @@ public sealed class AgentCommandResultCoordinator
 {
     private readonly ConcurrentDictionary<Guid, PendingCommand> pending = new();
 
+    internal int PendingCount => pending.Count;
+
     public Task<AgentCommandAcknowledgement> Register(AgentCommandEnvelope command, string connectionId)
     {
         var handle = new PendingCommand(command, connectionId);
@@ -109,20 +111,19 @@ public sealed class AgentHealthProbeDispatcher(
         var completion = commandResults.Register(command, lease.ConnectionId);
         try
         {
-            // Revalidate the exact lease immediately before the outbound side effect.
-            // Revocation/rotation removes that lease transactionally; a stale snapshot
-            // must not authorize a fresh command dispatch.
-            if (!await leases.IsCurrentLeaseAsync(
+            // The lease-store transaction locks and revalidates the exact lease row
+            // while SignalR completes the bounded send attempt. Credential revoke/rotate
+            // deletes the same row, making the order of revoke and send unambiguous.
+            if (!await leases.SendIfCurrentLeaseAsync(
                     lease.DeviceId,
                     lease.ConnectionId,
                     lease.LeaseToken,
+                    sendCancellationToken => hub.Clients.Client(lease.ConnectionId).SendAsync(
+                        "ReceiveCommand", command, sendCancellationToken),
                     cancellationToken))
             {
                 return null;
             }
-
-            await hub.Clients.Client(lease.ConnectionId).SendAsync(
-                "ReceiveCommand", command, cancellationToken);
             return await commandResults.WaitAsync(completion, TimeSpan.FromSeconds(8), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

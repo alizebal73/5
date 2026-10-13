@@ -1,4 +1,5 @@
 using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Realtime;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Persistence;
 using GameNet.Server.Persistence.Entities;
@@ -24,6 +25,8 @@ public sealed class AgentEnrollmentService(
         if (command.IssuedByOperatorId == Guid.Empty)
             throw new AgentCredentialException("auth.identity_missing");
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, command.DeviceId, cancellationToken);
         try
         {
             return await transactions.ExecuteAsync(async ct =>
@@ -107,6 +110,8 @@ public sealed class AgentEnrollmentService(
         if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Trim().Length > 1000)
             throw new AgentCredentialException("agent.enrollment_reason_invalid");
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, command.DeviceId, cancellationToken);
         try
         {
             return await transactions.ExecuteAsync(async ct =>
@@ -133,6 +138,12 @@ public sealed class AgentEnrollmentService(
                 // expired/unredeemed token when no credential was ever authenticated.
                 if (hasPreviouslyAuthenticatedCredential)
                     throw new AgentCredentialException("agent.enrollment_recovery_not_safe");
+
+                // Recovery is allowed only before the credential was ever used. Clear any
+                // residual lease under the same device fence before issuing a replacement token.
+                await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"DELETE FROM agent_connection_leases WHERE device_id = {command.DeviceId}",
+                    ct);
 
                 if (credential is not null)
                 {
@@ -232,6 +243,8 @@ public sealed class AgentEnrollmentService(
             return null;
         }
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
         try
         {
             return await transactions.ExecuteAsync(async ct =>
@@ -324,9 +337,20 @@ public sealed class AgentEnrollmentService(
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000)
             throw new AgentCredentialException("agent.enrollment_reason_invalid");
 
+        // Resolve the immutable device binding before beginning the transactional
+        // operation; acquire its fence before reading the mutable token state.
+        var initial = await dbContext.AgentEnrollmentTokens
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == tokenId, cancellationToken);
+        if (initial is null)
+            return false;
+
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, initial.DeviceId, cancellationToken);
         return await transactions.ExecuteAsync(async ct =>
         {
-            var token = await dbContext.AgentEnrollmentTokens.SingleOrDefaultAsync(x => x.Id == tokenId, ct);
+            var token = await dbContext.AgentEnrollmentTokens
+                .SingleOrDefaultAsync(x => x.Id == tokenId && x.DeviceId == initial.DeviceId, ct);
             if (token is null || !token.Revoke(clock.UtcNow))
                 return false;
 
