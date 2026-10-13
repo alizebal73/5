@@ -13,6 +13,8 @@ public sealed class AgentCommandResultCoordinator
 {
     private readonly ConcurrentDictionary<Guid, PendingCommand> pending = new();
 
+    internal int PendingCount => pending.Count;
+
     public Task<AgentCommandAcknowledgement> Register(AgentCommandEnvelope command, string connectionId)
     {
         var handle = new PendingCommand(command, connectionId);
