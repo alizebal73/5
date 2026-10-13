@@ -64,6 +64,72 @@ public sealed class AgentDispatchLeaseFencePostgresTests
     }
 
     [Fact]
+    public async Task Late_lease_created_after_revocation_cannot_authorize_a_send()
+    {
+        if (!IsExplicitlyEnabled())
+            return;
+
+        var connectionString = GetConnectionString();
+        var clock = new FixedClock(DateTimeOffset.UtcNow);
+        var deviceId = DeviceId();
+        var initialConnectionId = "connection-" + Guid.NewGuid().ToString("N");
+        var initialLeaseToken = Guid.NewGuid().ToString("N");
+        await SeedAsync(connectionString, deviceId, initialConnectionId, initialLeaseToken, clock.UtcNow);
+
+        try
+        {
+            await using (var revokeDb = CreateContext(connectionString))
+            {
+                var revoked = await CreateCredentialService(revokeDb, clock).RevokeAsync(
+                    new AgentCredentialRevokeRequest(deviceId, "dispatch-fence-test"));
+                Assert.True(revoked);
+            }
+
+            // Model a ConnectAsync that passed its first credential check before the
+            // revoke but inserts its lease after revoke's lease delete committed.
+            var lateConnectionId = "late-connection-" + Guid.NewGuid().ToString("N");
+            var lateLeaseToken = Guid.NewGuid().ToString("N");
+            await using (var lateLeaseDb = CreateContext(connectionString))
+            {
+                lateLeaseDb.AgentConnectionLeases.Add(new AgentConnectionLease
+                {
+                    DeviceId = deviceId,
+                    ConnectionId = lateConnectionId,
+                    LeaseToken = lateLeaseToken,
+                    LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(1),
+                    UpdatedAtUtc = clock.UtcNow,
+                    LastHeartbeatAtUtc = clock.UtcNow,
+                    AgentVersion = "fence-test",
+                    StationState = "Ready"
+                });
+                await lateLeaseDb.SaveChangesAsync();
+            }
+
+            await using var dispatchDb = CreateContext(connectionString);
+            var store = CreateLeaseStore(dispatchDb, clock);
+            var sends = 0;
+            var accepted = await store.SendIfCurrentLeaseAsync(
+                deviceId,
+                lateConnectionId,
+                lateLeaseToken,
+                _ =>
+                {
+                    Interlocked.Increment(ref sends);
+                    return Task.CompletedTask;
+                });
+
+            Assert.False(accepted);
+            Assert.Equal(0, Volatile.Read(ref sends));
+            Assert.False(await dispatchDb.AgentCredentials.AnyAsync(
+                x => x.DeviceId == deviceId && x.RevokedAtUtc == null));
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, deviceId);
+        }
+    }
+
+    [Fact]
     public async Task Revocation_waits_for_an_in_progress_send_attempt_then_removes_lease()
     {
         if (!IsExplicitlyEnabled())
