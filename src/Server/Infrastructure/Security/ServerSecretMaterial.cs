@@ -63,7 +63,7 @@ internal sealed class ServerSecretMaterial :
         // Legacy stores deliberately retain the old fingerprint root so the same
         // idempotency records remain replay-compatible. Such stores must not rotate
         // the JWT signing key until re-provisioned with a dedicated fingerprint key.
-        var fingerprintKey = string.IsNullOrWhiteSpace(idempotencyFingerprintKeyBase64)
+        var fingerprintKey = idempotencyFingerprintKeyBase64 is null
             ? signingKeyBase64
             : idempotencyFingerprintKeyBase64;
         ValidateBase64Key(fingerprintKey);
