@@ -34,6 +34,17 @@ public interface IAgentConnectionLeaseStore
         string leaseToken,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Executes one bounded outbound send attempt while holding the current lease row lock.
+    /// This method must not automatically retry because the callback performs an external side effect.
+    /// </summary>
+    Task<bool> SendIfCurrentLeaseAsync(
+        string deviceId,
+        string connectionId,
+        string leaseToken,
+        Func<CancellationToken, Task> send,
+        CancellationToken cancellationToken = default);
+
     Task ReleaseIfOwnerAsync(
         string deviceId,
         string connectionId,
