@@ -29,6 +29,9 @@ public sealed class AgentEnrollmentService(
         {
             return await transactions.ExecuteAsync(async ct =>
             {
+                // Token issuance must be ordered with credential provisioning/revocation
+                // and redemption for this same device.
+                await AgentDeviceFenceLock.AcquireAsync(dbContext, command.DeviceId, ct);
                 var now = clock.UtcNow;
                 var exists = await dbContext.AgentCredentials.AnyAsync(
                     x => x.DeviceId == command.DeviceId && x.RevokedAtUtc == null, ct);
@@ -247,6 +250,9 @@ public sealed class AgentEnrollmentService(
         {
             return await transactions.ExecuteAsync(async ct =>
             {
+                // Redeeming an enrollment token creates new credential authority.
+                // Serialize it with issue, recovery, credential changes and dispatch.
+                await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
                 var now = clock.UtcNow;
                 var enrollment = await dbContext.AgentEnrollmentTokens.SingleOrDefaultAsync(
                     x => x.DeviceId == request.DeviceId && x.TokenHash == tokenHash, ct);
@@ -335,9 +341,19 @@ public sealed class AgentEnrollmentService(
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000)
             throw new AgentCredentialException("agent.enrollment_reason_invalid");
 
+        // Resolve the immutable device binding before beginning the transactional
+        // operation; acquire its fence before reading the mutable token state.
+        var initial = await dbContext.AgentEnrollmentTokens
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == tokenId, cancellationToken);
+        if (initial is null)
+            return false;
+
         return await transactions.ExecuteAsync(async ct =>
         {
-            var token = await dbContext.AgentEnrollmentTokens.SingleOrDefaultAsync(x => x.Id == tokenId, ct);
+            await AgentDeviceFenceLock.AcquireAsync(dbContext, initial.DeviceId, ct);
+            var token = await dbContext.AgentEnrollmentTokens
+                .SingleOrDefaultAsync(x => x.Id == tokenId && x.DeviceId == initial.DeviceId, ct);
             if (token is null || !token.Revoke(clock.UtcNow))
                 return false;
 
