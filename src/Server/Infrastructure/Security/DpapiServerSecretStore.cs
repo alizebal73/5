@@ -71,7 +71,8 @@ internal static class DpapiServerSecretStore
                 GenerationId = Guid.NewGuid().ToString("N"),
                 DatabaseConnectionString = secrets.ConnectionString,
                 JwtSigningKeyBase64 = secrets.SigningKey,
-                AgentProvisioningKeyBase64 = secrets.ProvisioningKey
+                AgentProvisioningKeyBase64 = secrets.ProvisioningKey,
+                IdempotencyFingerprintKeyBase64 = secrets.FingerprintKey
             });
             return ProtectedData.Protect(plaintext, Entropy, DataProtectionScope.LocalMachine);
         }
@@ -124,7 +125,8 @@ internal static class DpapiServerSecretStore
             return ServerSecretMaterial.Create(
                 payload.DatabaseConnectionString,
                 payload.JwtSigningKeyBase64,
-                payload.AgentProvisioningKeyBase64);
+                payload.AgentProvisioningKeyBase64,
+                payload.IdempotencyFingerprintKeyBase64);
         }
         catch (ServerSecretStoreException)
         {
@@ -136,13 +138,21 @@ internal static class DpapiServerSecretStore
         }
     }
 
-    internal static void Provision(string connectionString, string jwtSigningKeyBase64, string agentProvisioningKeyBase64)
+    internal static void Provision(
+        string connectionString,
+        string jwtSigningKeyBase64,
+        string agentProvisioningKeyBase64,
+        string? idempotencyFingerprintKeyBase64 = null)
     {
         if (!OperatingSystem.IsWindows())
             throw new ServerSecretStoreException("The protected Server secret store requires Windows DPAPI.");
         EnsureElevatedAdministrator();
 
-        var secrets = ServerSecretMaterial.Create(connectionString, jwtSigningKeyBase64, agentProvisioningKeyBase64);
+        var secrets = ServerSecretMaterial.Create(
+            connectionString,
+            jwtSigningKeyBase64,
+            agentProvisioningKeyBase64,
+            idempotencyFingerprintKeyBase64);
         var directory = GetDefaultDirectory();
         var path = GetDefaultPath();
         if (File.Exists(path) || Directory.Exists(directory))
@@ -330,5 +340,6 @@ internal static class DpapiServerSecretStore
         [JsonPropertyName("databaseConnectionString")] public string? DatabaseConnectionString { get; init; }
         [JsonPropertyName("jwtSigningKeyBase64")] public string? JwtSigningKeyBase64 { get; init; }
         [JsonPropertyName("agentProvisioningKeyBase64")] public string? AgentProvisioningKeyBase64 { get; init; }
+        [JsonPropertyName("idempotencyFingerprintKeyBase64")] public string? IdempotencyFingerprintKeyBase64 { get; init; }
     }
 }
