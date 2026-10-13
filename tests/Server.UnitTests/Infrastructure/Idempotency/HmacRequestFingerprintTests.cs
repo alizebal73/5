@@ -53,6 +53,22 @@ public sealed class HmacRequestFingerprintTests
     }
 
     [Fact]
+    public void Legacy_secret_migration_preserves_fingerprints_for_retained_idempotency_records()
+    {
+        var legacySigningKey = Key('a');
+        var legacy = ServerSecretMaterial.Create(ConnectionString, legacySigningKey, Key('b'));
+        var migrated = ServerSecretMaterial.Create(
+            ConnectionString, legacySigningKey, Key('b'), legacySigningKey);
+        var payload = new { Operation = "users.create", Password = "Sensitive-Password-123" };
+
+        Assert.False(legacy.HasDedicatedFingerprintKey);
+        Assert.True(migrated.HasDedicatedFingerprintKey);
+        Assert.Equal(
+            new HmacRequestFingerprint(legacy).Compute(payload),
+            new HmacRequestFingerprint(migrated).Compute(payload));
+    }
+
+    [Fact]
     public void Fingerprinting_fails_closed_without_a_strong_key()
     {
         Assert.Throws<InvalidOperationException>(() =>
