@@ -17,13 +17,22 @@ public sealed class EfAgentConnectionLeaseStore(
 {
     public Task<AgentConnectionLeaseState?> TryAcquireAsync(
         AgentConnectionLeaseRequest request,
+        Guid credentialId,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken = default)
     {
         Validate(request, leaseDuration);
-        return transactions.ExecuteAsync(
-            ct => TryAcquireWithinTransactionAsync(request, leaseDuration, ct),
-            cancellationToken);
+        if (credentialId == Guid.Empty)
+            throw new ArgumentException("An active persisted credential id is required.", nameof(credentialId));
+
+        return transactions.ExecuteAsync(async ct =>
+        {
+            // Acquisition uses the same per-device fence as revocation and dispatch.
+            // This prevents a connection that authenticated before a revoke/rotate
+            // from creating a late lease after the credential's authority was removed.
+            await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
+            return await TryAcquireWithinTransactionAsync(request, credentialId, leaseDuration, ct);
+        }, cancellationToken);
     }
 
     public async Task<bool> RenewAsync(
@@ -244,9 +253,18 @@ public sealed class EfAgentConnectionLeaseStore(
 
     private async Task<AgentConnectionLeaseState?> TryAcquireWithinTransactionAsync(
         AgentConnectionLeaseRequest request,
+        Guid credentialId,
         TimeSpan leaseDuration,
         CancellationToken cancellationToken)
     {
+        var credentialIsActive = await dbContext.AgentCredentials.AnyAsync(
+            x => x.Id == credentialId &&
+                 x.DeviceId == request.DeviceId &&
+                 x.RevokedAtUtc == null,
+            cancellationToken);
+        if (!credentialIsActive)
+            return null;
+
         var now = clock.UtcNow;
         var token = Guid.NewGuid().ToString("N");
         var expires = now.Add(leaseDuration);
