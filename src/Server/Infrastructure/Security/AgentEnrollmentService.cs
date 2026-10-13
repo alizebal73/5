@@ -25,13 +25,12 @@ public sealed class AgentEnrollmentService(
         if (command.IssuedByOperatorId == Guid.Empty)
             throw new AgentCredentialException("auth.identity_missing");
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, command.DeviceId, cancellationToken);
         try
         {
             return await transactions.ExecuteAsync(async ct =>
             {
-                // Token issuance must be ordered with credential provisioning/revocation
-                // and redemption for this same device.
-                await AgentDeviceFenceLock.AcquireAsync(dbContext, command.DeviceId, ct);
                 var now = clock.UtcNow;
                 var exists = await dbContext.AgentCredentials.AnyAsync(
                     x => x.DeviceId == command.DeviceId && x.RevokedAtUtc == null, ct);
@@ -111,14 +110,12 @@ public sealed class AgentEnrollmentService(
         if (string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Trim().Length > 1000)
             throw new AgentCredentialException("agent.enrollment_reason_invalid");
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, command.DeviceId, cancellationToken);
         try
         {
             return await transactions.ExecuteAsync(async ct =>
             {
-                // Recovery can revoke a never-authenticated credential. It must share
-                // the same per-device fence as lease acquisition and outbound dispatch.
-                await AgentDeviceFenceLock.AcquireAsync(dbContext, command.DeviceId, ct);
-
                 var now = clock.UtcNow;
                 var credential = await dbContext.AgentCredentials.SingleOrDefaultAsync(
                     x => x.DeviceId == command.DeviceId && x.RevokedAtUtc == null, ct);
@@ -246,13 +243,12 @@ public sealed class AgentEnrollmentService(
             return null;
         }
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, request.DeviceId, cancellationToken);
         try
         {
             return await transactions.ExecuteAsync(async ct =>
             {
-                // Redeeming an enrollment token creates new credential authority.
-                // Serialize it with issue, recovery, credential changes and dispatch.
-                await AgentDeviceFenceLock.AcquireAsync(dbContext, request.DeviceId, ct);
                 var now = clock.UtcNow;
                 var enrollment = await dbContext.AgentEnrollmentTokens.SingleOrDefaultAsync(
                     x => x.DeviceId == request.DeviceId && x.TokenHash == tokenHash, ct);
@@ -349,9 +345,10 @@ public sealed class AgentEnrollmentService(
         if (initial is null)
             return false;
 
+        await using var fence = await AgentDeviceFenceLock.AcquireAsync(
+            dbContext, initial.DeviceId, cancellationToken);
         return await transactions.ExecuteAsync(async ct =>
         {
-            await AgentDeviceFenceLock.AcquireAsync(dbContext, initial.DeviceId, ct);
             var token = await dbContext.AgentEnrollmentTokens
                 .SingleOrDefaultAsync(x => x.Id == tokenId && x.DeviceId == initial.DeviceId, ct);
             if (token is null || !token.Revoke(clock.UtcNow))
