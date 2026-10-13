@@ -1,3 +1,4 @@
+using System.Data;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Persistence;
@@ -5,6 +6,7 @@ using GameNet.Server.Persistence.Entities;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace GameNet.Server.Infrastructure.Realtime;
 
@@ -140,6 +142,73 @@ public sealed class EfAgentConnectionLeaseStore(
                 x.LeaseToken == leaseToken &&
                 x.LeaseExpiresAtUtc > now,
                 cancellationToken);
+    }
+
+    public async Task<bool> SendIfCurrentLeaseAsync(
+        string deviceId,
+        string connectionId,
+        string leaseToken,
+        Func<CancellationToken, Task> send,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceId(deviceId);
+        ValidateBoundedText(connectionId, nameof(connectionId), 128);
+        ValidateBoundedText(leaseToken, nameof(leaseToken), 128);
+        ArgumentNullException.ThrowIfNull(send);
+
+        // This transaction contains a network send attempt, so it must never use the
+        // generic serializable retry coordinator: replaying the callback could send twice.
+        // The timeout bounds how long credential revocation/rotation may wait on this fence.
+        using var sendTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, sendTimeout.Token);
+        var token = linkedCancellation.Token;
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.ReadCommitted, token);
+        var connection = dbContext.Database.GetDbConnection();
+        string? currentConnectionId = null;
+        string? currentLeaseToken = null;
+        DateTimeOffset currentLeaseExpiresAtUtc = default;
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT connection_id, lease_token, lease_expires_at_utc
+                FROM agent_connection_leases
+                WHERE device_id = @deviceId
+                FOR UPDATE
+                """;
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "deviceId";
+            parameter.Value = deviceId;
+            command.Parameters.Add(parameter);
+
+            await using var reader = await command.ExecuteReaderAsync(token);
+            if (await reader.ReadAsync(token))
+            {
+                currentConnectionId = reader.GetString(0);
+                currentLeaseToken = reader.GetString(1);
+                currentLeaseExpiresAtUtc = reader.GetFieldValue<DateTimeOffset>(2);
+            }
+        }
+
+        var now = clock.UtcNow;
+        if (currentConnectionId is null ||
+            !string.Equals(currentConnectionId, connectionId, StringComparison.Ordinal) ||
+            !string.Equals(currentLeaseToken, leaseToken, StringComparison.Ordinal) ||
+            currentLeaseExpiresAtUtc <= now)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return false;
+        }
+
+        // Keep the row lock only until SignalR has completed the send attempt. Do not wait
+        // for the Agent acknowledgement here; the caller waits for it after this commits.
+        await send(token);
+        await transaction.CommitAsync(token);
+        return true;
     }
 
     public async Task ReleaseIfOwnerAsync(
