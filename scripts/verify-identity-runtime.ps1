@@ -714,14 +714,14 @@ try {
     $basicRole = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
         "Idempotency-Key" = ("ci-role-" + [Guid]::NewGuid().ToString("N"))
-    } @{ code = "readonly-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "CI Readonly"; permissions = @("stations.read") }
+    } @{ code = "readonly-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "CI Readonly"; permissions = @("stations.read"); reason = "CI creates least-privilege role" }
     Assert-Status $basicRole 201 "Create least-privilege role"
     $basicRoleId = [string]$basicRole.Json.data.id
     $basicUsername = "ci-basic-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
     $basicOperatorPassword = "CI-basic-" + [Guid]::NewGuid().ToString("N")
     $basicUserKey = "ci-user-" + [Guid]::NewGuid().ToString("N")
     $basicUserHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"; "Idempotency-Key" = $basicUserKey }
-    $basicUserBody = @{ username = $basicUsername; displayName = "CI Basic"; password = $basicOperatorPassword; roleId = $basicRoleId }
+    $basicUserBody = @{ username = $basicUsername; displayName = "CI Basic"; password = $basicOperatorPassword; roleId = $basicRoleId; reason = "CI creates a limited operator account" }
     $basicUser = Invoke-IdentityRequest "POST" "/api/v1/identity/users" $basicUserHeaders $basicUserBody
     Assert-Status $basicUser 201 "Create limited operator"
     $basicUserId = [string]$basicUser.Json.data.id
@@ -742,7 +742,7 @@ try {
     $basicPermissionUpdate = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$basicRoleId/permissions" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
         "Idempotency-Key" = ("ci-role-perm-" + [Guid]::NewGuid().ToString("N"))
-    } @{ permissions = @("stations.read", "identity.users.read") }
+    } @{ permissions = @("stations.read", "identity.users.read"); reason = "CI verifies owner role-permission update" }
     Assert-Status $basicPermissionUpdate 200 "Owner updates role permissions"
     $basicNowCanRead = Invoke-IdentityRequest "GET" "/api/v1/identity/users" $basicHeaders
     Assert-Status $basicNowCanRead 200 "Refresh role permissions from authoritative Server state"
@@ -804,6 +804,7 @@ try {
         code = "manager-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
         name = "CI Restricted Manager"
         permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "stations.read")
+        reason = "CI creates constrained role manager"
     }
     Assert-Status $managerRole 201 "Create constrained role manager"
     $managerUsername = "ci-manager-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
@@ -811,7 +812,7 @@ try {
     $managerUser = Invoke-IdentityRequest "POST" "/api/v1/identity/users" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
         "Idempotency-Key" = ("ci-mgr-user-" + [Guid]::NewGuid().ToString("N"))
-    } @{ username = $managerUsername; displayName = "CI Manager"; password = $managerPassword; roleId = [string]$managerRole.Json.data.id }
+    } @{ username = $managerUsername; displayName = "CI Manager"; password = $managerPassword; roleId = [string]$managerRole.Json.data.id; reason = "CI creates constrained role manager account" }
     Assert-Status $managerUser 201 "Create constrained role manager account"
     $managerTokenResponse = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{ username = $managerUsername; password = $managerPassword }
     Assert-Status $managerTokenResponse 200 "Login constrained role manager"
@@ -827,13 +828,13 @@ try {
     $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
         "Idempotency-Key" = ("ci-escalate-" + [Guid]::NewGuid().ToString("N"))
-    } @{ code = "blocked-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "No escalation"; permissions = @("settings.write") }
+    } @{ code = "blocked-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "No escalation"; permissions = @("settings.write"); reason = "CI verifies role permission escalation is denied" }
     Assert-ErrorCode $managerEscalates 403 "identity.permission_escalation" "Deny privilege escalation when creating role"
 
     $managerEditsOwner = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$($bootstrap.Json.data.userId)/active" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
         "Idempotency-Key" = ("ci-disable-owner-" + [Guid]::NewGuid().ToString("N"))
-    } @{ isActive = $false }
+    } @{ isActive = $false; reason = "CI verifies non-owner cannot disable Owner" }
     Assert-ErrorCode $managerEditsOwner 403 "identity.owner_protected" "Deny non-owner from disabling Owner"
 
 
@@ -847,7 +848,7 @@ try {
     $grantPasswordReset = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($managerRole.Json.data.id)/permissions" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
         "Idempotency-Key" = ("ci-grant-password-reset-" + [Guid]::NewGuid().ToString("N"))
-    } @{ permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "identity.users.password-reset", "stations.read") }
+    } @{ permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "identity.users.password-reset", "stations.read"); reason = "CI grants the password reset permission" }
     Assert-Status $grantPasswordReset 200 "Grant dedicated password-reset permission"
 
     $managerResetOwner = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$($bootstrap.Json.data.userId)/password" @{
@@ -859,7 +860,7 @@ try {
     $systemRoleEdit = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($ownerRole.id)/permissions" @{
         "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
         "Idempotency-Key" = ("ci-system-role-" + [Guid]::NewGuid().ToString("N"))
-    } @{ permissions = @("stations.read") }
+    } @{ permissions = @("stations.read"); reason = "CI verifies the system Owner role cannot be edited" }
     Assert-ErrorCode $systemRoleEdit 409 "identity.system_role_immutable" "Protect system Owner role"
 
     $managerLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $managerHeaders
