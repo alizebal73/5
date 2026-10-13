@@ -11,7 +11,9 @@ namespace GameNet.Server.Infrastructure.Security;
 internal enum ServerSecretProvisioningFailureCode
 {
     ProvisioningRejected,
-    ProvisioningFailed
+    ProvisioningFailed,
+    MigrationRejected,
+    MigrationFailed
 }
 
 internal sealed record ServerSecretProvisioningAuditRecord(
@@ -37,11 +39,30 @@ internal static class ServerSecretProvisioningAuditLog
 
     internal static void RecordSucceeded(string operationId) => WriteRecord(operationId, "Succeeded", null);
 
-    internal static bool TryRecordFailed(string operationId, ServerSecretProvisioningFailureCode failureCode)
+    internal static bool TryRecordFailed(string operationId, ServerSecretProvisioningFailureCode failureCode) =>
+        TryRecordFailed(operationId, failureCode, EventType);
+
+    internal static void RecordMigrationStarted(string operationId) =>
+        WriteRecord(operationId, "Started", null, "ServerSecretStore.MigrateFingerprintKey");
+
+    internal static void RecordMigrationSucceeded(string operationId) =>
+        WriteRecord(operationId, "Succeeded", null, "ServerSecretStore.MigrateFingerprintKey");
+
+    internal static bool TryRecordMigrationFailed(string operationId, ServerSecretProvisioningFailureCode failureCode)
+    {
+        if (failureCode is not (ServerSecretProvisioningFailureCode.MigrationRejected or ServerSecretProvisioningFailureCode.MigrationFailed))
+            throw new ServerSecretStoreException("The fingerprint migration audit failure code is invalid.");
+        return TryRecordFailed(operationId, failureCode, "ServerSecretStore.MigrateFingerprintKey");
+    }
+
+    private static bool TryRecordFailed(
+        string operationId,
+        ServerSecretProvisioningFailureCode failureCode,
+        string eventType)
     {
         try
         {
-            WriteRecord(operationId, "Failed", failureCode.ToString());
+            WriteRecord(operationId, "Failed", failureCode.ToString(), eventType);
             return true;
         }
         catch
@@ -50,15 +71,26 @@ internal static class ServerSecretProvisioningAuditLog
         }
     }
 
-    private static void WriteRecord(string operationId, string outcome, string? failureCode)
+    private static void WriteRecord(
+        string operationId,
+        string outcome,
+        string? failureCode,
+        string eventType = EventType)
     {
         if (!OperatingSystem.IsWindows())
             throw new ServerSecretStoreException("The restricted provisioning audit log requires Windows.");
 
         if (!Guid.TryParseExact(operationId, "N", out _))
             throw new ServerSecretStoreException("The provisioning audit operation identifier is invalid.");
-        if (outcome is not ("Started" or "Succeeded" or "Failed") ||
-            (outcome == "Failed" && failureCode is not ("ProvisioningRejected" or "ProvisioningFailed")) ||
+        var validFailureCode = eventType switch
+        {
+            "ServerSecretStore.Provision" => failureCode is "ProvisioningRejected" or "ProvisioningFailed",
+            "ServerSecretStore.MigrateFingerprintKey" => failureCode is "MigrationRejected" or "MigrationFailed",
+            _ => false
+        };
+        if (eventType is not ("ServerSecretStore.Provision" or "ServerSecretStore.MigrateFingerprintKey") ||
+            outcome is not ("Started" or "Succeeded" or "Failed") ||
+            (outcome == "Failed" && !validFailureCode) ||
             (outcome != "Failed" && failureCode is not null))
             throw new ServerSecretStoreException("The provisioning audit event type is invalid.");
 
@@ -88,7 +120,7 @@ internal static class ServerSecretProvisioningAuditLog
             using var identity = WindowsIdentity.GetCurrent();
             var record = new ServerSecretProvisioningAuditRecord(
                 SchemaVersion,
-                EventType,
+                eventType,
                 operationId,
                 TimeProvider.System.GetUtcNow(),
                 outcome,
