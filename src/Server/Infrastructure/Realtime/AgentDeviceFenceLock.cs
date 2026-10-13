@@ -47,7 +47,26 @@ internal sealed class AgentDeviceFenceLock : IAsyncDisposable
         }
         catch
         {
-            await dbContext.Database.CloseConnectionAsync();
+            // Cancellation can race a successful server-side lock acquisition. Attempt
+            // an unconditional release before returning this session to the pool.
+            try
+            {
+                var connection = dbContext.Database.GetDbConnection();
+                await using var unlock = connection.CreateCommand();
+                unlock.CommandText = "SELECT pg_advisory_unlock(hashtextextended(@lockKey, 0))";
+                var parameter = unlock.CreateParameter();
+                parameter.ParameterName = "lockKey";
+                parameter.Value = key;
+                unlock.Parameters.Add(parameter);
+                await unlock.ExecuteScalarAsync(CancellationToken.None);
+            }
+            catch
+            {
+                // A broken connection releases its session lock when the backend ends.
+            }
+
+            try { await dbContext.Database.CloseConnectionAsync(); }
+            catch { /* Preserve the original acquisition/cancellation error. */ }
             throw;
         }
     }
