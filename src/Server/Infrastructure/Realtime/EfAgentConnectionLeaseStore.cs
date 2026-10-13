@@ -170,15 +170,24 @@ public sealed class EfAgentConnectionLeaseStore(
         string? currentConnectionId = null;
         string? currentLeaseToken = null;
         DateTimeOffset currentLeaseExpiresAtUtc = default;
+        var hasActiveCredential = false;
 
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = """
-                SELECT connection_id, lease_token, lease_expires_at_utc
-                FROM agent_connection_leases
-                WHERE device_id = @deviceId
-                FOR UPDATE
+                SELECT lease.connection_id,
+                       lease.lease_token,
+                       lease.lease_expires_at_utc,
+                       EXISTS (
+                           SELECT 1
+                           FROM agent_credentials credential
+                           WHERE credential.device_id = lease.device_id
+                             AND credential.revoked_at_utc IS NULL
+                       ) AS has_active_credential
+                FROM agent_connection_leases lease
+                WHERE lease.device_id = @deviceId
+                FOR UPDATE OF lease
                 """;
             var parameter = command.CreateParameter();
             parameter.ParameterName = "deviceId";
@@ -191,11 +200,13 @@ public sealed class EfAgentConnectionLeaseStore(
                 currentConnectionId = reader.GetString(0);
                 currentLeaseToken = reader.GetString(1);
                 currentLeaseExpiresAtUtc = reader.GetFieldValue<DateTimeOffset>(2);
+                hasActiveCredential = reader.GetBoolean(3);
             }
         }
 
         var now = clock.UtcNow;
         if (currentConnectionId is null ||
+            !hasActiveCredential ||
             !string.Equals(currentConnectionId, connectionId, StringComparison.Ordinal) ||
             !string.Equals(currentLeaseToken, leaseToken, StringComparison.Ordinal) ||
             currentLeaseExpiresAtUtc <= now)
