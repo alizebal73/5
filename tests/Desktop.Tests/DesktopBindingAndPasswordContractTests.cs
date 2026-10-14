@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Sessions;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Api;
 using GameNet.Shared.Contracts.V1.Sessions;
@@ -55,9 +56,11 @@ public sealed class DesktopBindingAndPasswordContractTests
 
                     var dataTemplate = attribute.Parent?.AncestorsAndSelf()
                         .FirstOrDefault(element => element.Name.LocalName == "DataTemplate");
-                    var rootType = dataTemplate is null
-                        ? typeof(LoginViewModel)
-                        : ResolveDataTemplateItemType(dataTemplate);
+                    var rootType = dataTemplate is not null
+                        ? ResolveDataTemplateItemType(dataTemplate)
+                        : string.Equals(Path.GetFileName(viewPath), "SessionWorkflowView.xaml", StringComparison.Ordinal)
+                            ? typeof(ISessionWorkflowPort)
+                            : typeof(LoginViewModel);
 
                     if (!TryResolvePath(rootType, path, out var unresolvedSegment))
                     {
@@ -72,6 +75,33 @@ public sealed class DesktopBindingAndPasswordContractTests
                 $"{Path.GetFileName(viewPath)} contains invalid WPF binding paths:" + Environment.NewLine +
                 string.Join(Environment.NewLine, failures));
         }
+    }
+
+    [Fact]
+    public void Session_workflow_view_is_plugged_into_a_stable_port_not_a_concrete_view_model()
+    {
+        var portProperty = typeof(LoginViewModel).GetProperty(nameof(LoginViewModel.SessionWorkflow));
+        Assert.NotNull(portProperty);
+        Assert.Equal(typeof(ISessionWorkflowPort), portProperty!.PropertyType);
+        Assert.True(typeof(ISessionWorkflowPort).IsAssignableFrom(typeof(SessionWorkflowViewModel)));
+
+        var root = FindRepositoryRoot();
+        var view = XDocument.Load(Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml"));
+        var bindingValues = view.Descendants().Attributes()
+            .Select(attribute => attribute.Value)
+            .Where(value => value.Contains("{Binding", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(bindingValues);
+        Assert.DoesNotContain(bindingValues, value => value.Contains("SessionWorkflow.", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            view.Descendants().Attributes().Select(attribute => attribute.Value),
+            value => value.Contains("SessionWorkflowViewModel", StringComparison.Ordinal));
+        
+        var mainWindow = XDocument.Load(Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"));
+        var plugin = mainWindow.Descendants().FirstOrDefault(element => element.Name.LocalName == "SessionWorkflowView");
+        Assert.NotNull(plugin);
+        Assert.Equal("{Binding SessionWorkflow}", (string?)plugin!.Attribute("DataContext"));
     }
 
     [Fact]
