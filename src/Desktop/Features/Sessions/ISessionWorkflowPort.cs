@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
 
@@ -17,8 +16,8 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
 {
     ObservableCollection<StationResponse> PcStations { get; }
     ObservableCollection<TariffResponse> Tariffs { get; }
-    ObservableCollection<SessionResponse> ActiveSessions { get; }
-    ObservableCollection<InvoicePreviewResponse> PendingInvoices { get; }
+    ObservableCollection<ActiveSessionListItem> ActiveSessions { get; }
+    ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; }
 
     ICommand RefreshCommand { get; }
     ICommand CreateTariffCommand { get; }
@@ -35,8 +34,8 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
 
     StationResponse? SelectedStation { get; set; }
     TariffResponse? SelectedTariff { get; set; }
-    SessionResponse? SelectedActiveSession { get; set; }
-    InvoicePreviewResponse? SelectedPendingInvoice { get; set; }
+    ActiveSessionListItem? SelectedActiveSession { get; set; }
+    PendingInvoiceListItem? SelectedPendingInvoice { get; set; }
 
     string TariffCode { get; set; }
     string TariffName { get; set; }
