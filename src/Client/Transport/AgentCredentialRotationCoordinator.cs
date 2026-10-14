@@ -66,8 +66,16 @@ public sealed class AgentCredentialRotationCoordinator(
             client, $"{root}/api/v1/agent/credentials/rotate/stage", stage, cancellationToken);
         if (stageResponse.OperationId != pending.OperationId ||
             !string.Equals(stageResponse.DeviceId, pending.DeviceId, StringComparison.Ordinal) ||
-            stageResponse.State is not ("staged" or "committed"))
+            stageResponse.State is not ("staged" or "committed" or "expired"))
             throw new InvalidOperationException("Server returned inconsistent Agent credential-rotation stage state.");
+
+        if (stageResponse.State == "expired")
+        {
+            await VerifyCurrentCredentialStillActiveAsync(client, root, pending, cancellationToken);
+            await credentialStore.DiscardExpiredPendingRotationAsync(
+                pending.OperationId, pending.DeviceId, cancellationToken);
+            return;
+        }
 
         var confirmation = new AgentCredentialRotationConfirmationRequest(
             pending.OperationId, pending.DeviceId, pending.CurrentSecret, pending.ReplacementSecret);
@@ -80,6 +88,51 @@ public sealed class AgentCredentialRotationCoordinator(
             throw new InvalidOperationException("Server did not confirm the Agent credential-rotation commit.");
 
         await credentialStore.PromotePendingRotationAsync(pending.OperationId, pending.DeviceId, cancellationToken);
+    }
+
+    private static async Task VerifyCurrentCredentialStillActiveAsync(
+        HttpClient client,
+        string root,
+        AgentPendingCredentialRotation pending,
+        CancellationToken cancellationToken)
+    {
+        var endpoint = $"{root}/api/v1/agent/auth/token";
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = JsonContent.Create(new AgentTokenRequest(pending.DeviceId, pending.CurrentSecret))
+        };
+        request.Headers.TryAddWithoutValidation("X-GameNet-Contract", "v1");
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.SendAsync(request, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            throw new InvalidOperationException(
+                "Could not verify the prior Agent credential after rotation expiry; protected pending state was retained.");
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(
+                    "The prior Agent credential is not confirmed active after rotation expiry; protected pending state was retained.");
+            try
+            {
+                var token = await response.Content.ReadFromJsonAsync<AgentTokenResponse>(
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken);
+                if (token is null || string.IsNullOrWhiteSpace(token.AccessToken))
+                    throw new InvalidOperationException(
+                        "Server returned no proof of the prior Agent credential after rotation expiry; protected pending state was retained.");
+            }
+            catch (JsonException)
+            {
+                throw new InvalidOperationException(
+                    "Server returned invalid proof of the prior Agent credential after rotation expiry; protected pending state was retained.");
+            }
+        }
     }
 
     private static async Task<TResponse> SendAsync<TRequest, TResponse>(
