@@ -35,6 +35,52 @@ public partial class AgentStagedCredentialRotation : Migration
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
+        // A schema rollback must not reactivate or strand a staged replacement.
+        // The legacy active-device index has no pending-rotation predicate, so an
+        // unrevoked staged row would collide with the prior active credential when
+        // the new columns are dropped. Cancel and audit in-flight staged rotations
+        // before restoring that legacy invariant.
+        migrationBuilder.Sql("""
+            INSERT INTO audit_entries (
+                id, occurred_at_utc, actor_type, actor_id, operation,
+                reference_type, reference_id, reason, correlation_id, source, outcome)
+            SELECT
+                gen_random_uuid(), clock_timestamp(), 'System', device_id,
+                'AgentCredential.RotationCancelledByRollback',
+                'AgentCredentialRotationRollback', id::text,
+                'Pending credential rotation was cancelled by schema rollback; the prior credential was retained.',
+                gen_random_uuid()::text, 'ServerMigration', 'Cancelled'
+            FROM agent_credentials
+            WHERE revoked_at_utc IS NULL AND is_pending_rotation = TRUE;
+
+            INSERT INTO audit_entries (
+                id, occurred_at_utc, actor_type, actor_id, operation,
+                reference_type, reference_id, reason, correlation_id, source, outcome)
+            SELECT
+                gen_random_uuid(), clock_timestamp(), 'System', device_id,
+                'AgentCredential.RotationRequestCancelledByRollback',
+                'AgentCredentialRotationRequestRollback', rotation_requested_operation_id::text,
+                'Credential rotation request was cancelled by schema rollback; the current credential was retained.',
+                gen_random_uuid()::text, 'ServerMigration', 'Cancelled'
+            FROM agent_credentials
+            WHERE revoked_at_utc IS NULL
+              AND is_pending_rotation = FALSE
+              AND rotation_requested_operation_id IS NOT NULL;
+
+            UPDATE agent_credentials
+            SET revoked_at_utc = clock_timestamp(),
+                is_pending_rotation = FALSE,
+                rotation_expires_at_utc = NULL
+            WHERE revoked_at_utc IS NULL AND is_pending_rotation = TRUE;
+
+            UPDATE agent_credentials
+            SET rotation_requested_operation_id = NULL,
+                rotation_requested_at_utc = NULL
+            WHERE revoked_at_utc IS NULL
+              AND is_pending_rotation = FALSE
+              AND rotation_requested_operation_id IS NOT NULL;
+            """);
+
         migrationBuilder.DropIndex(
             name: "IX_audit_entries_AgentCredentialRotationRequestOperation",
             table: "audit_entries");
