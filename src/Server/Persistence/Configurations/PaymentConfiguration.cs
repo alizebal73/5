@@ -13,6 +13,7 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             table.HasCheckConstraint("ck_payments_applied_positive", "amount_applied_toman > 0");
             table.HasCheckConstraint("ck_payments_received_sufficient", "amount_received_toman >= amount_applied_toman");
             table.HasCheckConstraint("ck_payments_change_matches", "change_given_toman = amount_received_toman - amount_applied_toman");
+            table.HasCheckConstraint("ck_payments_method_cash", "method = 1");
         });
         b.HasKey(x => x.Id).HasName("pk_payments");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
