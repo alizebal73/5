@@ -18,6 +18,9 @@ public sealed class AgentCredentialStore(
         var path = Path.Combine(root, "credential.bin");
         if (!File.Exists(path))
             return null;
+        RejectReparsePoint(path);
+        if (IsProduction())
+            AgentStateAccessControl.ValidateCredentialFile(root, path);
 
         byte[]? protectedBytes = null;
         byte[]? clearBytes = null;
@@ -56,6 +59,8 @@ public sealed class AgentCredentialStore(
         if (!File.Exists(path))
             return null;
         RejectReparsePoint(path);
+        if (IsProduction())
+            AgentStateAccessControl.ValidatePendingCredentialRotationFile(root, path);
 
         byte[]? protectedBytes = null;
         byte[]? clearBytes = null;
@@ -158,6 +163,23 @@ public sealed class AgentCredentialStore(
         }
     }
 
+    public async Task DiscardExpiredPendingRotationAsync(
+        Guid operationId, string deviceId, CancellationToken cancellationToken = default)
+    {
+        var pending = await TryLoadPendingRotationAsync(deviceId, cancellationToken);
+        if (pending is null)
+            return;
+        if (pending.OperationId != operationId)
+            throw new InvalidOperationException("Pending Agent credential-rotation operation does not match; refusing cleanup.");
+
+        var root = identityOptions.Value.ResolveRootPath();
+        var path = Path.Combine(root, PendingRotationFileName);
+        RejectReparsePoint(path);
+        if (IsProduction())
+            AgentStateAccessControl.ValidatePendingCredentialRotationFile(root, path);
+        File.Delete(path);
+    }
+
     public async Task PromotePendingRotationAsync(
         Guid operationId, string deviceId, CancellationToken cancellationToken = default)
     {
@@ -240,9 +262,18 @@ public sealed class AgentCredentialStore(
                 "Agent credential must contain at least 32 characters.", nameof(secret));
 
         var root = identityOptions.Value.ResolveRootPath();
-        Directory.CreateDirectory(root);
+        if (IsProduction())
+            AgentStateAccessControl.ValidateProductionStateRoot(root);
+        else
+            Directory.CreateDirectory(root);
         var path = Path.Combine(root, "credential.bin");
-        var temp = path + ".tmp";
+        if (File.Exists(path))
+        {
+            RejectReparsePoint(path);
+            if (IsProduction())
+                AgentStateAccessControl.ValidateCredentialFile(root, path);
+        }
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
         byte[]? clearBytes = null;
         byte[]? protectedBytes = null;
@@ -250,8 +281,16 @@ public sealed class AgentCredentialStore(
         {
             clearBytes = Encoding.UTF8.GetBytes(secret);
             protectedBytes = ProtectedData.Protect(clearBytes, null, DataProtectionScope.CurrentUser);
-            await File.WriteAllBytesAsync(temp, protectedBytes, cancellationToken);
+            await using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                4096, FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(protectedBytes, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
             File.Move(temp, path, overwrite: true);
+            RejectReparsePoint(path);
+            if (IsProduction())
+                AgentStateAccessControl.ValidateCredentialFile(root, path);
         }
         finally
         {
