@@ -3,6 +3,57 @@
 **Snapshot date:** 2026-10-12  
 **Purpose:** Prevent rework loops by separating closed engineering stages from distinct operational/release gates. This is the active execution control document. The master plan remains the product plan; this file governs the current queue and evidence rules.
 
+
+## Live execution order — read-back 2026-10-14 (supersedes older queue snapshots below)
+
+Older dated sections remain as historical evidence. For current action, this section is authoritative, but read live PR heads/checks again before every merge.
+
+### Verified refs at this read-back
+- Integration: integration/runtime-operator-v1 = 6a6cda5bf0c199d7163323d69f4c0fbfef09d58f (PR #90 squash merge).
+- Main: main = b9288471f2047570eaf8d0d6552cf87bc0ddc214 (intentionally unchanged starter; this is the exact 40-character SHA).
+- Foundation: foundation/runtime-final-v2 = 71ef6534331e6ba5a8a460fd5b8846fe40e8567a.
+- Passing CI on a candidate SHA is evidence only for that SHA. It does not certify later rebases, post-merge SHA, installed Service behavior or release readiness.
+
+### Current execution order and timebox
+**Immediate bug-fix queue: target no more than 2–3 working days after 2026-10-14, subject to actual CI failures. Do not use this timebox to waive checks.**
+
+1. **PR #90 — DONE.** Merged to Integration at `6a6cda5bf0c199d7163323d69f4c0fbfef09d58f`. It upgrades Microsoft .NET packages to 10.0.13 and SDK to 10.0.402 and keeps the dependency vulnerability scanner fail-closed. The candidate passed Quick/Foundation and Runtime Payload before merge; post-merge checks must be read from the live SHA when available.
+2. **PR #94 — current PostgreSQL retry fix replacing old PR #87.** Head at this read-back: `72a6ccbeba8536ae8734e535a7e739862bf132a8`, directly based on post-#90 Integration and limited to `EfTransactionCoordinator.cs`. Runtime Payload run [#38560171404](https://github.com/alizebal73/5/actions/runs/38560171404) succeeded. Full Foundation / PostgreSQL certification [run #38560171403](https://github.com/alizebal73/5/actions/runs/38560171403) was still in progress at the last read-back. Do not merge until all required checks complete successfully on this exact head, especially the concurrent last-active-Owner invariant, audit and rollback behavior. If any code changes, require fresh exact-head runs.
+3. **Old PR #87 — superseded by #94.** Once #94 has passed and is merged, close #87 as superseded; do not merge its old-base candidate.
+4. **PR #88 — rebuild as redaction-only after #94 merges.** Current PR #88 contains both the retry change and log-redaction change even though its base is Integration. Create a clean branch from the new Integration head and port only `ExceptionHandlingMiddleware` redaction plus its sentinel regression test. Its final diff must not repeat the retry fix. Run exact-head Quick and Foundation; confirm secrets/exception sentinels do not appear in log output before merging.
+5. **PR #91 — staged per-device Agent credential rotation is deferred, not cancelled.** It is a substantial security feature and passed its earlier exact-candidate Quick/Foundation gates, but is based on the prior #90/#87 stack. Do not merge the stale stack. Defer implementation integration until the bounded PC-control feasibility task (#92) and the first Session slice are scoped; rebuild it later against the then-current Integration. The old one-step rotation route must not be treated as safe or used operationally before the staged protocol is accepted. Rotation/recovery remains a mandatory pre-pilot/release gate; Issue #74 remains open.
+6. **Human review and runner.** At the last read-back, no submitted review was found for the main security PRs and the configured approval count was zero. Delegated technical review is not independent human approval. Current CI uses GitHub-hosted `windows-2025`; resolve local-runner policy in [Issue #67](https://github.com/alizebal73/5/issues/67) separately. Never run untrusted PR code on a persistent personal runner or relabel hosted results as local-runner evidence.
+
+Capture live head SHA, base SHA, all required check conclusions, review/disposition and merge SHA for each merge. Re-read Integration after each merge.
+
+### Stage 3 exit rule — bounded and evidence-based
+Close the immediate bug-fix track after #90, #94 and the clean redaction-only PR have merged with exact-SHA evidence; timebox that track to 2–3 working days and record any actual blocker. This does **not** close Issue #74 or claim all secret lifecycle work is complete. Move non-blocking rotation/recovery items to named pre-pilot/release gates with reason, owner, affected capability and evidence required. A deferral never authorizes operational use of the unsafe path.
+
+Remaining Issue #74 items include JWT active/previous signing-key rotation, PostgreSQL runtime credential rotation, provisioning-key rotation, protected-state/host-replacement recovery, and wider redaction. Preserve [Issue #63's idempotency replay contract](https://github.com/alizebal73/5/issues/63), including retained records and fingerprint-key compatibility.
+
+### First product-risk task — Issue #92
+Complete a concrete feasibility test on a disposable test PC/VM by **2026-10-18**, not a documentation-only exercise. Establish supported Windows edition and customer privilege boundary; demonstrate the minimum lock/unlock lifecycle and failure behavior for server/network loss, Agent/Windows restart and stale/duplicate command. Record observed results and bypass limits. This early spike is not final Setup acceptance and does not authorize changes to the live Manager/shop PC. If physical hardware is unavailable in the current environment, record that as BLOCKED with a specific test-PC requirement; do not claim PASS.
+
+### First product journey and mandatory pre-Slice prerequisite
+1. Freeze V1 scope and persistent money/time decisions with requirement IDs in [requirements traceability](../planning/requirements-traceability.md).
+2. Before Session V1, complete [Issue #95](https://github.com/alizebal73/5/issues/95): characterize the current Identity mutation path and extract only the proven common transaction/idempotency/replay mechanics if the same contract is truly reusable. Keep permission checks, domain validation, reason requirements and audit before/after semantics explicit within each use case. Preserve behavior with characterization tests; do not rewrite the 28 KB service merely because of file size or build a generic framework without two real consumers.
+3. Build a narrow PC journey in ordered slices: minimal Customer/Walk-in -> fixed PC tariff snapshot -> Session start/end -> invoice -> cash payment -> durable Ledger and Audit, all through WPF, Server and PostgreSQL. The first slice must exercise the verified command pipeline. Only then add wallet, debt, free credit/time, discount and advanced tariff periods.
+4. Each slice includes versioned Shared/API command contract, authorization/error mapping, migration, Server use case, database constraints, stable idempotency, unit/PostgreSQL concurrency/regression tests and WPF loading/empty/offline/error/forbidden states. External Agent effects must not run inside a database transaction: commit authoritative state and any required outbox record atomically, then dispatch after commit.
+5. After the cash journey passes, execute an early 2–3-station **shadow trial** using a disposable/test database and test build under [Issue #96](https://github.com/alizebal73/5/issues/96). Capture operator feedback early, but do not process real customer sessions/money, replace the legacy source of truth, or modify the live Manager PC. This is not the final production pilot.
+6. Continue PS5/foosball as server-managed timed stations, then wallet/debt, shifts/reconciliation/reports, inventory/Buffet, VIP/discounts, Games and only later GameAccounts after its security/legal decision.
+7. Build Setup/Updater/rollback after planned product scope is traceable. Final installed-Service/TLS/DPAPI/ACL/two-PC LAN/UI acceptance remains under [Issue #16](https://github.com/alizebal73/5/issues/16) and [Issue #34](https://github.com/alizebal73/5/issues/34). Only after those gates pass may the formal real-shop pilot and release/main promotion proceed.
+
+### Cross-cutting invariants for every product slice
+- **Money:** persist amounts as checked integer `long` in Toman. No binary floating point for money. Use one documented integer/fixed-point/rational calculation and rounding policy. Ledger is append-only; corrections are reversal/adjustment entries with reason, not mutation/deletion. Cash received, wallet value, bonus/free credit, free time and debt stay separate.
+- **Tariff/session:** use Server UTC time; convert to Jalali only in presentation. Snapshot the effective tariff at session start. Explicit versioned state transitions and a PostgreSQL constraint enforce at most one active session per station. Decide/test tariff boundary crossings, pause/resume, disconnect, restart and recovery.
+- **Idempotency/concurrency:** one stable operation key per user intent across retries; same key plus changed payload conflicts. Test double-click, lost response, concurrent operators, duplicate payment/session, simultaneous wallet changes and restart. Database unique/check/FK constraints are the final invariant guard.
+- **Agent/control:** Server is authoritative; stale commands are fenced by device/lease/session generation. Persist required state/outbox before dispatch; reconnect reconciles from Server. Explicitly decide behavior after Server/network/Agent/Windows restart.
+- **Audit/security:** actor, reason, correlation, and suitable before/after evidence for privileged/financial corrections. Never log credentials, tokens, connection-string secrets or private-key contents. Fail closed on corrupt/unsupported secret state; no silent key regeneration or fallback.
+- **Database/contracts:** never edit an applied migration; use expand/compatible transition/contract. Test upgrade and restore with disposable previous-version data. Version Shared/API contracts intentionally and specify old Agent/Desktop compatibility.
+- **Module ownership/UI:** Sessions owns time/lifecycle; Tariffs resolves price; Billing owns invoices/payment allocations; Wallet owns stored value/free value/debt; Inventory owns stock movements; Agent only executes authorized OS commands. WPF displays Server results, never computes authoritative price/time/money. Test fa-IR RTL, en-US LTR, Persian/Arabic digits, ی/ي, ک/ك, Toman formatting and loading/empty/offline/error/forbidden states.
+- **Testing/process:** do not weaken/disable a failing test for green CI. Review money/session code directly. Split classes by responsibility/change pressure, not arbitrary kilobyte limits. Each slice links requirement IDs and exact-SHA evidence; CI and final installed-service/physical acceptance are distinct gates.
+- **Scope discipline:** one primary slice at a time. No generic infrastructure without demonstrated need. Do not merge stale Drafts #15/#17/#21 wholesale.
+
 ## Current queue — live audit update (2026-10-13; snapshot before docs-only PR merge)
 
 The Integration branch was read at `610ad37739e4ea32ee4e0d4d24d011b8e413e908` immediately after PR #82 merged and before this status-reconciliation PR. This SHA is immutable evidence, not a pointer to Integration after this PR merges.
