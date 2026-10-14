@@ -20,8 +20,8 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private StationResponse? selectedStation;
     private TariffResponse? selectedTariff;
-    private SessionResponse? selectedActiveSession;
-    private InvoicePreviewResponse? selectedPendingInvoice;
+    private ActiveSessionListItem? selectedActiveSession;
+    private PendingInvoiceListItem? selectedPendingInvoice;
     private string tariffCode = "PC-STANDARD";
     private string tariffName = "PC Standard";
     private string hourlyRateText = string.Empty;
@@ -44,22 +44,22 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
             SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
             SelectedStation is not null &&
-            !ActiveSessions.Any(x => x.StationId == SelectedStation.Id) &&
-            !PendingInvoices.Any(x => x.StationId == SelectedStation.Id));
+            !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
+            !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedActiveSession is { Status: SessionStatusContract.Active });
+            SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
-            SelectedPendingInvoice is { Status: InvoiceStatusContract.PendingPayment } &&
+            SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
             TryParseToman(AmountReceivedText, out var received) &&
-            SelectedPendingInvoice is not null && received >= SelectedPendingInvoice.AmountToman);
+            SelectedPendingInvoice is not null && received >= SelectedPendingInvoice.Invoice.AmountToman);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<StationResponse> PcStations { get; } = [];
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
-    public ObservableCollection<SessionResponse> ActiveSessions { get; } = [];
-    public ObservableCollection<InvoicePreviewResponse> PendingInvoices { get; } = [];
+    public ObservableCollection<ActiveSessionListItem> ActiveSessions { get; } = [];
+    public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
 
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
@@ -85,20 +85,20 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         set { if (SetField(ref selectedTariff, value)) RaiseCommands(); }
     }
 
-    public SessionResponse? SelectedActiveSession
+    public ActiveSessionListItem? SelectedActiveSession
     {
         get => selectedActiveSession;
         set { if (SetField(ref selectedActiveSession, value)) RaiseCommands(); }
     }
 
-    public InvoicePreviewResponse? SelectedPendingInvoice
+    public PendingInvoiceListItem? SelectedPendingInvoice
     {
         get => selectedPendingInvoice;
         set
         {
             if (SetField(ref selectedPendingInvoice, value))
             {
-                AmountReceivedText = value?.AmountToman.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+                AmountReceivedText = value?.Invoice.AmountToman.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
                 RaiseCommands();
                 OnPropertyChanged(nameof(SelectedInvoiceAmountText));
             }
@@ -125,11 +125,11 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 
     public string SelectedInvoiceAmountText => SelectedPendingInvoice is null
         ? string.Empty
-        : FormatToman(SelectedPendingInvoice.AmountToman);
+        : FormatToman(SelectedPendingInvoice.Invoice.AmountToman);
 
     public string SelectedSessionText => SelectedActiveSession is null
         ? string.Empty
-        : $"{SelectedActiveSession.TariffNameSnapshot} — {FormatToman(SelectedActiveSession.TariffHourlyRateTomanSnapshot)}";
+        : $"{SelectedActiveSession.Session.TariffNameSnapshot} — {FormatToman(SelectedActiveSession.Session.TariffHourlyRateTomanSnapshot)}";
 
     public async Task RefreshAsync()
     {
@@ -170,7 +170,11 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             if (CanOperateSessions)
             {
                 var sessions = await api.GetActiveSessionsAsync();
-                Replace(ActiveSessions, sessions, SelectedActiveSession?.Id, x => x.Id, out var currentSession);
+                var sessionItems = sessions.Select(session => new ActiveSessionListItem(
+                    session,
+                    GetStationLabel(session.StationId),
+                    FormatStartedAtDisplayText(session.StartedAtUtc))).ToArray();
+                Replace(ActiveSessions, sessionItems, SelectedActiveSession?.Id, x => x.Id, out var currentSession);
                 SelectedActiveSession = currentSession;
             }
             else
@@ -182,7 +186,12 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             if (CanCheckout)
             {
                 var invoices = await api.GetPendingInvoicesAsync();
-                Replace(PendingInvoices, invoices, SelectedPendingInvoice?.InvoiceId, x => x.InvoiceId, out var currentInvoice);
+                var invoiceItems = invoices.Select(invoice => new PendingInvoiceListItem(
+                    invoice,
+                    GetStationLabel(invoice.StationId),
+                    FormatDurationDisplayText(invoice.ElapsedTicks),
+                    FormatAmountDisplayText(invoice.AmountToman))).ToArray();
+                Replace(PendingInvoices, invoiceItems, SelectedPendingInvoice?.Id, x => x.Id, out var currentInvoice);
                 SelectedPendingInvoice = currentInvoice;
             }
             else
@@ -294,7 +303,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                 new StartSessionRequest(SelectedStation.Id, SelectedTariff.Id, null), key);
             pendingKeys.Remove("session.start");
             await RefreshAsync();
-            SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Id == session.Id);
+            SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
             StatusMessage = Text($"Session برای {SelectedStation.Code} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
                 $"Session started for {SelectedStation.Code}. PC lock/unlock control is not included yet.");
         }
@@ -309,7 +318,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         if (SelectedActiveSession is null)
             return;
 
-        var session = SelectedActiveSession;
+        var session = SelectedActiveSession.Session;
         var fingerprint = $"{session.Id:D}|{session.Version}";
         var key = GetKey("session.end", fingerprint);
         BeginBusy();
@@ -319,7 +328,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             var invoice = await api.EndSessionAsync(session.Id, new EndSessionRequest(session.Version), key);
             pendingKeys.Remove("session.end");
             await RefreshAsync();
-            SelectedPendingInvoice = PendingInvoices.FirstOrDefault(x => x.InvoiceId == invoice.InvoiceId);
+            SelectedPendingInvoice = PendingInvoices.FirstOrDefault(x => x.Invoice.InvoiceId == invoice.InvoiceId);
             StatusMessage = Text($"صورتحساب صادر شد: {FormatToman(invoice.AmountToman)} تومان.",
                 $"Invoice issued: {FormatToman(invoice.AmountToman)} Toman.");
         }
@@ -334,13 +343,13 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         if (SelectedPendingInvoice is null)
             return;
-        if (!TryParseToman(AmountReceivedText, out var received) || received < SelectedPendingInvoice.AmountToman)
+        if (!TryParseToman(AmountReceivedText, out var received) || received < SelectedPendingInvoice.Invoice.AmountToman)
         {
             ErrorMessage = Text("وجه دریافتی باید عدد صحیح و حداقل برابر مبلغ صورتحساب باشد.", "Cash received must be a whole number at least equal to the invoice amount.");
             return;
         }
 
-        var invoice = SelectedPendingInvoice;
+        var invoice = SelectedPendingInvoice.Invoice;
         var fingerprint = $"{invoice.InvoiceId:D}|{received}|{invoice.SessionVersion}";
         var key = GetKey("billing.cash", fingerprint);
         BeginBusy();
@@ -362,6 +371,34 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         catch { ErrorMessage = Text("ثبت پرداخت انجام نشد.", "Cash checkout failed."); }
         finally { EndBusy(); }
     }
+
+    private string GetStationLabel(Guid stationId)
+    {
+        var stationCode = PcStations.FirstOrDefault(x => x.Id == stationId)?.Code;
+        return !string.IsNullOrWhiteSpace(stationCode)
+            ? stationCode
+            : Text($"ایستگاه {stationId:D}", $"Station {stationId:D}");
+    }
+
+    private static string FormatStartedAtDisplayText(DateTimeOffset startedAtUtc)
+    {
+        var localTime = startedAtUtc.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
+        return Text($"شروع: {localTime}", $"Started: {localTime}");
+    }
+
+    private static string FormatDurationDisplayText(long elapsedTicks)
+    {
+        if (elapsedTicks <= 0)
+            return Text("مدت زمان در دسترس نیست", "Duration unavailable");
+
+        var duration = TimeSpan.FromTicks(elapsedTicks);
+        var totalHours = checked((long)duration.Days * 24 + duration.Hours);
+        var value = $"{totalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
+        return Text($"مدت: {value}", $"Duration: {value}");
+    }
+
+    private static string FormatAmountDisplayText(long amountToman) =>
+        Text($"{FormatToman(amountToman)} تومان", $"{FormatToman(amountToman)} Toman");
 
     private string GetKey(string scope, string fingerprint)
     {
