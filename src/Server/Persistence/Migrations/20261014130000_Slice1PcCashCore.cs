@@ -97,8 +97,8 @@ public partial class Slice1PcCashCore : Migration
                 amount_toman = table.Column<long>(type: "bigint", nullable: false),
                 issued_by_operator_id = table.Column<Guid>(type: "uuid", nullable: false),
                 issued_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                paid_by_operator_id = table.Column<Guid>(type: "uuid", nullable: false),
-                paid_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                paid_by_operator_id = table.Column<Guid>(type: "uuid", nullable: true),
+                paid_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                 status = table.Column<int>(type: "integer", nullable: false)
             },
             constraints: table =>
@@ -107,7 +107,8 @@ public partial class Slice1PcCashCore : Migration
                 table.CheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
                 table.CheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks > 0");
                 table.CheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
-                table.CheckConstraint("ck_invoices_status_paid", "status = 1");
+                table.CheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 2");
+                table.CheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");
                 table.ForeignKey("fk_invoices_sessions_session_id", x => x.session_id, "sessions", "id", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("fk_invoices_stations_station_id", x => x.station_id, "stations", "id", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("fk_invoices_customers_customer_id", x => x.customer_id, "customers", "id", onDelete: ReferentialAction.Restrict);
