@@ -129,6 +129,18 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.True(pendingList.IsSuccess);
                 Assert.Contains(pendingList.Value, x => x.InvoiceId == ended.Value.InvoiceId && x.SessionVersion == ended.Value.SessionVersion);
 
+                var staleCheckout = await billing.CheckoutCashAsync(
+                    new CashCheckoutCommand(
+                        ended.Value.InvoiceId, 50_000L, ended.Value.SessionVersion - 1,
+                        idempotencyPrefix + "cash-stale", billingActor),
+                    CancellationToken.None);
+                Assert.False(staleCheckout.IsSuccess);
+                Assert.Equal("billing.session_version_conflict", staleCheckout.Error.Code);
+                Assert.Equal(InvoiceStatus.PendingPayment,
+                    (await db.Invoices.SingleAsync(x => x.Id == ended.Value.InvoiceId)).Status);
+                Assert.Equal(0, await db.Payments.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
+                Assert.Equal(0, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
+
                 var checkout = await billing.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
                 Assert.True(checkout.IsSuccess, checkout.IsSuccess ? "" : checkout.Error.Code);
                 Assert.Equal(30_000L, checkout.Value.InvoiceAmountToman);
