@@ -37,5 +37,12 @@ public sealed class AgentCredential
         RotationExpiresAtUtc = null;
     }
 
-    public void Revoke(DateTimeOffset revokedAtUtc) => RevokedAtUtc = revokedAtUtc;
+    public void Revoke(DateTimeOffset revokedAtUtc)
+    {
+        RevokedAtUtc = revokedAtUtc;
+        // Revoked pending replacements are no longer pending work. Retain the
+        // operation ID and prior-credential link as the durable replay tombstone.
+        IsPendingRotation = false;
+        RotationExpiresAtUtc = null;
+    }
 }
