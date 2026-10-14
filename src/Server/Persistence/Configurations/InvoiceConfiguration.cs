@@ -17,6 +17,7 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             table.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
             table.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks > 0");
             table.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
+            table.HasCheckConstraint("ck_invoices_status_paid", "status = 1");
         });
         b.HasKey(x => x.Id).HasName("pk_invoices");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
