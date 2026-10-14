@@ -62,6 +62,10 @@ jobs:
         shell: pwsh
         run: .\scripts\check-ci-runner-policy.ps1
 
+      - name: Install repository-pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
 
       - name: PowerShell parser gate
         timeout-minutes: 5
@@ -98,6 +102,10 @@ jobs:
         shell: pwsh
         run: .\scripts\check-ci-runner-policy.ps1
 
+      - name: Install repository-pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
 
       - name: Publish versioned self-contained payloads
         shell: pwsh
