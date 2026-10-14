@@ -78,8 +78,8 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $actual = (dotnet --version).Trim()
-          if ($LASTEXITCODE -ne 0 -or $actual -ne "10.0.401") {
-            throw "Expected pinned .NET SDK 10.0.401; found '$actual'. Use the repository's installed SDK rather than attempting a system install."
+          if ($LASTEXITCODE -ne 0 -or $actual -ne "10.0.402") {
+            throw "Expected pinned .NET SDK 10.0.402; found '$actual'. Use the repository's installed SDK rather than attempting a system install."
           }
 
       - name: Restore Windows x64 runtime graph
