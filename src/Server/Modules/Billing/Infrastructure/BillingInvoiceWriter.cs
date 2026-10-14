@@ -6,6 +6,7 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
+using GameNet.Server.Modules.Billing.Domain;
 
 namespace GameNet.Server.Modules.Billing.Infrastructure;
 
@@ -25,6 +26,25 @@ public sealed class BillingInvoiceWriter(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
+            SessionChargeBreakdown charge;
+            try
+            {
+                charge = HourlySessionChargeCalculator.Calculate(
+                    command.TariffHourlyRateTomanSnapshot,
+                    command.StartedAtUtc,
+                    command.EndedAtUtc);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return Result<InvoicePreviewResponse>.Failure(
+                    new Error("sessions.invalid_clock", "Server time did not produce a valid session duration."));
+            }
+            catch (OverflowException)
+            {
+                return Result<InvoicePreviewResponse>.Failure(
+                    new Error("sessions.amount_overflow", "Session charge exceeds the supported Toman range."));
+            }
+
             var invoice = Invoice.CreateForSession(
                 command.InvoiceId,
                 command.SessionId,
@@ -34,10 +54,10 @@ public sealed class BillingInvoiceWriter(
                 command.TariffCodeSnapshot,
                 command.TariffNameSnapshot,
                 command.TariffHourlyRateTomanSnapshot,
-                command.ElapsedTicks,
-                command.AmountToman,
+                charge.ElapsedTicks,
+                charge.AmountToman,
                 command.IssuedByOperatorId,
-                command.IssuedAtUtc);
+                command.EndedAtUtc);
 
             await db.Invoices.AddAsync(invoice, cancellationToken);
             var response = new InvoicePreviewResponse(
