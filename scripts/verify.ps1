@@ -65,27 +65,29 @@ if ($vulnerabilityReport.PSObject.Properties.Name -contains "problems") {
 }
 
 $projectReports = @($vulnerabilityReport.projects)
-$projectsWithoutFrameworks = @($projectReports | Where-Object {
-    $null -eq $_ -or $_.PSObject.Properties.Name -notcontains "frameworks"
-})
-if ($projectsWithoutFrameworks.Count -gt 0) {
-    $shapeDiagnostics = [pscustomobject]@{
-        ReportVersion = $vulnerabilityReport.version
-        RootProperties = @($vulnerabilityReport.PSObject.Properties.Name)
-        ProjectCount = $projectReports.Count
-        ProjectsWithoutFrameworks = @($projectsWithoutFrameworks | Select-Object -First 12 | ForEach-Object {
-            [pscustomobject]@{
-                Path = if ($_.PSObject.Properties.Name -contains "path") { [string]$_.path } else { $null }
-                Properties = @($_.PSObject.Properties.Name)
-            }
-        })
+foreach ($project in $projectReports) {
+    $projectProperties = @($project.PSObject.Properties.Name)
+    if ($projectProperties -contains "frameworks") {
+        continue
     }
-    $shapeDiagnostics | ConvertTo-Json -Depth 8 | Write-Host
-    throw "NuGet vulnerability report contains project entries without framework details; refusing to accept an unverified dependency graph."
+
+    # With --vulnerable, the version-1 JSON format can emit a project with only
+    # its path when that project has no vulnerability findings. Treat this as an
+    # empty finding set only for the exact path-only shape; any other missing or
+    # unexpected structure remains a hard failure.
+    if ($projectProperties.Count -ne 1 -or
+        $projectProperties[0] -ne "path" -or
+        [string]::IsNullOrWhiteSpace([string]$project.path)) {
+        $projectProperties | ConvertTo-Json -Depth 4 | Write-Host
+        throw "NuGet vulnerability report contains an unsupported project shape; refusing to accept an unverified dependency graph."
+    }
 }
 
 $vulnerablePackages = @()
 foreach ($project in $projectReports) {
+    if (@($project.PSObject.Properties.Name) -notcontains "frameworks") {
+        continue
+    }
     foreach ($framework in @($project.frameworks)) {
         foreach ($packageCollectionName in @("topLevelPackages", "transitivePackages")) {
             foreach ($package in @($framework.$packageCollectionName)) {
