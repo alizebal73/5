@@ -253,10 +253,10 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
                 new CreateTariffRequest(TariffCode, TariffName, StationTypeContract.Pc, rate, IsDefaultTariff),
                 key);
             pendingKeys.Remove("tariff.create");
-            StatusMessage = Text($"تعرفهٔ {created.Code} با نرخ {FormatToman(created.HourlyRateToman)} ساخته شد.",
-                $"Tariff {created.Code} was created at {FormatToman(created.HourlyRateToman)}.");
             await RefreshAsync();
             SelectedTariff = Tariffs.FirstOrDefault(x => x.Id == created.Id);
+            StatusMessage = Text($"تعرفهٔ {created.Code} با نرخ {FormatToman(created.HourlyRateToman)} ساخته شد.",
+                $"Tariff {created.Code} was created at {FormatToman(created.HourlyRateToman)}.");
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ ساخت تعرفه نامشخص است؛ تازه‌سازی کنید و از ارسال درخواست جدید خودداری کنید.", "Tariff creation result is unknown; refresh before issuing a new request."); }
@@ -278,10 +278,10 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
             var session = await api.StartSessionAsync(
                 new StartSessionRequest(SelectedStation.Id, SelectedTariff.Id, null), key);
             pendingKeys.Remove("session.start");
-            StatusMessage = Text($"Session برای {SelectedStation.Code} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
-                $"Session started for {SelectedStation.Code}. PC lock/unlock control is not included yet.");
             await RefreshAsync();
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Id == session.Id);
+            StatusMessage = Text($"Session برای {SelectedStation.Code} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
+                $"Session started for {SelectedStation.Code}. PC lock/unlock control is not included yet.");
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
@@ -303,10 +303,10 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         {
             var invoice = await api.EndSessionAsync(session.Id, new EndSessionRequest(session.Version), key);
             pendingKeys.Remove("session.end");
-            StatusMessage = Text($"صورتحساب صادر شد: {FormatToman(invoice.AmountToman)} تومان.",
-                $"Invoice issued: {FormatToman(invoice.AmountToman)} Toman.");
             await RefreshAsync();
             SelectedPendingInvoice = PendingInvoices.FirstOrDefault(x => x.InvoiceId == invoice.InvoiceId);
+            StatusMessage = Text($"صورتحساب صادر شد: {FormatToman(invoice.AmountToman)} تومان.",
+                $"Invoice issued: {FormatToman(invoice.AmountToman)} Toman.");
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
@@ -337,10 +337,10 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
                 new CashCheckoutRequest(received, invoice.SessionVersion),
                 key);
             pendingKeys.Remove("billing.cash");
+            await RefreshAsync();
             StatusMessage = Text(
                 $"پرداخت ثبت شد. مبلغ: {FormatToman(result.InvoiceAmountToman)}؛ دریافتی: {FormatToman(result.AmountReceivedToman)}؛ باقی‌مانده: {FormatToman(result.ChangeGivenToman)} تومان.",
                 $"Payment recorded. Due: {FormatToman(result.InvoiceAmountToman)}; received: {FormatToman(result.AmountReceivedToman)}; change: {FormatToman(result.ChangeGivenToman)} Toman.");
-            await RefreshAsync();
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پرداخت نامشخص است؛ ابتدا تازه‌سازی کنید و دوباره پول را ثبت نکنید.", "Payment result is unknown; refresh first and do not record cash again blindly."); }
@@ -366,6 +366,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         Func<T, TKey> key,
         out T? selected)
         where TKey : struct
+        where T : class
     {
         collection.Clear();
         foreach (var value in values)
