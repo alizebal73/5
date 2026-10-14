@@ -6,6 +6,11 @@ using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Billing.Domain;
+using GameNet.Server.Modules.Billing.Infrastructure;
+using GameNet.Server.Modules.Customers.Infrastructure;
+using GameNet.Server.Modules.Stations.Infrastructure;
+using GameNet.Server.Modules.Tariffs.Infrastructure;
+using GameNet.Server.Modules.Sessions.Infrastructure;
 using GameNet.Server.Modules.Sessions.Application;
 using GameNet.Server.Modules.Sessions.Domain;
 using GameNet.Server.Modules.Stations.Domain;
@@ -219,13 +224,20 @@ public sealed class SessionWorkflowPostgresTests
         }
     }
 
-    private static SessionService CreateService(GameNetDbContext db, IGameClock clock) =>
-        new(
+    private static SessionService CreateService(GameNetDbContext db, IGameClock clock)
+    {
+        var audit = new EfAuditWriter(db);
+        return new SessionService(
             db,
             new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock)),
             new TestRequestFingerprint(),
-            new EfAuditWriter(db),
+            new CustomerSessionAccess(db),
+            new StationSessionAccess(db),
+            new TariffSessionAccess(db),
+            new BillingInvoiceWriter(db, audit, clock),
+            audit,
             clock);
+    }
 
     private static SessionActorContext Actor(Guid operatorId, string correlation) =>
         new(operatorId, correlation, "PostgreSQLTest",
