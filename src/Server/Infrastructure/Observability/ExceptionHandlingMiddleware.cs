@@ -12,7 +12,14 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
         catch (Exception ex)
         {
             var id = CorrelationIdMiddleware.GetCurrent(context);
-            logger.LogError(ex, "Unhandled request failure. CorrelationId={CorrelationId}", id);
+            // Never log the exception object: its Message and inner exceptions can contain
+            // passwords, tokens, or connection strings. Keep only safe correlation,
+            // exception-type and stack information for incident triage.
+            logger.LogError(
+                "Unhandled request failure. CorrelationId={CorrelationId}; ExceptionType={ExceptionType}; StackTrace={StackTrace}",
+                id,
+                ex.GetType().FullName,
+                ex.StackTrace);
             if (context.Response.HasStarted) throw;
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             context.Response.ContentType = "application/json";
