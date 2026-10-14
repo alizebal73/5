@@ -163,7 +163,7 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **Permission / preconditions:** authenticated Operator with Server-side `sessions.operate`.
 - **Idempotency / concurrency:** read-only; no idempotency key. The response includes Session version; a later mutation must check it.
 - **Audit:** no mutation Audit expected.
-- **UI entry / states:** `RefreshCommand`; active Sessions are read from the Server, not maintained as an authoritative local timer.
+- **UI entry / states:** `RefreshCommand`; each active row identifies the station code, tariff and local display of the Server-issued start timestamp. The view does not calculate authoritative elapsed time or charges locally. Selection remains tied to the wrapped Session ID after refresh.
 - **Evidence:** `SessionEndpoints`, `SessionService.ListActiveAsync`, `SessionWorkflowPostgresTests`.
 
 ### `sessions.start-pc`
@@ -190,7 +190,7 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **Permission / preconditions:** authenticated Operator with Server-side `billing.write` (the current contract uses the write permission for this read).
 - **Idempotency / concurrency:** read-only; no key. Checkout re-checks the Session version, so stale preview state cannot authorize stale payment.
 - **Audit:** no read mutation Audit expected.
-- **UI entry / states:** `RefreshCommand`; Session version facts are supplied by the Sessions-owned `ISessionCheckoutAccess` contract.
+- **UI entry / states:** `RefreshCommand`; each pending invoice row identifies the station code, tariff, Server-calculated elapsed duration and due amount. Session version facts are supplied by the Sessions-owned `ISessionCheckoutAccess` contract; checkout still revalidates the expected version on the Server.
 - **Evidence:** `BillingEndpoints`, `BillingService.ListPendingInvoicesAsync`, `SessionCheckoutAccess` and PostgreSQL workflow tests.
 
 ### `billing.cash-checkout`

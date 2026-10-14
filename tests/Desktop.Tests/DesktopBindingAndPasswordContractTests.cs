@@ -109,6 +109,40 @@ public sealed class DesktopBindingAndPasswordContractTests
     }
 
     [Fact]
+    public void Session_and_invoice_rows_show_station_identity_and_disambiguating_context()
+    {
+        var root = FindRepositoryRoot();
+        var view = XDocument.Load(Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml"));
+        var listBoxes = view.Descendants().Where(element => element.Name.LocalName == "ListBox").ToArray();
+        var activeList = listBoxes.Single(element =>
+            (string?)element.Attribute("ItemsSource") == "{Binding ActiveSessions}");
+        var pendingList = listBoxes.Single(element =>
+            (string?)element.Attribute("ItemsSource") == "{Binding PendingInvoices}");
+
+        var activeBindings = activeList.DescendantsAndSelf().Attributes()
+            .Select(attribute => attribute.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("{Binding StationLabel}", activeBindings);
+        Assert.Contains("{Binding TariffNameSnapshot}", activeBindings);
+        Assert.Contains("{Binding StartedAtDisplayText}", activeBindings);
+
+        var pendingBindings = pendingList.DescendantsAndSelf().Attributes()
+            .Select(attribute => attribute.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("{Binding StationLabel}", pendingBindings);
+        Assert.Contains("{Binding TariffNameSnapshot}", pendingBindings);
+        Assert.Contains("{Binding DurationDisplayText}", pendingBindings);
+        Assert.Contains("{Binding AmountDisplayText}", pendingBindings);
+
+        var activeRowType = typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.ActiveSessions))!
+            .PropertyType.GetGenericArguments().Single();
+        var pendingRowType = typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.PendingInvoices))!
+            .PropertyType.GetGenericArguments().Single();
+        Assert.Equal(typeof(ActiveSessionListItem), activeRowType);
+        Assert.Equal(typeof(PendingInvoiceListItem), pendingRowType);
+    }
+
+    [Fact]
     public void Every_password_box_event_is_wired_to_a_real_handler()
     {
         var root = FindRepositoryRoot();
@@ -193,9 +227,9 @@ public sealed class DesktopBindingAndPasswordContractTests
         if (string.Equals(memberName, "Tariffs", StringComparison.Ordinal))
             return typeof(TariffResponse);
         if (string.Equals(memberName, "ActiveSessions", StringComparison.Ordinal))
-            return typeof(SessionResponse);
+            return typeof(ActiveSessionListItem);
         if (string.Equals(memberName, "PendingInvoices", StringComparison.Ordinal))
-            return typeof(InvoicePreviewResponse);
+            return typeof(PendingInvoiceListItem);
         if (string.Equals(memberName, "VisibleStations", StringComparison.Ordinal))
             return typeof(StationBoardItem);
 
