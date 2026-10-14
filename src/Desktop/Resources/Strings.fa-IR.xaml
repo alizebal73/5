@@ -44,4 +44,26 @@
   <system:String x:Key="Station.HealthProbe">بررسی سلامت Agent</system:String>
   <system:String x:Key="Station.StatusAdmin">وضعیت اداری</system:String>
   <system:String x:Key="Station.ReadPermissionRequired">برای مشاهدهٔ ایستگاه‌ها، مجوز «مشاهده ایستگاه‌ها» لازم است.</system:String>
+
+  <system:String x:Key="Session.WorkflowTitle">چرخهٔ Session و صندوق</system:String>
+  <system:String x:Key="Session.WorkflowSubtitle">مسیر آزمایشی PC: شروع، پایان، صورتحساب و دریافت وجه نقد؛ وضعیت سرور مرجع نهایی است.</system:String>
+  <system:String x:Key="Session.Refresh">تازه‌سازی وضعیت</system:String>
+  <system:String x:Key="Session.ControlWarning">هشدار: قفل و بازکردن واقعی PC هنوز در Issue #92 در حال امکان‌سنجی است. این پنل فعلاً برای آزمون گردش Session و حسابداری است، نه کنترل عملیاتی PC.</system:String>
+  <system:String x:Key="Session.StartTitle">شروع Session</system:String>
+  <system:String x:Key="Session.PcStation">ایستگاه PC</system:String>
+  <system:String x:Key="Session.Tariff">تعرفهٔ ساعتی</system:String>
+  <system:String x:Key="Session.Start">شروع Session</system:String>
+  <system:String x:Key="Session.CustomerWalkIn">در این برش، مشتری گذری ساخته می‌شود؛ اطلاعات شخصی دریافت نمی‌کنیم.</system:String>
+  <system:String x:Key="Session.ActiveTitle">Sessionهای فعال</system:String>
+  <system:String x:Key="Session.End">پایان و صدور صورتحساب</system:String>
+  <system:String x:Key="Tariff.CreateTitle">تعریف تعرفهٔ PC</system:String>
+  <system:String x:Key="Tariff.Code">کد تعرفه</system:String>
+  <system:String x:Key="Tariff.Name">نام تعرفه</system:String>
+  <system:String x:Key="Tariff.HourlyRate">نرخ ساعتی (تومان، عدد صحیح)</system:String>
+  <system:String x:Key="Tariff.IsDefault">تعرفهٔ پیش‌فرض PC باشد</system:String>
+  <system:String x:Key="Tariff.Create">ثبت تعرفه</system:String>
+  <system:String x:Key="Tariff.ManagePermissionRequired">برای ساخت تعرفه، مجوز تغییر تنظیمات لازم است.</system:String>
+  <system:String x:Key="Billing.PendingTitle">صورتحساب‌های در انتظار پرداخت</system:String>
+  <system:String x:Key="Billing.CashReceived">وجه نقد دریافتی (تومان)</system:String>
+  <system:String x:Key="Billing.Checkout">ثبت پرداخت نقدی</system:String>
 </ResourceDictionary>

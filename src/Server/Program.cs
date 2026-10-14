@@ -8,6 +8,9 @@ using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Security.Transport;
 using GameNet.Server.Modules.Identity.Api;
 using GameNet.Server.Modules.Stations.Api;
+using GameNet.Server.Modules.Sessions.Api;
+using GameNet.Server.Modules.Tariffs.Api;
+using GameNet.Server.Modules.Billing.Api;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using GameNet.Server.Persistence;
@@ -85,6 +88,9 @@ app.MapAgentEnrollmentRoutes();
 app.MapIdentityEndpoints();
 app.MapOperatorManagementEndpoints();
 app.MapStationEndpoints();
+app.MapTariffEndpoints();
+app.MapSessionEndpoints();
+app.MapBillingEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 app.MapGet("/health", async (

@@ -1,0 +1,15 @@
+using GameNet.Shared.Contracts.V1.Sessions;
+
+namespace GameNet.Server.Modules.Sessions.Application;
+
+public sealed record SessionActorContext(Guid OperatorId, string CorrelationId, string Source, IReadOnlySet<string> Permissions);
+public sealed record StartSessionCommand(Guid StationId, Guid TariffId, Guid? CustomerId, string IdempotencyKey, SessionActorContext Actor);
+public sealed record EndSessionCommand(Guid SessionId, int ExpectedVersion, string IdempotencyKey, SessionActorContext Actor);
+
+public interface ISessionService
+{
+    Task<GameNet.Shared.Primitives.Result<SessionResponse>> StartAsync(StartSessionCommand command, CancellationToken cancellationToken);
+    Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> EndAsync(EndSessionCommand command, CancellationToken cancellationToken);
+    Task<GameNet.Shared.Primitives.Result<IReadOnlyList<SessionResponse>>> ListActiveAsync(SessionActorContext actor, Guid? stationId, CancellationToken cancellationToken);
+}
+

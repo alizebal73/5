@@ -6,8 +6,11 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Sessions;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Api;
+using GameNet.Shared.Contracts.V1.Sessions;
+using GameNet.Shared.Contracts.V1.Tariffs;
 using Xunit;
 
 namespace GameNet.Desktop.Tests;
@@ -29,7 +32,8 @@ public sealed class DesktopBindingAndPasswordContractTests
         var viewPaths = new[]
         {
             Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
-            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml")
         };
 
         foreach (var viewPath in viewPaths)
@@ -50,9 +54,13 @@ public sealed class DesktopBindingAndPasswordContractTests
                     if (string.IsNullOrWhiteSpace(path) || path == ".")
                         continue;
 
-                    var dataTemplateBinding = attribute.Parent?.AncestorsAndSelf()
-                        .Any(element => element.Name.LocalName == "DataTemplate") == true;
-                    var rootType = dataTemplateBinding ? typeof(StationBoardItem) : typeof(LoginViewModel);
+                    var dataTemplate = attribute.Parent?.AncestorsAndSelf()
+                        .FirstOrDefault(element => element.Name.LocalName == "DataTemplate");
+                    var rootType = dataTemplate is not null
+                        ? ResolveDataTemplateItemType(dataTemplate)
+                        : string.Equals(Path.GetFileName(viewPath), "SessionWorkflowView.xaml", StringComparison.Ordinal)
+                            ? typeof(ISessionWorkflowPort)
+                            : typeof(LoginViewModel);
 
                     if (!TryResolvePath(rootType, path, out var unresolvedSegment))
                     {
@@ -67,6 +75,37 @@ public sealed class DesktopBindingAndPasswordContractTests
                 $"{Path.GetFileName(viewPath)} contains invalid WPF binding paths:" + Environment.NewLine +
                 string.Join(Environment.NewLine, failures));
         }
+    }
+
+    [Fact]
+    public void Session_workflow_view_is_plugged_into_a_stable_port_not_a_concrete_view_model()
+    {
+        var portProperty = typeof(LoginViewModel).GetProperty(nameof(LoginViewModel.SessionWorkflow));
+        Assert.NotNull(portProperty);
+        Assert.Equal(typeof(ISessionWorkflowPort), portProperty!.PropertyType);
+        Assert.True(typeof(ISessionWorkflowPort).IsAssignableFrom(typeof(SessionWorkflowViewModel)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.RefreshCommand)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.StartSessionCommand)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.EndSessionCommand)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.CheckoutCashCommand)));
+
+        var root = FindRepositoryRoot();
+        var view = XDocument.Load(Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml"));
+        var bindingValues = view.Descendants().Attributes()
+            .Select(attribute => attribute.Value)
+            .Where(value => value.Contains("{Binding", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(bindingValues);
+        Assert.DoesNotContain(bindingValues, value => value.Contains("SessionWorkflow.", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            view.Descendants().Attributes().Select(attribute => attribute.Value),
+            value => value.Contains("SessionWorkflowViewModel", StringComparison.Ordinal));
+        
+        var mainWindow = XDocument.Load(Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"));
+        var plugin = mainWindow.Descendants().FirstOrDefault(element => element.Name.LocalName == "SessionWorkflowView");
+        Assert.NotNull(plugin);
+        Assert.Equal("{Binding SessionWorkflow}", (string?)plugin!.Attribute("DataContext"));
     }
 
     [Fact]
@@ -140,6 +179,28 @@ public sealed class DesktopBindingAndPasswordContractTests
         Assert.Contains("CurrentPasswordChangeInput.Clear();", logoutBlock, StringComparison.Ordinal);
         Assert.Contains("NewPasswordChangeInput.Clear();", logoutBlock, StringComparison.Ordinal);
         Assert.Contains("ConfirmPasswordChangeInput.Clear();", logoutBlock, StringComparison.Ordinal);
+    }
+
+    private static Type ResolveDataTemplateItemType(XElement dataTemplate)
+    {
+        var itemsControl = dataTemplate.Ancestors()
+            .FirstOrDefault(element => element.Name.LocalName is "ListBox" or "ComboBox");
+        var itemsSource = (string?)itemsControl?.Attribute("ItemsSource") ?? string.Empty;
+        var match = Regex.Match(itemsSource, @"\{Binding\s+([^,}]+)");
+        var bindingPath = match.Success ? match.Groups[1].Value.Trim() : string.Empty;
+        var memberName = bindingPath.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+
+        if (string.Equals(memberName, "Tariffs", StringComparison.Ordinal))
+            return typeof(TariffResponse);
+        if (string.Equals(memberName, "ActiveSessions", StringComparison.Ordinal))
+            return typeof(SessionResponse);
+        if (string.Equals(memberName, "PendingInvoices", StringComparison.Ordinal))
+            return typeof(InvoicePreviewResponse);
+        if (string.Equals(memberName, "VisibleStations", StringComparison.Ordinal))
+            return typeof(StationBoardItem);
+
+        throw new InvalidOperationException(
+            $"Cannot determine WPF data-template item type from ItemsSource '{itemsSource}'.");
     }
 
     private static bool TryResolvePath(Type rootType, string path, out string unresolvedSegment)

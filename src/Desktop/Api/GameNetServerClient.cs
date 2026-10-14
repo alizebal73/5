@@ -7,6 +7,8 @@ using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Protocol;
+using GameNet.Shared.Contracts.V1.Sessions;
+using GameNet.Shared.Contracts.V1.Tariffs;
 
 namespace GameNet.Desktop.Api;
 
@@ -79,6 +81,72 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         using var request = CreateRequest(HttpMethod.Post, $"/api/v1/stations/{stationId:D}/agent/health-probe", authenticated: true);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         return await ReadPayloadAsync<AgentCommandAcknowledgement>(response, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(
+        GameNet.Shared.Contracts.V1.Stations.StationTypeContract? stationType = null,
+        CancellationToken cancellationToken = default)
+    {
+        var path = stationType.HasValue
+            ? $"/api/v1/tariffs?stationType={Uri.EscapeDataString(stationType.Value.ToString())}"
+            : "/api/v1/tariffs";
+        using var request = CreateRequest(HttpMethod.Get, path, authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var tariffs = await ReadPayloadAsync<TariffResponse[]>(response, cancellationToken);
+        return tariffs ?? Array.Empty<TariffResponse>();
+    }
+
+    public Task<TariffResponse> CreateTariffAsync(
+        CreateTariffRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<CreateTariffRequest, TariffResponse>(
+            HttpMethod.Post, "/api/v1/tariffs", body, idempotencyKey, cancellationToken);
+
+    public async Task<IReadOnlyList<SessionResponse>> GetActiveSessionsAsync(
+        Guid? stationId = null, CancellationToken cancellationToken = default)
+    {
+        var path = stationId.HasValue
+            ? $"/api/v1/sessions/active?stationId={stationId.Value:D}"
+            : "/api/v1/sessions/active";
+        using var request = CreateRequest(HttpMethod.Get, path, authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var sessions = await ReadPayloadAsync<SessionResponse[]>(response, cancellationToken);
+        return sessions ?? Array.Empty<SessionResponse>();
+    }
+
+    public Task<SessionResponse> StartSessionAsync(
+        StartSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<StartSessionRequest, SessionResponse>(
+            HttpMethod.Post, "/api/v1/sessions", body, idempotencyKey, cancellationToken);
+
+    public Task<InvoicePreviewResponse> EndSessionAsync(
+        Guid id, EndSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<EndSessionRequest, InvoicePreviewResponse>(
+            HttpMethod.Post, $"/api/v1/sessions/{id:D}/end", body, idempotencyKey, cancellationToken);
+
+    public async Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Get, "/api/v1/billing/pending", authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var invoices = await ReadPayloadAsync<InvoicePreviewResponse[]>(response, cancellationToken);
+        return invoices ?? Array.Empty<InvoicePreviewResponse>();
+    }
+
+    public Task<CashCheckoutResponse> CheckoutCashAsync(
+        Guid invoiceId, CashCheckoutRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<CashCheckoutRequest, CashCheckoutResponse>(
+            HttpMethod.Post, $"/api/v1/billing/invoices/{invoiceId:D}/cash", body, idempotencyKey, cancellationToken);
+
+    private async Task<TResponse> SendMutationAsync<TRequest, TResponse>(
+        HttpMethod method, string path, TRequest body, string idempotencyKey, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        if (idempotencyKey.Length > 200) throw new ArgumentOutOfRangeException(nameof(idempotencyKey));
+        using var request = CreateRequest(method, path, authenticated: true);
+        request.Headers.TryAddWithoutValidation(ApiHeaders.IdempotencyKey, idempotencyKey.Trim());
+        request.Content = JsonContent.Create(body, options: JsonOptions);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadPayloadAsync<TResponse>(response, cancellationToken);
     }
 
     private async Task<StationResponse> SendStationMutationAsync<TRequest>(

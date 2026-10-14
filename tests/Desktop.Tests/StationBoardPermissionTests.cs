@@ -10,6 +10,8 @@ using GameNet.Desktop.Features.Stations;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
+using GameNet.Shared.Contracts.V1.Sessions;
+using GameNet.Shared.Contracts.V1.Tariffs;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.System;
@@ -337,6 +339,34 @@ public sealed class StationBoardPermissionTests
             ProbeCalls++;
             throw new InvalidOperationException("A probe request must not run while another command is busy.");
         }
+
+        public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(
+            StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<TariffResponse>>(Array.Empty<TariffResponse>());
+
+        public Task<TariffResponse> CreateTariffAsync(
+            CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<SessionResponse>> GetActiveSessionsAsync(
+            Guid? stationId = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SessionResponse>>(Array.Empty<SessionResponse>());
+
+        public Task<SessionResponse> StartSessionAsync(
+            StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<InvoicePreviewResponse> EndSessionAsync(
+            Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(Array.Empty<InvoicePreviewResponse>());
+
+        public Task<CashCheckoutResponse> CheckoutCashAsync(
+            Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task LogoutAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 

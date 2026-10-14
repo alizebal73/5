@@ -13,11 +13,15 @@ on:
   push:
     branches:
       - "feature/operator-identity-v1"
+      - "feature/**"
+      - "feat/**"
       - "integration/runtime-operator-v1"
       - "integration/runtime-*"
       - "integration/candidate-**"
       - "security/**"
       - "refactor/**"
+      - "fix/**"
+      - "topic/**"
       - "stage2/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
@@ -230,6 +234,7 @@ jobs:
         run: .\scripts\verify.ps1
 
       - name: Prepare disposable PostgreSQL certification database
+        id: prepare-postgres
         timeout-minutes: 10
         shell: pwsh
         run: |
@@ -269,6 +274,35 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Could not initialize the disposable Foundation database with the repository migrations." }
 
           Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+
+      - name: Diagnose EF model snapshot drift
+        if: failure() && steps.prepare-postgres.outcome == 'failure'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $snapshot = "src/Server/Persistence/Migrations/GameNetDbContextModelSnapshot.cs"
+          $snapshotBackup = Join-Path $env:RUNNER_TEMP "GameNetDbContextModelSnapshot.cs"
+          $diagnosticDir = "src/Server/Persistence/ModelDriftDiagnostics"
+          Copy-Item -LiteralPath $snapshot -Destination $snapshotBackup -Force
+          try {
+            $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+            & $dotnet ef migrations add ModelDriftDiagnostic --configuration Release --project src/Server/GameNet.Server.csproj --startup-project src/Server/GameNet.Server.csproj --context GameNet.Server.Persistence.GameNetDbContext --output-dir Persistence/ModelDriftDiagnostics
+            $scaffoldExitCode = $LASTEXITCODE
+            if (Test-Path -LiteralPath $diagnosticDir -PathType Container) {
+              Get-ChildItem -LiteralPath $diagnosticDir -Filter "*_ModelDriftDiagnostic.cs" -File | ForEach-Object {
+                Write-Output ("===== DIAGNOSTIC MIGRATION: " + $_.Name + " =====")
+                Get-Content -LiteralPath $_.FullName
+              }
+            }
+            if ($scaffoldExitCode -ne 0) {
+              Write-Output "EF model-drift diagnostic migration could not be scaffolded; exit code: $scaffoldExitCode."
+            }
+          }
+          finally {
+            Copy-Item -LiteralPath $snapshotBackup -Destination $snapshot -Force
+            Remove-Item -LiteralPath $diagnosticDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
       - name: PostgreSQL certification
         timeout-minutes: 15

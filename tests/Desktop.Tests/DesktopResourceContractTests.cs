@@ -43,7 +43,8 @@ public sealed class DesktopResourceContractTests
         var viewPaths = new[]
         {
             Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
-            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml")
         };
         var faPath = Path.Combine(root, "src", "Desktop", "Resources", "Strings.fa-IR.xaml");
         var enPath = Path.Combine(root, "src", "Desktop", "Resources", "Strings.en-US.xaml");
@@ -73,7 +74,8 @@ public sealed class DesktopResourceContractTests
         var viewPaths = new[]
         {
             Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
-            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml")
         };
 
         foreach (var viewPath in viewPaths)

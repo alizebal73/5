@@ -44,4 +44,26 @@
   <system:String x:Key="Station.HealthProbe">Check Agent health</system:String>
   <system:String x:Key="Station.StatusAdmin">Administrative status</system:String>
   <system:String x:Key="Station.ReadPermissionRequired">You need the Stations Read permission to view this workspace.</system:String>
+
+  <system:String x:Key="Session.WorkflowTitle">Session and cash checkout</system:String>
+  <system:String x:Key="Session.WorkflowSubtitle">PC test flow: start, end, invoice and cash payment. Server state is authoritative.</system:String>
+  <system:String x:Key="Session.Refresh">Refresh status</system:String>
+  <system:String x:Key="Session.ControlWarning">Warning: actual PC lock/unlock is still being evaluated in Issue #92. This panel currently tests Session/accounting flow, not operational PC control.</system:String>
+  <system:String x:Key="Session.StartTitle">Start a Session</system:String>
+  <system:String x:Key="Session.PcStation">PC station</system:String>
+  <system:String x:Key="Session.Tariff">Hourly tariff</system:String>
+  <system:String x:Key="Session.Start">Start Session</system:String>
+  <system:String x:Key="Session.CustomerWalkIn">This slice creates a Walk-in customer and does not collect personal details.</system:String>
+  <system:String x:Key="Session.ActiveTitle">Active Sessions</system:String>
+  <system:String x:Key="Session.End">End and issue invoice</system:String>
+  <system:String x:Key="Tariff.CreateTitle">Configure a PC tariff</system:String>
+  <system:String x:Key="Tariff.Code">Tariff code</system:String>
+  <system:String x:Key="Tariff.Name">Tariff name</system:String>
+  <system:String x:Key="Tariff.HourlyRate">Hourly rate (whole Toman)</system:String>
+  <system:String x:Key="Tariff.IsDefault">Make default for PC</system:String>
+  <system:String x:Key="Tariff.Create">Create tariff</system:String>
+  <system:String x:Key="Tariff.ManagePermissionRequired">The Settings Write permission is required to create tariffs.</system:String>
+  <system:String x:Key="Billing.PendingTitle">Invoices awaiting payment</system:String>
+  <system:String x:Key="Billing.CashReceived">Cash received (Toman)</system:String>
+  <system:String x:Key="Billing.Checkout">Record cash payment</system:String>
 </ResourceDictionary>
