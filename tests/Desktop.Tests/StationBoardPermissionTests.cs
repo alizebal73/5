@@ -381,8 +381,10 @@ public sealed class StationBoardPermissionTests
         Assert.Empty(workflow.ErrorMessage);
         Assert.Single(workflow.PendingInvoices);
         Assert.Contains(station.Id.ToString("D"), workflow.PendingInvoices[0].StationLabel, StringComparison.Ordinal);
-        Assert.NotEqual("Sessions, tariffs and pending invoices were refreshed.", workflow.StatusMessage);
-        Assert.NotEqual("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", workflow.StatusMessage);
+        Assert.True(
+            workflow.StatusMessage.Contains("Station codes were unavailable", StringComparison.Ordinal) ||
+            workflow.StatusMessage.Contains("کد ایستگاه در دسترس نبود", StringComparison.Ordinal),
+            "A station-label fallback warning should be shown when the optional lookup fails.");
         Assert.True(workflow.CanCheckout);
         Assert.False(workflow.CanOperateSessions);
     }
