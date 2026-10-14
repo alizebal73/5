@@ -6,12 +6,6 @@ on:
   push:
     branches:
       - "feature/operator-identity-v1"
-      - "feature/**"
-      - "feat/**"
-      - "fix/**"
-      - "refactor/**"
-      - "topic/**"
-      - "stage2/**"
       - "integration/runtime-operator-v1"
       - "integration/runtime-*"
       - "docs/engineering-readiness-audit-v1"
