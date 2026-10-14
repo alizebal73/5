@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Stations;
+using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Security;
 
@@ -29,6 +30,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         LogoutCommand = new AsyncUiAction(LogoutAsync, () => !IsBusy && IsAuthenticated);
         ChangePasswordCommand = new AsyncUiAction(ChangePasswordAsync, () => !IsBusy && IsAuthenticated);
         StationBoard = new StationBoardViewModel(serverClient, HasPermission);
+        SessionWorkflow = new SessionWorkflowViewModel(serverClient, HasPermission);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -36,6 +38,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     public ICommand LogoutCommand { get; }
     public ICommand ChangePasswordCommand { get; }
     public StationBoardViewModel StationBoard { get; }
+    public SessionWorkflowViewModel SessionWorkflow { get; }
     public string Username { get => username; set => SetField(ref username, value); }
     public string Password { get => password; set => SetField(ref password, value); }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
@@ -83,6 +86,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             IsAuthenticated = true;
             Password = string.Empty;
             await StationBoard.RefreshAsync();
+            await SessionWorkflow.RefreshAsync();
         }
         catch (GameNetApiException exception)
         {
@@ -217,6 +221,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             CurrentUsername = string.Empty;
             Password = string.Empty;
             StationBoard.ClearLocalState();
+            SessionWorkflow.Reset();
             CurrentPassword = string.Empty;
             NewPassword = string.Empty;
             ConfirmNewPassword = string.Empty;
@@ -245,6 +250,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanReadStations)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanOperateStations)));
         StationBoard.NotifyPermissionsChanged();
+        SessionWorkflow.NotifyPermissionsChanged();
     }
 
     private void RaiseCommands()
