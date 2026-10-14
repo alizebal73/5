@@ -17,7 +17,8 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             table.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
             table.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks > 0");
             table.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
-            table.HasCheckConstraint("ck_invoices_status_paid", "status = 1");
+            table.HasCheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 2");
+            table.HasCheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");
         });
         b.HasKey(x => x.Id).HasName("pk_invoices");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
@@ -32,8 +33,8 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.AmountToman).IsRequired().HasColumnName("amount_toman");
         b.Property(x => x.IssuedByOperatorId).IsRequired().HasColumnName("issued_by_operator_id");
         b.Property(x => x.IssuedAtUtc).IsRequired().HasColumnName("issued_at_utc");
-        b.Property(x => x.PaidByOperatorId).IsRequired().HasColumnName("paid_by_operator_id");
-        b.Property(x => x.PaidAtUtc).IsRequired().HasColumnName("paid_at_utc");
+        b.Property(x => x.PaidByOperatorId).HasColumnName("paid_by_operator_id");
+        b.Property(x => x.PaidAtUtc).HasColumnName("paid_at_utc");
         b.Property(x => x.Status).IsRequired().HasColumnName("status");
         b.HasIndex(x => x.SessionId).IsUnique().HasDatabaseName("ux_invoices_session_id");
         b.HasIndex(x => x.PaidAtUtc).HasDatabaseName("ix_invoices_paid_at_utc");
