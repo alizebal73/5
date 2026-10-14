@@ -234,7 +234,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             OnPropertyChanged(nameof(CanReadStations));
             OnPropertyChanged(nameof(CanUseWorkspace));
             StatusMessage = stationLabelsUnavailable
-                ? Text("صورتحساب‌ها به‌روزرسانی شدند؛ کد ایستگاه در دسترس نبود و شناسهٔ ایستگاه نمایش داده می‌شود.", "Invoices were refreshed; station codes were unavailable, so station IDs are shown.")
+                ? Text("کد ایستگاه در دسترس نبود؛ در صورت نمایش صورتحساب، شناسهٔ ایستگاه استفاده می‌شود.", "Station codes were unavailable; invoice rows will use station IDs.")
                 : Text("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", "Sessions, tariffs and pending invoices were refreshed.");
         }
         catch (GameNetApiException ex)
