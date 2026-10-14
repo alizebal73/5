@@ -580,7 +580,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasKey("Id").HasName("pk_sessions");
                     b.HasIndex("CustomerId", "Status").HasDatabaseName("ix_sessions_customer_status");
                     b.HasIndex("StartedAtUtc").HasDatabaseName("ix_sessions_started_at_utc");
-                    b.HasIndex("StationId").IsUnique().HasDatabaseName("ux_sessions_one_active_per_station").HasFilter("status = 1");
+                    b.HasIndex("StationId").IsUnique().HasDatabaseName("ux_sessions_one_unsettled_per_station").HasFilter("status IN (1, 2)");
                     b.HasIndex("TariffId").HasDatabaseName("ix_sessions_tariff_id");
                     b.ToTable("sessions", null, t =>
                         {
