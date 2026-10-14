@@ -29,19 +29,18 @@ public sealed class AgentWorker(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var resumedRotation = await credentialRotationCoordinator.ResumePendingIfAnyAsync(identity.DeviceId, stoppingToken);
-                if (resumedRotation)
-                {
-                    await transport.ResetConnectionAsync(stoppingToken);
-                    await Task.Delay(TimeSpan.FromSeconds(options.Value.InitialRetrySeconds), stoppingToken);
-                    continue;
-                }
-
                 var succeeded = false;
 
                 try
                 {
-                    await transport.ConnectAsync(identity, stoppingToken);
+                    var resumedRotation = await credentialRotationCoordinator.ResumePendingIfAnyAsync(identity.DeviceId, stoppingToken);
+                    if (resumedRotation)
+                    {
+                        await transport.ResetConnectionAsync(stoppingToken);
+                    }
+                    else
+                    {
+                        await transport.ConnectAsync(identity, stoppingToken);
 
                     var heartbeat = new AgentHeartbeat(
                         identity.DeviceId,
@@ -65,11 +64,11 @@ public sealed class AgentWorker(
                     {
                         await credentialRotationCoordinator.RotateForOperationAsync(identity.DeviceId, operationId, stoppingToken);
                         await transport.ResetConnectionAsync(stoppingToken);
-                        succeeded = false;
                     }
                     else
                     {
                         succeeded = true;
+                    }
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
