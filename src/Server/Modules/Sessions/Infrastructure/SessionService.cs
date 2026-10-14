@@ -82,6 +82,11 @@ public sealed class SessionService(
                     if (activeExists)
                         return Fail<SessionResponse>("sessions.station_has_active_session", "Station already has an active session.");
 
+                    var pendingSettlementExists = await db.Sessions.AnyAsync(
+                        x => x.StationId == station.Id && x.Status == SessionStatus.PendingSettlement, token);
+                    if (pendingSettlementExists)
+                        return Fail<SessionResponse>("sessions.station_pending_settlement", "The previous Session must be paid before this station can be started again.");
+
                     var customer = command.CustomerId is Guid customerId
                         ? await customers.FindActiveAsync(customerId, token)
                         : await customers.CreateWalkInAsync(clock.UtcNow, token);
