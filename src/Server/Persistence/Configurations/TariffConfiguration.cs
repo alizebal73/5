@@ -11,6 +11,7 @@ public sealed class TariffConfiguration : IEntityTypeConfiguration<Tariff>
         b.ToTable("tariffs", table =>
         {
             table.HasCheckConstraint("ck_tariffs_hourly_rate_positive", "hourly_rate_toman > 0");
+            table.HasCheckConstraint("ck_tariffs_station_type", "station_type BETWEEN 1 AND 3");
         });
         b.HasKey(x => x.Id).HasName("pk_tariffs");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
