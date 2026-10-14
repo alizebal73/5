@@ -4,6 +4,52 @@
 
 **سیاست زمان‌بندی پذیرش نهایی (2026-10-12):** آزمون فیزیکی Windows Service/LAN، آزمون تعاملی WPF، نصب/ارتقا/repair/rollback و pilot فقط پس از تکمیل دامنهٔ برنامه‌ریزی‌شده و ساخته‌شدن Setup.exe/MSI اجرا می‌شوند. CI، unit/integration/regression/security tests برای هر برش و هر SHA مرتبط در طول توسعه ادامه دارند؛ این تعویق فقط مربوط به پذیرش یکپارچهٔ نهایی است. هر ادعای Done باید به commit، آزمون و مدرک همان SHA متصل باشد.
 
+
+## Live read-back and execution decisions — 2026-10-14 (newest snapshot)
+
+Historical snapshots below are preserved as evidence; use this latest section plus a live GitHub read before action. Do not create a new documentation-reconciliation PR for every small status change; use the active issue/check history for event-level status and update this register only at milestone/risk decisions.
+
+### Exact refs / current facts
+- Integration after PR #90: `6a6cda5bf0c199d7163323d69f4c0fbfef09d58f`.
+- Main: `b9288471f2047570eaf8d0d6552cf87bc0ddc214` (40-character SHA verified against GitHub commit API; intentionally unchanged starter).
+- Foundation: `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`.
+- PR #90 is merged. PR #94 is the clean one-file retry replacement for #87, directly based on post-#90 Integration at head `72a6ccbeba8536ae8734e535a7e739862bf132a8`. Runtime Payload [#38560171404](https://github.com/alizebal73/5/actions/runs/38560171404) passed; Full Foundation/PostgreSQL run [#38560171403](https://github.com/alizebal73/5/actions/runs/38560171403) was still in progress at last read-back. No merge before it and all required checks conclude success.
+- Old PR #87 must be closed as superseded only after #94 succeeds and merges. PR #88 presently contains both retry and redaction changes; rebuild it redaction-only after #94 merges. PR #91 is deferred to after Issue #92 / the first Session slice as a substantial security capability; it remains a mandatory pre-pilot/release gate, not an accepted operational route yet.
+- The exact `main` SHA was verified through GitHub commit metadata. Avoid copy/pasting a shortened or mistyped hash into future evidence.
+
+### Agreed priority, with timebox
+Timebox immediate defect fixes to 2–3 working days following 2026-10-14 without relaxing checks: (1) #90 merged; (2) exact-head #94 transaction retry; (3) clean redaction-only PR derived after #94. Do not include #91's feature development in this immediate bug-fix timebox. If CI exposes a real defect, record the blocker and remaining effort rather than bypassing the gate.
+
+### Pipeline and product feedback timing
+- [Issue #95](https://github.com/alizebal73/5/issues/95) is the bounded prerequisite before Session V1. The code already has Identity's private `MutateAsync` that centralizes transaction/idempotency/replay; authorization, domain validation and audit payloads remain operation-specific. Add characterization tests first and extract only the proven common contract. No broad service rewrite based on file size.
+- [Issue #92](https://github.com/alizebal73/5/issues/92) requires a real, isolated PC/VM feasibility outcome by 2026-10-18 if hardware is available; otherwise mark BLOCKED with the specific missing test environment. Documentation alone is not PASS, and the live Manager/shop PC must not be modified.
+- [Issue #96](https://github.com/alizebal73/5/issues/96) defines an early 2–3-station shadow trial after Slice 2/cash E2E for fast operator feedback. It uses test build/disposable DB and keeps the legacy system authoritative; no real customer money or production sessions. This is separate from the final formal pilot.
+- Final Setup/update/rollback, installed Windows Service identity/ACL/DPAPI/TLS, restore and physical LAN acceptance remains with [Issue #16](https://github.com/alizebal73/5/issues/16) and [Issue #34](https://github.com/alizebal73/5/issues/34). Formal real-shop pilot/release is still gated on those final checks.
+
+### Risks / disposition
+| Risk | Disposition |
+|---|---|
+| .NET advisory baseline | Resolved in Integration by #90; keep vulnerability scan mandatory. |
+| Wrapped PostgreSQL serialization/deadlock retry | Open in #94; verify owner-concurrency invariant and exact-head Full Foundation before merge. |
+| Exception text/secret leakage in logs | #88 must be rebuilt redaction-only after #94; use sentinel regression test and no secret-bearing diagnostics. |
+| Staged Agent credential rotation | Defer from immediate bug-fix queue; do not call old one-step rotate path safe. Mandatory pre-pilot/release gate; keep Issue #74 open. |
+| JWT active/previous key rotation, PostgreSQL runtime credential rotation, provisioning key, protected-state recovery/host replacement and broad redaction | Track separately in Issue #74; define dependent feature, owner, proof and pre-use/release gate. No silent key regeneration. |
+| Hosted vs local runner | Issue #67 remains open. Current evidence is from hosted `windows-2025`, not the local self-hosted runner. Do not change runner labels without a trust-boundary decision. |
+| Control of a Windows customer PC | Issue #92; prove feasibility in an isolated environment before designing Session-to-Agent control. |
+| Premature generic architecture | Issue #95 bounds the shared command-pipeline extraction; only common mechanics are abstracted, domain permission/Audit semantics stay explicit. |
+| Late operator feedback | Issue #96 early shadow trial after the cash journey; final production pilot remains after Setup and Issue #34 acceptance. |
+| Old-base draft PRs #15/#17/#21 | Historical comparison only; do not merge wholesale. |
+
+### Cross-cutting requirements for each slice
+- Money: checked integer `long` Toman amounts; no binary float; one documented rounding policy; append-only ledger and reversal entries; distinguish cash, wallet, free/bonus value, free time and debt.
+- Session/time: Server UTC; tariff snapshot at start; explicit versioned state machine; PostgreSQL unique constraint for at most one active session per station; defined pause/resume, boundary pricing and recovery behavior.
+- Concurrency: intent-stable idempotency key across retry, changed-payload rejection, duplicate click/payment/session and simultaneous operator/wallet tests; database constraints are final guards.
+- Agent/recovery: Server-authoritative decisions, fencing against stale device/lease/session generations, transactional persistence before external dispatch, reconnect reconciliation.
+- Data/security: immutable applied migrations; expand/compatible transition/contract; tested upgrade/restore with disposable old-version data; secrets excluded from logs/traces/support bundles; fail closed for corrupt secret state.
+- Module/UI boundaries: Sessions owns lifecycle/time, Tariffs price resolution, Billing invoices/payment allocations, Wallet balances/free value/debt, Inventory stock movements, Agent OS execution. WPF displays Server response; test RTL/LTR, Persian/Arabic digits, Persian normalization and loading/empty/offline/error/forbidden states.
+- Completion evidence: behavior/characterization tests, relevant PostgreSQL concurrency tests, exact candidate SHA checks and operator-facing flow test. Final installed-Service/physical acceptance remains a distinct release gate.
+
+
 ## Current execution snapshot — 2026-10-13 (read-back before docs reconciliation PR)
 
 - **Integration:** `integration/runtime-operator-v1` was read at `610ad37739e4ea32ee4e0d4d24d011b8e413e908` immediately before this docs-only PR was prepared. This is an immutable evidence/ref-read-back event, not a live pointer after the docs PR merges.
