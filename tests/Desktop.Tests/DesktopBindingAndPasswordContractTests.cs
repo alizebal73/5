@@ -8,6 +8,8 @@ using System.Xml.Linq;
 using GameNet.Desktop.Features.Identity;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Api;
+using GameNet.Shared.Contracts.V1.Sessions;
+using GameNet.Shared.Contracts.V1.Tariffs;
 using Xunit;
 
 namespace GameNet.Desktop.Tests;
@@ -29,7 +31,8 @@ public sealed class DesktopBindingAndPasswordContractTests
         var viewPaths = new[]
         {
             Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml"),
-            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml")
+            Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml"),
+            Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml")
         };
 
         foreach (var viewPath in viewPaths)
@@ -50,9 +53,11 @@ public sealed class DesktopBindingAndPasswordContractTests
                     if (string.IsNullOrWhiteSpace(path) || path == ".")
                         continue;
 
-                    var dataTemplateBinding = attribute.Parent?.AncestorsAndSelf()
-                        .Any(element => element.Name.LocalName == "DataTemplate") == true;
-                    var rootType = dataTemplateBinding ? typeof(StationBoardItem) : typeof(LoginViewModel);
+                    var dataTemplate = attribute.Parent?.AncestorsAndSelf()
+                        .FirstOrDefault(element => element.Name.LocalName == "DataTemplate");
+                    var rootType = dataTemplate is null
+                        ? typeof(LoginViewModel)
+                        : ResolveDataTemplateItemType(dataTemplate);
 
                     if (!TryResolvePath(rootType, path, out var unresolvedSegment))
                     {
@@ -140,6 +145,25 @@ public sealed class DesktopBindingAndPasswordContractTests
         Assert.Contains("CurrentPasswordChangeInput.Clear();", logoutBlock, StringComparison.Ordinal);
         Assert.Contains("NewPasswordChangeInput.Clear();", logoutBlock, StringComparison.Ordinal);
         Assert.Contains("ConfirmPasswordChangeInput.Clear();", logoutBlock, StringComparison.Ordinal);
+    }
+
+    private static Type ResolveDataTemplateItemType(XElement dataTemplate)
+    {
+        var itemsControl = dataTemplate.Ancestors()
+            .FirstOrDefault(element => element.Name.LocalName is "ListBox" or "ComboBox");
+        var itemsSource = (string?)itemsControl?.Attribute("ItemsSource") ?? string.Empty;
+
+        if (itemsSource.Contains("SessionWorkflow.Tariffs", StringComparison.Ordinal))
+            return typeof(TariffResponse);
+        if (itemsSource.Contains("SessionWorkflow.ActiveSessions", StringComparison.Ordinal))
+            return typeof(SessionResponse);
+        if (itemsSource.Contains("SessionWorkflow.PendingInvoices", StringComparison.Ordinal))
+            return typeof(InvoicePreviewResponse);
+        if (itemsSource.Contains("StationBoard.VisibleStations", StringComparison.Ordinal))
+            return typeof(StationBoardItem);
+
+        throw new InvalidOperationException(
+            $"Cannot determine WPF data-template item type from ItemsSource '{itemsSource}'.");
     }
 
     private static bool TryResolvePath(Type rootType, string path, out string unresolvedSegment)
