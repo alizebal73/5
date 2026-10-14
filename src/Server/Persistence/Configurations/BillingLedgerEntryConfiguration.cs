@@ -23,7 +23,7 @@ public sealed class BillingLedgerEntryConfiguration : IEntityTypeConfiguration<B
         b.HasIndex(x => x.InvoiceId).IsUnique().HasDatabaseName("ux_billing_ledger_invoice_id");
         b.HasIndex(x => x.PaymentId).IsUnique().HasDatabaseName("ux_billing_ledger_payment_id");
         b.HasIndex(x => x.OccurredAtUtc).HasDatabaseName("ix_billing_ledger_occurred_at_utc");
-        b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Payment>().WithMany().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_billing_ledger_entries_invoices_invoice_id");
+        b.HasOne<Payment>().WithMany().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_billing_ledger_entries_payments_payment_id");
     }
 }
