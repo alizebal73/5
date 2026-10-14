@@ -6,7 +6,6 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
-using GameNet.Server.Modules.Billing.Domain;
 
 namespace GameNet.Server.Modules.Billing.Infrastructure;
 
