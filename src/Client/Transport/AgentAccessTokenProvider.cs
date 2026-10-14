@@ -96,5 +96,23 @@ public sealed class AgentAccessTokenProvider(
         }
     }
 
+    public async Task InvalidateCachedTokenAsync(string deviceId, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (string.Equals(cachedDeviceId, deviceId, StringComparison.Ordinal))
+            {
+                cachedDeviceId = null;
+                cachedToken = null;
+                expiresAtUtc = default;
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     public void Dispose() => gate.Dispose();
 }
