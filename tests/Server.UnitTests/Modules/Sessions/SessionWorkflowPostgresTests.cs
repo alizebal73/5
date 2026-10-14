@@ -72,7 +72,7 @@ public sealed class SessionWorkflowPostgresTests
                 var started = await service.StartAsync(startCommand, CancellationToken.None);
                 Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
                 Assert.Equal(SessionStatusContract.Active, started.Value.Status);
-                Assert.Equal("PG-" + token[..12], started.Value.TariffCodeSnapshot);
+                Assert.Equal(("PG-" + token[..12]).ToUpperInvariant(), started.Value.TariffCodeSnapshot);
                 Assert.Equal(60_000L, started.Value.TariffHourlyRateTomanSnapshot);
                 customerId = started.Value.CustomerId;
 
