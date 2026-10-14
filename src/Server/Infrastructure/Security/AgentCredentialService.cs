@@ -173,10 +173,30 @@ public sealed class AgentCredentialService(
                 .SingleOrDefaultAsync(ct);
             if (current is null || !FixedHexEquals(current.SecretHash, oldHash))
                 throw new AgentCredentialException("agent.rotation_credential_rejected");
+
+            // If the local pending record survived a long outage, the operation may
+            // have expired or been superseded before the Server staged it. Return an
+            // explicit expired state only after proving that this prior credential is
+            // still the active one. The Agent will independently verify the old secret
+            // through /auth/token before it deletes local pending state.
             if (current.RotationRequestedOperationId != request.OperationId ||
-                !current.RotationRequestedAtUtc.HasValue ||
-                current.RotationRequestedAtUtc.Value + RotationLifetime <= now)
-                throw new AgentCredentialException("agent.rotation_not_requested");
+                !current.RotationRequestedAtUtc.HasValue)
+            {
+                return new AgentCredentialRotationStageResponse(
+                    request.OperationId, request.DeviceId, "expired", null);
+            }
+
+            if (current.RotationRequestedAtUtc.Value + RotationLifetime <= now)
+            {
+                current.ClearRotationRequest();
+                auditWriter.Append(new AuditRecord(
+                    now, "System", request.DeviceId, "AgentCredential.RotationExpired",
+                    "AgentCredential", current.Id.ToString("N"),
+                    "An unstaged Agent credential rotation request expired; the prior credential was retained.",
+                    "foundation", "Server", "Expired"));
+                return new AgentCredentialRotationStageResponse(
+                    request.OperationId, request.DeviceId, "expired", null);
+            }
 
             var otherPending = await dbContext.AgentCredentials.AnyAsync(
                 x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null && x.IsPendingRotation, ct);
