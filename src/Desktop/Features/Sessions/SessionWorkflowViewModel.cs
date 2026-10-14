@@ -30,6 +30,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
     private string statusMessage = string.Empty;
     private bool isDefaultTariff = true;
     private bool isBusy;
+    private int busyDepth;
 
     public SessionWorkflowViewModel(IGameNetServerClient api, Func<string, bool> hasPermission)
     {
@@ -135,7 +136,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         if (!CanUseWorkspace)
             return;
 
-        IsBusy = true;
+        BeginBusy();
         ErrorMessage = string.Empty;
         try
         {
@@ -215,7 +216,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         }
         finally
         {
-            IsBusy = false;
+            EndBusy();
         }
     }
 
@@ -260,7 +261,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
 
         var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{rate}|{IsDefaultTariff}";
         var key = GetKey("tariff.create", fingerprint);
-        IsBusy = true;
+        BeginBusy();
         try
         {
             var created = await api.CreateTariffAsync(
@@ -275,7 +276,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ ساخت تعرفه نامشخص است؛ تازه‌سازی کنید و از ارسال درخواست جدید خودداری کنید.", "Tariff creation result is unknown; refresh before issuing a new request."); }
         catch { ErrorMessage = Text("ساخت تعرفه انجام نشد.", "Tariff creation failed."); }
-        finally { IsBusy = false; }
+        finally { EndBusy(); }
     }
 
     private async Task StartSessionAsync()
@@ -285,7 +286,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
 
         var fingerprint = $"{SelectedStation.Id:D}|{SelectedTariff.Id:D}|walk-in";
         var key = GetKey("session.start", fingerprint);
-        IsBusy = true;
+        BeginBusy();
         ErrorMessage = string.Empty;
         try
         {
@@ -300,7 +301,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
         catch { ErrorMessage = Text("شروع Session انجام نشد.", "Session start failed."); }
-        finally { IsBusy = false; }
+        finally { EndBusy(); }
     }
 
     private async Task EndSessionAsync()
@@ -311,7 +312,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         var session = SelectedActiveSession;
         var fingerprint = $"{session.Id:D}|{session.Version}";
         var key = GetKey("session.end", fingerprint);
-        IsBusy = true;
+        BeginBusy();
         ErrorMessage = string.Empty;
         try
         {
@@ -326,7 +327,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
         }
         catch { ErrorMessage = Text("پایان Session انجام نشد.", "Ending the Session failed."); }
-        finally { IsBusy = false; }
+        finally { EndBusy(); }
     }
 
     private async Task CheckoutCashAsync()
@@ -342,7 +343,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         var invoice = SelectedPendingInvoice;
         var fingerprint = $"{invoice.InvoiceId:D}|{received}|{invoice.SessionVersion}";
         var key = GetKey("billing.cash", fingerprint);
-        IsBusy = true;
+        BeginBusy();
         ErrorMessage = string.Empty;
         try
         {
@@ -359,7 +360,7 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پرداخت نامشخص است؛ ابتدا تازه‌سازی کنید و دوباره پول را ثبت نکنید.", "Payment result is unknown; refresh first and do not record cash again blindly."); }
         catch { ErrorMessage = Text("ثبت پرداخت انجام نشد.", "Cash checkout failed."); }
-        finally { IsBusy = false; }
+        finally { EndBusy(); }
     }
 
     private string GetKey(string scope, string fingerprint)
@@ -441,6 +442,21 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
 
     private static string Text(string fa, string en) =>
         CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? fa : en;
+
+    private void BeginBusy()
+    {
+        busyDepth = checked(busyDepth + 1);
+        IsBusy = busyDepth > 0;
+    }
+
+    private void EndBusy()
+    {
+        if (busyDepth <= 0)
+            throw new InvalidOperationException("SESSION_WORKFLOW_BUSY_DEPTH_UNBALANCED");
+
+        busyDepth--;
+        IsBusy = busyDepth > 0;
+    }
 
     private void RaiseCommands()
     {
