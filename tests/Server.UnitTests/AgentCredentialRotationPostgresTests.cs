@@ -1,0 +1,148 @@
+using System.Security.Cryptography;
+using System.Text;
+using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Security;
+using GameNet.Server.Infrastructure.Transactions;
+using GameNet.Server.Persistence;
+using GameNet.Server.Persistence.Entities;
+using GameNet.Shared.Contracts.V1.Security;
+using GameNet.Shared.Primitives;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace GameNet.Server.UnitTests;
+
+[Collection("Agent credential rotation PostgreSQL serial")]
+public sealed class AgentCredentialRotationPostgresTests
+{
+    [Fact]
+    public async Task Rotation_is_idempotent_and_old_credential_remains_active_until_commit()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return; // PostgreSQL behavior is exercised by the Foundation verification lane.
+
+        var deviceId = "rotation-" + Guid.NewGuid().ToString("N");
+        var operationId = Guid.NewGuid();
+        var currentSecret = GenerateSecret();
+        var replacementSecret = GenerateSecret();
+        var changedSecret = GenerateSecret();
+        var oldCredentialId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var options = new DbContextOptionsBuilder<GameNetDbContext>().UseNpgsql(connectionString).Options;
+
+        try
+        {
+            await using (var seed = new GameNetDbContext(options))
+            {
+                seed.AgentCredentials.Add(new AgentCredential
+                {
+                    Id = oldCredentialId,
+                    DeviceId = deviceId,
+                    SecretHash = Hash(currentSecret),
+                    CreatedAtUtc = now
+                });
+                await seed.SaveChangesAsync();
+            }
+
+            await using (var requestDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(requestDb, now);
+                var requested = await service.RequestRotationAsync(new AgentCredentialRotateRequest(deviceId, operationId));
+                Assert.Equal("requested", requested.State);
+            }
+
+            await using (var stageDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(stageDb, now.AddSeconds(1));
+                var staged = await service.StageRotationAsync(new AgentCredentialRotationStageRequest(
+                    operationId, deviceId, currentSecret, replacementSecret));
+                Assert.Equal("staged", staged.State);
+            }
+
+            await using (var checkDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(checkDb, now.AddSeconds(2));
+                Assert.True(await service.AuthenticateAsync(deviceId, currentSecret));
+                Assert.False(await service.AuthenticateAsync(deviceId, replacementSecret));
+                var current = await checkDb.AgentCredentials.SingleAsync(
+                    x => x.DeviceId == deviceId && x.RevokedAtUtc == null && !x.IsPendingRotation);
+                Assert.Equal(oldCredentialId, current.Id);
+                var staged = await checkDb.AgentCredentials.SingleAsync(x => x.RotationOperationId == operationId);
+                Assert.True(staged.IsPendingRotation);
+                Assert.NotEqual(current.Id, staged.Id);
+            }
+
+            await using (var replayDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(replayDb, now.AddSeconds(3));
+                var replay = await service.StageRotationAsync(new AgentCredentialRotationStageRequest(
+                    operationId, deviceId, currentSecret, replacementSecret));
+                Assert.Equal("staged", replay.State);
+                await Assert.ThrowsAsync<AgentCredentialException>(() => service.StageRotationAsync(
+                    new AgentCredentialRotationStageRequest(operationId, deviceId, currentSecret, changedSecret)));
+            }
+
+            Guid newCredentialId;
+            await using (var confirmDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(confirmDb, now.AddSeconds(4));
+                var committed = await service.ConfirmRotationAsync(new AgentCredentialRotationConfirmationRequest(
+                    operationId, deviceId, currentSecret, replacementSecret));
+                Assert.Equal("committed", committed.State);
+                newCredentialId = committed.CredentialId;
+                Assert.True(await service.AuthenticateAsync(deviceId, replacementSecret));
+                Assert.False(await service.AuthenticateAsync(deviceId, currentSecret));
+            }
+
+            await using (var replayConfirmDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(replayConfirmDb, now.AddSeconds(5));
+                var replay = await service.ConfirmRotationAsync(new AgentCredentialRotationConfirmationRequest(
+                    operationId, deviceId, currentSecret, replacementSecret));
+                Assert.Equal("already_committed", replay.State);
+                Assert.Equal(newCredentialId, replay.CredentialId);
+                Assert.False(await replayConfirmDb.AgentCredentials.AnyAsync(
+                    x => x.DeviceId == deviceId && x.RevokedAtUtc == null && x.IsPendingRotation));
+                Assert.Single(await replayConfirmDb.AgentCredentials.Where(
+                    x => x.DeviceId == deviceId && x.RevokedAtUtc == null && !x.IsPendingRotation).ToListAsync());
+            }
+        }
+        finally
+        {
+            await using var cleanup = new GameNetDbContext(options);
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_connection_leases WHERE device_id = {deviceId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
+            await cleanup.AuditEntries.Where(x => x.ReferenceId == oldCredentialId.ToString("N") ||
+                x.ReferenceId == (await cleanup.AgentCredentials.Where(c => c.DeviceId == deviceId)
+                    .Select(c => c.Id.ToString("N")).FirstOrDefaultAsync()))
+                .ExecuteDeleteAsync();
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
+        }
+    }
+
+    private static AgentCredentialService CreateService(GameNetDbContext db, DateTimeOffset now) =>
+        new(db, new EfTransactionCoordinator(db), new EfAuditWriter(db), new FixedClock(now));
+
+    private static string GenerateSecret()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(32);
+        try { return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_'); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+
+    private static string Hash(string secret)
+    {
+        var bytes = Encoding.UTF8.GetBytes(secret);
+        try { return Convert.ToHexString(SHA256.HashData(bytes)); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+
+    private sealed class FixedClock(DateTimeOffset utcNow) : IGameClock
+    {
+        public DateTimeOffset UtcNow { get; } = utcNow;
+    }
+}
