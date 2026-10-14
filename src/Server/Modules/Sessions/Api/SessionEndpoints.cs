@@ -93,7 +93,7 @@ public static class SessionEndpoints
         {
             "sessions.forbidden" => StatusCodes.Status403Forbidden,
             "sessions.not_found" or "sessions.station_not_found" or "sessions.tariff_not_found" or "sessions.customer_not_found" => StatusCodes.Status404NotFound,
-            "sessions.station_unavailable" or "sessions.station_has_active_session" or "sessions.tariff_station_mismatch" or
+            "sessions.station_unavailable" or "sessions.station_has_active_session" or "sessions.station_pending_settlement" or "sessions.tariff_station_mismatch" or
             "sessions.version_conflict" or "sessions.invalid_state" or "sessions.invalid_clock" or "sessions.amount_overflow" or
             "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
             "sessions.pc_only" or "idempotency.required" => StatusCodes.Status400BadRequest,
