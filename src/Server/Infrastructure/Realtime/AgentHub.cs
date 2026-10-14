@@ -98,12 +98,16 @@ public sealed class AgentHub(
         if (!await leases.IsCurrentLeaseAsync(deviceId, Context.ConnectionId, token, Context.ConnectionAborted))
             throw new HubException("AGENT_LEASE_NOT_AUTHORITATIVE");
 
+        var rotationOperationId = await credentials.GetRequestedRotationOperationIdAsync(
+            deviceId, RequireCredentialId(), Context.ConnectionAborted);
+
         return new AgentReconciliationResponse(
             deviceId,
             clock.UtcNow,
             AgentProtocolVersions.V1,
             true,
-            AgentReconciliationScope.LeaseAndIdentity);
+            AgentReconciliationScope.LeaseAndIdentity,
+            rotationOperationId);
     }
 
     public async Task<bool> AcknowledgeCommandAsync(AgentCommandAcknowledgement acknowledgement)
