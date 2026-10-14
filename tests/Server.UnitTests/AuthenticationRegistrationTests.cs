@@ -139,9 +139,21 @@ public sealed class AuthenticationRegistrationTests
             AgentCredentialProvisionRequest request, CancellationToken cancellationToken = default) =>
             Task.FromException<AgentCredentialSecretResponse>(new NotSupportedException());
 
-        public Task<AgentCredentialSecretResponse> RotateAsync(
+        public Task<AgentCredentialRotationRequestedResponse> RequestRotationAsync(
             AgentCredentialRotateRequest request, CancellationToken cancellationToken = default) =>
-            Task.FromException<AgentCredentialSecretResponse>(new NotSupportedException());
+            Task.FromException<AgentCredentialRotationRequestedResponse>(new NotSupportedException());
+
+        public Task<AgentCredentialRotationStageResponse> StageRotationAsync(
+            AgentCredentialRotationStageRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromException<AgentCredentialRotationStageResponse>(new NotSupportedException());
+
+        public Task<AgentCredentialRotationConfirmationResponse> ConfirmRotationAsync(
+            AgentCredentialRotationConfirmationRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromException<AgentCredentialRotationConfirmationResponse>(new NotSupportedException());
+
+        public Task<Guid?> GetRequestedRotationOperationIdAsync(
+            string deviceId, Guid credentialId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Guid?>(null);
 
         public Task<bool> RevokeAsync(
             AgentCredentialRevokeRequest request, CancellationToken cancellationToken = default) =>
