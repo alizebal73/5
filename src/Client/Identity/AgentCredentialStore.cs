@@ -141,6 +141,8 @@ public sealed class AgentCredentialStore(
                 await stream.WriteAsync(protectedBytes, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
+            if (IsProduction())
+                AgentStateAccessControl.ProtectStateFileForReplacement(root, temp, PendingRotationFileName);
             try
             {
                 File.Move(temp, path, overwrite: false);
@@ -287,6 +289,8 @@ public sealed class AgentCredentialStore(
                 await stream.WriteAsync(protectedBytes, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
+            if (IsProduction())
+                AgentStateAccessControl.ProtectStateFileForReplacement(root, temp, "credential.bin");
             File.Move(temp, path, overwrite: true);
             RejectReparsePoint(path);
             if (IsProduction())
