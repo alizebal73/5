@@ -187,13 +187,13 @@ public sealed class DesktopBindingAndPasswordContractTests
             .FirstOrDefault(element => element.Name.LocalName is "ListBox" or "ComboBox");
         var itemsSource = (string?)itemsControl?.Attribute("ItemsSource") ?? string.Empty;
 
-        if (itemsSource.Contains("SessionWorkflow.Tariffs", StringComparison.Ordinal))
+        if (itemsSource.EndsWith("Tariffs", StringComparison.Ordinal))
             return typeof(TariffResponse);
-        if (itemsSource.Contains("SessionWorkflow.ActiveSessions", StringComparison.Ordinal))
+        if (itemsSource.EndsWith("ActiveSessions", StringComparison.Ordinal))
             return typeof(SessionResponse);
-        if (itemsSource.Contains("SessionWorkflow.PendingInvoices", StringComparison.Ordinal))
+        if (itemsSource.EndsWith("PendingInvoices", StringComparison.Ordinal))
             return typeof(InvoicePreviewResponse);
-        if (itemsSource.Contains("StationBoard.VisibleStations", StringComparison.Ordinal))
+        if (itemsSource.EndsWith("VisibleStations", StringComparison.Ordinal))
             return typeof(StationBoardItem);
 
         throw new InvalidOperationException(
