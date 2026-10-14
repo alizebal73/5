@@ -18,6 +18,7 @@ public sealed class BillingService(
     CommandMutationPipeline mutationPipeline,
     IRequestFingerprint requestFingerprint,
     ISessionSettlement sessionSettlement,
+    ISessionCheckoutAccess sessionCheckoutAccess,
     IAuditWriter audit,
     IGameClock clock) : IBillingService
 {
@@ -31,17 +32,26 @@ public sealed class BillingService(
         if (!actor.Permissions.Contains(Permissions.BillingWrite))
             return Fail<IReadOnlyList<InvoicePreviewResponse>>("billing.forbidden", "Not allowed to read pending invoices.");
 
-        var rows = await db.Invoices.AsNoTracking()
+        var invoices = await db.Invoices.AsNoTracking()
             .Where(x => x.Status == InvoiceStatus.PendingPayment)
-            .Join(db.Sessions.AsNoTracking(),
-                invoice => invoice.SessionId,
-                session => session.Id,
-                (invoice, session) => new { Invoice = invoice, SessionVersion = session.Version })
-            .OrderBy(x => x.Invoice.IssuedAtUtc)
+            .OrderBy(x => x.IssuedAtUtc)
             .ToArrayAsync(cancellationToken);
+        var sessionVersions = await sessionCheckoutAccess.GetSessionVersionsAsync(
+            invoices.Select(x => x.SessionId).Distinct().ToArray(),
+            cancellationToken);
 
-        return Result<IReadOnlyList<InvoicePreviewResponse>>.Success(
-            rows.Select(x => ToPreview(x.Invoice, x.SessionVersion)).ToArray());
+        var previews = new List<InvoicePreviewResponse>(invoices.Length);
+        foreach (var invoice in invoices)
+        {
+            if (!sessionVersions.TryGetValue(invoice.SessionId, out var sessionVersion))
+                return Fail<IReadOnlyList<InvoicePreviewResponse>>(
+                    "billing.session_not_found",
+                    "Session for a pending invoice was not found.");
+
+            previews.Add(ToPreview(invoice, sessionVersion));
+        }
+
+        return Result<IReadOnlyList<InvoicePreviewResponse>>.Success(previews);
     }
 
     public Task<Result<CashCheckoutResponse>> CheckoutCashAsync(
@@ -86,13 +96,12 @@ public sealed class BillingService(
                     if (invoice.Status != InvoiceStatus.PendingPayment)
                         return Fail<CashCheckoutResponse>("billing.invoice_not_pending", "Invoice is not awaiting payment.");
 
-                    var currentSessionVersion = await db.Sessions.AsNoTracking()
-                        .Where(x => x.Id == invoice.SessionId)
-                        .Select(x => (int?)x.Version)
-                        .SingleOrDefaultAsync(token);
-                    if (currentSessionVersion is null)
+                    var sessionVersions = await sessionCheckoutAccess.GetSessionVersionsAsync(
+                        new[] { invoice.SessionId },
+                        token);
+                    if (!sessionVersions.TryGetValue(invoice.SessionId, out var currentSessionVersion))
                         return Fail<CashCheckoutResponse>("billing.session_not_found", "Session for this invoice was not found.");
-                    if (currentSessionVersion.Value != command.ExpectedSessionVersion)
+                    if (currentSessionVersion != command.ExpectedSessionVersion)
                         return Fail<CashCheckoutResponse>("billing.session_version_conflict", "Session changed; refresh before checkout.");
 
                     var paidAt = clock.UtcNow;
