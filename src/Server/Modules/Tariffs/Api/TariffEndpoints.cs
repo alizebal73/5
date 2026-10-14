@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Modules.Tariffs.Application;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Security;
