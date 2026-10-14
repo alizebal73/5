@@ -64,8 +64,28 @@ if ($vulnerabilityReport.PSObject.Properties.Name -contains "problems") {
     }
 }
 
+$projectReports = @($vulnerabilityReport.projects)
+$projectsWithoutFrameworks = @($projectReports | Where-Object {
+    $null -eq $_ -or $_.PSObject.Properties.Name -notcontains "frameworks"
+})
+if ($projectsWithoutFrameworks.Count -gt 0) {
+    $shapeDiagnostics = [pscustomobject]@{
+        ReportVersion = $vulnerabilityReport.version
+        RootProperties = @($vulnerabilityReport.PSObject.Properties.Name)
+        ProjectCount = $projectReports.Count
+        ProjectsWithoutFrameworks = @($projectsWithoutFrameworks | Select-Object -First 12 | ForEach-Object {
+            [pscustomobject]@{
+                Path = if ($_.PSObject.Properties.Name -contains "path") { [string]$_.path } else { $null }
+                Properties = @($_.PSObject.Properties.Name)
+            }
+        })
+    }
+    $shapeDiagnostics | ConvertTo-Json -Depth 8 | Write-Host
+    throw "NuGet vulnerability report contains project entries without framework details; refusing to accept an unverified dependency graph."
+}
+
 $vulnerablePackages = @()
-foreach ($project in @($vulnerabilityReport.projects)) {
+foreach ($project in $projectReports) {
     foreach ($framework in @($project.frameworks)) {
         foreach ($packageCollectionName in @("topLevelPackages", "transitivePackages")) {
             foreach ($package in @($framework.$packageCollectionName)) {
