@@ -38,7 +38,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     public ICommand LogoutCommand { get; }
     public ICommand ChangePasswordCommand { get; }
     public StationBoardViewModel StationBoard { get; }
-    public SessionWorkflowViewModel SessionWorkflow { get; }
+    public ISessionWorkflowPort SessionWorkflow { get; }
     public string Username { get => username; set => SetField(ref username, value); }
     public string Password { get => password; set => SetField(ref password, value); }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
