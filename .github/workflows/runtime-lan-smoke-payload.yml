@@ -56,6 +56,10 @@ jobs:
         shell: pwsh
         run: .\scripts\check-ci-runner-policy.ps1
 
+      - name: Install repository-pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
 
       - name: Verify exact tested checkout SHA
         shell: pwsh
@@ -79,7 +83,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $actual = (dotnet --version).Trim()
           if ($LASTEXITCODE -ne 0 -or $actual -ne "10.0.402") {
-            throw "Expected pinned .NET SDK 10.0.402; found '$actual'. Use the repository's installed SDK rather than attempting a system install."
+            throw "Expected the repository-pinned .NET SDK 10.0.402 after setup-dotnet; found '$actual'. Refusing an unpinned SDK."
           }
 
       - name: Restore Windows x64 runtime graph
