@@ -76,6 +76,7 @@ public static class ServiceRegistration
         services.AddScoped<ITariffSessionAccess, TariffSessionAccess>();
         services.AddScoped<IBillingInvoiceWriter, BillingInvoiceWriter>();
         services.AddScoped<ISessionSettlement, SessionSettlement>();
+        services.AddScoped<ISessionCheckoutAccess, SessionCheckoutAccess>();
         services.AddScoped<ISessionService, GameNet.Server.Modules.Sessions.Infrastructure.SessionService>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<ITariffService, GameNet.Server.Modules.Tariffs.Infrastructure.TariffService>();
