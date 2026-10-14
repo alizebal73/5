@@ -209,6 +209,88 @@ public sealed class AgentCredentialRotationPostgresTests
         }
     }
 
+    [Fact]
+    public async Task Revoking_device_cancels_and_audits_pending_rotation_even_when_old_credential_is_removed()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return;
+
+        var deviceId = "rotation-revoke-" + Guid.NewGuid().ToString("N");
+        var operationId = Guid.NewGuid();
+        var currentSecret = GenerateSecret();
+        var replacementSecret = GenerateSecret();
+        var oldCredentialId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var options = new DbContextOptionsBuilder<GameNetDbContext>().UseNpgsql(connectionString).Options;
+
+        try
+        {
+            await using (var seed = new GameNetDbContext(options))
+            {
+                seed.AgentCredentials.Add(new AgentCredential
+                {
+                    Id = oldCredentialId,
+                    DeviceId = deviceId,
+                    SecretHash = Hash(currentSecret),
+                    CreatedAtUtc = now
+                });
+                await seed.SaveChangesAsync();
+            }
+
+            await using (var stageDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(stageDb, now);
+                Assert.Equal("requested", (await service.RequestRotationAsync(
+                    new AgentCredentialRotateRequest(deviceId, operationId))).State);
+                Assert.Equal("staged", (await service.StageRotationAsync(
+                    new AgentCredentialRotationStageRequest(
+                        operationId, deviceId, currentSecret, replacementSecret))).State);
+            }
+
+            Guid pendingCredentialId;
+            await using (var revokeDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(revokeDb, now.AddSeconds(1));
+                Assert.True(await service.RevokeAsync(new AgentCredentialRevokeRequest(
+                    deviceId, "test-only security revocation")));
+                var pending = await revokeDb.AgentCredentials.SingleAsync(
+                    x => x.DeviceId == deviceId && x.RotationOperationId == operationId);
+                pendingCredentialId = pending.Id;
+                Assert.NotNull(pending.RevokedAtUtc);
+                Assert.True(await revokeDb.AgentCredentials.Where(x => x.DeviceId == deviceId)
+                    .AllAsync(x => x.RevokedAtUtc != null));
+            }
+
+            await using (var auditDb = new GameNetDbContext(options))
+            {
+                Assert.Single(await auditDb.AuditEntries.Where(x =>
+                    x.Operation == "AgentCredential.RotationRevoked" &&
+                    x.ReferenceId == pendingCredentialId.ToString("N")).ToListAsync());
+                Assert.False(await CreateService(auditDb, now.AddSeconds(2))
+                    .AuthenticateAsync(deviceId, currentSecret));
+                Assert.False(await CreateService(auditDb, now.AddSeconds(2))
+                    .AuthenticateAsync(deviceId, replacementSecret));
+            }
+        }
+        finally
+        {
+            await using var cleanup = new GameNetDbContext(options);
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_connection_leases WHERE device_id = {deviceId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
+            var ids = await cleanup.AgentCredentials.Where(x => x.DeviceId == deviceId)
+                .Select(x => x.Id).ToListAsync();
+            var refs = ids.Select(id => id.ToString("N")).Append(oldCredentialId.ToString("N"))
+                .Append(operationId.ToString("N")).ToList();
+            await cleanup.AuditEntries.Where(x => x.ReferenceId != null && refs.Contains(x.ReferenceId))
+                .ExecuteDeleteAsync();
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
+        }
+    }
+
     private static AgentCredentialService CreateService(GameNetDbContext db, DateTimeOffset now) =>
         new(db, new EfTransactionCoordinator(db), new EfAuditWriter(db), new FixedClock(now));
 
