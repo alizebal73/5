@@ -72,6 +72,45 @@ public sealed class AgentCredentialService(
                     existingOperation.RotationExpiresAtUtc);
             }
 
+            var operationReference = request.OperationId.ToString("N");
+            var priorRequestAudit = await dbContext.AuditEntries
+                .SingleOrDefaultAsync(x =>
+                    x.ReferenceType == "AgentCredentialRotationRequest" &&
+                    x.ReferenceId == operationReference, ct);
+            if (priorRequestAudit is not null)
+            {
+                if (!string.Equals(priorRequestAudit.ActorId, request.DeviceId, StringComparison.Ordinal))
+                    throw new AgentCredentialException("agent.rotation_operation_reused");
+
+                var priorCurrent = await dbContext.AgentCredentials
+                    .Where(x => x.DeviceId == request.DeviceId &&
+                                x.RevokedAtUtc == null &&
+                                !x.IsPendingRotation)
+                    .SingleOrDefaultAsync(ct);
+                if (priorCurrent?.RotationRequestedOperationId == request.OperationId &&
+                    priorCurrent.RotationRequestedAtUtc.HasValue &&
+                    priorCurrent.RotationRequestedAtUtc.Value + RotationLifetime > now)
+                {
+                    return new AgentCredentialRotationRequestedResponse(
+                        request.OperationId, request.DeviceId, "requested",
+                        priorCurrent.RotationRequestedAtUtc.Value + RotationLifetime);
+                }
+
+                if (priorCurrent?.RotationRequestedOperationId == request.OperationId &&
+                    priorCurrent.RotationRequestedAtUtc.HasValue)
+                {
+                    priorCurrent.ClearRotationRequest();
+                    auditWriter.Append(new AuditRecord(
+                        now, "System", request.DeviceId, "AgentCredential.RotationExpired",
+                        "AgentCredential", priorCurrent.Id.ToString("N"),
+                        "An expired unstaged Agent credential rotation request was retired; the prior credential was retained.",
+                        "foundation", "Server", "Expired"));
+                }
+
+                return new AgentCredentialRotationRequestedResponse(
+                    request.OperationId, request.DeviceId, "expired", null);
+            }
+
             var current = await dbContext.AgentCredentials
                 .Where(x => x.DeviceId == request.DeviceId && x.RevokedAtUtc == null && !x.IsPendingRotation)
                 .SingleOrDefaultAsync(ct);
@@ -106,8 +145,9 @@ public sealed class AgentCredentialService(
             current.RequestRotation(request.OperationId, now);
             auditWriter.Append(new AuditRecord(
                 now, "System", request.DeviceId, "AgentCredential.RotationRequested",
-                "AgentCredential", current.Id.ToString("N"),
-                "Operator requested a staged Agent credential rotation.", "foundation", "Server", "Accepted"));
+                "AgentCredentialRotationRequest", request.OperationId.ToString("N"),
+                $"Operator requested a staged Agent credential rotation from credential {current.Id:N}.",
+                "foundation", "Server", "Accepted"));
             return new AgentCredentialRotationRequestedResponse(
                 request.OperationId, request.DeviceId, "requested", now.Add(RotationLifetime));
         }, cancellationToken);

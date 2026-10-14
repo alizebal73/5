@@ -28,6 +28,10 @@ public sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEntr
             .HasDatabaseName("IX_audit_entries_OccurredAtUtc_Operation");
         builder.HasIndex(x => new { x.ReferenceType, x.ReferenceId })
             .HasDatabaseName("IX_audit_entries_ReferenceType_ReferenceId");
+        builder.HasIndex(x => new { x.ReferenceType, x.ReferenceId })
+            .HasDatabaseName("IX_audit_entries_AgentCredentialRotationRequestOperation")
+            .IsUnique()
+            .HasFilter("reference_type = 'AgentCredentialRotationRequest' AND reference_id IS NOT NULL");
         builder.HasIndex(x => x.IdempotencyKey)
             .HasDatabaseName("IX_audit_entries_IdempotencyKey");
     }

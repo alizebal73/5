@@ -121,6 +121,7 @@ public sealed class AgentCredentialRotationPostgresTests
                 .ToListAsync();
             var credentialIds = credentialGuids.Select(id => id.ToString("N")).ToList();
             credentialIds.Add(oldCredentialId.ToString("N"));
+            credentialIds.Add(operationId.ToString("N"));
             await cleanup.AuditEntries
                 .Where(x => x.ReferenceId != null && credentialIds.Contains(x.ReferenceId))
                 .ExecuteDeleteAsync();
@@ -192,7 +193,7 @@ public sealed class AgentCredentialRotationPostgresTests
                 $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
             var ids = await cleanup.AgentCredentials.Where(x => x.DeviceId == deviceId)
                 .Select(x => x.Id).ToListAsync();
-            var refs = ids.Select(id => id.ToString("N")).Append(oldCredentialId.ToString("N")).ToList();
+            var refs = ids.Select(id => id.ToString("N")).Append(oldCredentialId.ToString("N")).Append(operationId.ToString("N")).ToList();
             await cleanup.AuditEntries.Where(x => x.ReferenceId != null && refs.Contains(x.ReferenceId))
                 .ExecuteDeleteAsync();
             await cleanup.Database.ExecuteSqlInterpolatedAsync(

@@ -24,10 +24,20 @@ public partial class AgentStagedCredentialRotation : Migration
             column: "rotation_operation_id", unique: true, filter: "rotation_operation_id IS NOT NULL");
         migrationBuilder.CreateIndex(name: "IX_agent_credentials_RotationRequestedOperation", table: "agent_credentials",
             column: "rotation_requested_operation_id", unique: true, filter: "rotation_requested_operation_id IS NOT NULL");
+
+        migrationBuilder.CreateIndex(
+            name: "IX_audit_entries_AgentCredentialRotationRequestOperation",
+            table: "audit_entries",
+            columns: new[] { "reference_type", "reference_id" },
+            unique: true,
+            filter: "reference_type = 'AgentCredentialRotationRequest' AND reference_id IS NOT NULL");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.DropIndex(
+            name: "IX_audit_entries_AgentCredentialRotationRequestOperation",
+            table: "audit_entries");
         migrationBuilder.DropIndex(name: "IX_agent_credentials_RotationRequestedOperation", table: "agent_credentials");
         migrationBuilder.DropIndex(name: "IX_agent_credentials_RotationOperation", table: "agent_credentials");
         migrationBuilder.DropIndex(name: "IX_agent_credentials_PendingRotationDevice", table: "agent_credentials");

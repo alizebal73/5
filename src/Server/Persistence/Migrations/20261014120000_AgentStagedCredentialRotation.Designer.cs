@@ -109,6 +109,11 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasIndex("ReferenceType", "ReferenceId")
                         .HasDatabaseName("IX_audit_entries_ReferenceType_ReferenceId");
 
+                    b.HasIndex("ReferenceType", "ReferenceId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_audit_entries_AgentCredentialRotationRequestOperation")
+                        .HasFilter("reference_type = 'AgentCredentialRotationRequest' AND reference_id IS NOT NULL");
+
                     b.ToTable("audit_entries", (string)null);
                 });
 
