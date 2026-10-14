@@ -37,6 +37,7 @@ public sealed record SessionResponse(
 public sealed record InvoicePreviewResponse(
     Guid InvoiceId,
     Guid SessionId,
+    int SessionVersion,
     Guid StationId,
     Guid CustomerId,
     Guid TariffId,
