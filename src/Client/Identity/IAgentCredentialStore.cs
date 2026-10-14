@@ -8,6 +8,7 @@ public interface IAgentCredentialStore
     Task<AgentPendingCredentialRotation?> TryLoadPendingRotationAsync(string deviceId, CancellationToken cancellationToken = default);
     Task SavePendingRotationAsync(Guid operationId, string deviceId, string currentSecret, string replacementSecret, CancellationToken cancellationToken = default);
     Task PromotePendingRotationAsync(Guid operationId, string deviceId, CancellationToken cancellationToken = default);
+    Task DiscardExpiredPendingRotationAsync(Guid operationId, string deviceId, CancellationToken cancellationToken = default);
 }
 
 public sealed record AgentPendingCredentialRotation(
