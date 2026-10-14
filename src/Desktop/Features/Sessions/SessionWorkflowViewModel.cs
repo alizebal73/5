@@ -18,6 +18,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
     private TariffResponse? selectedTariff;
     private ActiveSessionListItem? selectedActiveSession;
@@ -140,17 +141,32 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         ErrorMessage = string.Empty;
         try
         {
-            if (CanReadStations && CanOperateSessions)
+            if (CanReadStations)
             {
                 var stations = (await api.GetStationsAsync())
                     .Where(x => x.Type == StationTypeContract.Pc)
                     .OrderBy(x => x.Code, StringComparer.Ordinal)
                     .ToArray();
-                Replace(PcStations, stations, SelectedStation?.Id, x => x.Id, out var currentStation);
-                SelectedStation = currentStation;
+
+                stationLabels.Clear();
+                foreach (var station in stations)
+                    stationLabels[station.Id] = station.Code;
+
+                if (CanOperateSessions)
+                {
+                    Replace(PcStations, stations, SelectedStation?.Id, x => x.Id, out var currentStation);
+                    SelectedStation = currentStation;
+                }
+                else
+                {
+                    // Station labels may be visible to a cashier without granting Session operations.
+                    PcStations.Clear();
+                    SelectedStation = null;
+                }
             }
             else
             {
+                stationLabels.Clear();
                 PcStations.Clear();
                 SelectedStation = null;
             }
@@ -241,6 +257,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 
     public void Reset()
     {
+        stationLabels.Clear();
         PcStations.Clear();
         Tariffs.Clear();
         ActiveSessions.Clear();
@@ -374,8 +391,8 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 
     private string GetStationLabel(Guid stationId)
     {
-        var stationCode = PcStations.FirstOrDefault(x => x.Id == stationId)?.Code;
-        return !string.IsNullOrWhiteSpace(stationCode)
+        return stationLabels.TryGetValue(stationId, out var stationCode) &&
+               !string.IsNullOrWhiteSpace(stationCode)
             ? stationCode
             : Text($"ایستگاه {stationId:D}", $"Station {stationId:D}");
     }
