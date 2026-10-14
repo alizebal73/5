@@ -17,4 +17,6 @@ public interface IAgentTransport : IAsyncDisposable
     Task<bool> AcknowledgeCommandAsync(
         AgentCommandAcknowledgement acknowledgement,
         CancellationToken cancellationToken = default);
+
+    Task ResetConnectionAsync(CancellationToken cancellationToken = default);
 }
