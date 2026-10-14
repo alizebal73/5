@@ -24,6 +24,7 @@ public partial class Slice1PcCashCore : Migration
             {
                 table.PrimaryKey("pk_customers", x => x.id);
                 table.CheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
+                table.CheckConstraint("ck_customers_kind_range", "kind BETWEEN 1 AND 2");
                 table.CheckConstraint("ck_customers_registered_name", "(kind = 1) OR (display_name IS NOT NULL AND length(trim(display_name)) > 0)");
             });
 
@@ -46,6 +47,7 @@ public partial class Slice1PcCashCore : Migration
                 table.PrimaryKey("pk_tariffs", x => x.id);
                 table.CheckConstraint("ck_tariffs_hourly_rate_positive", "hourly_rate_toman > 0");
                 table.CheckConstraint("ck_tariffs_station_type", "station_type BETWEEN 1 AND 3");
+                table.CheckConstraint("ck_tariffs_default_must_be_active", "is_active OR NOT is_default");
             });
 
         m.CreateTable(
