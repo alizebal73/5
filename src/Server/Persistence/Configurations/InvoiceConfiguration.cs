@@ -37,6 +37,9 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.PaidAtUtc).HasColumnName("paid_at_utc");
         b.Property(x => x.Status).IsRequired().HasColumnName("status");
         b.HasIndex(x => x.SessionId).IsUnique().HasDatabaseName("ux_invoices_session_id");
+        b.HasIndex(x => x.StationId).HasDatabaseName("ix_invoices_station_id");
+        b.HasIndex(x => x.CustomerId).HasDatabaseName("ix_invoices_customer_id");
+        b.HasIndex(x => x.TariffId).HasDatabaseName("ix_invoices_tariff_id");
         b.HasIndex(x => x.PaidAtUtc).HasDatabaseName("ix_invoices_paid_at_utc");
 
         b.HasOne<Session>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_sessions_session_id");
