@@ -588,7 +588,7 @@ namespace GameNet.Server.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_sessions_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
                             t.HasCheckConstraint("ck_sessions_status_range", "status BETWEEN 1 AND 3");
-                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND paid_at_utc IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND paid_at_utc IS NULL) OR (status = 3 AND ended_at_utc IS NOT NULL AND paid_at_utc IS NOT NULL)");
+                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND ended_at_utc > started_at_utc) OR (status = 3 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL AND ended_at_utc > started_at_utc AND paid_at_utc >= ended_at_utc)");
                         });
                 });
 
