@@ -155,23 +155,6 @@ public sealed class SessionService(
                         return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Only an active session can be ended.");
 
                     var endedAt = clock.UtcNow;
-                    SessionChargeBreakdown charge;
-                    try
-                    {
-                        charge = HourlySessionChargeCalculator.Calculate(
-                            session.TariffHourlyRateTomanSnapshot,
-                            session.StartedAtUtc,
-                            endedAt);
-                    }
-                    catch (ArgumentOutOfRangeException)
-                    {
-                        return Fail<InvoicePreviewResponse>("sessions.invalid_clock", "Server time did not produce a valid session duration.");
-                    }
-                    catch (OverflowException)
-                    {
-                        return Fail<InvoicePreviewResponse>("sessions.amount_overflow", "Session charge exceeds the supported Toman range.");
-                    }
-
                     var before = ToResponse(session);
                     try
                     {
@@ -192,8 +175,8 @@ public sealed class SessionService(
                             session.TariffCodeSnapshot,
                             session.TariffNameSnapshot,
                             session.TariffHourlyRateTomanSnapshot,
-                            charge.ElapsedTicks,
-                            charge.AmountToman,
+                            session.StartedAtUtc,
+                            endedAt,
                             session.Version,
                             command.Actor.OperatorId,
                             endedAt,
