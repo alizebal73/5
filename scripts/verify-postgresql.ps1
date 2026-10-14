@@ -370,6 +370,23 @@ try {
         }
     }
 
+    $previousSessionWorkflowIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_SESSION_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_SESSION_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~SessionWorkflowPostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "PC Session-to-cash PostgreSQL integration verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousSessionWorkflowIntegrationFlag) {
+            Remove-Item Env:GAMENET_SESSION_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_SESSION_POSTGRES_TESTS = $previousSessionWorkflowIntegrationFlag
+        }
+    }
+
     $previousAgentDispatchIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_AGENT_DISPATCH_POSTGRES_TESTS", "Process")
     try {
         $env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS = "true"
