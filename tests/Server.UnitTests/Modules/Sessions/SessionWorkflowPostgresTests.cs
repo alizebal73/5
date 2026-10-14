@@ -246,6 +246,7 @@ public sealed class SessionWorkflowPostgresTests
             new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock)),
             new TestRequestFingerprint(),
             new SessionSettlement(db, audit, clock),
+            new SessionCheckoutAccess(db),
             audit,
             clock);
     }
