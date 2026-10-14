@@ -139,14 +139,26 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 
         BeginBusy();
         ErrorMessage = string.Empty;
+        var stationLabelsUnavailable = false;
         try
         {
             if (CanReadStations)
             {
-                var stations = (await api.GetStationsAsync())
-                    .Where(x => x.Type == StationTypeContract.Pc)
-                    .OrderBy(x => x.Code, StringComparer.Ordinal)
-                    .ToArray();
+                StationResponse[] stations;
+                try
+                {
+                    stations = (await api.GetStationsAsync())
+                        .Where(x => x.Type == StationTypeContract.Pc)
+                        .OrderBy(x => x.Code, StringComparer.Ordinal)
+                        .ToArray();
+                }
+                catch (Exception ex) when (!CanOperateSessions &&
+                    (ex is GameNetApiException || ex is HttpRequestException || ex is TaskCanceledException))
+                {
+                    // A station-code lookup enriches invoice rows; it must not block a cashier from loading invoices.
+                    stations = [];
+                    stationLabelsUnavailable = true;
+                }
 
                 stationLabels.Clear();
                 foreach (var station in stations)
@@ -221,7 +233,9 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             OnPropertyChanged(nameof(CanCheckout));
             OnPropertyChanged(nameof(CanReadStations));
             OnPropertyChanged(nameof(CanUseWorkspace));
-            StatusMessage = Text("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", "Sessions, tariffs and pending invoices were refreshed.");
+            StatusMessage = stationLabelsUnavailable
+                ? Text("صورتحساب‌ها به‌روزرسانی شدند؛ کد ایستگاه در دسترس نبود و شناسهٔ ایستگاه نمایش داده می‌شود.", "Invoices were refreshed; station codes were unavailable, so station IDs are shown.")
+                : Text("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", "Sessions, tariffs and pending invoices were refreshed.");
         }
         catch (GameNetApiException ex)
         {
