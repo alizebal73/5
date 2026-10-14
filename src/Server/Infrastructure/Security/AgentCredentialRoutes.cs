@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Server.Infrastructure.Observability;
+using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.Extensions.Options;
@@ -51,6 +52,7 @@ public static class AgentCredentialRoutes
                 if (denied is not null) return denied;
                 try { return Results.Ok(await credentials.RequestRotationAsync(request, cancellationToken)); }
                 catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
+                catch (PersistenceConflictException) { return WriteRotationConflict(context); }
             }).AllowAnonymous();
 
         group.MapPost("/credentials/rotate/stage",
@@ -60,6 +62,7 @@ public static class AgentCredentialRoutes
                 context.Response.Headers.CacheControl = "no-store";
                 try { return Results.Ok(await credentials.StageRotationAsync(request, cancellationToken)); }
                 catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
+                catch (PersistenceConflictException) { return WriteRotationConflict(context); }
             }).AllowAnonymous();
 
         group.MapPost("/credentials/rotate/confirm",
@@ -69,6 +72,7 @@ public static class AgentCredentialRoutes
                 context.Response.Headers.CacheControl = "no-store";
                 try { return Results.Ok(await credentials.ConfirmRotationAsync(request, cancellationToken)); }
                 catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
+                catch (PersistenceConflictException) { return WriteRotationConflict(context); }
             }).AllowAnonymous();
 
         group.MapPost("/credentials/revoke",
@@ -87,6 +91,11 @@ public static class AgentCredentialRoutes
     private static IResult WriteCredentialFailure(HttpContext context, AgentCredentialException exception) =>
         Results.Conflict(new ApiFailure(
             new ApiError(exception.Code, "The Agent credential operation was rejected."),
+            CorrelationIdMiddleware.GetCurrent(context)));
+
+    private static IResult WriteRotationConflict(HttpContext context) =>
+        Results.Conflict(new ApiFailure(
+            new ApiError("agent.rotation_conflict", "The Agent credential operation conflicts with another operation."),
             CorrelationIdMiddleware.GetCurrent(context)));
 
     private static IResult? ValidateProvisioningKey(HttpContext context, string expectedKey)
