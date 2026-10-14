@@ -33,6 +33,57 @@ Write-Host "Using dotnet: $dotnetPath"
 Invoke-Checked $dotnetPath @("--info")
 Invoke-Checked $dotnetPath @("tool","restore")
 Invoke-Checked $dotnetPath @("restore","GameNet.slnx")
+
+Write-Host "Scanning restored direct and transitive NuGet packages for known vulnerabilities."
+$vulnerabilityOutput = & $dotnetPath @(
+    "package", "list", "--project", "GameNet.slnx",
+    "--vulnerable", "--include-transitive", "--format", "json", "--no-restore"
+)
+if ($LASTEXITCODE -ne 0) {
+    throw "NuGet vulnerability scan failed; refusing to accept an unverified dependency graph."
+}
+
+try {
+    $vulnerabilityReport = ($vulnerabilityOutput -join [Environment]::NewLine) | ConvertFrom-Json -Depth 100
+}
+catch {
+    throw "NuGet vulnerability scan returned invalid JSON; refusing to accept an unverified dependency graph."
+}
+
+$vulnerablePackages = @()
+foreach ($project in @($vulnerabilityReport.projects)) {
+    foreach ($framework in @($project.frameworks)) {
+        foreach ($packageCollectionName in @("topLevelPackages", "transitivePackages")) {
+            foreach ($package in @($framework.$packageCollectionName)) {
+                foreach ($vulnerability in @($package.vulnerabilities)) {
+                    if ($null -eq $vulnerability -or [string]::IsNullOrWhiteSpace([string]$vulnerability.severity)) {
+                        continue
+                    }
+
+                    $vulnerablePackages += [pscustomobject]@{
+                        Project = $project.path
+                        Framework = $framework.framework
+                        Package = $package.id
+                        ResolvedVersion = $package.resolvedVersion
+                        Severity = $vulnerability.severity
+                        AdvisoryUrl = $vulnerability.advisoryurl
+                    }
+                }
+            }
+        }
+    }
+}
+
+if ($vulnerablePackages.Count -gt 0) {
+    $vulnerablePackages |
+        Sort-Object Severity, Package, ResolvedVersion |
+        Format-Table Project, Framework, Package, ResolvedVersion, Severity, AdvisoryUrl -AutoSize |
+        Out-String |
+        Write-Host
+    throw "Known vulnerable NuGet packages were detected. Update affected dependencies; do not suppress NuGet Audit."
+}
+
+Write-Host "DEPENDENCY_VULNERABILITY_SCAN_PASSED=true"
 Invoke-Checked $dotnetPath @("build","GameNet.slnx","--configuration","Release","--no-restore")
 Invoke-Checked $dotnetPath @("test","GameNet.slnx","--configuration","Release","--no-build","--no-restore")
 Write-Host "FOUNDATION BUILD/TEST VERIFICATION PASSED."
