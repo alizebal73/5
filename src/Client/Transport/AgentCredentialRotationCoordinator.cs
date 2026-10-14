@@ -108,6 +108,10 @@ public sealed class AgentCredentialRotationCoordinator(
         {
             response = await client.SendAsync(request, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             throw new InvalidOperationException(
@@ -144,6 +148,10 @@ public sealed class AgentCredentialRotationCoordinator(
         try
         {
             response = await client.SendAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
