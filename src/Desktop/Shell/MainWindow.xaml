@@ -112,7 +112,7 @@
                 </Border>
               </Expander>
               <Expander Grid.Row="3" Header="{DynamicResource Session.WorkflowTitle}" Margin="0,0,0,10">
-                <sessions:SessionWorkflowView />
+                <sessions:SessionWorkflowView DataContext="{Binding SessionWorkflow}" />
               </Expander>
               <stations:StationBoardView Grid.Row="4" />
             </Grid>
