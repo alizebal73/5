@@ -50,6 +50,9 @@ public sealed class AgentCredentialRotationPostgresTests
                 var service = CreateService(requestDb, now);
                 var requested = await service.RequestRotationAsync(new AgentCredentialRotateRequest(deviceId, operationId));
                 Assert.Equal("requested", requested.State);
+                var requestReplay = await service.RequestRotationAsync(new AgentCredentialRotateRequest(deviceId, operationId));
+                Assert.Equal("requested", requestReplay.State);
+                Assert.Equal(requested.ExpiresAtUtc, requestReplay.ExpiresAtUtc);
             }
 
             await using (var stageDb = new GameNetDbContext(options))
@@ -182,6 +185,11 @@ public sealed class AgentCredentialRotationPostgresTests
                     x => x.DeviceId == deviceId && x.RotationOperationId == operationId));
                 Assert.Single(await verifyDb.AgentCredentials.Where(
                     x => x.DeviceId == deviceId && x.RevokedAtUtc == null && !x.IsPendingRotation).ToListAsync());
+
+                var sameExpiredOperation = await service.RequestRotationAsync(
+                    new AgentCredentialRotateRequest(deviceId, operationId));
+                Assert.Equal("expired", sameExpiredOperation.State);
+                Assert.Null(await service.GetRequestedRotationOperationIdAsync(deviceId, oldCredentialId));
             }
         }
         finally
