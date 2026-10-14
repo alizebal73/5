@@ -96,14 +96,13 @@ public sealed class AgentCredentialService(
                         priorCurrent.RotationRequestedAtUtc.Value + RotationLifetime);
                 }
 
-                if (priorCurrent?.RotationRequestedOperationId == request.OperationId &&
-                    priorCurrent.RotationRequestedAtUtc.HasValue)
+                if (priorCurrent?.RotationRequestedOperationId == request.OperationId)
                 {
                     priorCurrent.ClearRotationRequest();
                     auditWriter.Append(new AuditRecord(
                         now, "System", request.DeviceId, "AgentCredential.RotationExpired",
                         "AgentCredential", priorCurrent.Id.ToString("N"),
-                        "An expired unstaged Agent credential rotation request was retired; the prior credential was retained.",
+                        "An expired or incomplete unstaged Agent credential rotation request was retired; the prior credential was retained.",
                         "foundation", "Server", "Expired"));
                 }
 
@@ -219,20 +218,20 @@ public sealed class AgentCredentialService(
             // explicit expired state only after proving that this prior credential is
             // still the active one. The Agent will independently verify the old secret
             // through /auth/token before it deletes local pending state.
-            if (current.RotationRequestedOperationId != request.OperationId ||
-                !current.RotationRequestedAtUtc.HasValue)
+            if (current.RotationRequestedOperationId != request.OperationId)
             {
                 return new AgentCredentialRotationStageResponse(
                     request.OperationId, request.DeviceId, "expired", null);
             }
 
-            if (current.RotationRequestedAtUtc.Value + RotationLifetime <= now)
+            if (!current.RotationRequestedAtUtc.HasValue ||
+                current.RotationRequestedAtUtc.Value + RotationLifetime <= now)
             {
                 current.ClearRotationRequest();
                 auditWriter.Append(new AuditRecord(
                     now, "System", request.DeviceId, "AgentCredential.RotationExpired",
                     "AgentCredential", current.Id.ToString("N"),
-                    "An unstaged Agent credential rotation request expired; the prior credential was retained.",
+                    "An expired or incomplete unstaged Agent credential rotation request was retired; the prior credential was retained.",
                     "foundation", "Server", "Expired"));
                 return new AgentCredentialRotationStageResponse(
                     request.OperationId, request.DeviceId, "expired", null);
