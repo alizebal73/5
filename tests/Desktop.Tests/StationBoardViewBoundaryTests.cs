@@ -11,14 +11,36 @@ public sealed class StationBoardViewBoundaryTests
         "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Fact]
-    public void Main_window_hosts_station_board_at_original_row_and_keeps_shell_responsibilities()
+    public void Main_window_plugs_feature_views_into_distinct_valid_rows_and_keeps_shell_responsibilities()
     {
         var root = FindRepositoryRoot();
         var mainPath = Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml");
         var main = XDocument.Load(mainPath);
 
         var host = Assert.Single(main.Descendants(), element => element.Name.LocalName == "StationBoardView");
-        Assert.Equal("3", (string?)host.Attribute("Grid.Row"));
+        var stationRowText = (string?)host.Attribute("Grid.Row");
+        Assert.NotNull(stationRowText);
+        Assert.True(int.TryParse(stationRowText, out var stationRow));
+
+        var hostGrid = host.Parent;
+        Assert.NotNull(hostGrid);
+        Assert.Equal("Grid", hostGrid!.Name.LocalName);
+        var rowDefinitions = hostGrid.Elements()
+            .Where(element => element.Name.LocalName == "Grid.RowDefinitions")
+            .SelectMany(element => element.Elements())
+            .Count(element => element.Name.LocalName == "RowDefinition");
+        Assert.True(rowDefinitions > 0);
+        Assert.InRange(stationRow, 0, rowDefinitions - 1);
+
+        var sessionHost = Assert.Single(main.Descendants(),
+            element => element.Name.LocalName == "Expander" &&
+                       element.Descendants().Any(child => child.Name.LocalName == "SessionWorkflowView"));
+        var sessionRowText = (string?)sessionHost.Attribute("Grid.Row");
+        Assert.NotNull(sessionRowText);
+        Assert.True(int.TryParse(sessionRowText, out var sessionRow));
+        Assert.InRange(sessionRow, 0, rowDefinitions - 1);
+        Assert.NotEqual(stationRow, sessionRow);
+
         Assert.Equal("clr-namespace:GameNet.Desktop.Features.Stations",
             (string?)main.Root?.Attribute(XNamespace.Xmlns + "stations"));
 
