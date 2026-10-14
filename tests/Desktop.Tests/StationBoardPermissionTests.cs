@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
 using GameNet.Desktop.Features.Stations;
+using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
