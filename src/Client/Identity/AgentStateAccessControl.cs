@@ -54,6 +54,21 @@ internal static class AgentStateAccessControl
     }
 
     [SupportedOSPlatform("windows")]
+    public static void ValidatePendingCredentialRotationFile(string configuredRoot, string pendingPath)
+    {
+        ValidateProductionStateRoot(configuredRoot);
+        var expectedPath = Path.GetFullPath(Path.Combine(configuredRoot, "credential-rotation.pending.dpapi"));
+        if (!string.Equals(Path.GetFullPath(pendingPath), expectedPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Production Agent rotation state must use its canonical ProgramData filename.");
+        if (!File.Exists(expectedPath))
+            return;
+
+        RejectReparsePoint(expectedPath, expectedDirectory: false);
+        var agentSid = GetAgentServiceSid();
+        ValidateExactAcl(expectedPath, isDirectory: false, AgentStateDirectoryRights(agentSid.Value));
+    }
+
+    [SupportedOSPlatform("windows")]
     private static SecurityIdentifier GetAgentServiceSid() =>
         (SecurityIdentifier)new NTAccount("NT SERVICE", ServiceName).Translate(typeof(SecurityIdentifier));
 
