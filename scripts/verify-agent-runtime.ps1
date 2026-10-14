@@ -1,8 +1,16 @@
  $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
-if (-not (Test-Path $dotnet)) { $dotnet = (Get-Command dotnet -ErrorAction Stop).Source }
+$dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+if ($null -ne $dotnetCommand -and -not [string]::IsNullOrWhiteSpace($dotnetCommand.Source)) {
+    $dotnet = $dotnetCommand.Source
+}
+else {
+    $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+}
+if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
+    throw "The required dotnet SDK executable was not found on PATH or under Program Files."
+}
 
 function Get-ConnectionValue([System.Data.Common.DbConnectionStringBuilder]$builder, [string[]]$names) {
     foreach ($name in $names) {
