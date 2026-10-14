@@ -206,8 +206,7 @@ public sealed class OperatorManagementAuditReasonTests
                 Repository,
                 new FakeIdentityRepository(),
                 new FakePasswordHasher(),
-                new InlineTransactionCoordinator(),
-                new FakeIdempotencyStore(),
+                new CommandMutationPipeline(new InlineTransactionCoordinator(), new FakeIdempotencyStore()),
                 new JsonRequestFingerprint(),
                 Audit,
                 new FixedClock(DateTimeOffset.Parse("2026-10-13T12:00:00Z")));

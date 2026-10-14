@@ -12,8 +12,7 @@ public sealed class OperatorManagementService(
     IOperatorManagementRepository repository,
     IIdentityRepository identityRepository,
     IPasswordHasher passwordHasher,
-    ITransactionCoordinator transactions,
-    IIdempotencyStore idempotency,
+    CommandMutationPipeline mutationPipeline,
     IRequestFingerprint requestFingerprint,
     IAuditWriter audit,
     IGameClock clock)
@@ -309,33 +308,18 @@ public sealed class OperatorManagementService(
     private async Task<Result<T>> MutateAsync<T>(string operation, string key, object payload, IdentityActor actor, int status,
         Func<CancellationToken, Task<Result<T>>> action, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
-            return Fail<T>("idempotency.required", "A valid Idempotency-Key is required.");
         var scope = $"identity.{operation}:{actor.UserId:D}";
         var hash = requestFingerprint.Compute(payload);
         try
         {
-            return await transactions.ExecuteAsync(async token =>
-            {
-                var claim = await idempotency.TryClaimAsync(scope, key.Trim(), operation, hash,
-                    TimeSpan.FromSeconds(30), TimeSpan.FromDays(1), token);
-                if (claim.Completed && claim.ResponseJson is not null)
-                {
-                    var replay = JsonSerializer.Deserialize<T>(claim.ResponseJson);
-                    return replay is null ? Fail<T>("idempotency.invalid_replay", "Saved operation response is invalid.") : Result<T>.Success(replay);
-                }
-                if (claim.InFlight) throw new AbortMutation(new Error("idempotency.in_flight", "Operation is already in progress."));
-                if (!claim.Claimed || string.IsNullOrWhiteSpace(claim.LeaseToken))
-                    throw new AbortMutation(new Error("idempotency.unavailable", "Operation could not be claimed."));
-                var result = await action(token);
-                if (!result.IsSuccess) throw new AbortMutation(result.Error);
-                await idempotency.CompleteAsync(scope, key.Trim(), claim.LeaseToken, status, JsonSerializer.Serialize(result.Value), token);
-                return result;
-            }, ct);
+            return await mutationPipeline.ExecuteAsync(
+                scope, operation, key, hash, status,
+                TimeSpan.FromSeconds(30), TimeSpan.FromDays(1), action, ct);
         }
-        catch (AbortMutation ex) { return Fail<T>(ex.Error.Code, ex.Error.Message); }
-        catch (IdempotencyKeyConflictException) { return Fail<T>("idempotency.key_reused", "Idempotency-Key was used for a different request."); }
-        catch (PersistenceConflictException) { return Fail<T>("identity.conflict", "The requested identity change conflicts with current data."); }
+        catch (PersistenceConflictException)
+        {
+            return Fail<T>("identity.conflict", "The requested identity change conflicts with current data.");
+        }
     }
 
     private static string? NormalizeRequiredReason(string? reason)
@@ -369,5 +353,4 @@ public sealed class OperatorManagementService(
         .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
     private static readonly HashSet<string> PermissionSet = new(PermissionCatalog, StringComparer.Ordinal);
     private static Result<T> Fail<T>(string code, string message) => Result<T>.Failure(new Error(code, message));
-    private sealed class AbortMutation(Error error) : Exception(error.Code) { public Error Error { get; } = error; }
 }

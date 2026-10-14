@@ -298,8 +298,7 @@ public sealed class OperatorManagementPostgresTests
             repository ?? new EfOperatorManagementRepository(db),
             new EfIdentityRepository(db),
             new Pbkdf2PasswordHasher(),
-            new EfTransactionCoordinator(db),
-            new EfIdempotencyStore(db, clock),
+            new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock)),
             new HmacRequestFingerprint(new TestFingerprintSecret(FingerprintKey)),
             new EfAuditWriter(db),
             clock);

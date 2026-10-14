@@ -9,7 +9,7 @@ using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Primitives;
 
 namespace GameNet.Server.Modules.Stations.Application;
-public sealed class StationService(IStationRepository repository, ITransactionCoordinator transactions, IIdempotencyStore idempotency,
+public sealed class StationService(IStationRepository repository, CommandMutationPipeline mutationPipeline,
     IAuditWriter audit, IGameClock clock)
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
@@ -83,32 +83,22 @@ public sealed class StationService(IStationRepository repository, ITransactionCo
     private async Task<Result<T>> Mutate<T>(string op, string key, object payload, StationActorContext actor, int status,
         Func<CancellationToken, Task<Result<T>>> action, CancellationToken ct)
     {
-        if (!actor.Permissions.Contains(Permissions.StationsOperate)) return Fail<T>("stations.forbidden", "Not allowed to change stations.");
-        if (string.IsNullOrWhiteSpace(key) || key.Length > 200) return Fail<T>("idempotency.required", "A valid Idempotency-Key is required.");
+        if (!actor.Permissions.Contains(Permissions.StationsOperate))
+            return Fail<T>("stations.forbidden", "Not allowed to change stations.");
+
         var scope = $"stations.{op}:{actor.ActorId ?? "unknown"}";
+        // Keep the established SHA-256 fingerprint for retained Station idempotency records.
+        // New module commands should use IRequestFingerprint; changing this legacy format
+        // requires a separately tested replay-compatibility transition.
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload))));
         try
         {
-            return await transactions.ExecuteAsync(async token =>
-            {
-                var claim = await idempotency.TryClaimAsync(scope, key.Trim(), op, hash, Lease, Retention, token);
-                if (claim.Completed && claim.ResponseJson is not null)
-                {
-                    var replay = JsonSerializer.Deserialize<T>(claim.ResponseJson);
-                    return replay is null ? Fail<T>("idempotency.invalid_replay", "Saved operation response is invalid.") : Result<T>.Success(replay);
-                }
-                if (claim.InFlight) throw new AbortMutation(new Error("idempotency.in_flight", "Operation is already in progress."));
-                if (!claim.Claimed || string.IsNullOrWhiteSpace(claim.LeaseToken))
-                    throw new AbortMutation(new Error("idempotency.unavailable", "Operation could not be claimed."));
-                var result = await action(token);
-                if (!result.IsSuccess) throw new AbortMutation(result.Error);
-                await idempotency.CompleteAsync(scope, key.Trim(), claim.LeaseToken, status, JsonSerializer.Serialize(result.Value), token);
-                return result;
-            }, ct);
+            return await mutationPipeline.ExecuteAsync(scope, op, key, hash, status, Lease, Retention, action, ct);
         }
-        catch (AbortMutation ex) { return Fail<T>(ex.Error.Code, ex.Error.Message); }
-        catch (IdempotencyKeyConflictException) { return Fail<T>("idempotency.key_reused", "Idempotency-Key was used for a different request."); }
-        catch (PersistenceConflictException) { return Fail<T>("stations.conflict", "A station code or Agent binding conflicts with another record."); }
+        catch (PersistenceConflictException)
+        {
+            return Fail<T>("stations.conflict", "A station code or Agent binding conflicts with another record.");
+        }
     }
 
     private async Task<StationDto> ReadDto(Station s, CancellationToken ct)
@@ -136,5 +126,4 @@ public sealed class StationService(IStationRepository repository, ITransactionCo
     private static Result<T> Fail<T>(string code, string message) => Result<T>.Failure(new Error(code, message));
     private static Result<IReadOnlyList<StationDto>> FailList(string code, string message) =>
         Result<IReadOnlyList<StationDto>>.Failure(new Error(code, message));
-    private sealed class AbortMutation(Error error) : Exception(error.Code) { public Error Error { get; } = error; }
 }
