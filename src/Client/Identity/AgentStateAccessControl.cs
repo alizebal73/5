@@ -54,6 +54,21 @@ internal static class AgentStateAccessControl
     }
 
     [SupportedOSPlatform("windows")]
+    public static void ValidateCredentialFile(string configuredRoot, string credentialPath)
+    {
+        ValidateProductionStateRoot(configuredRoot);
+        var expectedPath = Path.GetFullPath(Path.Combine(configuredRoot, "credential.bin"));
+        if (!string.Equals(Path.GetFullPath(credentialPath), expectedPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Production Agent credential must use its canonical ProgramData filename.");
+        if (!File.Exists(expectedPath))
+            return;
+
+        RejectReparsePoint(expectedPath, expectedDirectory: false);
+        var agentSid = GetAgentServiceSid();
+        ValidateExactAcl(expectedPath, isDirectory: false, AgentStateDirectoryRights(agentSid.Value));
+    }
+
+    [SupportedOSPlatform("windows")]
     public static void ValidatePendingCredentialRotationFile(string configuredRoot, string pendingPath)
     {
         ValidateProductionStateRoot(configuredRoot);
