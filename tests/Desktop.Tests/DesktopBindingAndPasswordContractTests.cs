@@ -186,14 +186,17 @@ public sealed class DesktopBindingAndPasswordContractTests
         var itemsControl = dataTemplate.Ancestors()
             .FirstOrDefault(element => element.Name.LocalName is "ListBox" or "ComboBox");
         var itemsSource = (string?)itemsControl?.Attribute("ItemsSource") ?? string.Empty;
+        var match = Regex.Match(itemsSource, @"\{Binding\s+([^,}]+)");
+        var bindingPath = match.Success ? match.Groups[1].Value.Trim() : string.Empty;
+        var memberName = bindingPath.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
 
-        if (itemsSource.EndsWith("Tariffs", StringComparison.Ordinal))
+        if (string.Equals(memberName, "Tariffs", StringComparison.Ordinal))
             return typeof(TariffResponse);
-        if (itemsSource.EndsWith("ActiveSessions", StringComparison.Ordinal))
+        if (string.Equals(memberName, "ActiveSessions", StringComparison.Ordinal))
             return typeof(SessionResponse);
-        if (itemsSource.EndsWith("PendingInvoices", StringComparison.Ordinal))
+        if (string.Equals(memberName, "PendingInvoices", StringComparison.Ordinal))
             return typeof(InvoicePreviewResponse);
-        if (itemsSource.EndsWith("VisibleStations", StringComparison.Ordinal))
+        if (string.Equals(memberName, "VisibleStations", StringComparison.Ordinal))
             return typeof(StationBoardItem);
 
         throw new InvalidOperationException(
