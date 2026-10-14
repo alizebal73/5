@@ -713,6 +713,21 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasConstraintName("fk_billing_ledger_entries_payments_payment_id");
                 });
 
+            modelBuilder.Entity("GameNet.Server.Modules.Stations.Domain.Station", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<string>("AgentDeviceId").HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("agent_device_id");
+                    b.Property<string>("Code").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("code");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)").HasColumnName("name");
+                    b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
+                    b.Property<int>("Type").HasColumnType("integer").HasColumnName("type");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
+                    b.HasKey("Id").HasName("pk_stations");
+                    b.HasIndex("AgentDeviceId").IsUnique().HasDatabaseName("ix_stations_agent_device_id").HasFilter("agent_device_id IS NOT NULL");
+                    b.HasIndex("Code").IsUnique().HasDatabaseName("ix_stations_code");
+                    b.ToTable("stations", (string)null);
+                });
+
 #pragma warning restore 612, 618
         }
     }
