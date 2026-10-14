@@ -319,6 +319,107 @@ try {
 
     Assert-FoundationSchema $env:GAMENET_DATABASE_CONNECTION
 
+    # Exercise the Down path of the new Agent rotation migration on the disposable
+    # clean-cluster database. A real in-flight rotation used to make the legacy
+    # unique active-device index fail on downgrade; the migration must revoke and
+    # audit pending material before dropping the staged-rotation columns.
+    $rollbackConnection = Get-NpgsqlBuilder $env:GAMENET_DATABASE_CONNECTION
+    $rollbackCli = @(
+        "--host=$($rollbackConnection.Host)",
+        "--port=$($rollbackConnection.Port)",
+        "--username=$($rollbackConnection.Username)",
+        "--dbname=$($rollbackConnection.Database)"
+    )
+    $rollbackDeviceId = "rollback-probe-" + [Guid]::NewGuid().ToString("N")
+    $rollbackPriorCredentialId = [Guid]::NewGuid()
+    $rollbackPendingCredentialId = [Guid]::NewGuid()
+    $rollbackOperationId = [Guid]::NewGuid()
+    $rollbackCorrelationId = [Guid]::NewGuid().ToString("N")
+    $rollbackPriorHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes([Guid]::NewGuid().ToString("N"))))
+    $rollbackPendingHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes([Guid]::NewGuid().ToString("N"))))
+    $rollbackOperationReference = $rollbackOperationId.ToString("N")
+    $rollbackPreviousMigration = "20261012100000_OutboxDeliveryReliability"
+    $rollbackSeedSql = @"
+INSERT INTO agent_credentials (
+    id, device_id, secret_hash, created_at_utc,
+    is_pending_rotation, rotation_operation_id, replaces_credential_id,
+    rotation_expires_at_utc, rotation_requested_operation_id, rotation_requested_at_utc)
+VALUES (
+    '$rollbackPriorCredentialId', '$rollbackDeviceId', '$rollbackPriorHash', clock_timestamp(),
+    FALSE, NULL, NULL, NULL, '$rollbackOperationId', clock_timestamp()),
+    ('$rollbackPendingCredentialId', '$rollbackDeviceId', '$rollbackPendingHash', clock_timestamp(),
+    TRUE, '$rollbackOperationId', '$rollbackPriorCredentialId', clock_timestamp() + interval '5 minutes',
+    NULL, NULL);
+
+INSERT INTO audit_entries (
+    id, occurred_at_utc, actor_type, actor_id, operation, reference_type, reference_id,
+    reason, correlation_id, source, outcome)
+VALUES (
+    gen_random_uuid(), clock_timestamp(), 'System', '$rollbackDeviceId',
+    'AgentCredential.RotationRequested', 'AgentCredentialRotationRequest', '$rollbackOperationReference',
+    'Disposable migration rollback probe.', '$rollbackCorrelationId', 'foundation-test', 'Accepted');
+"@
+    $rollbackSeedResult = ((& $psql @rollbackCli "--set=ON_ERROR_STOP=1" "--command=$rollbackSeedSql" 2>&1) -join [Environment]::NewLine)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not seed the disposable in-flight Agent rotation rollback probe."
+    }
+
+    & $dotnetPath @(@("ef", "database", "update", $rollbackPreviousMigration) + $efOptions)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Database downgrade with an in-flight Agent credential rotation failed."
+    }
+
+    $rollbackVerifySql = @"
+SELECT CASE WHEN
+    (SELECT COUNT(*) FROM agent_credentials
+     WHERE device_id = '$rollbackDeviceId' AND revoked_at_utc IS NULL) = 1
+    AND
+    (SELECT COUNT(*) FROM agent_credentials
+     WHERE id = '$rollbackPendingCredentialId' AND revoked_at_utc IS NOT NULL) = 1
+    AND
+    (SELECT COUNT(*) FROM audit_entries
+     WHERE operation = 'AgentCredential.RotationCancelledByRollback'
+       AND reference_id = '$rollbackPendingCredentialId') = 1
+    AND
+    (SELECT COUNT(*) FROM audit_entries
+     WHERE operation = 'AgentCredential.RotationRequestCancelledByRollback'
+       AND reference_id = '$rollbackOperationId') = 1
+    AND
+    (SELECT COUNT(*) FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'agent_credentials'
+       AND column_name = 'is_pending_rotation') = 0
+    THEN 'PASS' ELSE 'FAIL' END;
+"@
+    $rollbackResult = ((& $psql @rollbackCli "--set=ON_ERROR_STOP=1" "--tuples-only" "--no-align" "--command=$rollbackVerifySql" 2>&1) -join "").Trim()
+    if ($LASTEXITCODE -ne 0 -or $rollbackResult -ne "PASS") {
+        throw "Agent credential migration rollback did not preserve the prior credential and audit cancellation of staged state."
+    }
+
+    & $dotnetPath @(@("ef", "database", "update") + $efOptions)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not reapply the latest schema after the Agent credential rollback probe."
+    }
+    & $dotnetPath @(@("ef", "migrations", "has-pending-model-changes") + $efOptions)
+    if ($LASTEXITCODE -ne 0) {
+        throw "EF model verification failed after rolling the Agent credential migration down and up."
+    }
+
+    Assert-FoundationSchema $env:GAMENET_DATABASE_CONNECTION
+    $rollbackCleanupSql = @"
+DELETE FROM audit_entries
+WHERE actor_id = '$rollbackDeviceId'
+   OR reference_id IN ('$rollbackPendingCredentialId', '$rollbackOperationId');
+DELETE FROM agent_credentials WHERE device_id = '$rollbackDeviceId';
+"@
+    $rollbackCleanup = ((& $psql @rollbackCli "--set=ON_ERROR_STOP=1" "--command=$rollbackCleanupSql" 2>&1) -join [Environment]::NewLine)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not remove the disposable Agent migration rollback probe."
+    }
+    Write-Host "AGENT CREDENTIAL MIGRATION DOWN/UP ROLLBACK VERIFICATION PASSED."
+
     $previousOutboxIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_OUTBOX_POSTGRES_TESTS", "Process")
     try {
         $env:GAMENET_OUTBOX_POSTGRES_TESTS = "true"
@@ -386,6 +487,23 @@ try {
             $env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS = $previousAgentDispatchIntegrationFlag
         }
     }
+
+$previousAgentCredentialRotationIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS", "Process")
+try {
+    $env:GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS = "true"
+    & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~AgentCredentialRotationPostgresTests"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Agent credential-rotation PostgreSQL integration verification failed."
+    }
+}
+finally {
+    if ($null -eq $previousAgentCredentialRotationIntegrationFlag) {
+        Remove-Item Env:GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS = $previousAgentCredentialRotationIntegrationFlag
+    }
+}
 
     & "$PSScriptRoot/verify-identity-runtime.ps1"
     Write-Host "Clean PostgreSQL migration/schema/Idempotency/Outbox/Agent-dispatch/Identity runtime verification passed."
