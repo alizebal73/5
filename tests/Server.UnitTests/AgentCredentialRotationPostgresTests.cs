@@ -322,6 +322,7 @@ public sealed class AgentCredentialRotationPostgresTests
 
         var deviceId = "rotation-concurrent-" + Guid.NewGuid().ToString("N");
         var operationIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var operationReferences = operationIds.Select(id => id.ToString("N")).ToArray();
         var currentSecret = GenerateSecret();
         var oldCredentialId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -364,8 +365,8 @@ public sealed class AgentCredentialRotationPostgresTests
                 Task.Run(() => RequestAsync(options, deviceId, operationIds[0], now)),
                 Task.Run(() => RequestAsync(options, deviceId, operationIds[1], now)));
 
-            Assert.Single(outcomes.Where(outcome => outcome == "requested"));
-            Assert.Single(outcomes.Where(outcome => outcome == "agent.rotation_in_progress"));
+            Assert.Single(outcomes, outcome => outcome == "requested");
+            Assert.Single(outcomes, outcome => outcome == "agent.rotation_in_progress");
 
             await using (var verify = new GameNetDbContext(options))
             {
@@ -376,7 +377,7 @@ public sealed class AgentCredentialRotationPostgresTests
                 Assert.Equal(1, await verify.AuditEntries.CountAsync(x =>
                     x.ReferenceType == "AgentCredentialRotationRequest" &&
                     x.ReferenceId != null &&
-                    operationIds.Select(id => id.ToString("N")).Contains(x.ReferenceId)));
+                    operationReferences.Contains(x.ReferenceId)));
                 Assert.False(await verify.AgentCredentials.AnyAsync(
                     x => x.DeviceId == deviceId && x.IsPendingRotation && x.RevokedAtUtc == null));
             }
