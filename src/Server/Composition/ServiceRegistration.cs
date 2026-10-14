@@ -12,6 +12,8 @@ using GameNet.Server.Modules.Identity.Application;
 using GameNet.Server.Infrastructure.Persistence.Identity;
 using GameNet.Server.Infrastructure.Persistence.Stations;
 using GameNet.Server.Modules.Stations.Application;
+using GameNet.Server.Modules.Sessions.Application;
+using GameNet.Server.Modules.Tariffs.Application;
 using GameNet.Server.Modules.Identity.Infrastructure.Security;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +60,8 @@ public static class ServiceRegistration
         services.AddScoped<OperatorManagementService>();
         services.AddScoped<IStationRepository, EfStationRepository>();
         services.AddScoped<StationService>();
+        services.AddScoped<ISessionService, SessionService>();
+        services.AddScoped<ITariffService, TariffService>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IAgentAccessTokenIssuer, AgentAccessTokenIssuer>();
