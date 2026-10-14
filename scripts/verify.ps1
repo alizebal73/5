@@ -50,6 +50,15 @@ catch {
     throw "NuGet vulnerability scan returned invalid JSON; refusing to accept an unverified dependency graph."
 }
 
+if ($vulnerabilityReport.version -ne 1 -or @($vulnerabilityReport.projects).Count -eq 0) {
+    throw "NuGet vulnerability scan returned an unsupported or incomplete report; refusing to accept an unverified dependency graph."
+}
+$scanProblems = @($vulnerabilityReport.problems)
+if ($scanProblems.Count -gt 0) {
+    $scanProblems | ConvertTo-Json -Depth 10 | Write-Host
+    throw "NuGet vulnerability scan reported source or analysis problems; refusing to accept an unverified dependency graph."
+}
+
 $vulnerablePackages = @()
 foreach ($project in @($vulnerabilityReport.projects)) {
     foreach ($framework in @($project.frameworks)) {
