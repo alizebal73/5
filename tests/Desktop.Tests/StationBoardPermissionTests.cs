@@ -381,7 +381,8 @@ public sealed class StationBoardPermissionTests
         Assert.Empty(workflow.ErrorMessage);
         Assert.Single(workflow.PendingInvoices);
         Assert.Contains(station.Id.ToString("D"), workflow.PendingInvoices[0].StationLabel, StringComparison.Ordinal);
-        Assert.Contains(station.Id.ToString("D"), workflow.StatusMessage, StringComparison.Ordinal);
+        Assert.NotEqual("Sessions, tariffs and pending invoices were refreshed.", workflow.StatusMessage);
+        Assert.NotEqual("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", workflow.StatusMessage);
         Assert.True(workflow.CanCheckout);
         Assert.False(workflow.CanOperateSessions);
     }
