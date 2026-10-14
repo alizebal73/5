@@ -116,6 +116,13 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(0, await db.Payments.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
                 Assert.Equal(0, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
 
+                var blockedStart = await service.StartAsync(
+                    new StartSessionCommand(
+                        stationId, tariffId, null, idempotencyPrefix + "start-before-settlement", actor),
+                    CancellationToken.None);
+                Assert.False(blockedStart.IsSuccess);
+                Assert.Equal("sessions.station_pending_settlement", blockedStart.Error.Code);
+
                 var checkoutCommand = new CashCheckoutCommand(
                     ended.Value.InvoiceId, 50_000L, ended.Value.SessionVersion, checkoutKey, billingActor);
                 var pendingList = await billing.ListPendingInvoicesAsync(billingActor, CancellationToken.None);
