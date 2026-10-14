@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using GameNet.Server.Infrastructure.Observability;
-using GameNet.Server.Modules.Sessions.Application;
+using GameNet.Server.Modules.Billing.Application;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Primitives;
@@ -14,11 +16,11 @@ public static class BillingEndpoints
         var group = endpoints.MapGroup("/api/v1/billing").RequireAuthorization("Operator");
 
         group.MapGet("/pending", async (
-            ISessionService service,
+            IBillingService service,
             HttpContext context,
             CancellationToken cancellationToken) =>
         {
-            if (!SessionEndpoints.TryGetActor(context, out var actor))
+            if (!TryGetActor(context, out var actor))
                 return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
 
             var result = await service.ListPendingInvoicesAsync(actor, cancellationToken);
@@ -30,21 +32,45 @@ public static class BillingEndpoints
         group.MapPost("/invoices/{invoiceId:guid}/cash", async (
             Guid invoiceId,
             CashCheckoutRequest request,
-            ISessionService service,
+            IBillingService service,
             HttpContext context,
             CancellationToken cancellationToken) =>
         {
-            if (!SessionEndpoints.TryGetActor(context, out var actor))
+            if (!TryGetActor(context, out var actor))
                 return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
 
             var command = new CashCheckoutCommand(
-                invoiceId, request.AmountReceivedToman, request.ExpectedSessionVersion,
-                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+                invoiceId,
+                request.AmountReceivedToman,
+                request.ExpectedSessionVersion,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(),
+                actor);
             var result = await service.CheckoutCashAsync(command, cancellationToken);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CashCheckoutResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.BillingWrite);
+    }
+
+    private static bool TryGetActor(HttpContext context, out BillingActorContext actor)
+    {
+        var id = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue("sub");
+        if (!Guid.TryParse(id, out var operatorId) || operatorId == Guid.Empty)
+        {
+            actor = null!;
+            return false;
+        }
+
+        var permissions = context.User.Claims
+            .Where(x => string.Equals(x.Type, "permission", StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        actor = new BillingActorContext(
+            operatorId,
+            CorrelationIdMiddleware.GetCurrent(context),
+            "Desktop",
+            permissions);
+        return true;
     }
 
     private static IResult Failure(Error error, HttpContext context)
