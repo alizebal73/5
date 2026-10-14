@@ -164,7 +164,7 @@ public sealed class SessionService(
                         command.Actor.OperatorId, endedAt);
                     await db.Invoices.AddAsync(invoice, token);
 
-                    var response = ToPreview(invoice);
+                    var response = ToPreview(invoice, session.Version);
                     audit.Append(new AuditRecord(
                         clock.UtcNow, "Operator", command.Actor.OperatorId.ToString("D"),
                         "sessions.end", "Session", session.Id.ToString("D"), null,
@@ -233,7 +233,7 @@ public sealed class SessionService(
                     var ledger = BillingLedgerEntry.RecordCashSale(
                         Guid.NewGuid(), invoice.Id, payment.Id, invoice.AmountToman,
                         command.Actor.OperatorId, paidAt);
-                    var before = ToPreview(invoice);
+                    var before = ToPreview(invoice, session.Version);
 
                     try
                     {
@@ -295,8 +295,11 @@ public sealed class SessionService(
 
         var rows = await db.Invoices.AsNoTracking()
             .Where(x => x.Status == InvoiceStatus.PendingPayment)
-            .OrderBy(x => x.IssuedAtUtc).ToArrayAsync(cancellationToken);
-        return Result<IReadOnlyList<InvoicePreviewResponse>>.Success(rows.Select(ToPreview).ToArray());
+            .Join(db.Sessions.AsNoTracking(), invoice => invoice.SessionId, session => session.Id,
+                (invoice, session) => new { Invoice = invoice, SessionVersion = session.Version })
+            .OrderBy(x => x.Invoice.IssuedAtUtc).ToArrayAsync(cancellationToken);
+        return Result<IReadOnlyList<InvoicePreviewResponse>>.Success(
+            rows.Select(x => ToPreview(x.Invoice, x.SessionVersion)).ToArray());
     }
 
     private static SessionResponse ToResponse(Session session) =>
@@ -305,8 +308,8 @@ public sealed class SessionService(
             session.StartedByOperatorId, session.StartedAtUtc, session.EndedByOperatorId, session.EndedAtUtc,
             session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version);
 
-    private static InvoicePreviewResponse ToPreview(Invoice invoice) =>
-        new(invoice.Id, invoice.SessionId, invoice.StationId, invoice.CustomerId, invoice.TariffId,
+    private static InvoicePreviewResponse ToPreview(Invoice invoice, int sessionVersion) =>
+        new(invoice.Id, invoice.SessionId, sessionVersion, invoice.StationId, invoice.CustomerId, invoice.TariffId,
             invoice.TariffCodeSnapshot, invoice.TariffNameSnapshot, invoice.TariffHourlyRateTomanSnapshot,
             invoice.ElapsedTicks, invoice.AmountToman, (InvoiceStatusContract)invoice.Status,
             invoice.IssuedAtUtc, invoice.PaidAtUtc);
