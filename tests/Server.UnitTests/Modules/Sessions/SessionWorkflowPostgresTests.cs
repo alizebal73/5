@@ -5,6 +5,7 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Transactions;
+using GameNet.Server.Modules.Billing.Application;
 using GameNet.Server.Modules.Billing.Domain;
 using GameNet.Server.Modules.Billing.Infrastructure;
 using GameNet.Server.Modules.Customers.Infrastructure;
@@ -64,6 +65,8 @@ public sealed class SessionWorkflowPostgresTests
 
                 var service = CreateService(db, clock);
                 var actor = Actor(operatorId, correlation);
+                var billingActor = BillingActor(operatorId, correlation);
+                var billing = CreateBillingService(db, clock);
                 var startCommand = new StartSessionCommand(stationId, tariffId, null, startKey, actor);
 
                 var started = await service.StartAsync(startCommand, CancellationToken.None);
@@ -101,10 +104,10 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(ended.Value.AmountToman, invoiceReplay.Value.AmountToman);
                 Assert.Equal(1, await db.Invoices.CountAsync(x => x.SessionId == started.Value.Id));
 
-                var insufficientCheckout = await service.CheckoutCashAsync(
+                var insufficientCheckout = await billing.CheckoutCashAsync(
                     new CashCheckoutCommand(
                         ended.Value.InvoiceId, 29_999L, ended.Value.SessionVersion,
-                        idempotencyPrefix + "cash-low", actor),
+                        idempotencyPrefix + "cash-low", billingActor),
                     CancellationToken.None);
                 Assert.False(insufficientCheckout.IsSuccess);
                 Assert.Equal("billing.cash_insufficient", insufficientCheckout.Error.Code);
@@ -114,14 +117,18 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(0, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
 
                 var checkoutCommand = new CashCheckoutCommand(
-                    ended.Value.InvoiceId, 50_000L, ended.Value.SessionVersion, checkoutKey, actor);
-                var checkout = await service.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
+                    ended.Value.InvoiceId, 50_000L, ended.Value.SessionVersion, checkoutKey, billingActor);
+                var pendingList = await billing.ListPendingInvoicesAsync(billingActor, CancellationToken.None);
+                Assert.True(pendingList.IsSuccess);
+                Assert.Contains(pendingList.Value, x => x.InvoiceId == ended.Value.InvoiceId && x.SessionVersion == ended.Value.SessionVersion);
+
+                var checkout = await billing.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
                 Assert.True(checkout.IsSuccess, checkout.IsSuccess ? "" : checkout.Error.Code);
                 Assert.Equal(30_000L, checkout.Value.InvoiceAmountToman);
                 Assert.Equal(50_000L, checkout.Value.AmountReceivedToman);
                 Assert.Equal(20_000L, checkout.Value.ChangeGivenToman);
 
-                var checkoutReplay = await service.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
+                var checkoutReplay = await billing.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
                 Assert.True(checkoutReplay.IsSuccess);
                 Assert.Equal(checkout.Value.PaymentId, checkoutReplay.Value.PaymentId);
                 Assert.Equal(checkout.Value.LedgerEntryId, checkoutReplay.Value.LedgerEntryId);
@@ -223,6 +230,22 @@ public sealed class SessionWorkflowPostgresTests
             await CleanupAsync(connectionString, stationId, tariffId, customerB, correlationB, idempotencyPrefix);
         }
     }
+
+    private static BillingService CreateBillingService(GameNetDbContext db, IGameClock clock)
+    {
+        var audit = new EfAuditWriter(db);
+        return new BillingService(
+            db,
+            new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock)),
+            new TestRequestFingerprint(),
+            new SessionSettlement(db, audit, clock),
+            audit,
+            clock);
+    }
+
+    private static BillingActorContext BillingActor(Guid operatorId, string correlation) =>
+        new(operatorId, correlation, "PostgreSQLTest",
+            new HashSet<string>([Permissions.BillingWrite], StringComparer.Ordinal));
 
     private static SessionService CreateService(GameNetDbContext db, IGameClock clock)
     {
