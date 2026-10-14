@@ -54,6 +54,79 @@ internal static class AgentStateAccessControl
     }
 
     [SupportedOSPlatform("windows")]
+    public static void ProtectStateFileForReplacement(
+        string configuredRoot,
+        string temporaryPath,
+        string targetFileName)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException("Production Agent state requires Windows ACLs.");
+        if (string.IsNullOrWhiteSpace(targetFileName) ||
+            targetFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            targetFileName is "." or "..")
+            throw new InvalidOperationException("Agent state target filename is invalid.");
+
+        var root = Path.GetFullPath(configuredRoot);
+        ValidateProductionStateRoot(root);
+        var fullTemporaryPath = Path.GetFullPath(temporaryPath);
+        if (!string.Equals(Path.GetDirectoryName(fullTemporaryPath), root, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Agent state replacement file must be created directly inside the protected Agent directory.");
+
+        var temporaryName = Path.GetFileName(fullTemporaryPath);
+        if (!temporaryName.StartsWith(targetFileName + ".", StringComparison.OrdinalIgnoreCase) ||
+            !temporaryName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(temporaryName, targetFileName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Agent state replacement filename is not a valid temporary file for its target.");
+
+        RejectReparsePoint(fullTemporaryPath, expectedDirectory: false);
+        if (!File.Exists(fullTemporaryPath))
+            throw new FileNotFoundException("Agent state replacement file is unavailable.", fullTemporaryPath);
+
+        var agentSid = GetAgentServiceSid();
+        var security = new FileSecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new FileSystemAccessRule(
+            new SecurityIdentifier("S-1-5-18"), FileSystemRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(
+            new SecurityIdentifier("S-1-5-32-544"), FileSystemRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new FileSystemAccessRule(
+            agentSid, FileSystemRights.Modify, AccessControlType.Allow));
+
+        new FileInfo(fullTemporaryPath).SetAccessControl(security);
+        ValidateExactAcl(fullTemporaryPath, isDirectory: false, AgentStateDirectoryRights(agentSid.Value));
+    }
+
+    [SupportedOSPlatform("windows")]
+    public static void ValidateCredentialFile(string configuredRoot, string credentialPath)
+    {
+        ValidateProductionStateRoot(configuredRoot);
+        var expectedPath = Path.GetFullPath(Path.Combine(configuredRoot, "credential.bin"));
+        if (!string.Equals(Path.GetFullPath(credentialPath), expectedPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Production Agent credential must use its canonical ProgramData filename.");
+        if (!File.Exists(expectedPath))
+            return;
+
+        RejectReparsePoint(expectedPath, expectedDirectory: false);
+        var agentSid = GetAgentServiceSid();
+        ValidateExactAcl(expectedPath, isDirectory: false, AgentStateDirectoryRights(agentSid.Value));
+    }
+
+    [SupportedOSPlatform("windows")]
+    public static void ValidatePendingCredentialRotationFile(string configuredRoot, string pendingPath)
+    {
+        ValidateProductionStateRoot(configuredRoot);
+        var expectedPath = Path.GetFullPath(Path.Combine(configuredRoot, "credential-rotation.pending.dpapi"));
+        if (!string.Equals(Path.GetFullPath(pendingPath), expectedPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Production Agent rotation state must use its canonical ProgramData filename.");
+        if (!File.Exists(expectedPath))
+            return;
+
+        RejectReparsePoint(expectedPath, expectedDirectory: false);
+        var agentSid = GetAgentServiceSid();
+        ValidateExactAcl(expectedPath, isDirectory: false, AgentStateDirectoryRights(agentSid.Value));
+    }
+
+    [SupportedOSPlatform("windows")]
     private static SecurityIdentifier GetAgentServiceSid() =>
         (SecurityIdentifier)new NTAccount("NT SERVICE", ServiceName).Translate(typeof(SecurityIdentifier));
 
