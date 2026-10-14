@@ -38,6 +38,7 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
             .HasFilter("status = 1")
             .HasDatabaseName("ux_sessions_one_active_per_station");
         b.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("ix_sessions_customer_status");
+        b.HasIndex(x => x.TariffId).HasDatabaseName("ix_sessions_tariff_id");
         b.HasIndex(x => x.StartedAtUtc).HasDatabaseName("ix_sessions_started_at_utc");
 
         b.HasOne<Station>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_sessions_stations_station_id");
