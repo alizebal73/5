@@ -37,7 +37,7 @@ Invoke-Checked $dotnetPath @("restore","GameNet.slnx")
 Write-Host "Scanning restored direct and transitive NuGet packages for known vulnerabilities."
 $vulnerabilityOutput = & $dotnetPath @(
     "package", "list", "--project", "GameNet.slnx",
-    "--vulnerable", "--include-transitive", "--format", "json", "--no-restore"
+    "--vulnerable", "--include-transitive", "--format", "json", "--output-version", "1", "--no-restore"
 )
 if ($LASTEXITCODE -ne 0) {
     throw "NuGet vulnerability scan failed; refusing to accept an unverified dependency graph."
