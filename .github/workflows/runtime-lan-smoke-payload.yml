@@ -6,6 +6,14 @@ on:
     branches:
       - "foundation/runtime-*"
       - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
+      - "feature/**"
+      - "feat/**"
+      - "fix/**"
+      - "refactor/**"
+      - "topic/**"
+      - "stage2/**"
+      - "security/**"
     paths:
       - ".github/workflows/runtime-lan-smoke-payload.yml"
       - "GameNet.slnx"

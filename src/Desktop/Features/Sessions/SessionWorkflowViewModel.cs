@@ -13,7 +13,7 @@ using GameNet.Shared.Contracts.V1.Tariffs;
 
 namespace GameNet.Desktop.Features.Sessions;
 
-public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
+public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;

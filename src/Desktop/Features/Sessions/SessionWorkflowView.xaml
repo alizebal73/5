@@ -9,7 +9,7 @@
     <StackPanel>
       <DockPanel Margin="0,0,0,8">
         <Button DockPanel.Dock="Right" Padding="10,5" Content="{DynamicResource Session.Refresh}"
-                Command="{Binding SessionWorkflow.RefreshCommand}"/>
+                Command="{Binding RefreshCommand}"/>
         <StackPanel>
           <TextBlock Text="{DynamicResource Session.WorkflowTitle}" FontSize="17" FontWeight="SemiBold" Foreground="#182230"/>
           <TextBlock Text="{DynamicResource Session.WorkflowSubtitle}" FontSize="11" Foreground="#667085" TextWrapping="Wrap"/>
@@ -17,8 +17,8 @@
       </DockPanel>
       <TextBlock Text="{DynamicResource Session.ControlWarning}" Foreground="#854D0E" Background="#FEF3C7"
                  Padding="8" Margin="0,0,0,8" TextWrapping="Wrap"/>
-      <TextBlock Text="{Binding SessionWorkflow.ErrorMessage}" Foreground="#B42318" TextWrapping="Wrap" Margin="0,0,0,4"/>
-      <TextBlock Text="{Binding SessionWorkflow.StatusMessage}" Foreground="#475467" TextWrapping="Wrap" Margin="0,0,0,8"/>
+      <TextBlock Text="{Binding ErrorMessage}" Foreground="#B42318" TextWrapping="Wrap" Margin="0,0,0,4"/>
+      <TextBlock Text="{Binding StatusMessage}" Foreground="#475467" TextWrapping="Wrap" Margin="0,0,0,8"/>
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="1*"/>
@@ -28,11 +28,11 @@
         <StackPanel Grid.Column="0" Margin="0,0,8,0">
           <TextBlock Text="{DynamicResource Session.StartTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
           <TextBlock Text="{DynamicResource Session.PcStation}" FontSize="12"/>
-          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding SessionWorkflow.PcStations}"
-                    DisplayMemberPath="Code" SelectedItem="{Binding SessionWorkflow.SelectedStation, Mode=TwoWay}"/>
+          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding PcStations}"
+                    DisplayMemberPath="Code" SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
           <TextBlock Text="{DynamicResource Session.Tariff}" FontSize="12"/>
-          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding SessionWorkflow.Tariffs}"
-                    SelectedItem="{Binding SessionWorkflow.SelectedTariff, Mode=TwoWay}">
+          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding Tariffs}"
+                    SelectedItem="{Binding SelectedTariff, Mode=TwoWay}">
             <ComboBox.ItemTemplate>
               <DataTemplate>
                 <StackPanel>
@@ -42,29 +42,29 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <Button Padding="8,6" Content="{DynamicResource Session.Start}" Command="{Binding SessionWorkflow.StartSessionCommand}"/>
+          <Button Padding="8,6" Content="{DynamicResource Session.Start}" Command="{Binding StartSessionCommand}"/>
           <TextBlock Text="{DynamicResource Session.CustomerWalkIn}" FontSize="11" Foreground="#667085"
                      TextWrapping="Wrap" Margin="0,6,0,0"/>
         </StackPanel>
 
         <StackPanel Grid.Column="1" Margin="8,0">
           <TextBlock Text="{DynamicResource Tariff.CreateTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-          <StackPanel Visibility="{Binding SessionWorkflow.CanManageTariffs, Converter={StaticResource BooleanToVisibilityConverter}}">
+          <StackPanel Visibility="{Binding CanManageTariffs, Converter={StaticResource BooleanToVisibilityConverter}}">
             <TextBlock Text="{DynamicResource Tariff.Code}" FontSize="12"/>
-            <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding SessionWorkflow.TariffCode, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding TariffCode, UpdateSourceTrigger=PropertyChanged}"/>
             <TextBlock Text="{DynamicResource Tariff.Name}" FontSize="12"/>
-            <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding SessionWorkflow.TariffName, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding TariffName, UpdateSourceTrigger=PropertyChanged}"/>
             <TextBlock Text="{DynamicResource Tariff.HourlyRate}" FontSize="12"/>
-            <TextBox Margin="0,3,0,5" Padding="5" Text="{Binding SessionWorkflow.HourlyRateText, UpdateSourceTrigger=PropertyChanged}"/>
-            <CheckBox Content="{DynamicResource Tariff.IsDefault}" IsChecked="{Binding SessionWorkflow.IsDefaultTariff}" Margin="0,2,0,8"/>
-            <Button Padding="8,6" Content="{DynamicResource Tariff.Create}" Command="{Binding SessionWorkflow.CreateTariffCommand}"/>
+            <TextBox Margin="0,3,0,5" Padding="5" Text="{Binding HourlyRateText, UpdateSourceTrigger=PropertyChanged}"/>
+            <CheckBox Content="{DynamicResource Tariff.IsDefault}" IsChecked="{Binding IsDefaultTariff}" Margin="0,2,0,8"/>
+            <Button Padding="8,6" Content="{DynamicResource Tariff.Create}" Command="{Binding CreateTariffCommand}"/>
           </StackPanel>
           <TextBlock Text="{DynamicResource Tariff.ManagePermissionRequired}" TextWrapping="Wrap" Foreground="#667085" FontSize="11">
             <TextBlock.Style>
               <Style TargetType="TextBlock">
                 <Setter Property="Visibility" Value="Visible"/>
                 <Style.Triggers>
-                  <DataTrigger Binding="{Binding SessionWorkflow.CanManageTariffs}" Value="True">
+                  <DataTrigger Binding="{Binding CanManageTariffs}" Value="True">
                     <Setter Property="Visibility" Value="Collapsed"/>
                   </DataTrigger>
                 </Style.Triggers>
@@ -75,13 +75,13 @@
 
         <StackPanel Grid.Column="2" Margin="8,0,0,0">
           <TextBlock Text="{DynamicResource Session.ActiveTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
-          <ListBox Height="72" ItemsSource="{Binding SessionWorkflow.ActiveSessions}"
-                   SelectedItem="{Binding SessionWorkflow.SelectedActiveSession, Mode=TwoWay}" DisplayMemberPath="TariffNameSnapshot"/>
+          <ListBox Height="72" ItemsSource="{Binding ActiveSessions}"
+                   SelectedItem="{Binding SelectedActiveSession, Mode=TwoWay}" DisplayMemberPath="TariffNameSnapshot"/>
           <Button Margin="0,5,0,10" Padding="8,5" Content="{DynamicResource Session.End}"
-                  Command="{Binding SessionWorkflow.EndSessionCommand}"/>
+                  Command="{Binding EndSessionCommand}"/>
           <TextBlock Text="{DynamicResource Billing.PendingTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
-          <ListBox Height="72" ItemsSource="{Binding SessionWorkflow.PendingInvoices}"
-                   SelectedItem="{Binding SessionWorkflow.SelectedPendingInvoice, Mode=TwoWay}">
+          <ListBox Height="72" ItemsSource="{Binding PendingInvoices}"
+                   SelectedItem="{Binding SelectedPendingInvoice, Mode=TwoWay}">
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <StackPanel>
@@ -92,8 +92,8 @@
             </ListBox.ItemTemplate>
           </ListBox>
           <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12" Margin="0,7,0,0"/>
-          <TextBox Padding="5" Margin="0,3,0,6" Text="{Binding SessionWorkflow.AmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
-          <Button Padding="8,6" Content="{DynamicResource Billing.Checkout}" Command="{Binding SessionWorkflow.CheckoutCashCommand}"/>
+          <TextBox Padding="5" Margin="0,3,0,6" Text="{Binding AmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+          <Button Padding="8,6" Content="{DynamicResource Billing.Checkout}" Command="{Binding CheckoutCashCommand}"/>
         </StackPanel>
       </Grid>
     </StackPanel>
