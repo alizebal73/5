@@ -5,16 +5,14 @@ public enum AgentReconciliationScope
     LeaseAndIdentity = 1
 }
 
-public sealed record AgentReconciliationRequest(
-    string DeviceId,
-    DateTimeOffset RequestedAtUtc,
-    string Reason);
+public sealed record AgentReconciliationRequest(string DeviceId, DateTimeOffset RequestedAtUtc, string Reason);
 
 public sealed record AgentReconciliationResponse(
     string DeviceId,
     DateTimeOffset ServerTimeUtc,
     int AgentProtocolVersion,
     bool AuthoritativeConnection,
-    AgentReconciliationScope Scope);
+    AgentReconciliationScope Scope,
+    Guid? CredentialRotationOperationId = null);
 
 public sealed record CommandExpiry(DateTimeOffset ExpiresAtUtc);
