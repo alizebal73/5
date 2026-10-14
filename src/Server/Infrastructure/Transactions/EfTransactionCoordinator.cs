@@ -25,14 +25,14 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
                 db.ChangeTracker.Clear();
                 throw new PersistenceConflictException("persistence.unique", ex);
             }
-            catch (PostgresException ex) when (
-                ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
+            catch (Exception ex) when (ContainsRetryableTransactionFailure(ex))
             {
-                // Npgsql may already have completed a transaction after a serialization
-                // failure. Do not explicitly roll it back here: leaving this attempt's
-                // await-using scope disposes the provider transaction, which rolls back
-                // when still active and safely no-ops when the provider already completed it.
-                // This preserves the original PostgreSQL error and allows bounded retry.
+                // EF/Npgsql can wrap SQLSTATE 40001/40P01 in an InvalidOperationException
+                // when a provider execution strategy observes a transient error inside an
+                // explicit serializable transaction. Inspect the full exception chain so
+                // wrapped serialization failures get the same bounded whole-transaction retry.
+                // Do not explicitly roll back here: transaction disposal at the end of this
+                // attempt safely rolls back an active provider transaction.
                 db.ChangeTracker.Clear();
 
                 if (attempt == 3)
@@ -48,6 +48,18 @@ public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransaction
         for (Exception? current = exception; current is not null; current = current.InnerException)
             if (current is PostgresException pg && string.Equals(pg.SqlState, PostgresErrorCodes.UniqueViolation, StringComparison.Ordinal))
                 return true;
+        return false;
+    }
+
+    private static bool ContainsRetryableTransactionFailure(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException pg &&
+                pg.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
+                return true;
+        }
+
         return false;
     }
 }
