@@ -215,6 +215,16 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
         }
     }
 
+    public void NotifyPermissionsChanged()
+    {
+        OnPropertyChanged(nameof(CanManageTariffs));
+        OnPropertyChanged(nameof(CanOperateSessions));
+        OnPropertyChanged(nameof(CanCheckout));
+        OnPropertyChanged(nameof(CanReadStations));
+        OnPropertyChanged(nameof(CanUseWorkspace));
+        RaiseCommands();
+    }
+
     public void Reset()
     {
         PcStations.Clear();
