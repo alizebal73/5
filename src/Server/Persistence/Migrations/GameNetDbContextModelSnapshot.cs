@@ -107,6 +107,11 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasIndex("ReferenceType", "ReferenceId")
                         .HasDatabaseName("IX_audit_entries_ReferenceType_ReferenceId");
 
+                    b.HasIndex("ReferenceType", "ReferenceId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_audit_entries_AgentCredentialRotationRequestOperation")
+                        .HasFilter("reference_type = 'AgentCredentialRotationRequest' AND reference_id IS NOT NULL");
+
                     b.ToTable("audit_entries", (string)null);
                 });
 
@@ -319,44 +324,28 @@ namespace GameNet.Server.Persistence.Migrations
 
             modelBuilder.Entity("GameNet.Server.Persistence.Entities.AgentCredential", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("device_id");
-
-                    b.Property<DateTimeOffset?>("LastAuthenticatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_authenticated_at_utc");
-
-                    b.Property<DateTimeOffset?>("RevokedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at_utc");
-
-                    b.Property<string>("SecretHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("secret_hash");
-
+                    b.Property<Guid>("Id").HasColumnType("uuid").HasColumnName("id");
+                    b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+                    b.Property<string>("DeviceId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("device_id");
+                    b.Property<DateTimeOffset?>( "LastAuthenticatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("last_authenticated_at_utc");
+                    b.Property<bool>("IsPendingRotation").HasDefaultValue(false).HasColumnType("boolean").HasColumnName("is_pending_rotation");
+                    b.Property<Guid?>( "ReplacesCredentialId").HasColumnType("uuid").HasColumnName("replaces_credential_id");
+                    b.Property<DateTimeOffset?>( "RevokedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("revoked_at_utc");
+                    b.Property<DateTimeOffset?>( "RotationExpiresAtUtc").HasColumnType("timestamp with time zone").HasColumnName("rotation_expires_at_utc");
+                    b.Property<Guid?>( "RotationOperationId").HasColumnType("uuid").HasColumnName("rotation_operation_id");
+                    b.Property<DateTimeOffset?>( "RotationRequestedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("rotation_requested_at_utc");
+                    b.Property<Guid?>( "RotationRequestedOperationId").HasColumnType("uuid").HasColumnName("rotation_requested_operation_id");
+                    b.Property<string>("SecretHash").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("secret_hash");
                     b.HasKey("Id");
-
-                    b.HasIndex("DeviceId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_agent_credentials_ActiveDevice")
-                        .HasFilter("revoked_at_utc IS NULL");
-
-                    b.HasIndex("DeviceId", "CreatedAtUtc")
-                        .HasDatabaseName("IX_agent_credentials_Device_Created");
-
+                    b.HasIndex("DeviceId").IsUnique().HasDatabaseName("IX_agent_credentials_ActiveDevice")
+                        .HasFilter("revoked_at_utc IS NULL AND is_pending_rotation = FALSE");
+                    b.HasIndex("DeviceId").IsUnique().HasDatabaseName("IX_agent_credentials_PendingRotationDevice")
+                        .HasFilter("revoked_at_utc IS NULL AND is_pending_rotation = TRUE");
+                    b.HasIndex("RotationOperationId").IsUnique().HasDatabaseName("IX_agent_credentials_RotationOperation")
+                        .HasFilter("rotation_operation_id IS NOT NULL");
+                    b.HasIndex("RotationRequestedOperationId").IsUnique().HasDatabaseName("IX_agent_credentials_RotationRequestedOperation")
+                        .HasFilter("rotation_requested_operation_id IS NOT NULL");
+                    b.HasIndex("DeviceId", "CreatedAtUtc").HasDatabaseName("IX_agent_credentials_Device_Created");
                     b.ToTable("agent_credentials", (string)null);
                 });
 
