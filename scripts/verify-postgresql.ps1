@@ -381,6 +381,23 @@ try {
         }
     }
 
+$previousAgentCredentialRotationIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS", "Process")
+try {
+    $env:GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS = "true"
+    & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~AgentCredentialRotationPostgresTests"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Agent credential-rotation PostgreSQL integration verification failed."
+    }
+}
+finally {
+    if ($null -eq $previousAgentCredentialRotationIntegrationFlag) {
+        Remove-Item Env:GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS = $previousAgentCredentialRotationIntegrationFlag
+    }
+}
+
     & "$PSScriptRoot/verify-identity-runtime.ps1"
     Write-Host "Clean PostgreSQL migration/schema/Idempotency/Outbox/Agent-dispatch/Identity runtime verification passed."
 }
