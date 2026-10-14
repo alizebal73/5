@@ -518,19 +518,192 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasConstraintName("fk_agent_enrollment_tokens_issued_by_operator");
                 });
 
-            modelBuilder.Entity("GameNet.Server.Modules.Stations.Domain.Station", b =>
+            modelBuilder.Entity("GameNet.Server.Modules.Customers.Domain.Customer", b =>
                 {
                     b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
-                    b.Property<string>("AgentDeviceId").HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("agent_device_id");
-                    b.Property<string>("Code").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("code");
-                    b.Property<string>("Name").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)").HasColumnName("name");
-                    b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
-                    b.Property<int>("Type").HasColumnType("integer").HasColumnName("type");
+                    b.Property<string>("Code").IsRequired().HasMaxLength(40).HasColumnType("character varying(40)").HasColumnName("code");
+                    b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+                    b.Property<string>("DisplayName").HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("display_name");
+                    b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
+                    b.Property<int>("Kind").HasColumnType("integer").HasColumnName("kind");
                     b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
-                    b.HasKey("Id").HasName("pk_stations");
-                    b.HasIndex("AgentDeviceId").IsUnique().HasDatabaseName("ix_stations_agent_device_id").HasFilter("agent_device_id IS NOT NULL");
-                    b.HasIndex("Code").IsUnique().HasDatabaseName("ix_stations_code");
-                    b.ToTable("stations", (string)null);
+                    b.HasKey("Id").HasName("pk_customers");
+                    b.HasIndex("Code").IsUnique().HasDatabaseName("ux_customers_code");
+                    b.HasIndex("Kind", "IsActive").HasDatabaseName("ix_customers_kind_active");
+                    b.ToTable("customers", null, t =>
+                        {
+                             t.HasCheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
+                            t.HasCheckConstraint("ck_customers_registered_name", "(kind = 1) OR (display_name IS NOT NULL AND length(trim(display_name)) > 0)");
+                            t.HasCheckConstraint("ck_customers_kind_range", "kind BETWEEN 1 AND 2");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Tariffs.Domain.Tariff", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<string>("Code").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("code");
+                    b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+                    b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
+                    b.Property<bool>("IsDefault").HasColumnType("boolean").HasColumnName("is_default");
+                    b.Property<long>("HourlyRateToman").HasColumnType("bigint").HasColumnName("hourly_rate_toman");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("name");
+                    b.Property<int>("StationType").HasColumnType("integer").HasColumnName("station_type");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
+                    b.HasKey("Id").HasName("pk_tariffs");
+                    b.HasIndex("Code").IsUnique().HasDatabaseName("ux_tariffs_code");
+                    b.HasIndex("StationType").IsUnique().HasDatabaseName("ux_tariffs_one_active_default_per_type").HasFilter("is_default = TRUE AND is_active = TRUE");
+                    b.ToTable("tariffs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tariffs_hourly_rate_positive", "hourly_rate_toman > 0");
+                            t.HasCheckConstraint("ck_tariffs_station_type", "station_type BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("ck_tariffs_default_must_be_active", "is_active OR NOT is_default");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Sessions.Domain.Session", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
+                    b.Property<Guid?>("EndedByOperatorId").HasColumnType("uuid").HasColumnName("ended_by_operator_id");
+                    b.Property<DateTimeOffset?>("EndedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("ended_at_utc");
+                    b.Property<Guid?>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
+                    b.Property<DateTimeOffset?>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
+                    b.Property<Guid>("StartedByOperatorId").HasColumnType("uuid").HasColumnName("started_by_operator_id");
+                    b.Property<DateTimeOffset>("StartedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("started_at_utc");
+                    b.Property<Guid>("StationId").HasColumnType("uuid").HasColumnName("station_id");
+                    b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
+                    b.Property<Guid>("TariffId").HasColumnType("uuid").HasColumnName("tariff_id");
+                    b.Property<string>("TariffCodeSnapshot").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("tariff_code_snapshot");
+                    b.Property<string>("TariffNameSnapshot").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("tariff_name_snapshot");
+                    b.Property<long>("TariffHourlyRateTomanSnapshot").HasColumnType("bigint").HasColumnName("tariff_hourly_rate_toman_snapshot");
+                    b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
+                    b.HasKey("Id").HasName("pk_sessions");
+                    b.HasIndex("CustomerId", "Status").HasDatabaseName("ix_sessions_customer_status");
+                    b.HasIndex("StartedAtUtc").HasDatabaseName("ix_sessions_started_at_utc");
+                    b.HasIndex("StationId").IsUnique().HasDatabaseName("ux_sessions_one_active_per_station").HasFilter("status = 1");
+                    b.ToTable("sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sessions_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
+                            t.HasCheckConstraint("ck_sessions_status_range", "status BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND paid_at_utc IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND paid_at_utc IS NULL) OR (status = 3 AND ended_at_utc IS NOT NULL AND paid_at_utc IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.Invoice", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<long>("AmountToman").HasColumnType("bigint").HasColumnName("amount_toman");
+                    b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
+                    b.Property<long>("ElapsedTicks").HasColumnType("bigint").HasColumnName("elapsed_ticks");
+                    b.Property<DateTimeOffset>("IssuedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("issued_at_utc");
+                    b.Property<Guid>("IssuedByOperatorId").HasColumnType("uuid").HasColumnName("issued_by_operator_id");
+                    b.Property<DateTimeOffset>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
+                    b.Property<Guid>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
+                    b.Property<Guid>("SessionId").HasColumnType("uuid").HasColumnName("session_id");
+                    b.Property<Guid>("StationId").HasColumnType("uuid").HasColumnName("station_id");
+                    b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
+                    b.Property<Guid>("TariffId").HasColumnType("uuid").HasColumnName("tariff_id");
+                    b.Property<string>("TariffCodeSnapshot").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("tariff_code_snapshot");
+                    b.Property<string>("TariffNameSnapshot").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("tariff_name_snapshot");
+                    b.Property<long>("TariffHourlyRateTomanSnapshot").HasColumnType("bigint").HasColumnName("tariff_hourly_rate_toman_snapshot");
+                    b.HasKey("Id").HasName("pk_invoices");
+                    b.HasIndex("PaidAtUtc").HasDatabaseName("ix_invoices_paid_at_utc");
+                    b.HasIndex("SessionId").IsUnique().HasDatabaseName("ux_invoices_session_id");
+                    b.ToTable("invoices", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
+                            t.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks > 0");
+                            t.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
+                            t.HasCheckConstraint("ck_invoices_status_paid", "status = 1");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.Payment", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<long>("AmountAppliedToman").HasColumnType("bigint").HasColumnName("amount_applied_toman");
+                    b.Property<long>("AmountReceivedToman").HasColumnType("bigint").HasColumnName("amount_received_toman");
+                    b.Property<long>("ChangeGivenToman").HasColumnType("bigint").HasColumnName("change_given_toman");
+                    b.Property<Guid>("InvoiceId").HasColumnType("uuid").HasColumnName("invoice_id");
+                    b.Property<int>("Method").HasColumnType("integer").HasColumnName("method");
+                    b.Property<DateTimeOffset>("ReceivedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("received_at_utc");
+                    b.Property<Guid>("ReceivedByOperatorId").HasColumnType("uuid").HasColumnName("received_by_operator_id");
+                    b.HasKey("Id").HasName("pk_payments");
+                    b.HasIndex("InvoiceId").IsUnique().HasDatabaseName("ux_payments_invoice_id");
+                    b.HasIndex("ReceivedAtUtc").HasDatabaseName("ix_payments_received_at_utc");
+                    b.ToTable("payments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payments_applied_positive", "amount_applied_toman > 0");
+                            t.HasCheckConstraint("ck_payments_change_matches", "change_given_toman = amount_received_toman - amount_applied_toman");
+                            t.HasCheckConstraint("ck_payments_method_cash", "method = 1");
+                            t.HasCheckConstraint("ck_payments_received_sufficient", "amount_received_toman >= amount_applied_toman");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.BillingLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<long>("AmountToman").HasColumnType("bigint").HasColumnName("amount_toman");
+                    b.Property<Guid>("ActorId").HasColumnType("uuid").HasColumnName("actor_id");
+                    b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone").HasColumnName("occurred_at_utc");
+                    b.Property<int>("EntryType").HasColumnType("integer").HasColumnName("entry_type");
+                    b.Property<Guid>("InvoiceId").HasColumnType("uuid").HasColumnName("invoice_id");
+                    b.Property<Guid>("PaymentId").HasColumnType("uuid").HasColumnName("payment_id");
+                    b.HasKey("Id").HasName("pk_billing_ledger_entries");
+                    b.HasIndex("InvoiceId").IsUnique().HasDatabaseName("ux_billing_ledger_invoice_id");
+                    b.HasIndex("OccurredAtUtc").HasDatabaseName("ix_billing_ledger_occurred_at_utc");
+                    b.HasIndex("PaymentId").IsUnique().HasDatabaseName("ux_billing_ledger_payment_id");
+                    b.ToTable("billing_ledger_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_billing_ledger_amount_positive", "amount_toman > 0");
+                            t.HasCheckConstraint("ck_billing_ledger_entry_type", "entry_type = 1");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Sessions.Domain.Session", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Customers.Domain.Customer", null).WithMany()
+                        .HasForeignKey("CustomerId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_sessions_customers_customer_id");
+                    b.HasOne("GameNet.Server.Modules.Stations.Domain.Station", null).WithMany()
+                        .HasForeignKey("StationId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_sessions_stations_station_id");
+                    b.HasOne("GameNet.Server.Modules.Tariffs.Domain.Tariff", null).WithMany()
+                        .HasForeignKey("TariffId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_sessions_tariffs_tariff_id");
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.Invoice", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Customers.Domain.Customer", null).WithMany()
+                        .HasForeignKey("CustomerId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_invoices_customers_customer_id");
+                    b.HasOne("GameNet.Server.Modules.Sessions.Domain.Session", null).WithMany()
+                        .HasForeignKey("SessionId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_invoices_sessions_session_id");
+                    b.HasOne("GameNet.Server.Modules.Stations.Domain.Station", null).WithMany()
+                        .HasForeignKey("StationId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_invoices_stations_station_id");
+                    b.HasOne("GameNet.Server.Modules.Tariffs.Domain.Tariff", null).WithMany()
+                        .HasForeignKey("TariffId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_invoices_tariffs_tariff_id");
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.Payment", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Invoice", null).WithMany()
+                        .HasForeignKey("InvoiceId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_payments_invoices_invoice_id");
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.BillingLedgerEntry", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Invoice", null).WithMany()
+                        .HasForeignKey("InvoiceId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_billing_ledger_entries_invoices_invoice_id");
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Payment", null).WithMany()
+                        .HasForeignKey("PaymentId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_billing_ledger_entries_payments_payment_id");
                 });
 
 #pragma warning restore 612, 618
