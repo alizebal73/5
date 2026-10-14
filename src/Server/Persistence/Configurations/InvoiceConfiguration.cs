@@ -37,9 +37,9 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.HasIndex(x => x.SessionId).IsUnique().HasDatabaseName("ux_invoices_session_id");
         b.HasIndex(x => x.PaidAtUtc).HasDatabaseName("ix_invoices_paid_at_utc");
 
-        b.HasOne<Session>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Station>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Tariff>().WithMany().HasForeignKey(x => x.TariffId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Session>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_sessions_session_id");
+        b.HasOne<Station>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_stations_station_id");
+        b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_customers_customer_id");
+        b.HasOne<Tariff>().WithMany().HasForeignKey(x => x.TariffId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_tariffs_tariff_id");
     }
 }
