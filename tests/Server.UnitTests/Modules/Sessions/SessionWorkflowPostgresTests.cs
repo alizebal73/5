@@ -96,6 +96,18 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(ended.Value.AmountToman, invoiceReplay.Value.AmountToman);
                 Assert.Equal(1, await db.Invoices.CountAsync(x => x.SessionId == started.Value.Id));
 
+                var insufficientCheckout = await service.CheckoutCashAsync(
+                    new CashCheckoutCommand(
+                        ended.Value.InvoiceId, 29_999L, ended.Value.SessionVersion,
+                        idempotencyPrefix + "cash-low", actor),
+                    CancellationToken.None);
+                Assert.False(insufficientCheckout.IsSuccess);
+                Assert.Equal("billing.cash_insufficient", insufficientCheckout.Error.Code);
+                Assert.Equal(InvoiceStatus.PendingPayment,
+                    (await db.Invoices.SingleAsync(x => x.Id == ended.Value.InvoiceId)).Status);
+                Assert.Equal(0, await db.Payments.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
+                Assert.Equal(0, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
+
                 var checkoutCommand = new CashCheckoutCommand(
                     ended.Value.InvoiceId, 50_000L, ended.Value.SessionVersion, checkoutKey, actor);
                 var checkout = await service.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
