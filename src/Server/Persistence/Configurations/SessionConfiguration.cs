@@ -39,8 +39,8 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         b.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("ix_sessions_customer_status");
         b.HasIndex(x => x.StartedAtUtc).HasDatabaseName("ix_sessions_started_at_utc");
 
-        b.HasOne<Station>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Tariff>().WithMany().HasForeignKey(x => x.TariffId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Station>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_sessions_stations_station_id");
+        b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_sessions_customers_customer_id");
+        b.HasOne<Tariff>().WithMany().HasForeignKey(x => x.TariffId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_sessions_tariffs_tariff_id");
     }
 }
