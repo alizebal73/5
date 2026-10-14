@@ -301,6 +301,17 @@ public sealed class AgentCredentialService(
                 "Agent credential rotation committed; prior pending enrollment token retired.", ct);
             current.ClearRotationRequest();
             current.Revoke(now);
+
+            // Flush the prior credential's revocation before promoting the staged
+            // replacement. The filtered unique active-device index is checked per
+            // statement, not at transaction commit; updating both tracked rows in
+            // one SaveChanges can otherwise activate the replacement first and
+            // collide with the still-active prior credential. This save remains
+            // inside the same serializable transaction, so no intermediate state
+            // becomes externally visible and any later failure rolls the whole
+            // rotation back.
+            await dbContext.SaveChangesAsync(ct);
+
             replacement.CompleteRotation();
             await FenceActiveLeaseAsync(request.DeviceId, ct);
             auditWriter.Append(new AuditRecord(
