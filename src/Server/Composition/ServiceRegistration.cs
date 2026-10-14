@@ -32,6 +32,7 @@ public static class ServiceRegistration
         services.AddSingleton<IValidateOptions<GameNetOptions>, GameNetOptionsValidator>();
 
         services.AddScoped<ITransactionCoordinator, EfTransactionCoordinator>();
+        services.AddScoped<CommandMutationPipeline>();
         services.AddScoped<IServerReadinessProbe, ServerReadinessProbe>();
         services.AddScoped<IAuditWriter, EfAuditWriter>();
         services.AddScoped<IIdempotencyStore, EfIdempotencyStore>();
