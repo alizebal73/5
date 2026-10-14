@@ -1,7 +1,7 @@
-using GameNet.Server.Infrastructure.Observability;
 using System.Security.Cryptography;
 using System.Text;
 using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Server.Infrastructure.Observability;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.Extensions.Options;
@@ -17,94 +17,70 @@ public static class AgentCredentialRoutes
         var group = app.MapGroup("/api/v1/agent");
 
         group.MapPost("/auth/token",
-            async (
-                AgentTokenRequest request,
-                IAgentCredentialService credentials,
-                IAgentAccessTokenIssuer tokenIssuer,
-                IOptions<GameNetOptions> options,
-                HttpResponse response,
-                CancellationToken cancellationToken) =>
+            async (AgentTokenRequest request, IAgentCredentialService credentials,
+                IAgentAccessTokenIssuer tokenIssuer, IOptions<GameNetOptions> options,
+                HttpResponse response, CancellationToken cancellationToken) =>
             {
                 response.Headers.CacheControl = "no-store";
                 if (!options.Value.Authentication.Enabled)
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-
-                var credentialId = await credentials.AuthenticateAndGetCredentialIdAsync(
-                    request.DeviceId, request.Secret, cancellationToken);
-                if (credentialId is null)
-                    return Results.Unauthorized();
-
-                var token = tokenIssuer.Issue(request.DeviceId, credentialId.Value);
-                return Results.Ok(token);
+                var credentialId = await credentials.AuthenticateAndGetCredentialIdAsync(request.DeviceId, request.Secret, cancellationToken);
+                if (credentialId is null) return Results.Unauthorized();
+                return Results.Ok(tokenIssuer.Issue(request.DeviceId, credentialId.Value));
             }).AllowAnonymous();
 
         group.MapPost("/credentials/provision",
-            async (
-                HttpContext context,
-                AgentCredentialProvisionRequest request,
-                IAgentCredentialService credentials,
-                IAgentProvisioningKeySecret provisioningSecret,
+            async (HttpContext context, AgentCredentialProvisionRequest request,
+                IAgentCredentialService credentials, IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
                 context.Response.Headers.CacheControl = "no-store";
                 var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
-
-                try
-                {
-                    var issued = await credentials.ProvisionAsync(request, cancellationToken);
-                    return Results.Ok(issued);
-                }
-                catch (AgentCredentialException ex)
-                {
-                    return WriteCredentialFailure(context, ex);
-                }
+                try { return Results.Ok(await credentials.ProvisionAsync(request, cancellationToken)); }
+                catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
             }).AllowAnonymous();
 
         group.MapPost("/credentials/rotate",
-            async (
-                HttpContext context,
-                AgentCredentialRotateRequest request,
-                IAgentCredentialService credentials,
-                IAgentProvisioningKeySecret provisioningSecret,
+            async (HttpContext context, AgentCredentialRotateRequest request,
+                IAgentCredentialService credentials, IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
                 context.Response.Headers.CacheControl = "no-store";
                 var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
+                try { return Results.Ok(await credentials.RequestRotationAsync(request, cancellationToken)); }
+                catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
+            }).AllowAnonymous();
 
-                try
-                {
-                    var issued = await credentials.RotateAsync(request, cancellationToken);
-                    return Results.Ok(issued);
-                }
-                catch (AgentCredentialException ex)
-                {
-                    return WriteCredentialFailure(context, ex);
-                }
+        group.MapPost("/credentials/rotate/stage",
+            async (HttpContext context, AgentCredentialRotationStageRequest request,
+                IAgentCredentialService credentials, CancellationToken cancellationToken) =>
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                try { return Results.Ok(await credentials.StageRotationAsync(request, cancellationToken)); }
+                catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
+            }).AllowAnonymous();
+
+        group.MapPost("/credentials/rotate/confirm",
+            async (HttpContext context, AgentCredentialRotationConfirmationRequest request,
+                IAgentCredentialService credentials, CancellationToken cancellationToken) =>
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                try { return Results.Ok(await credentials.ConfirmRotationAsync(request, cancellationToken)); }
+                catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
             }).AllowAnonymous();
 
         group.MapPost("/credentials/revoke",
-            async (
-                HttpContext context,
-                AgentCredentialRevokeRequest request,
-                IAgentCredentialService credentials,
-                IAgentProvisioningKeySecret provisioningSecret,
+            async (HttpContext context, AgentCredentialRevokeRequest request,
+                IAgentCredentialService credentials, IAgentProvisioningKeySecret provisioningSecret,
                 CancellationToken cancellationToken) =>
             {
                 context.Response.Headers.CacheControl = "no-store";
                 var denied = ValidateProvisioningKey(context, provisioningSecret.ProvisioningKey);
                 if (denied is not null) return denied;
-
-                try
-                {
-                    var revoked = await credentials.RevokeAsync(request, cancellationToken);
-                    return Results.Ok(new { revoked });
-                }
-                catch (AgentCredentialException ex)
-                {
-                    return WriteCredentialFailure(context, ex);
-                }
+                try { return Results.Ok(new { revoked = await credentials.RevokeAsync(request, cancellationToken) }); }
+                catch (AgentCredentialException ex) { return WriteCredentialFailure(context, ex); }
             }).AllowAnonymous();
     }
 
@@ -116,27 +92,21 @@ public static class AgentCredentialRoutes
     private static IResult? ValidateProvisioningKey(HttpContext context, string expectedKey)
     {
         var supplied = context.Request.Headers[ProvisioningHeader].ToString();
-        if (string.IsNullOrWhiteSpace(supplied))
-            return Results.Unauthorized();
-
+        if (string.IsNullOrWhiteSpace(supplied)) return Results.Unauthorized();
         byte[]? expectedBytes = null;
         byte[]? suppliedBytes = null;
         try
         {
             expectedBytes = Encoding.UTF8.GetBytes(expectedKey);
             suppliedBytes = Encoding.UTF8.GetBytes(supplied);
-
             return expectedBytes.Length == suppliedBytes.Length &&
                    CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes)
-                ? null
-                : Results.Unauthorized();
+                ? null : Results.Unauthorized();
         }
         finally
         {
-            if (expectedBytes is not null)
-                CryptographicOperations.ZeroMemory(expectedBytes);
-            if (suppliedBytes is not null)
-                CryptographicOperations.ZeroMemory(suppliedBytes);
+            if (expectedBytes is not null) CryptographicOperations.ZeroMemory(expectedBytes);
+            if (suppliedBytes is not null) CryptographicOperations.ZeroMemory(suppliedBytes);
         }
     }
 }
