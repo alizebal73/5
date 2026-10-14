@@ -165,6 +165,21 @@ public sealed class SessionService(
                         return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Session could not be ended from its current state.");
                     }
 
+                    audit.Append(new AuditRecord(
+                        clock.UtcNow,
+                        "Operator",
+                        command.Actor.OperatorId.ToString("D"),
+                        "sessions.end",
+                        "Session",
+                        session.Id.ToString("D"),
+                        null,
+                        command.Actor.CorrelationId,
+                        command.Actor.Source,
+                        "Succeeded",
+                        command.IdempotencyKey,
+                        JsonSerializer.Serialize(before),
+                        JsonSerializer.Serialize(ToResponse(session))));
+
                     var invoiceResult = await invoices.CreatePendingAsync(
                         new CreatePendingInvoiceCommand(
                             Guid.NewGuid(),
@@ -187,20 +202,7 @@ public sealed class SessionService(
                     if (!invoiceResult.IsSuccess)
                         return Fail<InvoicePreviewResponse>(invoiceResult.Error.Code, invoiceResult.Error.Message);
 
-                    audit.Append(new AuditRecord(
-                        clock.UtcNow,
-                        "Operator",
-                        command.Actor.OperatorId.ToString("D"),
-                        "sessions.end",
-                        "Session",
-                        session.Id.ToString("D"),
-                        null,
-                        command.Actor.CorrelationId,
-                        command.Actor.Source,
-                        "Succeeded",
-                        command.IdempotencyKey,
-                        JsonSerializer.Serialize(before),
-                        JsonSerializer.Serialize(ToResponse(session))));
+
 
                     return invoiceResult;
                 },
