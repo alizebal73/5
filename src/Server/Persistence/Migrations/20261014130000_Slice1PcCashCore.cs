@@ -167,9 +167,13 @@ public partial class Slice1PcCashCore : Migration
 
         m.CreateIndex(name: "ux_sessions_one_active_per_station", table: "sessions", column: "station_id", unique: true, filter: "status = 1");
         m.CreateIndex("ix_sessions_customer_status", "sessions", new[] { "customer_id", "status" });
+        m.CreateIndex("ix_sessions_tariff_id", "sessions", "tariff_id");
         m.CreateIndex("ix_sessions_started_at_utc", "sessions", "started_at_utc");
         m.CreateIndex("ux_invoices_session_id", "invoices", "session_id", unique: true);
         m.CreateIndex("ix_invoices_paid_at_utc", "invoices", "paid_at_utc");
+        m.CreateIndex("ix_invoices_station_id", "invoices", "station_id");
+        m.CreateIndex("ix_invoices_customer_id", "invoices", "customer_id");
+        m.CreateIndex("ix_invoices_tariff_id", "invoices", "tariff_id");
         m.CreateIndex("ux_payments_invoice_id", "payments", "invoice_id", unique: true);
         m.CreateIndex("ix_payments_received_at_utc", "payments", "received_at_utc");
         m.CreateIndex("ux_billing_ledger_invoice_id", "billing_ledger_entries", "invoice_id", unique: true);
