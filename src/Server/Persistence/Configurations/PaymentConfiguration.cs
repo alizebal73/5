@@ -25,6 +25,6 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         b.Property(x => x.ReceivedAtUtc).IsRequired().HasColumnName("received_at_utc");
         b.HasIndex(x => x.InvoiceId).IsUnique().HasDatabaseName("ux_payments_invoice_id");
         b.HasIndex(x => x.ReceivedAtUtc).HasDatabaseName("ix_payments_received_at_utc");
-        b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_payments_invoices_invoice_id");
     }
 }
