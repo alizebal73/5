@@ -16,9 +16,15 @@ $desktop = Get-ChildItem "src/Desktop/bin/Release" -Recurse -File -Filter "*.exe
 
 if (-not $desktop) { throw "Built Desktop executable was not found." }
 
-$dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+$dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+if ($null -ne $dotnetCommand -and -not [string]::IsNullOrWhiteSpace($dotnetCommand.Source)) {
+    $dotnet = $dotnetCommand.Source
+}
+else {
+    $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+}
 if (-not (Test-Path -LiteralPath $dotnet -PathType Leaf)) {
-    $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+    throw "The required dotnet SDK executable was not found on PATH or under Program Files."
 }
 
 $environmentNames = @(
