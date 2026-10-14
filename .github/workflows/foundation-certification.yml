@@ -13,12 +13,15 @@ on:
   push:
     branches:
       - "feature/operator-identity-v1"
+      - "feature/**"
+      - "feat/**"
       - "integration/runtime-operator-v1"
       - "integration/runtime-*"
       - "integration/candidate-**"
       - "security/**"
       - "refactor/**"
       - "fix/**"
+      - "topic/**"
       - "stage2/**"
     paths:
       - ".github/workflows/foundation-certification.yml"
