@@ -1,0 +1,450 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Windows.Input;
+using GameNet.Desktop.Api;
+using GameNet.Desktop.Features.Identity;
+using GameNet.Shared.Contracts.V1.Security;
+using GameNet.Shared.Contracts.V1.Sessions;
+using GameNet.Shared.Contracts.V1.Stations;
+using GameNet.Shared.Contracts.V1.Tariffs;
+
+namespace GameNet.Desktop.Features.Sessions;
+
+public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
+{
+    private readonly IGameNetServerClient api;
+    private readonly Func<string, bool> hasPermission;
+    private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
+    private StationResponse? selectedStation;
+    private TariffResponse? selectedTariff;
+    private SessionResponse? selectedActiveSession;
+    private InvoicePreviewResponse? selectedPendingInvoice;
+    private string tariffCode = "PC-STANDARD";
+    private string tariffName = "PC Standard";
+    private string hourlyRateText = string.Empty;
+    private string amountReceivedText = string.Empty;
+    private string errorMessage = string.Empty;
+    private string statusMessage = string.Empty;
+    private bool isDefaultTariff = true;
+    private bool isBusy;
+
+    public SessionWorkflowViewModel(IGameNetServerClient api, Func<string, bool> hasPermission)
+    {
+        this.api = api ?? throw new ArgumentNullException(nameof(api));
+        this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
+
+        RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
+        CreateTariffCommand = new AsyncUiAction(CreateTariffAsync, () => !IsBusy && CanManageTariffs &&
+            !string.IsNullOrWhiteSpace(TariffCode) && !string.IsNullOrWhiteSpace(TariffName) && TryParseToman(HourlyRateText, out var rate) && rate > 0);
+        StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
+            SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
+            SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc });
+        EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
+            SelectedActiveSession is { Status: SessionStatusContract.Active });
+        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
+            SelectedPendingInvoice is { Status: InvoiceStatusContract.PendingPayment } &&
+            TryParseToman(AmountReceivedText, out var received) &&
+            SelectedPendingInvoice is not null && received >= SelectedPendingInvoice.AmountToman);
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public ObservableCollection<StationResponse> PcStations { get; } = [];
+    public ObservableCollection<TariffResponse> Tariffs { get; } = [];
+    public ObservableCollection<SessionResponse> ActiveSessions { get; } = [];
+    public ObservableCollection<InvoicePreviewResponse> PendingInvoices { get; } = [];
+
+    public ICommand RefreshCommand { get; }
+    public ICommand CreateTariffCommand { get; }
+    public ICommand StartSessionCommand { get; }
+    public ICommand EndSessionCommand { get; }
+    public ICommand CheckoutCashCommand { get; }
+
+    public bool CanManageTariffs => hasPermission(Permissions.SettingsWrite);
+    public bool CanOperateSessions => hasPermission(Permissions.SessionsOperate);
+    public bool CanCheckout => hasPermission(Permissions.BillingWrite);
+    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout;
+    public bool CanReadStations => hasPermission(Permissions.StationsRead);
+
+    public StationResponse? SelectedStation
+    {
+        get => selectedStation;
+        set { if (SetField(ref selectedStation, value)) RaiseCommands(); }
+    }
+
+    public TariffResponse? SelectedTariff
+    {
+        get => selectedTariff;
+        set { if (SetField(ref selectedTariff, value)) RaiseCommands(); }
+    }
+
+    public SessionResponse? SelectedActiveSession
+    {
+        get => selectedActiveSession;
+        set { if (SetField(ref selectedActiveSession, value)) RaiseCommands(); }
+    }
+
+    public InvoicePreviewResponse? SelectedPendingInvoice
+    {
+        get => selectedPendingInvoice;
+        set
+        {
+            if (SetField(ref selectedPendingInvoice, value))
+            {
+                AmountReceivedText = value?.AmountToman.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+                RaiseCommands();
+                OnPropertyChanged(nameof(SelectedInvoiceAmountText));
+            }
+        }
+    }
+
+    public string TariffCode { get => tariffCode; set { if (SetField(ref tariffCode, value)) RaiseCommands(); } }
+    public string TariffName { get => tariffName; set { if (SetField(ref tariffName, value)) RaiseCommands(); } }
+    public string HourlyRateText { get => hourlyRateText; set { if (SetField(ref hourlyRateText, value)) RaiseCommands(); } }
+    public string AmountReceivedText { get => amountReceivedText; set { if (SetField(ref amountReceivedText, value)) RaiseCommands(); } }
+    public bool IsDefaultTariff { get => isDefaultTariff; set { if (SetField(ref isDefaultTariff, value)) RaiseCommands(); } }
+    public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
+    public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
+
+    public bool IsBusy
+    {
+        get => isBusy;
+        private set
+        {
+            if (SetField(ref isBusy, value))
+                RaiseCommands();
+        }
+    }
+
+    public string SelectedInvoiceAmountText => SelectedPendingInvoice is null
+        ? string.Empty
+        : FormatToman(SelectedPendingInvoice.AmountToman);
+
+    public string SelectedSessionText => SelectedActiveSession is null
+        ? string.Empty
+        : $"{SelectedActiveSession.TariffNameSnapshot} — {FormatToman(SelectedActiveSession.TariffHourlyRateTomanSnapshot)}";
+
+    public async Task RefreshAsync()
+    {
+        if (!CanUseWorkspace)
+            return;
+
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+        try
+        {
+            if (CanReadStations && CanOperateSessions)
+            {
+                var stations = (await api.GetStationsAsync())
+                    .Where(x => x.Type == StationTypeContract.Pc)
+                    .OrderBy(x => x.Code, StringComparer.Ordinal)
+                    .ToArray();
+                Replace(PcStations, stations, SelectedStation?.Id, x => x.Id, out var currentStation);
+                SelectedStation = currentStation;
+            }
+            else
+            {
+                PcStations.Clear();
+                SelectedStation = null;
+            }
+
+            if (CanOperateSessions || CanManageTariffs)
+            {
+                var tariffs = await api.GetTariffsAsync(StationTypeContract.Pc);
+                Replace(Tariffs, tariffs, SelectedTariff?.Id, x => x.Id, out var currentTariff);
+                SelectedTariff = currentTariff;
+            }
+            else
+            {
+                Tariffs.Clear();
+                SelectedTariff = null;
+            }
+
+            if (CanOperateSessions)
+            {
+                var sessions = await api.GetActiveSessionsAsync();
+                Replace(ActiveSessions, sessions, SelectedActiveSession?.Id, x => x.Id, out var currentSession);
+                SelectedActiveSession = currentSession;
+            }
+            else
+            {
+                ActiveSessions.Clear();
+                SelectedActiveSession = null;
+            }
+
+            if (CanCheckout)
+            {
+                var invoices = await api.GetPendingInvoicesAsync();
+                Replace(PendingInvoices, invoices, SelectedPendingInvoice?.InvoiceId, x => x.InvoiceId, out var currentInvoice);
+                SelectedPendingInvoice = currentInvoice;
+            }
+            else
+            {
+                PendingInvoices.Clear();
+                SelectedPendingInvoice = null;
+            }
+
+            OnPropertyChanged(nameof(CanManageTariffs));
+            OnPropertyChanged(nameof(CanOperateSessions));
+            OnPropertyChanged(nameof(CanCheckout));
+            OnPropertyChanged(nameof(CanReadStations));
+            OnPropertyChanged(nameof(CanUseWorkspace));
+            StatusMessage = Text("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", "Sessions, tariffs and pending invoices were refreshed.");
+        }
+        catch (GameNetApiException ex)
+        {
+            ErrorMessage = ErrorText(ex.Code);
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = Text("ارتباط با سرور برقرار نشد؛ وضعیت مالی تغییر نکرده است.", "Could not reach the Server; no financial result was confirmed.");
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorMessage = Text("پاسخ سرور دریافت نشد؛ برای بررسی وضعیت دوباره تازه‌سازی کنید.", "The Server response timed out; refresh to reconcile the current state.");
+        }
+        catch
+        {
+            ErrorMessage = Text("به‌روزرسانی انجام نشد. وضعیت سرور را بررسی کنید.", "Refresh failed. Check the Server status.");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public void Reset()
+    {
+        PcStations.Clear();
+        Tariffs.Clear();
+        ActiveSessions.Clear();
+        PendingInvoices.Clear();
+        SelectedStation = null;
+        SelectedTariff = null;
+        SelectedActiveSession = null;
+        SelectedPendingInvoice = null;
+        pendingKeys.Clear();
+        ErrorMessage = string.Empty;
+        StatusMessage = string.Empty;
+        OnPropertyChanged(nameof(CanManageTariffs));
+        OnPropertyChanged(nameof(CanOperateSessions));
+        OnPropertyChanged(nameof(CanCheckout));
+        OnPropertyChanged(nameof(CanReadStations));
+        OnPropertyChanged(nameof(CanUseWorkspace));
+    }
+
+    private async Task CreateTariffAsync()
+    {
+        ErrorMessage = string.Empty;
+        if (!TryParseToman(HourlyRateText, out var rate) || rate <= 0)
+        {
+            ErrorMessage = Text("مبلغ تعرفه باید عدد صحیح مثبت به تومان باشد.", "Hourly rate must be a positive whole number of Toman.");
+            return;
+        }
+
+        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{rate}|{IsDefaultTariff}";
+        var key = GetKey("tariff.create", fingerprint);
+        IsBusy = true;
+        try
+        {
+            var created = await api.CreateTariffAsync(
+                new CreateTariffRequest(TariffCode, TariffName, StationTypeContract.Pc, rate, IsDefaultTariff),
+                key);
+            pendingKeys.Remove("tariff.create");
+            StatusMessage = Text($"تعرفهٔ {created.Code} با نرخ {FormatToman(created.HourlyRateToman)} ساخته شد.",
+                $"Tariff {created.Code} was created at {FormatToman(created.HourlyRateToman)}.");
+            await RefreshAsync();
+            SelectedTariff = Tariffs.FirstOrDefault(x => x.Id == created.Id);
+        }
+        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ ساخت تعرفه نامشخص است؛ تازه‌سازی کنید و از ارسال درخواست جدید خودداری کنید.", "Tariff creation result is unknown; refresh before issuing a new request."); }
+        catch { ErrorMessage = Text("ساخت تعرفه انجام نشد.", "Tariff creation failed."); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task StartSessionAsync()
+    {
+        if (SelectedStation is null || SelectedTariff is null)
+            return;
+
+        var fingerprint = $"{SelectedStation.Id:D}|{SelectedTariff.Id:D}|walk-in";
+        var key = GetKey("session.start", fingerprint);
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+        try
+        {
+            var session = await api.StartSessionAsync(
+                new StartSessionRequest(SelectedStation.Id, SelectedTariff.Id, null), key);
+            pendingKeys.Remove("session.start");
+            StatusMessage = Text($"Session برای {SelectedStation.Code} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
+                $"Session started for {SelectedStation.Code}. PC lock/unlock control is not included yet.");
+            await RefreshAsync();
+            SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Id == session.Id);
+        }
+        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
+        catch { ErrorMessage = Text("شروع Session انجام نشد.", "Session start failed."); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task EndSessionAsync()
+    {
+        if (SelectedActiveSession is null)
+            return;
+
+        var session = SelectedActiveSession;
+        var fingerprint = $"{session.Id:D}|{session.Version}";
+        var key = GetKey("session.end", fingerprint);
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+        try
+        {
+            var invoice = await api.EndSessionAsync(session.Id, new EndSessionRequest(session.Version), key);
+            pendingKeys.Remove("session.end");
+            StatusMessage = Text($"صورتحساب صادر شد: {FormatToman(invoice.AmountToman)} تومان.",
+                $"Invoice issued: {FormatToman(invoice.AmountToman)} Toman.");
+            await RefreshAsync();
+            SelectedPendingInvoice = PendingInvoices.FirstOrDefault(x => x.InvoiceId == invoice.InvoiceId);
+        }
+        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
+        }
+        catch { ErrorMessage = Text("پایان Session انجام نشد.", "Ending the Session failed."); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task CheckoutCashAsync()
+    {
+        if (SelectedPendingInvoice is null)
+            return;
+        if (!TryParseToman(AmountReceivedText, out var received) || received < SelectedPendingInvoice.AmountToman)
+        {
+            ErrorMessage = Text("وجه دریافتی باید عدد صحیح و حداقل برابر مبلغ صورتحساب باشد.", "Cash received must be a whole number at least equal to the invoice amount.");
+            return;
+        }
+
+        var invoice = SelectedPendingInvoice;
+        var fingerprint = $"{invoice.InvoiceId:D}|{received}|{invoice.SessionVersion}";
+        var key = GetKey("billing.cash", fingerprint);
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+        try
+        {
+            var result = await api.CheckoutCashAsync(
+                invoice.InvoiceId,
+                new CashCheckoutRequest(received, invoice.SessionVersion),
+                key);
+            pendingKeys.Remove("billing.cash");
+            StatusMessage = Text(
+                $"پرداخت ثبت شد. مبلغ: {FormatToman(result.InvoiceAmountToman)}؛ دریافتی: {FormatToman(result.AmountReceivedToman)}؛ باقی‌مانده: {FormatToman(result.ChangeGivenToman)} تومان.",
+                $"Payment recorded. Due: {FormatToman(result.InvoiceAmountToman)}; received: {FormatToman(result.AmountReceivedToman)}; change: {FormatToman(result.ChangeGivenToman)} Toman.");
+            await RefreshAsync();
+        }
+        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پرداخت نامشخص است؛ ابتدا تازه‌سازی کنید و دوباره پول را ثبت نکنید.", "Payment result is unknown; refresh first and do not record cash again blindly."); }
+        catch { ErrorMessage = Text("ثبت پرداخت انجام نشد.", "Cash checkout failed."); }
+        finally { IsBusy = false; }
+    }
+
+    private string GetKey(string scope, string fingerprint)
+    {
+        if (pendingKeys.TryGetValue(scope, out var existing) &&
+            string.Equals(existing.Fingerprint, fingerprint, StringComparison.Ordinal))
+            return existing.Key;
+
+        var key = Guid.NewGuid().ToString("N");
+        pendingKeys[scope] = (fingerprint, key);
+        return key;
+    }
+
+    private static void Replace<T, TKey>(
+        ObservableCollection<T> collection,
+        IReadOnlyCollection<T> values,
+        TKey? previousKey,
+        Func<T, TKey> key,
+        out T? selected)
+        where TKey : struct
+    {
+        collection.Clear();
+        foreach (var value in values)
+            collection.Add(value);
+
+        selected = previousKey.HasValue
+            ? values.FirstOrDefault(x => EqualityComparer<TKey>.Default.Equals(key(x), previousKey.Value))
+            : default;
+        selected ??= values.FirstOrDefault();
+    }
+
+    private static bool TryParseToman(string? text, out long value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var builder = new System.Text.StringBuilder(text.Length);
+        foreach (var c in text.Trim())
+        {
+            if (c is '۰' or '٠') builder.Append('0');
+            else if (c is '۱' or '١') builder.Append('1');
+            else if (c is '۲' or '٢') builder.Append('2');
+            else if (c is '۳' or '٣') builder.Append('3');
+            else if (c is '۴' or '٤') builder.Append('4');
+            else if (c is '۵' or '٥') builder.Append('5');
+            else if (c is '۶' or '٦') builder.Append('6');
+            else if (c is '۷' or '٧') builder.Append('7');
+            else if (c is '۸' or '٨') builder.Append('8');
+            else if (c is '۹' or '٩') builder.Append('9');
+            else if (c is ',' or '٬' or ' ' or '\u00A0') continue;
+            else builder.Append(c);
+        }
+
+        return long.TryParse(builder.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static string FormatToman(long amount) =>
+        amount.ToString("N0", CultureInfo.CurrentCulture);
+
+    private string ErrorText(string code) => code switch
+    {
+        "security.https_required" => Text("برای اتصال به سرور راه دور HTTPS لازم است.", "HTTPS is required for a remote Server."),
+        "tariffs.forbidden" or "sessions.forbidden" or "billing.forbidden" => Text("مجوز انجام این عملیات را ندارید.", "You do not have permission for this operation."),
+        "tariffs.code_exists" => Text("کد این تعرفه قبلاً ثبت شده است.", "This tariff code already exists."),
+        "sessions.station_unavailable" => Text("این ایستگاه آمادهٔ شروع Session نیست.", "This station is not available for a new Session."),
+        "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
+        "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
+        "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
+        "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
+        "billing.cash_insufficient" => Text("وجه دریافتی کمتر از صورتحساب است.", "Cash received is less than the invoice amount."),
+        "billing.invoice_not_pending" => Text("این صورتحساب در انتظار پرداخت نیست.", "This invoice is not awaiting payment."),
+        "idempotency.in_flight" => Text("این درخواست هنوز در حال پردازش است؛ کمی بعد وضعیت را تازه‌سازی کنید.", "This request is still processing; refresh its status before retrying."),
+        "idempotency.key_reused" => Text("کلید تکرار درخواست با اطلاعات متفاوت استفاده شده است.", "The idempotency key was reused with different request data."),
+        _ => Text("عملیات انجام نشد؛ پیام خطای پایدار ثبت شد. وضعیت را تازه‌سازی کنید.", "The operation failed. Refresh to reconcile the current state.")
+    };
+
+    private static string Text(string fa, string en) =>
+        CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? fa : en;
+
+    private void RaiseCommands()
+    {
+        (RefreshCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (CreateTariffCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        OnPropertyChanged(name);
+        return true;
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
