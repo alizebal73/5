@@ -59,8 +59,18 @@
             <CheckBox Content="{DynamicResource Tariff.IsDefault}" IsChecked="{Binding SessionWorkflow.IsDefaultTariff}" Margin="0,2,0,8"/>
             <Button Padding="8,6" Content="{DynamicResource Tariff.Create}" Command="{Binding SessionWorkflow.CreateTariffCommand}"/>
           </StackPanel>
-          <TextBlock Text="{DynamicResource Tariff.ManagePermissionRequired}" TextWrapping="Wrap" Foreground="#667085" FontSize="11"
-                     Visibility="{Binding SessionWorkflow.CanManageTariffs, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+          <TextBlock Text="{DynamicResource Tariff.ManagePermissionRequired}" TextWrapping="Wrap" Foreground="#667085" FontSize="11">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Visibility" Value="Visible"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding SessionWorkflow.CanManageTariffs}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
         </StackPanel>
 
         <StackPanel Grid.Column="2" Margin="8,0,0,0">
