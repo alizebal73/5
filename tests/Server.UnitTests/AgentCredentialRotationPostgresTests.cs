@@ -308,6 +308,104 @@ public sealed class AgentCredentialRotationPostgresTests
 
 
     [Fact]
+    public async Task Expired_staged_replacement_is_retired_while_prior_credential_remains_active()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS"),
+                "true",
+                StringComparison.Ordinal))
+            return;
+
+        var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return;
+
+        var deviceId = "rotation-expired-staged-" + Guid.NewGuid().ToString("N");
+        var operationId = Guid.NewGuid();
+        var currentSecret = GenerateSecret();
+        var replacementSecret = GenerateSecret();
+        var oldCredentialId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var options = new DbContextOptionsBuilder<GameNetDbContext>().UseNpgsql(connectionString).Options;
+
+        try
+        {
+            await using (var seed = new GameNetDbContext(options))
+            {
+                seed.AgentCredentials.Add(new AgentCredential
+                {
+                    Id = oldCredentialId,
+                    DeviceId = deviceId,
+                    SecretHash = Hash(currentSecret),
+                    CreatedAtUtc = now
+                });
+                await seed.SaveChangesAsync();
+            }
+
+            await using (var requestDb = new GameNetDbContext(options))
+            {
+                var requested = await CreateService(requestDb, now).RequestRotationAsync(
+                    new AgentCredentialRotateRequest(deviceId, operationId));
+                Assert.Equal("requested", requested.State);
+            }
+
+            await using (var stageDb = new GameNetDbContext(options))
+            {
+                var staged = await CreateService(stageDb, now.AddSeconds(1)).StageRotationAsync(
+                    new AgentCredentialRotationStageRequest(
+                        operationId, deviceId, currentSecret, replacementSecret));
+                Assert.Equal("staged", staged.State);
+            }
+
+            Guid pendingCredentialId;
+            await using (var expireDb = new GameNetDbContext(options))
+            {
+                var expired = await CreateService(expireDb, now.AddMinutes(11).AddSeconds(2)).StageRotationAsync(
+                    new AgentCredentialRotationStageRequest(
+                        operationId, deviceId, currentSecret, replacementSecret));
+                Assert.Equal("expired", expired.State);
+                var pending = await expireDb.AgentCredentials.SingleAsync(
+                    x => x.DeviceId == deviceId && x.RotationOperationId == operationId);
+                pendingCredentialId = pending.Id;
+                Assert.NotNull(pending.RevokedAtUtc);
+                Assert.False(pending.IsPendingRotation);
+            }
+
+            await using (var verifyDb = new GameNetDbContext(options))
+            {
+                var service = CreateService(verifyDb, now.AddMinutes(11).AddSeconds(3));
+                Assert.True(await service.AuthenticateAsync(deviceId, currentSecret));
+                Assert.False(await service.AuthenticateAsync(deviceId, replacementSecret));
+                var current = await verifyDb.AgentCredentials.SingleAsync(
+                    x => x.DeviceId == deviceId && x.RevokedAtUtc == null && !x.IsPendingRotation);
+                Assert.Equal(oldCredentialId, current.Id);
+                Assert.Null(current.RotationRequestedOperationId);
+                Assert.Single(await verifyDb.AuditEntries.Where(x =>
+                    x.Operation == "AgentCredential.RotationExpired" &&
+                    x.ReferenceId == pendingCredentialId.ToString("N")).ToListAsync());
+            }
+        }
+        finally
+        {
+            await using var cleanup = new GameNetDbContext(options);
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_connection_leases WHERE device_id = {deviceId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
+            var ids = await cleanup.AgentCredentials.Where(x => x.DeviceId == deviceId)
+                .Select(x => x.Id).ToListAsync();
+            var references = ids.Select(id => id.ToString("N"))
+                .Append(operationId.ToString("N"))
+                .Append(oldCredentialId.ToString("N"))
+                .ToList();
+            await cleanup.AuditEntries.Where(x =>
+                x.ReferenceId != null && references.Contains(x.ReferenceId)).ExecuteDeleteAsync();
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
+        }
+    }
+
+    [Fact]
     public async Task Concurrent_rotation_requests_for_one_device_allow_only_one_live_operation()
     {
         if (!string.Equals(
