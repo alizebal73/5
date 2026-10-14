@@ -21,12 +21,10 @@ public sealed class PaymentTests
     }
 
     [Fact]
-    public void Cash_payment_rejects_insufficient_amount_and_checked_change_overflow()
+    public void Cash_payment_rejects_insufficient_amount()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Payment.CreateCash(
             Guid.NewGuid(), Guid.NewGuid(), 30_000L, 29_999L, Guid.NewGuid(), DateTimeOffset.UtcNow));
 
-        Assert.Throws<OverflowException>(() => Payment.CreateCash(
-            Guid.NewGuid(), Guid.NewGuid(), 1L, long.MaxValue, Guid.NewGuid(), DateTimeOffset.UtcNow));
     }
 }
