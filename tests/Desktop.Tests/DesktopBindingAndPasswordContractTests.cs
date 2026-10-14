@@ -84,6 +84,10 @@ public sealed class DesktopBindingAndPasswordContractTests
         Assert.NotNull(portProperty);
         Assert.Equal(typeof(ISessionWorkflowPort), portProperty!.PropertyType);
         Assert.True(typeof(ISessionWorkflowPort).IsAssignableFrom(typeof(SessionWorkflowViewModel)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.RefreshCommand)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.StartSessionCommand)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.EndSessionCommand)));
+        Assert.NotNull(typeof(ISessionWorkflowPort).GetProperty(nameof(ISessionWorkflowPort.CheckoutCashCommand)));
 
         var root = FindRepositoryRoot();
         var view = XDocument.Load(Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml"));
