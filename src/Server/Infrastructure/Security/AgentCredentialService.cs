@@ -326,7 +326,15 @@ public sealed class AgentCredentialService(
                 .ToListAsync(ct);
             var now = clock.UtcNow;
             var revokedPendingTokens = await RevokePendingEnrollmentTokensAsync(request.DeviceId, now, request.Reason, ct);
-            foreach (var pending in pendingCredentials) pending.Revoke(now);
+            foreach (var pending in pendingCredentials)
+            {
+                pending.Revoke(now);
+                auditWriter.Append(new AuditRecord(
+                    now, "System", request.DeviceId, "AgentCredential.RotationRevoked",
+                    "AgentCredential", pending.Id.ToString("N"),
+                    "Pending Agent credential rotation was cancelled by credential revocation.",
+                    "foundation", "Server", "Revoked"));
+            }
 
             if (current is null)
             {
