@@ -8,6 +8,7 @@ namespace GameNet.Agent;
 public sealed class AgentWorker(
     IAgentIdentityStore identityStore,
     IAgentTransport transport,
+    IAgentCredentialRotationCoordinator credentialRotationCoordinator,
     IOptions<AgentTransportOptions> options,
     ILogger<AgentWorker> logger,
     TimeProvider timeProvider) : BackgroundService
@@ -28,6 +29,14 @@ public sealed class AgentWorker(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                var resumedRotation = await credentialRotationCoordinator.ResumePendingIfAnyAsync(identity.DeviceId, stoppingToken);
+                if (resumedRotation)
+                {
+                    await transport.ResetConnectionAsync(stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(options.Value.InitialRetrySeconds), stoppingToken);
+                    continue;
+                }
+
                 var succeeded = false;
 
                 try
@@ -52,7 +61,16 @@ public sealed class AgentWorker(
                         throw new InvalidOperationException("Server reconciliation did not confirm the authoritative Agent identity and lease.");
                     }
 
-                    succeeded = true;
+                    if (reconciliation.CredentialRotationOperationId is Guid operationId)
+                    {
+                        await credentialRotationCoordinator.RotateForOperationAsync(identity.DeviceId, operationId, stoppingToken);
+                        await transport.ResetConnectionAsync(stoppingToken);
+                        succeeded = false;
+                    }
+                    else
+                    {
+                        succeeded = true;
+                    }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
