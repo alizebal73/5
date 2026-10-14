@@ -91,9 +91,22 @@ foreach ($project in $projectReports) {
     foreach ($framework in @($project.frameworks)) {
         foreach ($packageCollectionName in @("topLevelPackages", "transitivePackages")) {
             foreach ($package in @($framework.$packageCollectionName)) {
-                foreach ($vulnerability in @($package.vulnerabilities)) {
+                if ($null -eq $package) {
+                    throw "NuGet vulnerability report contains an empty package entry; refusing to accept an unverified dependency graph."
+                }
+                if (@($package.PSObject.Properties.Name) -notcontains "vulnerabilities") {
+                    throw "NuGet vulnerability report omitted package vulnerability details; refusing to accept an unverified dependency graph."
+                }
+                $packageVulnerabilities = @($package.vulnerabilities)
+                if ($packageVulnerabilities.Count -eq 0) {
+                    throw "NuGet vulnerability report returned a package without findings under --vulnerable; refusing to accept an unverified dependency graph."
+                }
+                foreach ($vulnerability in $packageVulnerabilities) {
                     if ($null -eq $vulnerability -or [string]::IsNullOrWhiteSpace([string]$vulnerability.severity)) {
-                        continue
+                        throw "NuGet vulnerability report contains a finding without severity; refusing to accept an unverified dependency graph."
+                    }
+                    if ([string]::IsNullOrWhiteSpace([string]$vulnerability.advisoryurl)) {
+                        throw "NuGet vulnerability report contains a finding without an advisory URL; refusing to accept an unverified dependency graph."
                     }
 
                     $vulnerablePackages += [pscustomobject]@{
