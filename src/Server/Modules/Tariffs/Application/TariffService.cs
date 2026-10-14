@@ -38,7 +38,8 @@ public sealed class TariffService(
         if (stationType.HasValue)
             query = query.Where(x => x.StationType == stationType.Value);
 
-        var rows = await query.OrderBy(x => x.StationType).ThenBy(x => x.Code).ToArrayAsync(cancellationToken);
+        var rows = await query.OrderByDescending(x => x.IsDefault)
+            .ThenBy(x => x.StationType).ThenBy(x => x.Code).ToArrayAsync(cancellationToken);
         return Result<IReadOnlyList<TariffResponse>>.Success(rows.Select(ToResponse).ToArray());
     }
 
