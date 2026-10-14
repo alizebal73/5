@@ -67,6 +67,28 @@ public sealed class AgentCredentialRotationCoordinatorTests
     }
 
     [Fact]
+    public async Task Failed_local_pending_persistence_does_not_send_rotation_request()
+    {
+        var oldSecret = GenerateSecret();
+        var store = new FakeCredentialStore(oldSecret, failPendingSave: true);
+        var requests = 0;
+        var handler = new DelegateHandler((request, cancellationToken) =>
+        {
+            Interlocked.Increment(ref requests);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        });
+        using var client = new HttpClient(handler);
+        var coordinator = NewCoordinator(client, store);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => coordinator.RotateForOperationAsync("station-rotation-persist-failure", Guid.NewGuid()));
+
+        Assert.Equal(0, requests);
+        Assert.Equal(oldSecret, store.Current);
+        Assert.Null(store.Pending);
+    }
+
+    [Fact]
     public async Task Lost_confirm_response_keeps_both_secrets_and_replays_same_operation_after_restart()
     {
         var oldSecret = GenerateSecret();
@@ -215,7 +237,7 @@ public sealed class AgentCredentialRotationCoordinatorTests
         finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    private sealed class FakeCredentialStore(string current) : IAgentCredentialStore
+    private sealed class FakeCredentialStore(string current, bool failPendingSave = false) : IAgentCredentialStore
     {
         public string? Current { get; private set; } = current;
         public AgentPendingCredentialRotation? Pending { get; private set; }
@@ -239,6 +261,8 @@ public sealed class AgentCredentialRotationCoordinatorTests
             Guid operationId, string deviceId, string currentSecret, string replacementSecret,
             CancellationToken cancellationToken = default)
         {
+            if (failPendingSave)
+                throw new IOException("Simulated durable pending credential persistence failure.");
             var next = new AgentPendingCredentialRotation(operationId, deviceId, currentSecret, replacementSecret, DateTimeOffset.UtcNow);
             if (Pending is not null && Pending != next)
                 throw new InvalidOperationException("Different rotation already pending.");
