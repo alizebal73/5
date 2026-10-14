@@ -241,6 +241,80 @@ public sealed class StationBoardPermissionTests
         Assert.False(board.IsBusy);
     }
 
+    [Fact]
+    public async Task Session_and_invoice_lists_identify_the_correct_station_when_tariff_and_amount_match()
+    {
+        var now = DateTimeOffset.Parse("2026-10-15T10:00:00Z");
+        var stationOne = PermissionTestServerClient.TestStation();
+        var stationTwo = new StationResponse(
+            Guid.Parse("d2d61c84-0a66-466c-b4a0-bf1e0d6c7002"), "PC-02", "Right PC",
+            StationTypeContract.Pc, StationStatusContract.Available, 2, "agent-pc-02", true,
+            now, "1.2.3", "Ready");
+        var stationThree = new StationResponse(
+            Guid.Parse("d2d61c84-0a66-466c-b4a0-bf1e0d6c7003"), "PC-03", "Rear PC A",
+            StationTypeContract.Pc, StationStatusContract.Available, 1, "agent-pc-03", true,
+            now, "1.2.3", "Ready");
+        var stationFour = new StationResponse(
+            Guid.Parse("d2d61c84-0a66-466c-b4a0-bf1e0d6c7004"), "PC-04", "Rear PC B",
+            StationTypeContract.Pc, StationStatusContract.Available, 1, "agent-pc-04", true,
+            now, "1.2.3", "Ready");
+        var customerId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var operatorId = Guid.NewGuid();
+
+        var sessionOne = new SessionResponse(
+            Guid.NewGuid(), stationOne.Id, customerId, tariffId, "PC-STANDARD", "PC Standard", 60_000L,
+            operatorId, now.AddMinutes(-30), null, null, null, null, SessionStatusContract.Active, 1);
+        var sessionTwo = new SessionResponse(
+            Guid.NewGuid(), stationTwo.Id, customerId, tariffId, "PC-STANDARD", "PC Standard", 60_000L,
+            operatorId, now.AddMinutes(-25), null, null, null, null, SessionStatusContract.Active, 1);
+
+        var invoiceOne = new InvoicePreviewResponse(
+            Guid.NewGuid(), Guid.NewGuid(), 2, stationThree.Id, customerId, tariffId,
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L,
+            InvoiceStatusContract.PendingPayment, now, null);
+        var invoiceTwo = new InvoicePreviewResponse(
+            Guid.NewGuid(), Guid.NewGuid(), 2, stationFour.Id, customerId, tariffId,
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L,
+            InvoiceStatusContract.PendingPayment, now, null);
+
+        var api = new PermissionTestServerClient
+        {
+            StationsResponse = [stationOne, stationTwo, stationThree, stationFour],
+            ActiveSessionsResponse = [sessionOne, sessionTwo],
+            PendingInvoicesResponse = [invoiceOne, invoiceTwo]
+        };
+        var granted = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Permissions.StationsRead,
+            Permissions.SessionsOperate,
+            Permissions.BillingWrite
+        };
+        var workflow = new SessionWorkflowViewModel(api, granted.Contains);
+
+        await workflow.RefreshAsync();
+
+        Assert.Equal(2, workflow.ActiveSessions.Count);
+        Assert.Equal("PC-01", workflow.ActiveSessions[0].StationLabel);
+        Assert.Equal("PC-02", workflow.ActiveSessions[1].StationLabel);
+        Assert.Equal("PC Standard", workflow.ActiveSessions[0].TariffNameSnapshot);
+        Assert.Equal(workflow.ActiveSessions[0].TariffNameSnapshot, workflow.ActiveSessions[1].TariffNameSnapshot);
+        Assert.NotEqual(workflow.ActiveSessions[0].StartedAtDisplayText, workflow.ActiveSessions[1].StartedAtDisplayText);
+
+        Assert.Equal(2, workflow.PendingInvoices.Count);
+        Assert.Equal("PC-03", workflow.PendingInvoices[0].StationLabel);
+        Assert.Equal("PC-04", workflow.PendingInvoices[1].StationLabel);
+        Assert.Equal(workflow.PendingInvoices[0].AmountDisplayText, workflow.PendingInvoices[1].AmountDisplayText);
+        Assert.Contains("00:30:00", workflow.PendingInvoices[0].DurationDisplayText, StringComparison.Ordinal);
+        Assert.Contains("00:30:00", workflow.PendingInvoices[1].DurationDisplayText, StringComparison.Ordinal);
+
+        workflow.SelectedActiveSession = workflow.ActiveSessions[1];
+        Assert.True(workflow.EndSessionCommand.CanExecute(null));
+        workflow.SelectedPendingInvoice = workflow.PendingInvoices[1];
+        Assert.Equal("30000", workflow.AmountReceivedText);
+        Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
         for (var attempt = 0; attempt < 200; attempt++)
@@ -254,12 +328,16 @@ public sealed class StationBoardPermissionTests
         Assert.True(predicate(), "The permission state did not reach its expected value.");
     }
 
-    private sealed class PermissionTestServerClient : IGameNetServerClient
+    internal sealed class PermissionTestServerClient : IGameNetServerClient
     {
         public int ListCalls { get; private set; }
         public int MutationCalls { get; private set; }
         public int ProbeCalls { get; private set; }
         public Task<IReadOnlyList<StationResponse>>? PendingListResponse { get; set; }
+        public IReadOnlyList<StationResponse>? StationsResponse { get; set; }
+        public IReadOnlyList<TariffResponse>? TariffsResponse { get; set; }
+        public IReadOnlyList<SessionResponse>? ActiveSessionsResponse { get; set; }
+        public IReadOnlyList<InvoicePreviewResponse>? PendingInvoicesResponse { get; set; }
         public CurrentOperatorResponse CurrentOperator { get; set; } = new(
             Guid.Parse("c31e4c7e-806f-4d42-9f33-9940ac4ab351"),
             "operator",
@@ -290,7 +368,8 @@ public sealed class StationBoardPermissionTests
         public Task<IReadOnlyList<StationResponse>> GetStationsAsync(CancellationToken cancellationToken = default)
         {
             ListCalls++;
-            return PendingListResponse ?? Task.FromResult<IReadOnlyList<StationResponse>>([TestStation()]);
+            return PendingListResponse ?? Task.FromResult<IReadOnlyList<StationResponse>>(
+                StationsResponse ?? new[] { TestStation() });
         }
 
         public Task<StationResponse> CreateStationAsync(
@@ -342,7 +421,7 @@ public sealed class StationBoardPermissionTests
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(
             StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<TariffResponse>>(Array.Empty<TariffResponse>());
+            Task.FromResult<IReadOnlyList<TariffResponse>>(TariffsResponse ?? Array.Empty<TariffResponse>());
 
         public Task<TariffResponse> CreateTariffAsync(
             CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
@@ -350,7 +429,7 @@ public sealed class StationBoardPermissionTests
 
         public Task<IReadOnlyList<SessionResponse>> GetActiveSessionsAsync(
             Guid? stationId = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<SessionResponse>>(Array.Empty<SessionResponse>());
+            Task.FromResult<IReadOnlyList<SessionResponse>>(ActiveSessionsResponse ?? Array.Empty<SessionResponse>());
 
         public Task<SessionResponse> StartSessionAsync(
             StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
@@ -362,7 +441,7 @@ public sealed class StationBoardPermissionTests
 
         public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
             CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(Array.Empty<InvoicePreviewResponse>());
+            Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(PendingInvoicesResponse ?? Array.Empty<InvoicePreviewResponse>());
 
         public Task<CashCheckoutResponse> CheckoutCashAsync(
             Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
