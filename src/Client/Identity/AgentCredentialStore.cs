@@ -135,14 +135,20 @@ public sealed class AgentCredentialStore(
             clearBytes = JsonSerializer.SerializeToUtf8Bytes(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             entropy = CreatePendingRotationEntropy(deviceId);
             protectedBytes = ProtectedData.Protect(clearBytes, entropy, DataProtectionScope.CurrentUser);
-            await using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+            await using (var createStream = new FileStream(
+                temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.WriteThrough))
+            {
+                await createStream.FlushAsync(cancellationToken);
+            }
+            if (IsProduction())
+                AgentStateAccessControl.ProtectStateFileForReplacement(root, temp, PendingRotationFileName);
+
+            await using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Write, FileShare.None,
                 4096, FileOptions.Asynchronous | FileOptions.WriteThrough))
             {
                 await stream.WriteAsync(protectedBytes, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
-            if (IsProduction())
-                AgentStateAccessControl.ProtectStateFileForReplacement(root, temp, PendingRotationFileName);
             try
             {
                 File.Move(temp, path, overwrite: false);
@@ -155,6 +161,14 @@ public sealed class AgentCredentialStore(
                     !string.Equals(winner.ReplacementSecret, replacementSecret, StringComparison.Ordinal))
                     throw new InvalidOperationException("Concurrent Agent credential-rotation state did not match; refusing to overwrite it.");
             }
+
+            var persisted = await TryLoadPendingRotationAsync(deviceId, cancellationToken);
+            if (persisted is null ||
+                persisted.OperationId != operationId ||
+                !string.Equals(persisted.DeviceId, deviceId, StringComparison.Ordinal) ||
+                !string.Equals(persisted.CurrentSecret, currentSecret, StringComparison.Ordinal) ||
+                !string.Equals(persisted.ReplacementSecret, replacementSecret, StringComparison.Ordinal))
+                throw new InvalidOperationException("Protected Agent credential-rotation state failed read-after-write verification.");
         }
         finally
         {
@@ -283,18 +297,28 @@ public sealed class AgentCredentialStore(
         {
             clearBytes = Encoding.UTF8.GetBytes(secret);
             protectedBytes = ProtectedData.Protect(clearBytes, null, DataProtectionScope.CurrentUser);
-            await using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+            await using (var createStream = new FileStream(
+                temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.WriteThrough))
+            {
+                await createStream.FlushAsync(cancellationToken);
+            }
+            if (IsProduction())
+                AgentStateAccessControl.ProtectStateFileForReplacement(root, temp, "credential.bin");
+
+            await using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Write, FileShare.None,
                 4096, FileOptions.Asynchronous | FileOptions.WriteThrough))
             {
                 await stream.WriteAsync(protectedBytes, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
-            if (IsProduction())
-                AgentStateAccessControl.ProtectStateFileForReplacement(root, temp, "credential.bin");
             File.Move(temp, path, overwrite: true);
             RejectReparsePoint(path);
             if (IsProduction())
                 AgentStateAccessControl.ValidateCredentialFile(root, path);
+
+            var persisted = await TryLoadAsync(cancellationToken);
+            if (!string.Equals(persisted, secret, StringComparison.Ordinal))
+                throw new InvalidOperationException("Stored Agent credential failed read-after-write verification.");
         }
         finally
         {
