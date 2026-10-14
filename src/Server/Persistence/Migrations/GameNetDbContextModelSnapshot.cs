@@ -581,6 +581,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasIndex("CustomerId", "Status").HasDatabaseName("ix_sessions_customer_status");
                     b.HasIndex("StartedAtUtc").HasDatabaseName("ix_sessions_started_at_utc");
                     b.HasIndex("StationId").IsUnique().HasDatabaseName("ux_sessions_one_active_per_station").HasFilter("status = 1");
+                    b.HasIndex("TariffId").HasDatabaseName("ix_sessions_tariff_id");
                     b.ToTable("sessions", null, t =>
                         {
                             t.HasCheckConstraint("ck_sessions_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
@@ -607,8 +608,11 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<string>("TariffNameSnapshot").IsRequired().HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("tariff_name_snapshot");
                     b.Property<long>("TariffHourlyRateTomanSnapshot").HasColumnType("bigint").HasColumnName("tariff_hourly_rate_toman_snapshot");
                     b.HasKey("Id").HasName("pk_invoices");
+                    b.HasIndex("CustomerId").HasDatabaseName("ix_invoices_customer_id");
                     b.HasIndex("PaidAtUtc").HasDatabaseName("ix_invoices_paid_at_utc");
                     b.HasIndex("SessionId").IsUnique().HasDatabaseName("ux_invoices_session_id");
+                    b.HasIndex("StationId").HasDatabaseName("ix_invoices_station_id");
+                    b.HasIndex("TariffId").HasDatabaseName("ix_invoices_tariff_id");
                     b.ToTable("invoices", null, t =>
                         {
                             t.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
