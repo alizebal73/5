@@ -145,7 +145,7 @@ public sealed class AgentCredentialService(
             auditWriter.Append(new AuditRecord(
                 now, "System", request.DeviceId, "AgentCredential.RotationRequested",
                 "AgentCredentialRotationRequest", request.OperationId.ToString("N"),
-                $"Operator requested a staged Agent credential rotation from credential {current.Id:N}.",
+                $"Authorized provisioning control requested a staged Agent credential rotation from credential {current.Id:N}.",
                 "foundation", "Server", "Accepted"));
             return new AgentCredentialRotationRequestedResponse(
                 request.OperationId, request.DeviceId, "requested", now.Add(RotationLifetime));
