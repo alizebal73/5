@@ -302,6 +302,23 @@ public sealed class AgentEnrollmentBootstrapperTests
 
         public Task SaveAsync(string secret, CancellationToken cancellationToken = default) =>
             Task.FromException(new IOException("Simulated credential persistence failure."));
+
+        public Task<AgentPendingCredentialRotation?> TryLoadPendingRotationAsync(
+            string deviceId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<AgentPendingCredentialRotation?>(null);
+
+        public Task SavePendingRotationAsync(
+            Guid operationId, string deviceId, string currentSecret, string replacementSecret,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException(new NotSupportedException());
+
+        public Task PromotePendingRotationAsync(
+            Guid operationId, string deviceId, CancellationToken cancellationToken = default) =>
+            Task.FromException(new NotSupportedException());
+
+        public Task DiscardExpiredPendingRotationAsync(
+            Guid operationId, string deviceId, CancellationToken cancellationToken = default) =>
+            Task.FromException(new NotSupportedException());
     }
 
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
