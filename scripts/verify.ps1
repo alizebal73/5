@@ -18,9 +18,15 @@ function Invoke-Checked {
 & "$PSScriptRoot/verify-trust-server-certificate.ps1"
 & "$PSScriptRoot/publish-deployment-payloads.ps1" -ValidateOnly
 
-$dotnetPath = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+$dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+if ($null -ne $dotnetCommand -and -not [string]::IsNullOrWhiteSpace($dotnetCommand.Source)) {
+    $dotnetPath = $dotnetCommand.Source
+}
+else {
+    $dotnetPath = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+}
 if (-not (Test-Path -LiteralPath $dotnetPath -PathType Leaf)) {
-    $dotnetPath = (Get-Command dotnet -ErrorAction Stop).Source
+    throw "The required dotnet SDK executable was not found on PATH or under Program Files."
 }
 Write-Host "Using dotnet: $dotnetPath"
 
