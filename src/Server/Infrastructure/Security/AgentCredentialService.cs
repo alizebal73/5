@@ -135,9 +135,33 @@ public sealed class AgentCredentialService(
                 if (replaced is null || !FixedHexEquals(existing.SecretHash, replacementHash) ||
                     !FixedHexEquals(replaced.SecretHash, oldHash))
                     throw new AgentCredentialException("agent.rotation_payload_mismatch");
-                if (existing.RevokedAtUtc is not null ||
-                    (existing.IsPendingRotation && existing.RotationExpiresAtUtc <= now))
-                    throw new AgentCredentialException("agent.rotation_expired");
+                if (existing.RevokedAtUtc is not null)
+                    return new AgentCredentialRotationStageResponse(
+                        request.OperationId, request.DeviceId, "expired", null);
+
+                if (existing.IsPendingRotation && existing.RotationExpiresAtUtc <= now)
+                {
+                    var prior = existing.ReplacesCredentialId.HasValue
+                        ? await dbContext.AgentCredentials.SingleOrDefaultAsync(
+                            x => x.Id == existing.ReplacesCredentialId.Value, ct)
+                        : null;
+                    if (prior is not null &&
+                        prior.RevokedAtUtc is null &&
+                        prior.RotationRequestedOperationId == request.OperationId)
+                    {
+                        prior.ClearRotationRequest();
+                    }
+
+                    existing.Revoke(now);
+                    auditWriter.Append(new AuditRecord(
+                        now, "System", request.DeviceId, "AgentCredential.RotationExpired",
+                        "AgentCredential", existing.Id.ToString("N"),
+                        "An expired pending Agent credential rotation was safely retired; the prior credential was retained.",
+                        "foundation", "Server", "Expired"));
+                    return new AgentCredentialRotationStageResponse(
+                        request.OperationId, request.DeviceId, "expired", null);
+                }
+
                 return new AgentCredentialRotationStageResponse(
                     request.OperationId, request.DeviceId,
                     existing.IsPendingRotation ? "staged" : "committed",
