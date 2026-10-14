@@ -11,6 +11,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.ToTable("customers", table =>
         {
             table.HasCheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
+            table.HasCheckConstraint("ck_customers_kind_range", "kind BETWEEN 1 AND 2");
             table.HasCheckConstraint("ck_customers_registered_name", "(kind = 1) OR (display_name IS NOT NULL AND length(trim(display_name)) > 0)");
         });
         b.HasKey(x => x.Id).HasName("pk_customers");
