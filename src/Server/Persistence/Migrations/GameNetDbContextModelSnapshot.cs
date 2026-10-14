@@ -532,8 +532,9 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasIndex("Kind", "IsActive").HasDatabaseName("ix_customers_kind_active");
                     b.ToTable("customers", null, t =>
                         {
-                            t.HasCheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
+                             t.HasCheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
                             t.HasCheckConstraint("ck_customers_registered_name", "(kind = 1) OR (display_name IS NOT NULL AND length(trim(display_name)) > 0)");
+                            t.HasCheckConstraint("ck_customers_kind_range", "kind BETWEEN 1 AND 2");
                         });
                 });
 
@@ -555,6 +556,7 @@ namespace GameNet.Server.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_tariffs_hourly_rate_positive", "hourly_rate_toman > 0");
                             t.HasCheckConstraint("ck_tariffs_station_type", "station_type BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("ck_tariffs_default_must_be_active", "is_active OR NOT is_default");
                         });
                 });
 
