@@ -316,6 +316,45 @@ public sealed class StationBoardPermissionTests
         Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task Billing_operator_with_station_read_sees_pc_code_without_session_operation_permission()
+    {
+        var now = DateTimeOffset.Parse("2026-10-15T10:00:00Z");
+        var station = PermissionTestServerClient.TestStation();
+        var customerId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var invoice = new InvoicePreviewResponse(
+            Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, customerId, tariffId,
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L,
+            InvoiceStatusContract.PendingPayment, now, null);
+        var api = new PermissionTestServerClient
+        {
+            StationsResponse = [station],
+            PendingInvoicesResponse = [invoice]
+        };
+        var granted = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Permissions.StationsRead,
+            Permissions.BillingWrite
+        };
+        var workflow = new SessionWorkflowViewModel(api, granted.Contains);
+
+        await workflow.RefreshAsync();
+
+        Assert.True(workflow.CanReadStations);
+        Assert.True(workflow.CanCheckout);
+        Assert.False(workflow.CanOperateSessions);
+        Assert.Empty(workflow.PcStations);
+        Assert.Empty(workflow.ActiveSessions);
+        Assert.Single(workflow.PendingInvoices);
+        Assert.Equal("PC-01", workflow.PendingInvoices[0].StationLabel);
+
+        workflow.SelectedPendingInvoice = workflow.PendingInvoices[0];
+        Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
+        Assert.False(workflow.StartSessionCommand.CanExecute(null));
+        Assert.False(workflow.EndSessionCommand.CanExecute(null));
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
         for (var attempt = 0; attempt < 200; attempt++)
