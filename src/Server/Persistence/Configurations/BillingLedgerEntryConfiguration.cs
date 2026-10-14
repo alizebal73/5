@@ -11,6 +11,7 @@ public sealed class BillingLedgerEntryConfiguration : IEntityTypeConfiguration<B
         b.ToTable("billing_ledger_entries", table =>
         {
             table.HasCheckConstraint("ck_billing_ledger_amount_positive", "amount_toman > 0");
+            table.HasCheckConstraint("ck_billing_ledger_entry_type", "entry_type = 1");
         });
         b.HasKey(x => x.Id).HasName("pk_billing_ledger_entries");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
