@@ -134,6 +134,76 @@ public sealed class AgentCredentialRotationCoordinatorTests
         Assert.Equal(1, confirmAttempts);
     }
 
+    [Fact]
+    public async Task Expired_rotation_clears_pending_state_only_after_old_credential_is_verified_active()
+    {
+        const string deviceId = "station-rotation-expired";
+        var current = GenerateSecret();
+        var replacement = GenerateSecret();
+        var operationId = Guid.NewGuid();
+        var store = new FakeCredentialStore(current);
+        store.SeedPending(new AgentPendingCredentialRotation(
+            operationId, deviceId, current, replacement, DateTimeOffset.UtcNow));
+
+        var handler = new DelegateHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/rotate/stage", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AgentCredentialRotationStageResponse(
+                        operationId, deviceId, "expired", null))
+                };
+            }
+
+            Assert.EndsWith("/auth/token", request.RequestUri.AbsolutePath);
+            var tokenRequest = await request.Content!.ReadFromJsonAsync<AgentTokenRequest>(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web), cancellationToken);
+            Assert.Equal(current, tokenRequest!.Secret);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new AgentTokenResponse(
+                    "prior-credential-valid-token", DateTimeOffset.UtcNow.AddMinutes(2)))
+            };
+        });
+        using var client = new HttpClient(handler);
+        var coordinator = NewCoordinator(client, store);
+
+        Assert.True(await coordinator.ResumePendingIfAnyAsync(deviceId));
+        Assert.Equal(current, store.Current);
+        Assert.Null(store.Pending);
+    }
+
+    [Fact]
+    public async Task Expired_rotation_keeps_pending_state_when_old_credential_is_not_confirmed_active()
+    {
+        const string deviceId = "station-rotation-expired-401";
+        var current = GenerateSecret();
+        var replacement = GenerateSecret();
+        var operationId = Guid.NewGuid();
+        var store = new FakeCredentialStore(current);
+        store.SeedPending(new AgentPendingCredentialRotation(
+            operationId, deviceId, current, replacement, DateTimeOffset.UtcNow));
+
+        var handler = new DelegateHandler((request, cancellationToken) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/rotate/stage", StringComparison.Ordinal))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new AgentCredentialRotationStageResponse(
+                        operationId, deviceId, "expired", null))
+                });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        });
+        using var client = new HttpClient(handler);
+        var coordinator = NewCoordinator(client, store);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.ResumePendingIfAnyAsync(deviceId));
+        Assert.Equal(current, store.Current);
+        Assert.NotNull(store.Pending);
+    }
+
     private static AgentCredentialRotationCoordinator NewCoordinator(HttpClient client, IAgentCredentialStore store) =>
         new(new SingleClientFactory(client), store,
             Options.Create(new AgentTransportOptions { ServerBaseUrl = "https://127.0.0.1:5080" }));
@@ -183,6 +253,16 @@ public sealed class AgentCredentialRotationCoordinatorTests
             Pending = null;
             return Task.CompletedTask;
         }
+        public Task DiscardExpiredPendingRotationAsync(Guid operationId, string deviceId, CancellationToken cancellationToken = default)
+        {
+            if (Pending is null)
+                return Task.CompletedTask;
+            if (Pending.OperationId != operationId || Pending.DeviceId != deviceId)
+                throw new InvalidOperationException("Pending rotation mismatch.");
+            Pending = null;
+            return Task.CompletedTask;
+        }
+        public void SeedPending(AgentPendingCredentialRotation pending) => Pending = pending;
     }
 
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
