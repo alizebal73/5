@@ -161,6 +161,29 @@ public sealed class SignalRAgentTransport(
         return accepted;
     }
 
+    public async Task ResetConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            ClearLease();
+            if (identity is not null)
+                await accessTokenProvider.InvalidateCachedTokenAsync(identity.Value.DeviceId, cancellationToken);
+
+            var existing = connection;
+            connection = null;
+            if (existing is not null)
+            {
+                try { await existing.StopAsync(cancellationToken); }
+                finally { await existing.DisposeAsync(); }
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (connection is not null)
