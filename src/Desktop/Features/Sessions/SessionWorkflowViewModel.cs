@@ -41,7 +41,10 @@ public sealed class SessionWorkflowViewModel : INotifyPropertyChanged
             !string.IsNullOrWhiteSpace(TariffCode) && !string.IsNullOrWhiteSpace(TariffName) && TryParseToman(HourlyRateText, out var rate) && rate > 0);
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
-            SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc });
+            SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
+            SelectedStation is not null &&
+            !ActiveSessions.Any(x => x.StationId == SelectedStation.Id) &&
+            !PendingInvoices.Any(x => x.StationId == SelectedStation.Id));
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession is { Status: SessionStatusContract.Active });
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
