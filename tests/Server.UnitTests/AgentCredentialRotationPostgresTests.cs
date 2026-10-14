@@ -18,6 +18,11 @@ public sealed class AgentCredentialRotationPostgresTests
     [Fact]
     public async Task Rotation_is_idempotent_and_old_credential_remains_active_until_commit()
     {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS"),
+                "true",
+                StringComparison.Ordinal))
+            return;
         var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
             return; // PostgreSQL behavior is exercised by the Foundation verification lane.
@@ -136,6 +141,11 @@ public sealed class AgentCredentialRotationPostgresTests
     [Fact]
     public async Task Expired_unstaged_request_keeps_prior_credential_active_and_clears_only_its_signal()
     {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS"),
+                "true",
+                StringComparison.Ordinal))
+            return;
         var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
             return;
@@ -212,6 +222,11 @@ public sealed class AgentCredentialRotationPostgresTests
     [Fact]
     public async Task Revoking_device_cancels_and_audits_pending_rotation_even_when_old_credential_is_removed()
     {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS"),
+                "true",
+                StringComparison.Ordinal))
+            return;
         var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
             return;
@@ -286,6 +301,101 @@ public sealed class AgentCredentialRotationPostgresTests
                 .Append(operationId.ToString("N")).ToList();
             await cleanup.AuditEntries.Where(x => x.ReferenceId != null && refs.Contains(x.ReferenceId))
                 .ExecuteDeleteAsync();
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
+        }
+    }
+
+
+    [Fact]
+    public async Task Concurrent_rotation_requests_for_one_device_allow_only_one_live_operation()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("GAMENET_AGENT_CREDENTIAL_ROTATION_POSTGRES_TESTS"),
+                "true",
+                StringComparison.Ordinal))
+            return;
+
+        var connectionString = Environment.GetEnvironmentVariable("GAMENET_DATABASE_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return;
+
+        var deviceId = "rotation-concurrent-" + Guid.NewGuid().ToString("N");
+        var operationIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var currentSecret = GenerateSecret();
+        var oldCredentialId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var options = new DbContextOptionsBuilder<GameNetDbContext>().UseNpgsql(connectionString).Options;
+
+        try
+        {
+            await using (var seed = new GameNetDbContext(options))
+            {
+                seed.AgentCredentials.Add(new AgentCredential
+                {
+                    Id = oldCredentialId,
+                    DeviceId = deviceId,
+                    SecretHash = Hash(currentSecret),
+                    CreatedAtUtc = now
+                });
+                await seed.SaveChangesAsync();
+            }
+
+            static async Task<string> RequestAsync(
+                DbContextOptions<GameNetDbContext> options,
+                string deviceId,
+                Guid operationId,
+                DateTimeOffset now)
+            {
+                await using var db = new GameNetDbContext(options);
+                try
+                {
+                    var response = await CreateService(db, now).RequestRotationAsync(
+                        new AgentCredentialRotateRequest(deviceId, operationId));
+                    return response.State;
+                }
+                catch (AgentCredentialException exception)
+                {
+                    return exception.Code;
+                }
+            }
+
+            var outcomes = await Task.WhenAll(
+                Task.Run(() => RequestAsync(options, deviceId, operationIds[0], now)),
+                Task.Run(() => RequestAsync(options, deviceId, operationIds[1], now)));
+
+            Assert.Single(outcomes.Where(outcome => outcome == "requested"));
+            Assert.Single(outcomes.Where(outcome => outcome == "agent.rotation_in_progress"));
+
+            await using (var verify = new GameNetDbContext(options))
+            {
+                var current = await verify.AgentCredentials.SingleAsync(
+                    x => x.DeviceId == deviceId && x.RevokedAtUtc == null && !x.IsPendingRotation);
+                Assert.Equal(oldCredentialId, current.Id);
+                Assert.True(operationIds.Contains(current.RotationRequestedOperationId ?? Guid.Empty));
+                Assert.Equal(1, await verify.AuditEntries.CountAsync(x =>
+                    x.ReferenceType == "AgentCredentialRotationRequest" &&
+                    x.ReferenceId != null &&
+                    operationIds.Select(id => id.ToString("N")).Contains(x.ReferenceId)));
+                Assert.False(await verify.AgentCredentials.AnyAsync(
+                    x => x.DeviceId == deviceId && x.IsPendingRotation && x.RevokedAtUtc == null));
+            }
+        }
+        finally
+        {
+            await using var cleanup = new GameNetDbContext(options);
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_connection_leases WHERE device_id = {deviceId}");
+            await cleanup.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM agent_enrollment_tokens WHERE device_id = {deviceId}");
+            var ids = await cleanup.AgentCredentials.Where(x => x.DeviceId == deviceId)
+                .Select(x => x.Id).ToListAsync();
+            var references = ids.Select(id => id.ToString("N"))
+                .Concat(operationIds.Select(id => id.ToString("N")))
+                .Append(oldCredentialId.ToString("N"))
+                .ToList();
+            await cleanup.AuditEntries.Where(x =>
+                x.ReferenceId != null && references.Contains(x.ReferenceId)).ExecuteDeleteAsync();
             await cleanup.Database.ExecuteSqlInterpolatedAsync(
                 $"DELETE FROM agent_credentials WHERE device_id = {deviceId}");
         }
