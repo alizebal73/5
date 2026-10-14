@@ -75,7 +75,7 @@ public partial class Slice1PcCashCore : Migration
                 table.PrimaryKey("pk_sessions", x => x.id);
                 table.CheckConstraint("ck_sessions_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
                 table.CheckConstraint("ck_sessions_status_range", "status BETWEEN 1 AND 3");
-                table.CheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND paid_at_utc IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND paid_at_utc IS NULL) OR (status = 3 AND ended_at_utc IS NOT NULL AND paid_at_utc IS NOT NULL)");
+                table.CheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND ended_at_utc > started_at_utc) OR (status = 3 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL AND ended_at_utc > started_at_utc AND paid_at_utc >= ended_at_utc)");
                 table.ForeignKey("fk_sessions_stations_station_id", x => x.station_id, "stations", "id", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("fk_sessions_customers_customer_id", x => x.customer_id, "customers", "id", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("fk_sessions_tariffs_tariff_id", x => x.tariff_id, "tariffs", "id", onDelete: ReferentialAction.Restrict);
