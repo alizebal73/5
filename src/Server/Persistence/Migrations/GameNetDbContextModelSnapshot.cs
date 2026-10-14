@@ -597,8 +597,8 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<long>("ElapsedTicks").HasColumnType("bigint").HasColumnName("elapsed_ticks");
                     b.Property<DateTimeOffset>("IssuedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("issued_at_utc");
                     b.Property<Guid>("IssuedByOperatorId").HasColumnType("uuid").HasColumnName("issued_by_operator_id");
-                    b.Property<DateTimeOffset>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
-                    b.Property<Guid>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
+                    b.Property<DateTimeOffset?>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
+                    b.Property<Guid?>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
                     b.Property<Guid>("SessionId").HasColumnType("uuid").HasColumnName("session_id");
                     b.Property<Guid>("StationId").HasColumnType("uuid").HasColumnName("station_id");
                     b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
@@ -614,7 +614,8 @@ namespace GameNet.Server.Persistence.Migrations
                             t.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
                             t.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks > 0");
                             t.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
-                            t.HasCheckConstraint("ck_invoices_status_paid", "status = 1");
+                            t.HasCheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 2");
+                            t.HasCheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");
                         });
                 });
 
