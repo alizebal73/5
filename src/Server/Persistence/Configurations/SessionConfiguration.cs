@@ -35,8 +35,8 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         b.Property(x => x.Version).IsConcurrencyToken().IsRequired().HasColumnName("version");
 
         b.HasIndex(x => x.StationId).IsUnique()
-            .HasFilter("status = 1")
-            .HasDatabaseName("ux_sessions_one_active_per_station");
+            .HasFilter("status IN (1, 2)")
+            .HasDatabaseName("ux_sessions_one_unsettled_per_station");
         b.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("ix_sessions_customer_status");
         b.HasIndex(x => x.TariffId).HasDatabaseName("ix_sessions_tariff_id");
         b.HasIndex(x => x.StartedAtUtc).HasDatabaseName("ix_sessions_started_at_utc");
