@@ -269,7 +269,7 @@ When a defect reaches production or certification, fix the root boundary, add re
 - Fix: corrected only the malformed closing tag to `</system:String>` in both locale dictionaries. The displayed translations and runtime behavior are unchanged.
 - Regression evidence: the canonical Release build compiles both XAML dictionaries; the full Foundation workflow must pass on the exact resulting commit before the branch is considered verified.
 - Status at entry: correction committed; verification pending. Do not treat the failed run #159 as a passing checkpoint.
-- Roadmap/checkpoint: see `docs/development/roadmap-and-current-checkpoint.md`.
+- Current execution queue: [Active Execution Control](../operations/active-execution-control.md). The prior roadmap/checkpoint file was a superseded snapshot and is removed from the current tree; immutable historical evidence remains in the relevant GitHub PR/Actions records.
 
 ## 2026-10-09 — Full Foundation Certification passed after WPF XAML correction
 
