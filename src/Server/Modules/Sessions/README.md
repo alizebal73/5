@@ -1,6 +1,6 @@
 # Sessions Module Boundary
 
-**Status: PARTIALLY IMPLEMENTED.** The first PC walk-in slice includes Session start/end, Station and Customer binding, a tariff snapshot, and the transition into pending settlement. The full Sessions module is not complete; Slice 1 acceptance is tracked in [Issue #98](../../../../docs/operations/active-execution-control.md).
+**Status: PARTIALLY IMPLEMENTED.** The first PC walk-in slice includes Session start/end, Station and Customer binding, a tariff snapshot, and the transition into pending settlement. The full Sessions module is not complete; Slice 1 acceptance is tracked in [Issue #98](https://github.com/alizebal73/5/issues/98). The current queue is in [Active Execution Control](../../../../docs/operations/active-execution-control.md).
 
 ## Ownership
 
