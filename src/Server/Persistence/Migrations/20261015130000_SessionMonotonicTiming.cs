@@ -49,6 +49,12 @@ public partial class SessionMonotonicTiming : Migration
         m.AlterColumn<Guid>(name: "started_boot_identifier", table: "sessions", type: "uuid",
             nullable: false, oldClrType: typeof(Guid), oldType: "uuid", oldNullable: true);
 
+        m.DropCheckConstraint(name: "ck_invoices_elapsed_positive", table: "invoices");
+        m.AddCheckConstraint(
+            name: "ck_invoices_elapsed_positive",
+            table: "invoices",
+            sql: "elapsed_ticks IS NOT NULL AND elapsed_ticks > 0");
+
         m.DropCheckConstraint(name: "ck_sessions_time_state", table: "sessions");
         m.AddCheckConstraint(
             name: "ck_sessions_time_state",
@@ -59,6 +65,12 @@ public partial class SessionMonotonicTiming : Migration
     protected override void Down(MigrationBuilder m)
     {
         m.DropCheckConstraint(name: "ck_sessions_time_state", table: "sessions");
+        m.DropCheckConstraint(name: "ck_invoices_elapsed_positive", table: "invoices");
+        m.AddCheckConstraint(
+            name: "ck_invoices_elapsed_positive",
+            table: "invoices",
+            sql: "elapsed_ticks > 0");
+
         m.AddCheckConstraint(
             name: "ck_sessions_time_state",
             table: "sessions",
