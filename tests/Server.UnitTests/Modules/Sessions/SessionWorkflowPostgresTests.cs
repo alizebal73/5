@@ -89,12 +89,22 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(1, await db.Customers.CountAsync(x => x.Id == customerId.Value));
                 Assert.Equal(1, await db.IdempotencyRecords.CountAsync(x => x.Key == startKey));
 
+                // Editing today's tariff after Session start must not reprice this Session.
+                tariff.ChangeHourlyRate(120_000L);
+                await db.SaveChangesAsync();
+                Assert.Equal(120_000L, await db.Tariffs.AsNoTracking()
+                    .Where(x => x.Id == tariffId)
+                    .Select(x => x.HourlyRateToman)
+                    .SingleAsync());
+                Assert.Equal(60_000L, started.Value.TariffHourlyRateTomanSnapshot);
+
                 clock.Advance(TimeSpan.FromMinutes(30));
                 var endCommand = new EndSessionCommand(
                     started.Value.Id, started.Value.Version, endKey, actor);
                 var ended = await service.EndAsync(endCommand, CancellationToken.None);
                 Assert.True(ended.IsSuccess, ended.IsSuccess ? "" : ended.Error.Code);
                 Assert.Equal(InvoiceStatusContract.PendingPayment, ended.Value.Status);
+                Assert.Equal(60_000L, ended.Value.TariffHourlyRateTomanSnapshot);
                 Assert.Equal(30_000L, ended.Value.AmountToman);
                 Assert.Equal(started.Value.Version + 1, ended.Value.SessionVersion);
 
