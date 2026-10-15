@@ -13,7 +13,11 @@ public sealed class Session
         string tariffNameSnapshot,
         long tariffHourlyRateTomanSnapshot,
         Guid startedByOperatorId,
-        DateTimeOffset startedAtUtc)
+        DateTimeOffset startedAtUtc,
+        long startedMonotonicTimestamp,
+        long startedMonotonicFrequency,
+        long startedSystemUptimeMilliseconds,
+        Guid startedBootIdentifier)
     {
         Id = id;
         StationId = stationId;
@@ -24,6 +28,10 @@ public sealed class Session
         TariffHourlyRateTomanSnapshot = tariffHourlyRateTomanSnapshot;
         StartedByOperatorId = startedByOperatorId;
         StartedAtUtc = startedAtUtc.ToUniversalTime();
+        StartedMonotonicTimestamp = startedMonotonicTimestamp;
+        StartedMonotonicFrequency = startedMonotonicFrequency;
+        StartedSystemUptimeMilliseconds = startedSystemUptimeMilliseconds;
+        StartedBootIdentifier = startedBootIdentifier;
         Status = SessionStatus.Active;
         Version = 1;
     }
@@ -37,6 +45,11 @@ public sealed class Session
     public long TariffHourlyRateTomanSnapshot { get; private set; }
     public Guid StartedByOperatorId { get; private set; }
     public DateTimeOffset StartedAtUtc { get; private set; }
+    public long StartedMonotonicTimestamp { get; private set; }
+    public long StartedMonotonicFrequency { get; private set; }
+    public long StartedSystemUptimeMilliseconds { get; private set; }
+    public Guid StartedBootIdentifier { get; private set; }
+    public long? ElapsedTicks { get; private set; }
     public Guid? EndedByOperatorId { get; private set; }
     public DateTimeOffset? EndedAtUtc { get; private set; }
     public Guid? PaidByOperatorId { get; private set; }
@@ -53,7 +66,11 @@ public sealed class Session
         string tariffNameSnapshot,
         long tariffHourlyRateTomanSnapshot,
         Guid startedByOperatorId,
-        DateTimeOffset startedAtUtc)
+        DateTimeOffset startedAtUtc,
+        long startedMonotonicTimestamp,
+        long startedMonotonicFrequency,
+        long startedSystemUptimeMilliseconds,
+        Guid startedBootIdentifier)
     {
         if (id == Guid.Empty) throw new ArgumentException("Session id is required.", nameof(id));
         if (stationId == Guid.Empty) throw new ArgumentException("Station id is required.", nameof(stationId));
@@ -62,40 +79,44 @@ public sealed class Session
         if (startedByOperatorId == Guid.Empty) throw new ArgumentException("Operator id is required.", nameof(startedByOperatorId));
         if (tariffHourlyRateTomanSnapshot <= 0)
             throw new ArgumentOutOfRangeException(nameof(tariffHourlyRateTomanSnapshot));
+        if (startedMonotonicFrequency <= 0)
+            throw new ArgumentOutOfRangeException(nameof(startedMonotonicFrequency));
+        if (startedSystemUptimeMilliseconds < 0)
+            throw new ArgumentOutOfRangeException(nameof(startedSystemUptimeMilliseconds));
+        if (startedBootIdentifier == Guid.Empty)
+            throw new ArgumentOutOfRangeException(nameof(startedBootIdentifier));
+
         return new Session(id, stationId, customerId, tariffId, tariffCodeSnapshot, tariffNameSnapshot,
-            tariffHourlyRateTomanSnapshot, startedByOperatorId, startedAtUtc);
+            tariffHourlyRateTomanSnapshot, startedByOperatorId, startedAtUtc,
+            startedMonotonicTimestamp, startedMonotonicFrequency, startedSystemUptimeMilliseconds, startedBootIdentifier);
     }
 
-    public void End(Guid endedByOperatorId, DateTimeOffset endedAtUtc)
+    public void End(Guid endedByOperatorId, DateTimeOffset endedAtUtc, long elapsedTicks)
     {
         if (Status != SessionStatus.Active)
             throw new InvalidOperationException("SESSION_NOT_ACTIVE");
         if (endedByOperatorId == Guid.Empty)
             throw new ArgumentException("Operator id is required.", nameof(endedByOperatorId));
+        if (elapsedTicks <= 0)
+            throw new ArgumentOutOfRangeException(nameof(elapsedTicks), "Session elapsed time must be positive.");
 
-        var ended = endedAtUtc.ToUniversalTime();
-        if (ended <= StartedAtUtc)
-            throw new ArgumentOutOfRangeException(nameof(endedAtUtc), "Session end must be after session start.");
-
+        // UTC is an event timestamp, not the duration authority; it may move backwards.
         EndedByOperatorId = endedByOperatorId;
-        EndedAtUtc = ended;
+        EndedAtUtc = endedAtUtc.ToUniversalTime();
+        ElapsedTicks = elapsedTicks;
         Status = SessionStatus.PendingSettlement;
         Version = checked(Version + 1);
     }
 
     public void MarkPaid(Guid paidByOperatorId, DateTimeOffset paidAtUtc)
     {
-        if (Status != SessionStatus.PendingSettlement || EndedAtUtc is null)
+        if (Status != SessionStatus.PendingSettlement || EndedAtUtc is null || ElapsedTicks is null)
             throw new InvalidOperationException("SESSION_NOT_READY_FOR_SETTLEMENT");
         if (paidByOperatorId == Guid.Empty)
             throw new ArgumentException("Operator id is required.", nameof(paidByOperatorId));
 
-        var paid = paidAtUtc.ToUniversalTime();
-        if (paid < EndedAtUtc.Value)
-            throw new ArgumentOutOfRangeException(nameof(paidAtUtc), "Settlement cannot precede session end.");
-
         PaidByOperatorId = paidByOperatorId;
-        PaidAtUtc = paid;
+        PaidAtUtc = paidAtUtc.ToUniversalTime();
         Status = SessionStatus.Paid;
         Version = checked(Version + 1);
     }

@@ -84,12 +84,8 @@ public sealed class Invoice
         if (paidByOperatorId == Guid.Empty)
             throw new ArgumentException("Operator id is required.", nameof(paidByOperatorId));
 
-        var paid = paidAtUtc.ToUniversalTime();
-        if (paid < IssuedAtUtc)
-            throw new ArgumentOutOfRangeException(nameof(paidAtUtc), "Payment cannot precede invoice issuance.");
-
         PaidByOperatorId = paidByOperatorId;
-        PaidAtUtc = paid;
+        PaidAtUtc = paidAtUtc.ToUniversalTime();
         Status = InvoiceStatus.Paid;
     }
 

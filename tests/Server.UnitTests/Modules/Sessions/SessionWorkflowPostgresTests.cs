@@ -361,8 +361,23 @@ public sealed class SessionWorkflowPostgresTests
 
     private sealed class MutableClock(DateTimeOffset utcNow) : IGameClock
     {
+        private long timestamp;
+        private long uptimeMilliseconds = 5_000;
+        private static readonly Guid BootId = Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0");
+
         public DateTimeOffset UtcNow { get; private set; } = utcNow;
-        public void Advance(TimeSpan amount) => UtcNow = UtcNow.Add(amount);
+
+        public GameClockSnapshot Capture() => new(
+            UtcNow, timestamp, TimeSpan.TicksPerSecond, uptimeMilliseconds, BootId);
+
+        public void Advance(TimeSpan amount)
+        {
+            UtcNow = UtcNow.Add(amount);
+            timestamp = checked(timestamp + amount.Ticks);
+            uptimeMilliseconds = checked(uptimeMilliseconds + (long)amount.TotalMilliseconds);
+        }
+
+        public void JumpWallClock(TimeSpan amount) => UtcNow = UtcNow.Add(amount);
     }
 
     private sealed class TestRequestFingerprint : IRequestFingerprint

@@ -30,13 +30,12 @@ public sealed class BillingInvoiceWriter(
             {
                 charge = HourlySessionChargeCalculator.Calculate(
                     command.TariffHourlyRateTomanSnapshot,
-                    command.StartedAtUtc,
-                    command.EndedAtUtc);
+                    command.ElapsedTicks);
             }
             catch (ArgumentOutOfRangeException)
             {
                 return Result<InvoicePreviewResponse>.Failure(
-                    new Error("sessions.invalid_clock", "Server time did not produce a valid session duration."));
+                    new Error("sessions.invalid_clock", "Monotonic session elapsed time was invalid."));
             }
             catch (OverflowException)
             {
@@ -56,7 +55,7 @@ public sealed class BillingInvoiceWriter(
                 charge.ElapsedTicks,
                 charge.AmountToman,
                 command.IssuedByOperatorId,
-                command.EndedAtUtc);
+                command.IssuedAtUtc);
 
             await db.Invoices.AddAsync(invoice, cancellationToken);
             var response = new InvoicePreviewResponse(

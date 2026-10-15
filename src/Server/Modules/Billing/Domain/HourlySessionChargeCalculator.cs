@@ -7,23 +7,15 @@ public sealed record SessionChargeBreakdown(long ElapsedTicks, long HourlyRateTo
 public static class HourlySessionChargeCalculator
 {
     /// <summary>
-    /// Charges the exact elapsed UTC duration against an hourly Toman rate, rounding any
-    /// fractional Toman up to the next integer Toman. Integer arithmetic avoids binary
-    /// floating-point money calculations and BigInteger avoids intermediate overflow.
+    /// Charges monotonic elapsed duration against the immutable hourly Toman rate,
+    /// rounding any fractional Toman upward. UTC event timestamps are never inputs here.
     /// </summary>
-    public static SessionChargeBreakdown Calculate(
-        long hourlyRateToman,
-        DateTimeOffset startedAtUtc,
-        DateTimeOffset endedAtUtc)
+    public static SessionChargeBreakdown Calculate(long hourlyRateToman, long elapsedTicks)
     {
         if (hourlyRateToman <= 0)
             throw new ArgumentOutOfRangeException(nameof(hourlyRateToman), "Hourly rate must be positive.");
-
-        var startTicks = startedAtUtc.ToUniversalTime().Ticks;
-        var endTicks = endedAtUtc.ToUniversalTime().Ticks;
-        var elapsedTicks = checked(endTicks - startTicks);
         if (elapsedTicks <= 0)
-            throw new ArgumentOutOfRangeException(nameof(endedAtUtc), "Session end must be after session start.");
+            throw new ArgumentOutOfRangeException(nameof(elapsedTicks), "Session elapsed duration must be positive.");
 
         var numerator = new BigInteger(hourlyRateToman) * elapsedTicks;
         var denominator = new BigInteger(TimeSpan.TicksPerHour);

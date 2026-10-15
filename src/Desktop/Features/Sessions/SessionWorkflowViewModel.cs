@@ -501,6 +501,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         "tariffs.forbidden" or "sessions.forbidden" or "billing.forbidden" => Text("مجوز انجام این عملیات را ندارید.", "You do not have permission for this operation."),
         "tariffs.code_exists" => Text("کد این تعرفه قبلاً ثبت شده است.", "This tariff code already exists."),
         "sessions.station_unavailable" => Text("این ایستگاه آمادهٔ شروع Session نیست.", "This station is not available for a new Session."),
+        "sessions.timing_recovery_required" or "sessions.invalid_clock" => Text("پیوستگی زمان جلسه قابل تأیید نیست؛ صورتحساب صادر نشد و بازیابی زمان لازم است.", "Session timing continuity could not be verified. No invoice was created; timing recovery is required."),
         "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
         "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
         "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
