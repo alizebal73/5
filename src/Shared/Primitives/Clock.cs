@@ -38,17 +38,19 @@ internal static partial class WindowsBootIdentifier
         public Guid BootIdentifier;
     }
 
-    [LibraryImport("ntdll.dll")]
-    private static partial int NtQuerySystemInformation(
+    #pragma warning disable SYSLIB1054 // Keep this narrow native call free of generated unsafe-code requirements.
+    [DllImport("ntdll.dll")]
+    private static extern int NtQuerySystemInformation(
         int systemInformationClass,
         IntPtr systemInformation,
         uint systemInformationLength,
         out uint returnLength);
+#pragma warning restore SYSLIB1054
 
     public static Guid Read()
     {
         if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Authoritative Session timing requires a Windows boot identifier.");
+            throw new InvalidOperationException("SESSION_BOOT_ID_UNAVAILABLE");
 
         var size = Marshal.SizeOf<BootEnvironmentInformation>();
         var buffer = Marshal.AllocHGlobal(size);
@@ -93,7 +95,9 @@ public static class MonotonicElapsedTime
         out long elapsedTicks)
     {
         elapsedTicks = 0;
-        if (startedTimestampFrequency <= 0 ||
+        if (startedTimestamp < 0 ||
+            ending.Timestamp < 0 ||
+            startedTimestampFrequency <= 0 ||
             startedTimestampFrequency != ending.TimestampFrequency ||
             ending.Timestamp <= startedTimestamp ||
             startedSystemUptimeMilliseconds < 0 ||
