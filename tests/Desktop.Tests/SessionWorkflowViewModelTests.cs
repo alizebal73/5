@@ -407,6 +407,65 @@ public sealed class SessionWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task Unknown_checkout_outcome_blocks_retry_until_refresh_confirms_server_state()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-06", "Unknown outcome PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            client.FailNextCashCheckoutWithNetworkError = true;
+            client.FailNextCashCheckoutOutcomeLookupWithNetworkError = true;
+
+            var error = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains("Checkout outcome is still unverified", StringComparison.Ordinal));
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.CheckoutCashCommand.Execute(null);
+            Assert.Contains("Checkout outcome is still unverified", await error);
+
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            // A later explicit refresh must first reconcile the unresolved invoice with the Server.
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
     public async Task Operator_without_permissions_cannot_open_or_mutate_session_workspace()
     {
         var station = new StationResponse(
@@ -506,6 +565,7 @@ public sealed class SessionWorkflowViewModelTests
         public List<string> CheckoutIdempotencyKeys { get; } = [];
         public Exception? NextStartException { get; set; }
         public bool FailNextCashCheckoutWithNetworkError { get; set; }
+        public bool FailNextCashCheckoutOutcomeLookupWithNetworkError { get; set; }
         public StartSessionRequest? LastStartRequest { get; private set; }
         public string? LastStartIdempotencyKey { get; private set; }
         public Guid? LastEndedSessionId { get; private set; }
@@ -580,6 +640,12 @@ public sealed class SessionWorkflowViewModelTests
 
         public Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(Guid invoiceId, CancellationToken cancellationToken = default)
         {
+            if (FailNextCashCheckoutOutcomeLookupWithNetworkError)
+            {
+                FailNextCashCheckoutOutcomeLookupWithNetworkError = false;
+                return Task.FromException<CashCheckoutOutcomeResponse>(new HttpRequestException("Simulated checkout outcome lookup failure."));
+            }
+
             var completed = CompletedCashOutcomes.SingleOrDefault(x => x.InvoiceId == invoiceId);
             if (completed is not null)
                 return Task.FromResult(completed);

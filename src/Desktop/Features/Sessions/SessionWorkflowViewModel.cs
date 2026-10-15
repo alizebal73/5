@@ -29,6 +29,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     private string hourlyRateText = string.Empty;
     private string amountReceivedText = string.Empty;
     private bool confirmCashCheckout;
+    private Guid? unresolvedCashCheckoutInvoiceId;
     private string errorMessage = string.Empty;
     private string statusMessage = string.Empty;
     private bool isDefaultTariff = true;
@@ -52,6 +53,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
+            !unresolvedCashCheckoutInvoiceId.HasValue &&
             SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
             TryParseToman(AmountReceivedText, out var received) &&
             SelectedPendingInvoice is not null &&
@@ -187,10 +189,49 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             return;
 
         BeginBusy();
-        ErrorMessage = string.Empty;
         var stationLabelsUnavailable = false;
         try
         {
+            // If the previous checkout's HTTP result and its outcome lookup both failed,
+            // keep checkout disabled until this explicit refresh confirms Paid or Pending.
+            if (unresolvedCashCheckoutInvoiceId is Guid unresolvedInvoiceId)
+            {
+                CashCheckoutOutcomeResponse outcome;
+                try
+                {
+                    outcome = await api.GetCashCheckoutOutcomeAsync(unresolvedInvoiceId);
+                }
+                catch
+                {
+                    ErrorMessage = Text(
+                        "نتیجهٔ پرداخت هنوز قابل تأیید نیست. تا روشن‌شدن وضعیت سرور، پرداخت را دوباره ثبت نکنید.",
+                        "Checkout outcome is still unverified. Do not record the cash again until the Server outcome can be confirmed.");
+                    return;
+                }
+
+                if (IsConfirmedPaidCheckoutOutcome(outcome))
+                {
+                    unresolvedCashCheckoutInvoiceId = null;
+                    pendingKeys.Remove("billing.cash");
+                    RaiseCommands();
+                }
+                else if (IsConfirmedPendingCheckoutOutcome(outcome))
+                {
+                    unresolvedCashCheckoutInvoiceId = null;
+                    AmountReceivedText = string.Empty;
+                    ConfirmCashCheckout = false;
+                    RaiseCommands();
+                }
+                else
+                {
+                    ErrorMessage = Text(
+                        "نتیجهٔ پرداخت سازگار و قابل تأیید نیست. پرداخت مجدد مسدود است؛ ابتدا نتیجه را با سرور تطبیق دهید.",
+                        "The checkout outcome is not consistent enough to confirm. Retry is blocked; reconcile with the Server first.");
+                    return;
+                }
+            }
+
+            ErrorMessage = string.Empty;
             if (CanReadStations)
             {
                 StationResponse[] stations;
@@ -344,6 +385,8 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         SelectedActiveSession = null;
         SelectedPendingInvoice = null;
         pendingKeys.Clear();
+        unresolvedCashCheckoutInvoiceId = null;
+        RaiseCommands();
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
         OnPropertyChanged(nameof(CanManageTariffs));
@@ -442,6 +485,13 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         if (SelectedPendingInvoice is null)
             return;
+        if (unresolvedCashCheckoutInvoiceId.HasValue)
+        {
+            ErrorMessage = Text(
+                "نتیجهٔ پرداخت قبلی هنوز تأیید نشده است؛ ابتدا تازه‌سازی و تطبیق با سرور را انجام دهید.",
+                "The previous checkout outcome is still unverified. Refresh and reconcile with the Server before retrying.");
+            return;
+        }
         if (!ConfirmCashCheckout)
         {
             ErrorMessage = Text("برای ثبت پرداخت، تأیید آگاهانهٔ اپراتور لازم است.", "Explicit operator confirmation is required before recording cash.");
@@ -487,21 +537,20 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 
     private async Task ReconcileCashCheckoutOutcomeAsync(Guid invoiceId)
     {
-        // An ambiguous checkout outcome requires a fresh cash entry and explicit confirmation.
-        // Never carry the prior physical-cash observation into a retry after network/replay errors.
+        // An ambiguous checkout outcome blocks any retry until durable Server state is confirmed.
+        unresolvedCashCheckoutInvoiceId = invoiceId;
+        RaiseCommands();
         AmountReceivedText = string.Empty;
         ConfirmCashCheckout = false;
         try
         {
             var outcome = await api.GetCashCheckoutOutcomeAsync(invoiceId);
-            if (outcome.Status == InvoiceStatusContract.Paid &&
-                outcome.PaymentId is not null &&
-                outcome.LedgerEntryId is not null &&
-                outcome.AmountReceivedToman is long received &&
-                outcome.ChangeGivenToman is long change)
+            if (IsConfirmedPaidCheckoutOutcome(outcome))
             {
                 // Invoice, Payment and Ledger identities are read back from durable Server state.
                 // Do not retry a checkout that has already committed, even if its HTTP response was lost.
+                unresolvedCashCheckoutInvoiceId = null;
+                RaiseCommands();
                 pendingKeys.Remove("billing.cash");
                 await RefreshAsync();
                 ErrorMessage = string.Empty;
@@ -511,12 +560,21 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                 return;
             }
 
-            // Pending means the transactional invoice/payment/ledger mutation did not commit.
-            // Refresh invalidates the cash entry and prior confirmation, requiring a fresh review.
-            await RefreshAsync();
+            if (IsConfirmedPendingCheckoutOutcome(outcome))
+            {
+                // The Server explicitly confirms that the invoice is still pending and has no payment/ledger.
+                unresolvedCashCheckoutInvoiceId = null;
+                RaiseCommands();
+                await RefreshAsync();
+                ErrorMessage = Text(
+                    "سرور تأیید کرد این صورتحساب هنوز باز است و پرداختی ثبت نشده؛ مبلغ دریافتی را دوباره بررسی و ثبت را مجدداً تأیید کنید.",
+                    "Server confirms this invoice is still pending and no payment was recorded. Review the cash amount and explicitly confirm before retrying.");
+                return;
+            }
+
             ErrorMessage = Text(
-                "سرور تأیید کرد این صورتحساب هنوز باز است و پرداختی ثبت نشده؛ مبلغ دریافتی را دوباره بررسی و ثبت را مجدداً تأیید کنید.",
-                "Server confirms this invoice is still pending and no payment was recorded. Review the cash amount and explicitly confirm before retrying.");
+                "نتیجهٔ پرداخت سازگار و قابل تأیید نیست. پرداخت مجدد مسدود است؛ ابتدا نتیجه را با سرور تطبیق دهید.",
+                "The checkout outcome is not consistent enough to confirm. Retry is blocked; reconcile with the Server first.");
         }
         catch (Exception ex) when (ex is GameNetApiException or HttpRequestException or TaskCanceledException)
         {
@@ -525,6 +583,26 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                 "Checkout outcome is still unverified. Do not record the cash again until the Server outcome can be confirmed.");
         }
     }
+
+    private static bool IsConfirmedPaidCheckoutOutcome(CashCheckoutOutcomeResponse outcome)
+    {
+        return outcome.Status == InvoiceStatusContract.Paid &&
+               outcome.PaymentId is not null &&
+               outcome.LedgerEntryId is not null &&
+               outcome.PaidAtUtc is not null &&
+               outcome.AmountReceivedToman is long received &&
+               outcome.ChangeGivenToman is long change &&
+               received >= outcome.AmountToman &&
+               change == received - outcome.AmountToman;
+    }
+
+    private static bool IsConfirmedPendingCheckoutOutcome(CashCheckoutOutcomeResponse outcome) =>
+        outcome.Status == InvoiceStatusContract.PendingPayment &&
+        outcome.PaymentId is null &&
+        outcome.LedgerEntryId is null &&
+        outcome.AmountReceivedToman is null &&
+        outcome.ChangeGivenToman is null &&
+        outcome.PaidAtUtc is null;
 
     private static string FormatInvoiceIdentityDisplayText(Guid invoiceId) =>
         Text($"شناسهٔ صورتحساب: {invoiceId:D}", $"Invoice: {invoiceId:D}");
