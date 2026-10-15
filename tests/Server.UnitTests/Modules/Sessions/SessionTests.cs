@@ -82,7 +82,7 @@ public sealed class SessionTests
         Assert.Throws<InvalidOperationException>(() => session.MarkPaid(Guid.NewGuid(), start.AddMinutes(1)));
 
         session.End(Guid.NewGuid(), start.AddMinutes(1), TimeSpan.FromMinutes(1).Ticks);
-        Assert.Throws<InvalidOperationException>(() => session.MarkPaid(Guid.Empty, start.AddMinutes(1)));
+        Assert.Throws<ArgumentException>(() => session.MarkPaid(Guid.Empty, start.AddMinutes(1)));
     }
 
     private static Session NewSession(DateTimeOffset start) => Session.Start(
