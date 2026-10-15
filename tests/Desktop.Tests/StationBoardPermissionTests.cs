@@ -536,7 +536,7 @@ public sealed class StationBoardPermissionTests
 
         public Task<IReadOnlyList<CashCheckoutOutcomeResponse>> GetRecentCashCheckoutsAsync(
             CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            Task.FromResult<IReadOnlyList<CashCheckoutOutcomeResponse>>(Array.Empty<CashCheckoutOutcomeResponse>());
 
         public Task<CashCheckoutResponse> CheckoutCashAsync(
             Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
