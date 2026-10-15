@@ -121,12 +121,17 @@ public sealed partial class SessionWorkflowViewModel
         {
             await ReconcileCashCheckoutOutcomeAsync(invoice.InvoiceId);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             await ReconcileCashCheckoutOutcomeAsync(invoice.InvoiceId);
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
-        catch { ErrorMessage = Text("ثبت پرداخت انجام نشد.", "Cash checkout failed."); }
+        catch
+        {
+            // If the outcome of a financial command is unexpected, resolve durable Server state
+            // before allowing another attempt; never assume an exception means no commit.
+            await ReconcileCashCheckoutOutcomeAsync(invoice.InvoiceId);
+        }
         finally { EndBusy(); }
     }
 
