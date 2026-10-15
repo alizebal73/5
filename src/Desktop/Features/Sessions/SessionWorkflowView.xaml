@@ -103,8 +103,12 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-          <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12" Margin="0,7,0,0"/>
+          <TextBlock Text="{DynamicResource Billing.CashCheckoutSummary}" FontSize="11" Foreground="#344054"
+                     TextWrapping="Wrap" Margin="0,7,0,4" Text="{Binding CashCheckoutSummaryText}"/>
+          <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12"/>
           <TextBox Padding="5" Margin="0,3,0,6" Text="{Binding AmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+          <CheckBox Content="{DynamicResource Billing.ConfirmCashCheckout}"
+                    IsChecked="{Binding ConfirmCashCheckout, Mode=TwoWay}" Margin="0,0,0,8"/>
           <Button Padding="8,6" Content="{DynamicResource Billing.Checkout}" Command="{Binding CheckoutCashCommand}"/>
         </StackPanel>
       </Grid>

@@ -41,6 +41,8 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string TariffName { get; set; }
     string HourlyRateText { get; set; }
     string AmountReceivedText { get; set; }
+    bool ConfirmCashCheckout { get; set; }
+    string CashCheckoutSummaryText { get; }
     bool IsDefaultTariff { get; set; }
     string ErrorMessage { get; }
     string StatusMessage { get; }

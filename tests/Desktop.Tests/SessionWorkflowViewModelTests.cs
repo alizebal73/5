@@ -218,6 +218,59 @@ public sealed class SessionWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task Cash_checkout_does_not_prefill_received_amount_and_requires_fresh_explicit_confirmation()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-04", "Cash PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(client,
+                permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.ConfirmCashCheckout);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            Assert.Contains("Amount due: 30,000", viewModel.CashCheckoutSummaryText);
+
+            viewModel.AmountReceivedText = "50000";
+            Assert.Contains("cash received: 50,000", viewModel.CashCheckoutSummaryText);
+            Assert.Contains("change: 20,000", viewModel.CashCheckoutSummaryText);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            viewModel.ConfirmCashCheckout = true;
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            // Changing the received amount invalidates the prior confirmation.
+            viewModel.AmountReceivedText = "50001";
+            Assert.False(viewModel.ConfirmCashCheckout);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.ConfirmCashCheckout = true;
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
     public async Task Cash_checkout_network_failure_keeps_invoice_pending_and_reuses_same_idempotency_key_on_retry()
     {
         var originalCulture = CultureInfo.CurrentCulture;
@@ -245,7 +298,11 @@ public sealed class SessionWorkflowViewModelTests
             await viewModel.RefreshAsync();
             Assert.Single(viewModel.PendingInvoices);
             Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
             viewModel.AmountReceivedText = "50000";
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.ConfirmCashCheckout = true;
 
             client.FailNextCashCheckoutWithNetworkError = true;
             var error = WaitForErrorAsync(
@@ -262,7 +319,10 @@ public sealed class SessionWorkflowViewModelTests
             // amount and Session version so the idempotency key remains stable.
             await viewModel.RefreshAsync();
             Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
             viewModel.AmountReceivedText = "50000";
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.ConfirmCashCheckout = true;
             var paid = WaitForStatusAsync(
                 viewModel,
                 message => message.StartsWith("Payment recorded.", StringComparison.Ordinal));

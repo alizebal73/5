@@ -27,6 +27,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     private string tariffName = "PC Standard";
     private string hourlyRateText = string.Empty;
     private string amountReceivedText = string.Empty;
+    private bool confirmCashCheckout;
     private string errorMessage = string.Empty;
     private string statusMessage = string.Empty;
     private bool isDefaultTariff = true;
@@ -52,7 +53,9 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
             SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
             TryParseToman(AmountReceivedText, out var received) &&
-            SelectedPendingInvoice is not null && received >= SelectedPendingInvoice.Invoice.AmountToman);
+            SelectedPendingInvoice is not null &&
+            received >= SelectedPendingInvoice.Invoice.AmountToman &&
+            ConfirmCashCheckout);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -99,9 +102,12 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         {
             if (SetField(ref selectedPendingInvoice, value))
             {
-                AmountReceivedText = value?.Invoice.AmountToman.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+                // Cash received is a separate real-world observation, never inferred from the amount due.
+                AmountReceivedText = string.Empty;
+                ConfirmCashCheckout = false;
                 RaiseCommands();
                 OnPropertyChanged(nameof(SelectedInvoiceAmountText));
+                OnPropertyChanged(nameof(CashCheckoutSummaryText));
             }
         }
     }
@@ -109,7 +115,27 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     public string TariffCode { get => tariffCode; set { if (SetField(ref tariffCode, value)) RaiseCommands(); } }
     public string TariffName { get => tariffName; set { if (SetField(ref tariffName, value)) RaiseCommands(); } }
     public string HourlyRateText { get => hourlyRateText; set { if (SetField(ref hourlyRateText, value)) RaiseCommands(); } }
-    public string AmountReceivedText { get => amountReceivedText; set { if (SetField(ref amountReceivedText, value)) RaiseCommands(); } }
+    public string AmountReceivedText
+    {
+        get => amountReceivedText;
+        set
+        {
+            if (SetField(ref amountReceivedText, value))
+            {
+                // Editing the amount invalidates any prior confirmation.
+                ConfirmCashCheckout = false;
+                OnPropertyChanged(nameof(CashCheckoutSummaryText));
+                RaiseCommands();
+            }
+        }
+    }
+
+    public bool ConfirmCashCheckout
+    {
+        get => confirmCashCheckout;
+        set { if (SetField(ref confirmCashCheckout, value)) RaiseCommands(); }
+    }
+
     public bool IsDefaultTariff { get => isDefaultTariff; set { if (SetField(ref isDefaultTariff, value)) RaiseCommands(); } }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
@@ -131,6 +157,27 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     public string SelectedSessionText => SelectedActiveSession is null
         ? string.Empty
         : $"{SelectedActiveSession.Session.TariffNameSnapshot} — {FormatToman(SelectedActiveSession.Session.TariffHourlyRateTomanSnapshot)}";
+
+    public string CashCheckoutSummaryText
+    {
+        get
+        {
+            if (SelectedPendingInvoice is null)
+                return string.Empty;
+
+            var due = SelectedPendingInvoice.Invoice.AmountToman;
+            if (!TryParseToman(AmountReceivedText, out var received) || received < due)
+            {
+                return Text(
+                    $"مبلغ صورتحساب: {FormatToman(due)} تومان؛ وجه نقد دریافتی را به‌صورت عدد صحیح و حداقل برابر این مبلغ وارد کنید.",
+                    $"Amount due: {FormatToman(due)} Toman; enter a whole cash amount equal to or greater than this amount.");
+            }
+
+            return Text(
+                $"صورتحساب: {FormatToman(due)}؛ وجه دریافتی: {FormatToman(received)}؛ باقی‌مانده: {FormatToman(received - due)} تومان.",
+                $"Due: {FormatToman(due)}; cash received: {FormatToman(received)}; change: {FormatToman(received - due)} Toman.");
+        }
+    }
 
     public async Task RefreshAsync()
     {
@@ -379,6 +426,11 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         if (SelectedPendingInvoice is null)
             return;
+        if (!ConfirmCashCheckout)
+        {
+            ErrorMessage = Text("برای ثبت پرداخت، تأیید آگاهانهٔ اپراتور لازم است.", "Explicit operator confirmation is required before recording cash.");
+            return;
+        }
         if (!TryParseToman(AmountReceivedText, out var received) || received < SelectedPendingInvoice.Invoice.AmountToman)
         {
             ErrorMessage = Text("وجه دریافتی باید عدد صحیح و حداقل برابر مبلغ صورتحساب باشد.", "Cash received must be a whole number at least equal to the invoice amount.");
@@ -386,6 +438,8 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         }
 
         var invoice = SelectedPendingInvoice.Invoice;
+        // A confirmation authorizes this one click only; retries require a fresh review.
+        ConfirmCashCheckout = false;
         var fingerprint = $"{invoice.InvoiceId:D}|{received}|{invoice.SessionVersion}";
         var key = GetKey("billing.cash", fingerprint);
         BeginBusy();
