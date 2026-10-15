@@ -73,8 +73,8 @@ public sealed class SessionWorkflowViewModelTests
             client.StartSessionCompletion.SetResult(startedSession);
 
             var message = await successMessage.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Contains(stationA.Code, message, StringComparison.Ordinal);
-            Assert.DoesNotContain(stationB.Code, message, StringComparison.Ordinal);
+            Assert.Contains(stationA.Code, message);
+            Assert.DoesNotContain(stationB.Code, message);
             Assert.Equal(startedSession.Id, viewModel.SelectedActiveSession?.Session.Id);
         }
         finally
