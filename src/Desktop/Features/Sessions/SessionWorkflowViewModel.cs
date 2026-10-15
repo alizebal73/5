@@ -545,7 +545,9 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         try
         {
             var outcome = await api.GetCashCheckoutOutcomeAsync(invoiceId);
-            if (IsConfirmedPaidCheckoutOutcome(outcome))
+            if (IsConfirmedPaidCheckoutOutcome(outcome) &&
+                outcome.AmountReceivedToman is long received &&
+                outcome.ChangeGivenToman is long change)
             {
                 // Invoice, Payment and Ledger identities are read back from durable Server state.
                 // Do not retry a checkout that has already committed, even if its HTTP response was lost.
@@ -577,6 +579,12 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                 "The checkout outcome is not consistent enough to confirm. Retry is blocked; reconcile with the Server first.");
         }
         catch (Exception ex) when (ex is GameNetApiException or HttpRequestException or TaskCanceledException)
+        {
+            ErrorMessage = Text(
+                "نتیجهٔ پرداخت هنوز قابل تأیید نیست. تا روشن‌شدن وضعیت سرور، پرداخت را دوباره ثبت نکنید.",
+                "Checkout outcome is still unverified. Do not record the cash again until the Server outcome can be confirmed.");
+        }
+        catch
         {
             ErrorMessage = Text(
                 "نتیجهٔ پرداخت هنوز قابل تأیید نیست. تا روشن‌شدن وضعیت سرور، پرداخت را دوباره ثبت نکنید.",
