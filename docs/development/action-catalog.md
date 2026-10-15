@@ -1,8 +1,8 @@
 # Action Catalog — GameNet 5
 
-**Status:** Identity/Station actions plus the Draft Slice 1 PC cash candidate, updated 2026-10-15. Entries in section 3 describe the candidate under PRs #100–#103; they are not a claim that the complete product or release is ready.
+**Status:** Current Identity/Station operations plus the partially implemented PC Session-to-cash path on Integration, snapshot 2026-10-15. Slice 1 remains unaccepted under [Issue #98](https://github.com/alizebal73/5/issues/98); this catalog is not a claim that the complete product or release is ready.
 
-**Baseline:** `integration/runtime-operator-v1` was read at `1541714bd4acd7ef74c1dee002e30d92a95c6643` before this refactor branch was created. Re-read the live Integration SHA before each later change.
+Use the live Integration branch and relevant PR/Actions evidence when verifying code. This durable catalog deliberately avoids a mutable branch SHA.
 
 ## Rules
 
@@ -10,7 +10,7 @@
 - A Desktop operation uses `IGameNetServerClient` and typed Shared V1 contracts. Desktop/Agent never connect directly to PostgreSQL.
 - Mutations use the Server's stable error contract, actor/correlation data, idempotency and Audit behavior as listed below. Never invent a local success path or assume a timeout means the mutation failed.
 - `Desktop UI: yes` means an action is reachable in the current WPF shell. `Server API only` means the API exists, but no operator-management screen/command is currently wired in this Desktop shell.
-- This catalog covers current Identity/Station operations plus the Slice 1 PC cash candidate in section 3. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments/refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
+- This catalog covers current Identity/Station operations plus the partial Slice 1 Session-to-cash implementation in section 3. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments/refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
 
 ## 1. Current Desktop Identity operations
 
@@ -133,11 +133,11 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
 - Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
 - For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
-- **Catalog completeness is intentionally limited** to current Identity/Station API operations. Future customer/session/checkout/buffet/inventory/VIP/report/settings actions do not yet exist in this Catalog.
+- **Catalog completeness is intentionally limited** to current Identity/Station operations and the partial Slice 1 Session-to-cash actions in section 3. Future Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
 
-## 3. Draft Slice 1 PC hourly Session-to-cash candidate
+## 3. Partially implemented Slice 1 PC hourly Session-to-cash
 
-**Acceptance boundary:** These entries describe a narrow PC-only candidate, not completion of the corresponding P0 requirements. The candidate supports fixed hourly PC tariffs, a generated Walk-in customer when no customer is selected, Active → PendingSettlement → Paid, and cash-only checkout. Fractional Toman amounts are rounded up to the next whole Toman by the current calculator. Pause/resume, transfer, prepaid/free-time, wallet/debt, card payments, refunds, and PS5/foosball billing are not included.
+**Acceptance boundary:** This path is present in Integration but remains partial and is **not accepted as a complete feature**; see [Issue #98](https://github.com/alizebal73/5/issues/98). It supports fixed-hourly PC tariffs, a generated Walk-in customer when no customer is selected, Active → PendingSettlement → Paid, invoice creation and cash-only checkout. Fractional Toman amounts are rounded upward to the next whole Toman. Timing/restart semantics, deliberate cash entry, recovery after a committed-but-unacknowledged checkout, correction/reversal semantics, Agent-offline policy, full manual WPF acceptance and independent database reconciliation remain open. Pause/resume, transfer, prepaid/free time, wallet/debt, card payments, refunds and PS5/foosball billing are out of scope for this slice.
 
 ### `tariffs.active-list`
 - **Owner / outcome:** Tariffs; read active tariffs filtered by station type.
