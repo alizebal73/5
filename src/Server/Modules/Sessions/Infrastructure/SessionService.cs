@@ -70,6 +70,10 @@ public sealed class SessionService(
                         return Fail<SessionResponse>("sessions.pc_only", "This first session flow supports PC stations only.");
                     if (station.Status != StationStatusContract.Available)
                         return Fail<SessionResponse>("sessions.station_unavailable", "Station is not available.");
+                    if (!station.AgentOnline)
+                        return Fail<SessionResponse>(
+                            "sessions.agent_unavailable",
+                            "PC Agent is unbound, offline, lacks an active credential, or has no fresh authoritative heartbeat/lease. Session was not started.");
 
                     var tariff = await tariffs.FindActiveAsync(command.TariffId, token);
                     if (tariff is null)

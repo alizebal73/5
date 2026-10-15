@@ -18,6 +18,7 @@ using GameNet.Server.Modules.Sessions.Domain;
 using GameNet.Server.Modules.Stations.Domain;
 using GameNet.Server.Modules.Tariffs.Domain;
 using GameNet.Server.Persistence;
+using GameNet.Server.Persistence.Entities;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -68,8 +69,74 @@ public sealed class SessionWorkflowPostgresTests
                 var actor = Actor(operatorId, correlation);
                 var billingActor = BillingActor(operatorId, correlation);
                 var billing = CreateBillingService(db, clock);
-                var startCommand = new StartSessionCommand(stationId, tariffId, null, startKey, actor);
 
+                var customerCountBeforeRejectedStarts = await db.Customers.CountAsync();
+                var unboundStart = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, startKey + "-unbound", actor),
+                    CancellationToken.None);
+                Assert.False(unboundStart.IsSuccess);
+                Assert.Equal("sessions.agent_unavailable", unboundStart.Error.Code);
+                Assert.Equal(0, await db.Sessions.CountAsync(x => x.StationId == stationId));
+                Assert.Equal(customerCountBeforeRejectedStarts, await db.Customers.CountAsync());
+
+                var deviceId = "pg-agent-" + token[..12];
+                station.BindAgent(deviceId);
+                var credential = new AgentCredential
+                {
+                    DeviceId = deviceId,
+                    SecretHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("test-agent-secret-" + token))),
+                    CreatedAtUtc = clock.UtcNow
+                };
+                var lease = new AgentConnectionLease
+                {
+                    DeviceId = deviceId,
+                    ConnectionId = "pg-connection-" + token[..12],
+                    LeaseToken = Guid.NewGuid().ToString("N"),
+                    LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(-1),
+                    UpdatedAtUtc = clock.UtcNow,
+                    LastHeartbeatAtUtc = clock.UtcNow
+                };
+                db.AgentCredentials.Add(credential);
+                db.AgentConnectionLeases.Add(lease);
+                await db.SaveChangesAsync();
+
+                var expiredLeaseStart = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, startKey + "-expired-lease", actor),
+                    CancellationToken.None);
+                Assert.False(expiredLeaseStart.IsSuccess);
+                Assert.Equal("sessions.agent_unavailable", expiredLeaseStart.Error.Code);
+
+                lease.LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5);
+                lease.LastHeartbeatAtUtc = clock.UtcNow.AddMinutes(-3);
+                await db.SaveChangesAsync();
+                var staleHeartbeatStart = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, startKey + "-stale-heartbeat", actor),
+                    CancellationToken.None);
+                Assert.False(staleHeartbeatStart.IsSuccess);
+                Assert.Equal("sessions.agent_unavailable", staleHeartbeatStart.Error.Code);
+
+                lease.LastHeartbeatAtUtc = clock.UtcNow;
+                credential.Revoke(clock.UtcNow);
+                await db.SaveChangesAsync();
+                var revokedCredentialStart = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, startKey + "-revoked-credential", actor),
+                    CancellationToken.None);
+                Assert.False(revokedCredentialStart.IsSuccess);
+                Assert.Equal("sessions.agent_unavailable", revokedCredentialStart.Error.Code);
+                Assert.Equal(customerCountBeforeRejectedStarts, await db.Customers.CountAsync());
+                Assert.Equal(0, await db.Sessions.CountAsync(x => x.StationId == stationId));
+
+                db.AgentCredentials.Add(new AgentCredential
+                {
+                    DeviceId = deviceId,
+                    SecretHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("test-agent-secret-rotation-" + token))),
+                    CreatedAtUtc = clock.UtcNow
+                });
+                lease.LastHeartbeatAtUtc = clock.UtcNow;
+                lease.LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5);
+                await db.SaveChangesAsync();
+
+                var startCommand = new StartSessionCommand(stationId, tariffId, null, startKey, actor);
                 var started = await service.StartAsync(startCommand, CancellationToken.None);
                 Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
                 Assert.Equal(SessionStatusContract.Active, started.Value.Status);
@@ -256,12 +323,14 @@ public sealed class SessionWorkflowPostgresTests
         {
             await using (var setup = CreateContext(connectionString))
             {
-                setup.Stations.Add(Station.Create(
-                    stationId, "PC-" + token[..12], "Concurrent start PC", StationType.Pc));
+                var station = Station.Create(
+                    stationId, "PC-" + token[..12], "Concurrent start PC", StationType.Pc);
+                setup.Stations.Add(station);
                 setup.Tariffs.Add(Tariff.CreateFixedHourly(
                     tariffId, "TR-" + token[..12], "Concurrent start tariff",
                     StationTypeContract.Pc, 60_000L, false, clock.UtcNow));
                 await setup.SaveChangesAsync();
+                await BindActiveAgentAsync(setup, station, clock, token);
             }
 
             Result<SessionResponse> first;
@@ -298,6 +367,32 @@ public sealed class SessionWorkflowPostgresTests
             await CleanupAsync(connectionString, stationId, tariffId, customerA, correlationA, idempotencyPrefix);
             await CleanupAsync(connectionString, stationId, tariffId, customerB, correlationB, idempotencyPrefix);
         }
+    }
+
+    private static async Task BindActiveAgentAsync(
+        GameNetDbContext db,
+        Station station,
+        IGameClock clock,
+        string token)
+    {
+        var deviceId = "pg-agent-" + token[..12];
+        station.BindAgent(deviceId);
+        db.AgentCredentials.Add(new AgentCredential
+        {
+            DeviceId = deviceId,
+            SecretHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("test-agent-secret-" + token))),
+            CreatedAtUtc = clock.UtcNow
+        });
+        db.AgentConnectionLeases.Add(new AgentConnectionLease
+        {
+            DeviceId = deviceId,
+            ConnectionId = "pg-connection-" + token[..12],
+            LeaseToken = Guid.NewGuid().ToString("N"),
+            LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5),
+            UpdatedAtUtc = clock.UtcNow,
+            LastHeartbeatAtUtc = clock.UtcNow
+        });
+        await db.SaveChangesAsync();
     }
 
     private static BillingService CreateBillingService(GameNetDbContext db, IGameClock clock)
@@ -376,6 +471,10 @@ public sealed class SessionWorkflowPostgresTests
         if (customerId.HasValue)
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"DELETE FROM customers WHERE id = {customerId.Value}");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM agent_connection_leases WHERE device_id IN (SELECT agent_device_id FROM stations WHERE id = {stationId})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM agent_credentials WHERE device_id IN (SELECT agent_device_id FROM stations WHERE id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM tariffs WHERE id = {tariffId}");
         await db.Database.ExecuteSqlInterpolatedAsync(

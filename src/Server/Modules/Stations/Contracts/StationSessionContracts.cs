@@ -6,11 +6,12 @@ public sealed record StationSessionAvailability(
     Guid Id,
     string Code,
     StationTypeContract Type,
-    StationStatusContract Status);
+    StationStatusContract Status,
+    bool AgentOnline);
 
 /// <summary>
-/// Exposes only the administrative station facts Sessions needs; it does not expose the
-/// Stations domain entity or repository implementation.
+/// Exposes the administrative status and authoritative Agent-readiness facts Sessions needs;
+/// it does not expose the Stations domain entity or repository implementation.
 /// </summary>
 public interface IStationSessionAccess
 {
