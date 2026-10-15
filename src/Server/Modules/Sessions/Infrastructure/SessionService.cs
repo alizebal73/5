@@ -93,7 +93,19 @@ public sealed class SessionService(
                     if (customer is null)
                         return Fail<SessionResponse>("sessions.customer_not_found", "Active customer was not found.");
 
-                    var startSnapshot = clock.Capture();
+                    GameClockSnapshot startSnapshot;
+                    try
+                    {
+                        startSnapshot = clock.Capture();
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException
+                        or DllNotFoundException or EntryPointNotFoundException)
+                    {
+                        return Fail<SessionResponse>(
+                            "sessions.timing_recovery_required",
+                            "Authoritative timing source is unavailable. The Session was not started.");
+                    }
+
                     var session = Session.Start(
                         Guid.NewGuid(),
                         station.Id,
@@ -164,7 +176,19 @@ public sealed class SessionService(
                     if (session.Status != SessionStatus.Active)
                         return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Only an active session can be ended.");
 
-                    var endSnapshot = clock.Capture();
+                    GameClockSnapshot endSnapshot;
+                    try
+                    {
+                        endSnapshot = clock.Capture();
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException
+                        or DllNotFoundException or EntryPointNotFoundException)
+                    {
+                        return Fail<InvoicePreviewResponse>(
+                            "sessions.timing_recovery_required",
+                            "Authoritative timing source is unavailable. No invoice was created.");
+                    }
+
                     if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
                             session.StartedMonotonicTimestamp,
                             session.StartedMonotonicFrequency,
