@@ -25,8 +25,8 @@ public partial class SessionMonotonicTiming : Migration
         m.AddColumn<Guid>(name: "started_boot_identifier", table: "sessions", type: "uuid", nullable: true);
         m.AddColumn<long>(name: "elapsed_ticks", table: "sessions", type: "bigint", nullable: true);
 
-        // Existing active Sessions have no trustworthy monotonic baseline; the sentinel makes them fail closed.
-        // Completed Sessions retain the duration already persisted by their invoice.
+        // Closed historical Sessions have no trustworthy monotonic baseline; their stored invoice duration is preserved.
+        // The precondition above rejects active Sessions before any schema changes are applied.
         m.Sql("""
             UPDATE sessions
             SET started_monotonic_timestamp = 0,
