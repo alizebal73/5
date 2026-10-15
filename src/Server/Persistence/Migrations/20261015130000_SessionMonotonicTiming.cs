@@ -8,6 +8,17 @@ public partial class SessionMonotonicTiming : Migration
 {
     protected override void Up(MigrationBuilder m)
     {
+        // Never strand an active pre-migration Session without a billable timing baseline.
+        // Resolve active Sessions with the previous application before schema upgrade.
+        m.Sql("""
+            DO $
+            BEGIN
+                IF EXISTS (SELECT 1 FROM sessions WHERE status = 1) THEN
+                    RAISE EXCEPTION 'SESSION_MIGRATION_BLOCKED_ACTIVE_SESSIONS: close or reconcile active sessions before upgrading';
+                END IF;
+            END $;
+            """);
+
         m.AddColumn<long>(name: "started_monotonic_timestamp", table: "sessions", type: "bigint", nullable: true);
         m.AddColumn<long>(name: "started_monotonic_frequency", table: "sessions", type: "bigint", nullable: true);
         m.AddColumn<long>(name: "started_system_uptime_milliseconds", table: "sessions", type: "bigint", nullable: true);

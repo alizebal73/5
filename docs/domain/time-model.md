@@ -22,7 +22,7 @@ This supports a Server/service process restart while Windows remains in the same
 
 ## Fail-closed recovery
 
-If timestamp frequency/counter, uptime continuity, or boot identity cannot be verified, the Server must not substitute UTC subtraction, create an invoice, or estimate an amount. The end request fails with sessions.timing_recovery_required and the mutation transaction leaves Session/invoice/financial state unchanged. Existing Sessions migrated from the prior schema have sentinel timing values and no trustworthy boot identity; they deliberately fail the continuity check and require explicit recovery rather than silently billing.
+If timestamp frequency/counter, uptime continuity, or boot identity cannot be verified, the Server must not substitute UTC subtraction, create an invoice, or estimate an amount. The end request fails with sessions.timing_recovery_required and the mutation transaction leaves Session/invoice/financial state unchanged. The migration refuses to apply while any active Session exists, so deployment cannot strand a live Session whose old row has no monotonic baseline. Before upgrading, the previous application must end/reconcile all active Sessions. For older completed or pending-settlement Sessions, the monotonic baseline is sentinel data, while the already-persisted invoice duration is backfilled and never recomputed.
 
 The timing model does not guess elapsed time across an OS reboot. Recovery policy for a Session that spans machine restart remains a controlled operator/reconciliation workflow to specify before operational acceptance. Do not infer that automated process tests prove installed Windows Service, a real Windows reboot, or pilot readiness.
 
