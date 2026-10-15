@@ -1,3 +1,4 @@
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Primitives;
 
@@ -19,6 +20,15 @@ public sealed record CashCheckoutCommand(
 public interface IBillingService
 {
     Task<Result<IReadOnlyList<InvoicePreviewResponse>>> ListPendingInvoicesAsync(
+        BillingActorContext actor,
+        CancellationToken cancellationToken);
+
+    Task<Result<CashCheckoutOutcomeResponse>> GetCashCheckoutOutcomeAsync(
+        BillingActorContext actor,
+        Guid invoiceId,
+        CancellationToken cancellationToken);
+
+    Task<Result<IReadOnlyList<CashCheckoutOutcomeResponse>>> ListRecentCashCheckoutsAsync(
         BillingActorContext actor,
         CancellationToken cancellationToken);
 

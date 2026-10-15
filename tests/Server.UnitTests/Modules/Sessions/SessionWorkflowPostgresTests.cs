@@ -172,6 +172,22 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(50_000L, checkout.Value.AmountReceivedToman);
                 Assert.Equal(20_000L, checkout.Value.ChangeGivenToman);
 
+                var paidOutcome = await billing.GetCashCheckoutOutcomeAsync(
+                    billingActor, ended.Value.InvoiceId, CancellationToken.None);
+                Assert.True(paidOutcome.IsSuccess, paidOutcome.IsSuccess ? "" : paidOutcome.Error.Code);
+                Assert.Equal(InvoiceStatusContract.Paid, paidOutcome.Value.Status);
+                Assert.Equal(checkout.Value.PaymentId, paidOutcome.Value.PaymentId);
+                Assert.Equal(checkout.Value.LedgerEntryId, paidOutcome.Value.LedgerEntryId);
+                Assert.Equal(50_000L, paidOutcome.Value.AmountReceivedToman);
+                Assert.Equal(20_000L, paidOutcome.Value.ChangeGivenToman);
+
+                var recentOutcomes = await billing.ListRecentCashCheckoutsAsync(billingActor, CancellationToken.None);
+                Assert.True(recentOutcomes.IsSuccess, recentOutcomes.IsSuccess ? "" : recentOutcomes.Error.Code);
+                Assert.Contains(recentOutcomes.Value, x =>
+                    x.InvoiceId == ended.Value.InvoiceId &&
+                    x.Status == InvoiceStatusContract.Paid &&
+                    x.PaymentId == checkout.Value.PaymentId);
+
                 var checkoutReplay = await billing.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
                 Assert.True(checkoutReplay.IsSuccess);
                 Assert.Equal(checkout.Value.PaymentId, checkoutReplay.Value.PaymentId);
