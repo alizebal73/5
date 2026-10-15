@@ -8,6 +8,7 @@ using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Billing.Application;
 using GameNet.Server.Modules.Billing.Domain;
 using GameNet.Server.Modules.Billing.Infrastructure;
+using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Modules.Customers.Infrastructure;
 using GameNet.Server.Modules.Stations.Infrastructure;
 using GameNet.Server.Modules.Tariffs.Infrastructure;
@@ -75,6 +76,20 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(("PG-" + token[..12]).ToUpperInvariant(), started.Value.TariffCodeSnapshot);
                 Assert.Equal(60_000L, started.Value.TariffHourlyRateTomanSnapshot);
                 customerId = started.Value.CustomerId;
+
+                // Null CustomerId must create a persisted minimal Walk-in customer under
+                // the authoritative Server clock, and a replay must not duplicate it.
+                var walkIn = await db.Customers.AsNoTracking()
+                    .SingleAsync(x => x.Id == customerId.Value);
+                Assert.Equal(CustomerKind.WalkIn, walkIn.Kind);
+                Assert.StartsWith("W-", walkIn.Code, StringComparison.Ordinal);
+                Assert.Null(walkIn.DisplayName);
+                Assert.True(walkIn.IsActive);
+                // PostgreSQL timestamptz persists microsecond precision; compare at that
+                // boundary instead of requiring .NET's finer 100-nanosecond tick precision.
+                Assert.Equal(
+                    clock.UtcNow.UtcDateTime.Ticks / 10,
+                    walkIn.CreatedAtUtc.UtcDateTime.Ticks / 10);
 
                 var replay = await service.StartAsync(startCommand, CancellationToken.None);
                 Assert.True(replay.IsSuccess);
