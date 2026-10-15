@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using GameNet.Desktop.Api;
@@ -171,6 +172,145 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+
+    [Fact]
+    public async Task Start_session_shows_clear_error_if_server_reports_station_became_unavailable()
+    {
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-04", "Race PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedStation = station;
+            viewModel.SelectedTariff = tariff;
+
+            // The station was available when loaded, but another actor can change its
+            // state before the Server processes the command. The Server remains authoritative.
+            client.NextStartException = new GameNetApiException("sessions.station_unavailable", 409);
+            var error = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains("This station is not available for a new Session.", StringComparison.Ordinal));
+
+            Assert.True(viewModel.StartSessionCommand.CanExecute(null));
+            viewModel.StartSessionCommand.Execute(null);
+            var message = await error;
+
+            Assert.Contains("This station is not available for a new Session.", message);
+            Assert.Equal(station.Id, client.LastStartRequest?.StationId);
+            Assert.False(string.IsNullOrWhiteSpace(client.LastStartIdempotencyKey));
+            Assert.Empty(viewModel.ActiveSessions);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Cash_checkout_network_failure_keeps_invoice_pending_and_reuses_same_idempotency_key_on_retry()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-05", "Retry PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+            viewModel.AmountReceivedText = "50000";
+
+            client.FailNextCashCheckoutWithNetworkError = true;
+            var error = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains("Payment result is unknown", StringComparison.Ordinal));
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.CheckoutCashCommand.Execute(null);
+            Assert.Contains("Payment result is unknown", await error);
+
+            Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+
+            // Reconcile with the Server before retrying; keep the same intent, invoice,
+            // amount and Session version so the idempotency key remains stable.
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.PendingInvoices);
+            viewModel.AmountReceivedText = "50000";
+            var paid = WaitForStatusAsync(
+                viewModel,
+                message => message.StartsWith("Payment recorded.", StringComparison.Ordinal));
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.CheckoutCashCommand.Execute(null);
+            var message = await paid;
+
+            Assert.Contains("Due: 30,000", message);
+            Assert.Contains("received: 50,000", message);
+            Assert.Contains("change: 20,000", message);
+            Assert.Equal(2, client.CheckoutIdempotencyKeys.Count);
+            Assert.Equal(client.CheckoutIdempotencyKeys[0], client.CheckoutIdempotencyKeys[1]);
+            Assert.Equal(invoice.InvoiceId, client.LastCheckoutInvoiceId);
+            Assert.Empty(viewModel.PendingInvoices);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    private static async Task<string> WaitForErrorAsync(
+        SessionWorkflowViewModel viewModel,
+        Func<string, bool> predicate)
+    {
+        var completion = new TaskCompletionSource<string>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        PropertyChangedEventHandler handler = (_, args) =>
+        {
+            if (args.PropertyName == nameof(viewModel.ErrorMessage) &&
+                predicate(viewModel.ErrorMessage))
+            {
+                completion.TrySetResult(viewModel.ErrorMessage);
+            }
+        };
+
+        viewModel.PropertyChanged += handler;
+        try
+        {
+            return await completion.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            viewModel.PropertyChanged -= handler;
+        }
+    }
+
     private static async Task<string> WaitForStatusAsync(
         SessionWorkflowViewModel viewModel,
         Func<string, bool> predicate)
@@ -209,6 +349,9 @@ public sealed class SessionWorkflowViewModelTests
 
         public List<SessionResponse> ActiveSessions { get; } = [];
         public List<InvoicePreviewResponse> PendingInvoices { get; } = [];
+        public List<string> CheckoutIdempotencyKeys { get; } = [];
+        public Exception? NextStartException { get; set; }
+        public bool FailNextCashCheckoutWithNetworkError { get; set; }
         public StartSessionRequest? LastStartRequest { get; private set; }
         public string? LastStartIdempotencyKey { get; private set; }
         public Guid? LastEndedSessionId { get; private set; }
@@ -249,6 +392,11 @@ public sealed class SessionWorkflowViewModelTests
             LastStartRequest = request;
             LastStartIdempotencyKey = idempotencyKey;
             StartRequestReceived.TrySetResult(true);
+            if (NextStartException is { } error)
+            {
+                NextStartException = null;
+                return Task.FromException<SessionResponse>(error);
+            }
             return StartSessionCompletion.Task;
         }
 
@@ -278,6 +426,12 @@ public sealed class SessionWorkflowViewModelTests
             LastCheckoutInvoiceId = invoiceId;
             LastCashCheckoutRequest = request;
             LastCheckoutIdempotencyKey = idempotencyKey;
+            CheckoutIdempotencyKeys.Add(idempotencyKey);
+            if (FailNextCashCheckoutWithNetworkError)
+            {
+                FailNextCashCheckoutWithNetworkError = false;
+                return Task.FromException<CashCheckoutResponse>(new HttpRequestException("Simulated connection loss."));
+            }
             var invoice = PendingInvoices.Single(x => x.InvoiceId == invoiceId);
             PendingInvoices.Remove(invoice);
             return Task.FromResult(new CashCheckoutResponse(
