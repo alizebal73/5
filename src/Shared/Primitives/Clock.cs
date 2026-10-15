@@ -37,7 +37,7 @@ internal static class WindowsBootIdentifier
     {
         public Guid BootIdentifier;
         public int FirmwareType;
-        public uint BootFlags;
+        public ulong BootFlags;
     }
 
     [DllImport("ntdll.dll")]

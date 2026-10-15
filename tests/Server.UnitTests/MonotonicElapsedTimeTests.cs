@@ -7,6 +7,20 @@ public sealed class MonotonicElapsedTimeTests
 {
     private static readonly Guid Boot = Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0");
 
+    [Fact]
+    public void System_clock_captures_a_real_windows_boot_identifier_and_monotonic_baseline()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var snapshot = new SystemGameClock(TimeProvider.System).Capture();
+
+        Assert.NotEqual(Guid.Empty, snapshot.BootIdentifier);
+        Assert.True(snapshot.Timestamp > 0);
+        Assert.True(snapshot.TimestampFrequency > 0);
+        Assert.True(snapshot.SystemUptimeMilliseconds >= 0);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(-1)]
