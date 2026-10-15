@@ -169,5 +169,11 @@ public sealed class OutboxInboxPostgresTests
     private sealed class TestGameClock(DateTimeOffset utcNow) : IGameClock
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
+        public GameClockSnapshot Capture() => new(
+            UtcNow,
+            System.Diagnostics.Stopwatch.GetTimestamp(),
+            System.Diagnostics.Stopwatch.Frequency,
+            Environment.TickCount64,
+            Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0"));
     }
 }
