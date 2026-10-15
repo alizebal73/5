@@ -1,6 +1,6 @@
 # Billing Module Boundary
 
-**Status: PARTIALLY IMPLEMENTED.** The first PC slice creates a fixed-hourly invoice and supports cash checkout with persisted Payment, ledger and Audit records. The module and the overall Session-to-cash journey are not yet accepted; see [Issue #98](../../../../docs/operations/active-execution-control.md).
+**Status: PARTIALLY IMPLEMENTED.** The first PC slice creates a fixed-hourly invoice and supports cash checkout with persisted Payment, ledger and Audit records. The module and the overall Session-to-cash journey are not yet accepted; see [Issue #98](https://github.com/alizebal73/5/issues/98). The current queue is in [Active Execution Control](../../../../docs/operations/active-execution-control.md).
 
 ## Ownership
 
