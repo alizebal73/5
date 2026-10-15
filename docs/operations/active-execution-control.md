@@ -12,7 +12,7 @@ Foundation certification proves only the exact SHA tested. It does not prove phy
 
 ## Current product objective — Issue #98
 
-**Deliver and accept the first complete PC walk-in Session-to-cash journey. Status: PARTIAL / NOT ACCEPTED.**
+**Deliver and accept the first complete PC walk-in Session-to-cash journey. Status: PARTIAL / NOT ACCEPTED.** This milestone is tracked in [Issue #98](https://github.com/alizebal73/5/issues/98).
 
 The Integration branch now has a partial WPF/API/Server/PostgreSQL path for fixed-hourly PC Sessions, invoice creation and cash checkout, plus automated Server/DB/UI-contract coverage. A green automated run is not a substitute for the remaining risk fixes and manual acceptance.
 
