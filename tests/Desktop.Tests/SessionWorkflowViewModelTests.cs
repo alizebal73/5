@@ -285,6 +285,39 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task Operator_without_permissions_cannot_open_or_mutate_session_workspace()
+    {
+        var station = new StationResponse(
+            Guid.NewGuid(), "PC-06", "Restricted PC", StationTypeContract.Pc,
+            StationStatusContract.Available, 1, null, false, null, null, null);
+        var tariff = new TariffResponse(
+            Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+            60_000L, true, true, DateTimeOffset.UtcNow, 1);
+        var client = new FakeGameNetServerClient([station], [tariff]);
+        var viewModel = new SessionWorkflowViewModel(client, _ => false);
+
+        viewModel.SelectedStation = station;
+        viewModel.SelectedTariff = tariff;
+        viewModel.AmountReceivedText = "60000";
+
+        Assert.False(viewModel.CanUseWorkspace);
+        Assert.False(viewModel.CanManageTariffs);
+        Assert.False(viewModel.CanOperateSessions);
+        Assert.False(viewModel.CanCheckout);
+        Assert.False(viewModel.CanReadStations);
+        Assert.False(viewModel.RefreshCommand.CanExecute(null));
+        Assert.False(viewModel.CreateTariffCommand.CanExecute(null));
+        Assert.False(viewModel.StartSessionCommand.CanExecute(null));
+        Assert.False(viewModel.EndSessionCommand.CanExecute(null));
+        Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+        await viewModel.RefreshAsync();
+        Assert.Empty(viewModel.PcStations);
+        Assert.Empty(viewModel.ActiveSessions);
+        Assert.Empty(viewModel.PendingInvoices);
+    }
+
     private static async Task<string> WaitForErrorAsync(
         SessionWorkflowViewModel viewModel,
         Func<string, bool> predicate)
