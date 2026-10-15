@@ -9,6 +9,7 @@ using GameNet.Desktop.Features.Identity;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Sessions;
@@ -519,6 +520,14 @@ public sealed class StationBoardPermissionTests
         public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(PendingInvoicesResponse ?? Array.Empty<InvoicePreviewResponse>());
+
+        public Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(
+            Guid invoiceId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<CashCheckoutOutcomeResponse>> GetRecentCashCheckoutsAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<CashCheckoutResponse> CheckoutCashAsync(
             Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
