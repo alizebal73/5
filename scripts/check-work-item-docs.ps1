@@ -34,7 +34,7 @@ $tracePath = "docs/planning/requirements-traceability.md"
 $matrixPath = "docs/planning/capability-matrix.md"
 $logPath = "docs/development/bug-fix-log.md"
 $planPath = "docs/planning/master-build-plan.md"
-$readinessPath = "docs/planning/engineering-readiness-register.md"
+$executionPath = "docs/operations/active-execution-control.md"
 
 $ready = Get-RequiredText $readyPath
 $done = Get-RequiredText $donePath
@@ -45,7 +45,7 @@ $trace = Get-RequiredText $tracePath
 $matrix = Get-RequiredText $matrixPath
 $log = Get-RequiredText $logPath
 $plan = Get-RequiredText $planPath
-$readiness = Get-RequiredText $readinessPath
+$execution = Get-RequiredText $executionPath
 
 Assert-RequiredTerms $readyPath $ready @(
     "## اطلاعات پایه",
@@ -116,13 +116,12 @@ Assert-RequiredTerms $planPath $plan @(
     "[vertical-slice template](../templates/vertical-slice-template.md)"
 )
 
-Assert-RequiredTerms $readinessPath $readiness @(
-    "## Current verified baseline",
-    "## Active gap register",
-    "## Ordered execution route",
-    "## Branch and PR disposition",
-    "## Stage closure rules",
-    "## Explicit non-goals"
+Assert-RequiredTerms $executionPath $execution @(
+    "## Canonical refs",
+    "## Current product objective",
+    "Issue #98",
+    "## Deferred gates",
+    "## Execution rules"
 )
 
 $idMatches = [regex]::Matches($trace, '(?m)^\|\s*(REQ-[A-Z0-9-]+)\s*\|')
