@@ -313,7 +313,11 @@ public sealed class StationBoardPermissionTests
         workflow.SelectedActiveSession = workflow.ActiveSessions[1];
         Assert.True(workflow.EndSessionCommand.CanExecute(null));
         workflow.SelectedPendingInvoice = workflow.PendingInvoices[1];
-        Assert.Equal("30000", workflow.AmountReceivedText);
+        Assert.Equal(string.Empty, workflow.AmountReceivedText);
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.AmountReceivedText = "30000";
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.ConfirmCashCheckout = true;
         Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
     }
 
@@ -351,6 +355,11 @@ public sealed class StationBoardPermissionTests
         Assert.Equal("PC-01", workflow.PendingInvoices[0].StationLabel);
 
         workflow.SelectedPendingInvoice = workflow.PendingInvoices[0];
+        Assert.Equal(string.Empty, workflow.AmountReceivedText);
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.AmountReceivedText = "30000";
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.ConfirmCashCheckout = true;
         Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
         Assert.False(workflow.StartSessionCommand.CanExecute(null));
         Assert.False(workflow.EndSessionCommand.CanExecute(null));
