@@ -150,6 +150,7 @@ public sealed class SessionWorkflowViewModelTests
             // The operator enters the cash physically received; the Server response remains
             // the source of truth for due amount, received amount and change.
             viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
             var cashStatus = WaitForStatusAsync(
                 viewModel,
                 message => message.StartsWith("Payment recorded.", StringComparison.Ordinal));
