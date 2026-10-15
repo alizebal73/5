@@ -316,6 +316,79 @@ public sealed class StationBoardPermissionTests
         Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task Billing_operator_with_station_read_sees_pc_code_without_session_operation_permission()
+    {
+        var now = DateTimeOffset.Parse("2026-10-15T10:00:00Z");
+        var station = PermissionTestServerClient.TestStation();
+        var customerId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var invoice = new InvoicePreviewResponse(
+            Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, customerId, tariffId,
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L,
+            InvoiceStatusContract.PendingPayment, now, null);
+        var api = new PermissionTestServerClient
+        {
+            StationsResponse = [station],
+            PendingInvoicesResponse = [invoice]
+        };
+        var granted = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Permissions.StationsRead,
+            Permissions.BillingWrite
+        };
+        var workflow = new SessionWorkflowViewModel(api, granted.Contains);
+
+        await workflow.RefreshAsync();
+
+        Assert.True(workflow.CanReadStations);
+        Assert.True(workflow.CanCheckout);
+        Assert.False(workflow.CanOperateSessions);
+        Assert.Empty(workflow.PcStations);
+        Assert.Empty(workflow.ActiveSessions);
+        Assert.Single(workflow.PendingInvoices);
+        Assert.Equal("PC-01", workflow.PendingInvoices[0].StationLabel);
+
+        workflow.SelectedPendingInvoice = workflow.PendingInvoices[0];
+        Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
+        Assert.False(workflow.StartSessionCommand.CanExecute(null));
+        Assert.False(workflow.EndSessionCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Station_label_lookup_failure_does_not_block_cashier_invoice_refresh()
+    {
+        var now = DateTimeOffset.Parse("2026-10-15T10:00:00Z");
+        var station = PermissionTestServerClient.TestStation();
+        var invoice = new InvoicePreviewResponse(
+            Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), Guid.NewGuid(),
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L,
+            InvoiceStatusContract.PendingPayment, now, null);
+        var api = new PermissionTestServerClient
+        {
+            StationsException = new HttpRequestException("test-only station lookup failure"),
+            PendingInvoicesResponse = [invoice]
+        };
+        var granted = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Permissions.StationsRead,
+            Permissions.BillingWrite
+        };
+        var workflow = new SessionWorkflowViewModel(api, granted.Contains);
+
+        await workflow.RefreshAsync();
+
+        Assert.Empty(workflow.ErrorMessage);
+        Assert.Single(workflow.PendingInvoices);
+        Assert.Contains(station.Id.ToString("D"), workflow.PendingInvoices[0].StationLabel, StringComparison.Ordinal);
+        Assert.True(
+            workflow.StatusMessage.Contains("Station codes were unavailable", StringComparison.Ordinal) ||
+            workflow.StatusMessage.Contains("کد ایستگاه در دسترس نبود", StringComparison.Ordinal),
+            "A station-label fallback warning should be shown when the optional lookup fails.");
+        Assert.True(workflow.CanCheckout);
+        Assert.False(workflow.CanOperateSessions);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
         for (var attempt = 0; attempt < 200; attempt++)
@@ -336,6 +409,7 @@ public sealed class StationBoardPermissionTests
         public int ProbeCalls { get; private set; }
         public Task<IReadOnlyList<StationResponse>>? PendingListResponse { get; set; }
         public IReadOnlyList<StationResponse>? StationsResponse { get; set; }
+        public Exception? StationsException { get; set; }
         public IReadOnlyList<TariffResponse>? TariffsResponse { get; set; }
         public IReadOnlyList<SessionResponse>? ActiveSessionsResponse { get; set; }
         public IReadOnlyList<InvoicePreviewResponse>? PendingInvoicesResponse { get; set; }
@@ -369,6 +443,8 @@ public sealed class StationBoardPermissionTests
         public Task<IReadOnlyList<StationResponse>> GetStationsAsync(CancellationToken cancellationToken = default)
         {
             ListCalls++;
+            if (StationsException is not null)
+                return Task.FromException<IReadOnlyList<StationResponse>>(StationsException);
             return PendingListResponse ?? Task.FromResult<IReadOnlyList<StationResponse>>(
                 StationsResponse ?? new[] { TestStation() });
         }
