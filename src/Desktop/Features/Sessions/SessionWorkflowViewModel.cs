@@ -324,19 +324,24 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         if (SelectedStation is null || SelectedTariff is null)
             return;
 
-        var fingerprint = $"{SelectedStation.Id:D}|{SelectedTariff.Id:D}|walk-in";
+        // Preserve the user's original target across the asynchronous request and refresh.
+        // The selection control remains editable while the command is in flight.
+        var stationId = SelectedStation.Id;
+        var stationCode = SelectedStation.Code;
+        var tariffId = SelectedTariff.Id;
+        var fingerprint = $"{stationId:D}|{tariffId:D}|walk-in";
         var key = GetKey("session.start", fingerprint);
         BeginBusy();
         ErrorMessage = string.Empty;
         try
         {
             var session = await api.StartSessionAsync(
-                new StartSessionRequest(SelectedStation.Id, SelectedTariff.Id, null), key);
+                new StartSessionRequest(stationId, tariffId, null), key);
             pendingKeys.Remove("session.start");
             await RefreshAsync();
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
-            StatusMessage = Text($"Session برای {SelectedStation.Code} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
-                $"Session started for {SelectedStation.Code}. PC lock/unlock control is not included yet.");
+            StatusMessage = Text($"Session برای {stationCode} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
+                $"Session started for {stationCode}. PC lock/unlock control is not included yet.");
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
