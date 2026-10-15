@@ -25,8 +25,34 @@ public sealed class EfStationRepository(GameNetDbContext db) : IStationRepositor
     public async Task<IReadOnlyDictionary<string, StationRuntimeInfo>> GetAgentRuntimeAsync(IReadOnlyCollection<string> deviceIds, CancellationToken ct)
     {
         if (deviceIds.Count == 0) return new Dictionary<string, StationRuntimeInfo>(StringComparer.Ordinal);
-        var rows = await db.AgentConnectionLeases.AsNoTracking().Where(x => deviceIds.Contains(x.DeviceId))
-            .Select(x => new StationRuntimeInfo(x.DeviceId, x.LeaseExpiresAtUtc, x.LastHeartbeatAtUtc, x.AgentVersion, x.StationState)).ToArrayAsync(ct);
-        return rows.ToDictionary(x => x.DeviceId, StringComparer.Ordinal);
+
+        var rows = await db.AgentConnectionLeases.AsNoTracking()
+            .Where(x => deviceIds.Contains(x.DeviceId))
+            .Select(x => new
+            {
+                x.DeviceId,
+                x.LeaseExpiresAtUtc,
+                x.LastHeartbeatAtUtc,
+                x.AgentVersion,
+                x.StationState
+            })
+            .ToArrayAsync(ct);
+        var activeDeviceIds = (await db.AgentCredentials.AsNoTracking()
+                .Where(x => deviceIds.Contains(x.DeviceId) && x.RevokedAtUtc == null)
+                .Select(x => x.DeviceId)
+                .Distinct()
+                .ToArrayAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return rows.ToDictionary(
+            x => x.DeviceId,
+            x => new StationRuntimeInfo(
+                x.DeviceId,
+                x.LeaseExpiresAtUtc,
+                x.LastHeartbeatAtUtc,
+                x.AgentVersion,
+                x.StationState,
+                activeDeviceIds.Contains(x.DeviceId)),
+            StringComparer.Ordinal);
     }
 }

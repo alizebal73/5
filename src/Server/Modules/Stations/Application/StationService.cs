@@ -113,7 +113,8 @@ public sealed class StationService(IStationRepository repository, CommandMutatio
     {
         state.TryGetValue(s.AgentDeviceId ?? string.Empty, out var a);
         return new StationDto(s.Id, s.Code, s.Name, s.Type, s.Status, s.Version, s.AgentDeviceId,
-            a is not null && a.LastHeartbeatAtUtc.HasValue && a.LeaseExpiresAtUtc > now,
+            a is not null && AgentAvailabilityPolicy.IsOnline(
+                a.HasActiveCredential, a.LeaseExpiresAtUtc, a.LastHeartbeatAtUtc, now),
             a?.LastHeartbeatAtUtc, a?.AgentVersion, a?.StationState);
     }
 

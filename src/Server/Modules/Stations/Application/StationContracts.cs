@@ -5,7 +5,13 @@ public sealed record CreateStationCommand(string Code, string Name, StationType 
 public sealed record RenameStationCommand(Guid StationId, string Name, int ExpectedVersion, string IdempotencyKey, StationActorContext Actor);
 public sealed record BindStationAgentCommand(Guid StationId, string DeviceId, int ExpectedVersion, string IdempotencyKey, StationActorContext Actor);
 public sealed record SetStationStatusCommand(Guid StationId, StationStatus Status, int ExpectedVersion, string IdempotencyKey, StationActorContext Actor);
-public sealed record StationRuntimeInfo(string DeviceId, DateTimeOffset LeaseExpiresAtUtc, DateTimeOffset? LastHeartbeatAtUtc, string? AgentVersion, string? StationState);
+public sealed record StationRuntimeInfo(
+    string DeviceId,
+    DateTimeOffset LeaseExpiresAtUtc,
+    DateTimeOffset? LastHeartbeatAtUtc,
+    string? AgentVersion,
+    string? StationState,
+    bool HasActiveCredential);
 public sealed record StationDto(Guid Id, string Code, string Name, StationType Type, StationStatus Status, int Version, string? AgentDeviceId,
     bool AgentOnline, DateTimeOffset? LastHeartbeatAtUtc, string? AgentVersion, string? AgentReportedState);
 public interface IStationRepository
