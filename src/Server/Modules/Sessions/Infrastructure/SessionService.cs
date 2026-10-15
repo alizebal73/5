@@ -98,7 +98,7 @@ public sealed class SessionService(
                     {
                         startSnapshot = clock.Capture();
                     }
-                    catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException
+                    catch (Exception ex) when (ex is InvalidOperationException
                         or DllNotFoundException or EntryPointNotFoundException)
                     {
                         return Fail<SessionResponse>(
@@ -181,7 +181,7 @@ public sealed class SessionService(
                     {
                         endSnapshot = clock.Capture();
                     }
-                    catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException
+                    catch (Exception ex) when (ex is InvalidOperationException
                         or DllNotFoundException or EntryPointNotFoundException)
                     {
                         return Fail<InvoicePreviewResponse>(
