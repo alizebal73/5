@@ -28,20 +28,18 @@ public sealed class SystemGameClock(TimeProvider provider) : IGameClock
         WindowsBootIdentifier.Read());
 }
 
-internal static class WindowsBootIdentifier
+internal static partial class WindowsBootIdentifier
 {
     private const int SystemBootEnvironmentInformation = 90;
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Size = 32)]
     private struct BootEnvironmentInformation
     {
         public Guid BootIdentifier;
-        public int FirmwareType;
-        public ulong BootFlags;
     }
 
-    [DllImport("ntdll.dll")]
-    private static extern int NtQuerySystemInformation(
+    [LibraryImport("ntdll.dll")]
+    private static partial int NtQuerySystemInformation(
         int systemInformationClass,
         IntPtr systemInformation,
         uint systemInformationLength,
