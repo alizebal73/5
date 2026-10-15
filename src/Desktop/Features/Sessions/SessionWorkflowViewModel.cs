@@ -487,6 +487,10 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
 
     private async Task ReconcileCashCheckoutOutcomeAsync(Guid invoiceId)
     {
+        // An ambiguous checkout outcome requires a fresh cash entry and explicit confirmation.
+        // Never carry the prior physical-cash observation into a retry after network/replay errors.
+        AmountReceivedText = string.Empty;
+        ConfirmCashCheckout = false;
         try
         {
             var outcome = await api.GetCashCheckoutOutcomeAsync(invoiceId);
