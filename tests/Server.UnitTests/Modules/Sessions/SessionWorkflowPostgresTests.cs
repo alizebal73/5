@@ -154,6 +154,15 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.True(pendingList.IsSuccess);
                 Assert.Contains(pendingList.Value, x => x.InvoiceId == ended.Value.InvoiceId && x.SessionVersion == ended.Value.SessionVersion);
 
+                var pendingOutcome = await billing.GetCashCheckoutOutcomeAsync(
+                    billingActor, ended.Value.InvoiceId, CancellationToken.None);
+                Assert.True(pendingOutcome.IsSuccess, pendingOutcome.IsSuccess ? "" : pendingOutcome.Error.Code);
+                Assert.Equal(InvoiceStatusContract.PendingPayment, pendingOutcome.Value.Status);
+                Assert.Null(pendingOutcome.Value.PaymentId);
+                Assert.Null(pendingOutcome.Value.LedgerEntryId);
+                Assert.Null(pendingOutcome.Value.AmountReceivedToman);
+                Assert.Null(pendingOutcome.Value.ChangeGivenToman);
+
                 var staleCheckout = await billing.CheckoutCashAsync(
                     new CashCheckoutCommand(
                         ended.Value.InvoiceId, 50_000L, ended.Value.SessionVersion - 1,
@@ -171,6 +180,22 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(30_000L, checkout.Value.InvoiceAmountToman);
                 Assert.Equal(50_000L, checkout.Value.AmountReceivedToman);
                 Assert.Equal(20_000L, checkout.Value.ChangeGivenToman);
+
+                var paidOutcome = await billing.GetCashCheckoutOutcomeAsync(
+                    billingActor, ended.Value.InvoiceId, CancellationToken.None);
+                Assert.True(paidOutcome.IsSuccess, paidOutcome.IsSuccess ? "" : paidOutcome.Error.Code);
+                Assert.Equal(InvoiceStatusContract.Paid, paidOutcome.Value.Status);
+                Assert.Equal(checkout.Value.PaymentId, paidOutcome.Value.PaymentId);
+                Assert.Equal(checkout.Value.LedgerEntryId, paidOutcome.Value.LedgerEntryId);
+                Assert.Equal(50_000L, paidOutcome.Value.AmountReceivedToman);
+                Assert.Equal(20_000L, paidOutcome.Value.ChangeGivenToman);
+
+                var recentOutcomes = await billing.ListRecentCashCheckoutsAsync(billingActor, CancellationToken.None);
+                Assert.True(recentOutcomes.IsSuccess, recentOutcomes.IsSuccess ? "" : recentOutcomes.Error.Code);
+                Assert.Contains(recentOutcomes.Value, x =>
+                    x.InvoiceId == ended.Value.InvoiceId &&
+                    x.Status == InvoiceStatusContract.Paid &&
+                    x.PaymentId == checkout.Value.PaymentId);
 
                 var checkoutReplay = await billing.CheckoutCashAsync(checkoutCommand, CancellationToken.None);
                 Assert.True(checkoutReplay.IsSuccess);
@@ -361,8 +386,23 @@ public sealed class SessionWorkflowPostgresTests
 
     private sealed class MutableClock(DateTimeOffset utcNow) : IGameClock
     {
+        private long timestamp;
+        private long uptimeMilliseconds = 5_000;
+        private static readonly Guid BootId = Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0");
+
         public DateTimeOffset UtcNow { get; private set; } = utcNow;
-        public void Advance(TimeSpan amount) => UtcNow = UtcNow.Add(amount);
+
+        public GameClockSnapshot Capture() => new(
+            UtcNow, timestamp, TimeSpan.TicksPerSecond, uptimeMilliseconds, BootId);
+
+        public void Advance(TimeSpan amount)
+        {
+            UtcNow = UtcNow.Add(amount);
+            timestamp = checked(timestamp + amount.Ticks);
+            uptimeMilliseconds = checked(uptimeMilliseconds + (long)amount.TotalMilliseconds);
+        }
+
+        public void JumpWallClock(TimeSpan amount) => UtcNow = UtcNow.Add(amount);
     }
 
     private sealed class TestRequestFingerprint : IRequestFingerprint

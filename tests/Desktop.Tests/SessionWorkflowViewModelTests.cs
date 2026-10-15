@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Security;
@@ -149,6 +150,7 @@ public sealed class SessionWorkflowViewModelTests
             // The operator enters the cash physically received; the Server response remains
             // the source of truth for due amount, received amount and change.
             viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
             var cashStatus = WaitForStatusAsync(
                 viewModel,
                 message => message.StartsWith("Payment recorded.", StringComparison.Ordinal));
@@ -218,7 +220,119 @@ public sealed class SessionWorkflowViewModelTests
     }
 
     [Fact]
-    public async Task Cash_checkout_network_failure_keeps_invoice_pending_and_reuses_same_idempotency_key_on_retry()
+    public async Task Cash_checkout_does_not_prefill_received_amount_and_requires_fresh_explicit_confirmation()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-04", "Cash PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(client,
+                permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.ConfirmCashCheckout);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            Assert.Contains("Amount due: 30,000", viewModel.CashCheckoutSummaryText);
+
+            viewModel.AmountReceivedText = "50000";
+            Assert.Contains("cash received: 50,000", viewModel.CashCheckoutSummaryText);
+            Assert.Contains("change: 20,000", viewModel.CashCheckoutSummaryText);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            viewModel.ConfirmCashCheckout = true;
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            // Changing the received amount invalidates the prior confirmation.
+            viewModel.AmountReceivedText = "50001";
+            Assert.False(viewModel.ConfirmCashCheckout);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.ConfirmCashCheckout = true;
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Cash_checkout_response_loss_after_commit_recovers_payment_and_ledger_outcome_without_retry()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-07", "Recovered PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            client.LoseNextCashCheckoutResponseAfterCommit = true;
+
+            var reconciled = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains("payment was already recorded", StringComparison.Ordinal));
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.CheckoutCashCommand.Execute(null);
+            var message = await reconciled;
+
+            Assert.Contains("Due: 30,000", message);
+            Assert.Contains("received: 50,000", message);
+            Assert.Contains("change: 20,000", message);
+            Assert.Empty(viewModel.PendingInvoices);
+            Assert.Single(viewModel.RecentCashCheckouts);
+            Assert.Equal(invoice.InvoiceId, viewModel.RecentCashCheckouts[0].Outcome.InvoiceId);
+            Assert.Single(client.CheckoutIdempotencyKeys);
+
+            // Simulate Desktop restart: a fresh ViewModel discovers the paid invoice from Server history.
+            var restartedViewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingWrite);
+            await restartedViewModel.RefreshAsync();
+            Assert.Single(restartedViewModel.RecentCashCheckouts);
+            Assert.Equal(invoice.InvoiceId, restartedViewModel.RecentCashCheckouts[0].Outcome.InvoiceId);
+            Assert.Empty(restartedViewModel.PendingInvoices);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Cash_checkout_network_failure_confirms_pending_state_and_requires_a_fresh_confirmation_before_retry()
     {
         var originalCulture = CultureInfo.CurrentCulture;
         var originalUiCulture = CultureInfo.CurrentUICulture;
@@ -245,15 +359,19 @@ public sealed class SessionWorkflowViewModelTests
             await viewModel.RefreshAsync();
             Assert.Single(viewModel.PendingInvoices);
             Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
             viewModel.AmountReceivedText = "50000";
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.ConfirmCashCheckout = true;
 
             client.FailNextCashCheckoutWithNetworkError = true;
             var error = WaitForErrorAsync(
                 viewModel,
-                message => message.Contains("Payment result is unknown", StringComparison.Ordinal));
+                message => message.Contains("Server confirms this invoice is still pending", StringComparison.Ordinal));
             Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
             viewModel.CheckoutCashCommand.Execute(null);
-            Assert.Contains("Payment result is unknown", await error);
+            Assert.Contains("Server confirms this invoice is still pending", await error);
 
             Assert.Single(viewModel.PendingInvoices);
             Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
@@ -262,7 +380,10 @@ public sealed class SessionWorkflowViewModelTests
             // amount and Session version so the idempotency key remains stable.
             await viewModel.RefreshAsync();
             Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
             viewModel.AmountReceivedText = "50000";
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.ConfirmCashCheckout = true;
             var paid = WaitForStatusAsync(
                 viewModel,
                 message => message.StartsWith("Payment recorded.", StringComparison.Ordinal));
@@ -277,6 +398,114 @@ public sealed class SessionWorkflowViewModelTests
             Assert.Equal(client.CheckoutIdempotencyKeys[0], client.CheckoutIdempotencyKeys[1]);
             Assert.Equal(invoice.InvoiceId, client.LastCheckoutInvoiceId);
             Assert.Empty(viewModel.PendingInvoices);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Unknown_checkout_outcome_blocks_retry_until_refresh_confirms_server_state()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-06", "Unknown outcome PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            client.FailNextCashCheckoutWithNetworkError = true;
+            client.FailNextCashCheckoutOutcomeLookupWithNetworkError = true;
+
+            var error = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains("Checkout outcome is still unverified", StringComparison.Ordinal));
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.CheckoutCashCommand.Execute(null);
+            Assert.Contains("Checkout outcome is still unverified", await error);
+
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            // A later explicit refresh must first reconcile the unresolved invoice with the Server.
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Cash_checkout_timeout_reconciles_server_state_before_retry()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-07", "Timeout PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), Guid.NewGuid(), 2, station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, TimeSpan.FromMinutes(30).Ticks,
+                30_000L, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.PendingInvoices.Add(invoice);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            viewModel.AmountReceivedText = "50000";
+            viewModel.ConfirmCashCheckout = true;
+            client.FailNextCashCheckoutWithTimeout = true;
+
+            var error = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains("Server confirms this invoice is still pending", StringComparison.Ordinal));
+            viewModel.CheckoutCashCommand.Execute(null);
+            Assert.Contains("Server confirms this invoice is still pending", await error);
+
+            Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(invoice.InvoiceId, client.LastCheckoutInvoiceId);
+            Assert.Single(client.CheckoutIdempotencyKeys);
+            Assert.Equal(string.Empty, viewModel.AmountReceivedText);
+            Assert.False(viewModel.ConfirmCashCheckout);
+            Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
         }
         finally
         {
@@ -385,6 +614,8 @@ public sealed class SessionWorkflowViewModelTests
         public List<string> CheckoutIdempotencyKeys { get; } = [];
         public Exception? NextStartException { get; set; }
         public bool FailNextCashCheckoutWithNetworkError { get; set; }
+        public bool FailNextCashCheckoutWithTimeout { get; set; }
+        public bool FailNextCashCheckoutOutcomeLookupWithNetworkError { get; set; }
         public StartSessionRequest? LastStartRequest { get; private set; }
         public string? LastStartIdempotencyKey { get; private set; }
         public Guid? LastEndedSessionId { get; private set; }
@@ -451,8 +682,37 @@ public sealed class SessionWorkflowViewModelTests
             return Task.FromResult(invoice);
         }
 
+        public List<CashCheckoutOutcomeResponse> CompletedCashOutcomes { get; } = [];
+        public bool LoseNextCashCheckoutResponseAfterCommit { get; set; }
+
         public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(PendingInvoices.ToArray());
+
+        public Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(Guid invoiceId, CancellationToken cancellationToken = default)
+        {
+            if (FailNextCashCheckoutOutcomeLookupWithNetworkError)
+            {
+                FailNextCashCheckoutOutcomeLookupWithNetworkError = false;
+                return Task.FromException<CashCheckoutOutcomeResponse>(new HttpRequestException("Simulated checkout outcome lookup failure."));
+            }
+
+            var completed = CompletedCashOutcomes.SingleOrDefault(x => x.InvoiceId == invoiceId);
+            if (completed is not null)
+                return Task.FromResult(completed);
+
+            var invoice = PendingInvoices.SingleOrDefault(x => x.InvoiceId == invoiceId);
+            if (invoice is null)
+                return Task.FromException<CashCheckoutOutcomeResponse>(
+                    new GameNetApiException("billing.invoice_not_found", 404));
+
+            return Task.FromResult(new CashCheckoutOutcomeResponse(
+                invoice.InvoiceId, invoice.SessionId, invoice.StationId, invoice.TariffCodeSnapshot,
+                invoice.TariffNameSnapshot, invoice.TariffHourlyRateTomanSnapshot, invoice.ElapsedTicks,
+                invoice.AmountToman, invoice.Status, null, null, null, null, invoice.IssuedAtUtc, null));
+        }
+
+        public Task<IReadOnlyList<CashCheckoutOutcomeResponse>> GetRecentCashCheckoutsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<CashCheckoutOutcomeResponse>>(CompletedCashOutcomes.ToArray());
 
         public Task<CashCheckoutResponse> CheckoutCashAsync(Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
         {
@@ -463,14 +723,35 @@ public sealed class SessionWorkflowViewModelTests
             if (FailNextCashCheckoutWithNetworkError)
             {
                 FailNextCashCheckoutWithNetworkError = false;
-                return Task.FromException<CashCheckoutResponse>(new HttpRequestException("Simulated connection loss."));
+                return Task.FromException<CashCheckoutResponse>(new HttpRequestException("Simulated connection loss before commit."));
+            }
+            if (FailNextCashCheckoutWithTimeout)
+            {
+                FailNextCashCheckoutWithTimeout = false;
+                return Task.FromException<CashCheckoutResponse>(new TaskCanceledException("Simulated checkout timeout before commit."));
             }
             var invoice = PendingInvoices.Single(x => x.InvoiceId == invoiceId);
             PendingInvoices.Remove(invoice);
-            return Task.FromResult(new CashCheckoutResponse(
-                invoice.InvoiceId, Guid.NewGuid(), Guid.NewGuid(), invoice.AmountToman,
+            var paymentId = Guid.NewGuid();
+            var ledgerId = Guid.NewGuid();
+            var paidAt = DateTimeOffset.UtcNow;
+            var response = new CashCheckoutResponse(
+                invoice.InvoiceId, paymentId, ledgerId, invoice.AmountToman,
                 request.AmountReceivedToman, checked(request.AmountReceivedToman - invoice.AmountToman),
-                DateTimeOffset.UtcNow));
+                paidAt);
+            CompletedCashOutcomes.Add(new CashCheckoutOutcomeResponse(
+                invoice.InvoiceId, invoice.SessionId, invoice.StationId, invoice.TariffCodeSnapshot,
+                invoice.TariffNameSnapshot, invoice.TariffHourlyRateTomanSnapshot, invoice.ElapsedTicks,
+                invoice.AmountToman, InvoiceStatusContract.Paid, paymentId, ledgerId,
+                request.AmountReceivedToman, response.ChangeGivenToman, invoice.IssuedAtUtc, paidAt));
+
+            if (LoseNextCashCheckoutResponseAfterCommit)
+            {
+                LoseNextCashCheckoutResponseAfterCommit = false;
+                return Task.FromException<CashCheckoutResponse>(new HttpRequestException("Simulated connection loss after commit."));
+            }
+
+            return Task.FromResult(response);
         }
         public Task LogoutAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public void ClearSession() { }

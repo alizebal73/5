@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Modules.Billing.Application;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Security;
@@ -26,6 +27,35 @@ public static class BillingEndpoints
             var result = await service.ListPendingInvoicesAsync(actor, cancellationToken);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<InvoicePreviewResponse[]>(result.Value.ToArray(), CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.BillingWrite);
+
+        group.MapGet("/invoices/{invoiceId:guid}/outcome", async (
+            Guid invoiceId,
+            IBillingService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var result = await service.GetCashCheckoutOutcomeAsync(actor, invoiceId, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<CashCheckoutOutcomeResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.BillingWrite);
+
+        group.MapGet("/recent-cash-checkouts", async (
+            IBillingService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var result = await service.ListRecentCashCheckoutsAsync(actor, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<CashCheckoutOutcomeResponse[]>(result.Value.ToArray(), CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.BillingWrite);
 

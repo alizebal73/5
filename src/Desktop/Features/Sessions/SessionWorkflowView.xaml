@@ -103,9 +103,28 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-          <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12" Margin="0,7,0,0"/>
+          <TextBlock Text="{Binding CashCheckoutSummaryText}" FontSize="11" Foreground="#344054"
+                     TextWrapping="Wrap" Margin="0,7,0,4"/>
+          <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12"/>
           <TextBox Padding="5" Margin="0,3,0,6" Text="{Binding AmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+          <CheckBox Content="{DynamicResource Billing.ConfirmCashCheckout}"
+                    IsChecked="{Binding ConfirmCashCheckout, Mode=TwoWay}" Margin="0,0,0,8"/>
           <Button Padding="8,6" Content="{DynamicResource Billing.Checkout}" Command="{Binding CheckoutCashCommand}"/>
+          <Expander Header="{DynamicResource Billing.RecentCashCheckouts}" Margin="0,8,0,0">
+            <ListBox Height="150" ItemsSource="{Binding RecentCashCheckouts}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,2">
+                    <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding InvoiceIdentityText}" FontSize="10" Foreground="#667085"/>
+                    <TextBlock Text="{Binding AmountDisplayText}" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding CashDetailsDisplayText}" FontSize="10" Foreground="#475467"/>
+                    <TextBlock Text="{Binding PaidAtDisplayText}" FontSize="10" Foreground="#667085"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Expander>
         </StackPanel>
       </Grid>
     </StackPanel>

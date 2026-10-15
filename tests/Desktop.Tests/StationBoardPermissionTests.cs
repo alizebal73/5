@@ -9,6 +9,7 @@ using GameNet.Desktop.Features.Identity;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Sessions;
@@ -312,7 +313,11 @@ public sealed class StationBoardPermissionTests
         workflow.SelectedActiveSession = workflow.ActiveSessions[1];
         Assert.True(workflow.EndSessionCommand.CanExecute(null));
         workflow.SelectedPendingInvoice = workflow.PendingInvoices[1];
-        Assert.Equal("30000", workflow.AmountReceivedText);
+        Assert.Equal(string.Empty, workflow.AmountReceivedText);
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.AmountReceivedText = "30000";
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.ConfirmCashCheckout = true;
         Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
     }
 
@@ -350,6 +355,11 @@ public sealed class StationBoardPermissionTests
         Assert.Equal("PC-01", workflow.PendingInvoices[0].StationLabel);
 
         workflow.SelectedPendingInvoice = workflow.PendingInvoices[0];
+        Assert.Equal(string.Empty, workflow.AmountReceivedText);
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.AmountReceivedText = "30000";
+        Assert.False(workflow.CheckoutCashCommand.CanExecute(null));
+        workflow.ConfirmCashCheckout = true;
         Assert.True(workflow.CheckoutCashCommand.CanExecute(null));
         Assert.False(workflow.StartSessionCommand.CanExecute(null));
         Assert.False(workflow.EndSessionCommand.CanExecute(null));
@@ -519,6 +529,14 @@ public sealed class StationBoardPermissionTests
         public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(PendingInvoicesResponse ?? Array.Empty<InvoicePreviewResponse>());
+
+        public Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(
+            Guid invoiceId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<CashCheckoutOutcomeResponse>> GetRecentCashCheckoutsAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<CashCheckoutOutcomeResponse>>(Array.Empty<CashCheckoutOutcomeResponse>());
 
         public Task<CashCheckoutResponse> CheckoutCashAsync(
             Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>

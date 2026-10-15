@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -13,7 +14,7 @@ using GameNet.Shared.Contracts.V1.Tariffs;
 
 namespace GameNet.Desktop.Features.Sessions;
 
-public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
+public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
@@ -26,7 +27,6 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     private string tariffCode = "PC-STANDARD";
     private string tariffName = "PC Standard";
     private string hourlyRateText = string.Empty;
-    private string amountReceivedText = string.Empty;
     private string errorMessage = string.Empty;
     private string statusMessage = string.Empty;
     private bool isDefaultTariff = true;
@@ -50,9 +50,12 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
+            !unresolvedCashCheckoutInvoiceId.HasValue &&
             SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
             TryParseToman(AmountReceivedText, out var received) &&
-            SelectedPendingInvoice is not null && received >= SelectedPendingInvoice.Invoice.AmountToman);
+            SelectedPendingInvoice is not null &&
+            received >= SelectedPendingInvoice.Invoice.AmountToman &&
+            ConfirmCashCheckout);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -61,6 +64,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
     public ObservableCollection<ActiveSessionListItem> ActiveSessions { get; } = [];
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
+    public ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; } = [];
 
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
@@ -92,24 +96,9 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         set { if (SetField(ref selectedActiveSession, value)) RaiseCommands(); }
     }
 
-    public PendingInvoiceListItem? SelectedPendingInvoice
-    {
-        get => selectedPendingInvoice;
-        set
-        {
-            if (SetField(ref selectedPendingInvoice, value))
-            {
-                AmountReceivedText = value?.Invoice.AmountToman.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-                RaiseCommands();
-                OnPropertyChanged(nameof(SelectedInvoiceAmountText));
-            }
-        }
-    }
-
     public string TariffCode { get => tariffCode; set { if (SetField(ref tariffCode, value)) RaiseCommands(); } }
     public string TariffName { get => tariffName; set { if (SetField(ref tariffName, value)) RaiseCommands(); } }
     public string HourlyRateText { get => hourlyRateText; set { if (SetField(ref hourlyRateText, value)) RaiseCommands(); } }
-    public string AmountReceivedText { get => amountReceivedText; set { if (SetField(ref amountReceivedText, value)) RaiseCommands(); } }
     public bool IsDefaultTariff { get => isDefaultTariff; set { if (SetField(ref isDefaultTariff, value)) RaiseCommands(); } }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
@@ -138,10 +127,49 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
             return;
 
         BeginBusy();
-        ErrorMessage = string.Empty;
         var stationLabelsUnavailable = false;
         try
         {
+            // If the previous checkout's HTTP result and its outcome lookup both failed,
+            // keep checkout disabled until this explicit refresh confirms Paid or Pending.
+            if (unresolvedCashCheckoutInvoiceId is Guid unresolvedInvoiceId)
+            {
+                CashCheckoutOutcomeResponse outcome;
+                try
+                {
+                    outcome = await api.GetCashCheckoutOutcomeAsync(unresolvedInvoiceId);
+                }
+                catch
+                {
+                    ErrorMessage = Text(
+                        "نتیجهٔ پرداخت هنوز قابل تأیید نیست. تا روشن‌شدن وضعیت سرور، پرداخت را دوباره ثبت نکنید.",
+                        "Checkout outcome is still unverified. Do not record the cash again until the Server outcome can be confirmed.");
+                    return;
+                }
+
+                if (IsConfirmedPaidCheckoutOutcome(outcome))
+                {
+                    unresolvedCashCheckoutInvoiceId = null;
+                    pendingKeys.Remove("billing.cash");
+                    RaiseCommands();
+                }
+                else if (IsConfirmedPendingCheckoutOutcome(outcome))
+                {
+                    unresolvedCashCheckoutInvoiceId = null;
+                    AmountReceivedText = string.Empty;
+                    ConfirmCashCheckout = false;
+                    RaiseCommands();
+                }
+                else
+                {
+                    ErrorMessage = Text(
+                        "نتیجهٔ پرداخت سازگار و قابل تأیید نیست. پرداخت مجدد مسدود است؛ ابتدا نتیجه را با سرور تطبیق دهید.",
+                        "The checkout outcome is not consistent enough to confirm. Retry is blocked; reconcile with the Server first.");
+                    return;
+                }
+            }
+
+            ErrorMessage = string.Empty;
             if (CanReadStations)
             {
                 StationResponse[] stations;
@@ -221,11 +249,25 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                     FormatAmountDisplayText(invoice.AmountToman))).ToArray();
                 Replace(PendingInvoices, invoiceItems, SelectedPendingInvoice?.Id, x => x.Id, out var currentInvoice);
                 SelectedPendingInvoice = currentInvoice;
+
+                var recentOutcomes = await api.GetRecentCashCheckoutsAsync();
+                RecentCashCheckouts.Clear();
+                foreach (var outcome in recentOutcomes)
+                {
+                    RecentCashCheckouts.Add(new CashCheckoutOutcomeListItem(
+                        outcome,
+                        GetStationLabel(outcome.StationId),
+                        FormatInvoiceIdentityDisplayText(outcome.InvoiceId),
+                        FormatAmountDisplayText(outcome.AmountToman),
+                        FormatCashOutcomeDetailsDisplayText(outcome),
+                        FormatPaidAtDisplayText(outcome.PaidAtUtc)));
+                }
             }
             else
             {
                 PendingInvoices.Clear();
                 SelectedPendingInvoice = null;
+                RecentCashCheckouts.Clear();
             }
 
             OnPropertyChanged(nameof(CanManageTariffs));
@@ -281,6 +323,8 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         SelectedActiveSession = null;
         SelectedPendingInvoice = null;
         pendingKeys.Clear();
+        unresolvedCashCheckoutInvoiceId = null;
+        RaiseCommands();
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
         OnPropertyChanged(nameof(CanManageTariffs));
@@ -372,39 +416,6 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
         }
         catch { ErrorMessage = Text("پایان Session انجام نشد.", "Ending the Session failed."); }
-        finally { EndBusy(); }
-    }
-
-    private async Task CheckoutCashAsync()
-    {
-        if (SelectedPendingInvoice is null)
-            return;
-        if (!TryParseToman(AmountReceivedText, out var received) || received < SelectedPendingInvoice.Invoice.AmountToman)
-        {
-            ErrorMessage = Text("وجه دریافتی باید عدد صحیح و حداقل برابر مبلغ صورتحساب باشد.", "Cash received must be a whole number at least equal to the invoice amount.");
-            return;
-        }
-
-        var invoice = SelectedPendingInvoice.Invoice;
-        var fingerprint = $"{invoice.InvoiceId:D}|{received}|{invoice.SessionVersion}";
-        var key = GetKey("billing.cash", fingerprint);
-        BeginBusy();
-        ErrorMessage = string.Empty;
-        try
-        {
-            var result = await api.CheckoutCashAsync(
-                invoice.InvoiceId,
-                new CashCheckoutRequest(received, invoice.SessionVersion),
-                key);
-            pendingKeys.Remove("billing.cash");
-            await RefreshAsync();
-            StatusMessage = Text(
-                $"پرداخت ثبت شد. مبلغ: {FormatToman(result.InvoiceAmountToman)}؛ دریافتی: {FormatToman(result.AmountReceivedToman)}؛ باقی‌مانده: {FormatToman(result.ChangeGivenToman)} تومان.",
-                $"Payment recorded. Due: {FormatToman(result.InvoiceAmountToman)}; received: {FormatToman(result.AmountReceivedToman)}; change: {FormatToman(result.ChangeGivenToman)} Toman.");
-        }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
-        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پرداخت نامشخص است؛ ابتدا تازه‌سازی کنید و دوباره پول را ثبت نکنید.", "Payment result is unknown; refresh first and do not record cash again blindly."); }
-        catch { ErrorMessage = Text("ثبت پرداخت انجام نشد.", "Cash checkout failed."); }
         finally { EndBusy(); }
     }
 
@@ -501,6 +512,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
         "tariffs.forbidden" or "sessions.forbidden" or "billing.forbidden" => Text("مجوز انجام این عملیات را ندارید.", "You do not have permission for this operation."),
         "tariffs.code_exists" => Text("کد این تعرفه قبلاً ثبت شده است.", "This tariff code already exists."),
         "sessions.station_unavailable" => Text("این ایستگاه آمادهٔ شروع Session نیست.", "This station is not available for a new Session."),
+        "sessions.timing_recovery_required" or "sessions.invalid_clock" => Text("پیوستگی زمان جلسه قابل تأیید نیست؛ صورتحساب صادر نشد و بازیابی زمان لازم است.", "Session timing continuity could not be verified. No invoice was created; timing recovery is required."),
         "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
         "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
         "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),

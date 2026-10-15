@@ -17,7 +17,7 @@ namespace GameNet.Server.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -566,10 +566,15 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
                     b.Property<Guid?>("EndedByOperatorId").HasColumnType("uuid").HasColumnName("ended_by_operator_id");
                     b.Property<DateTimeOffset?>("EndedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("ended_at_utc");
+                    b.Property<long?>("ElapsedTicks").HasColumnType("bigint").HasColumnName("elapsed_ticks");
                     b.Property<Guid?>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
                     b.Property<DateTimeOffset?>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
                     b.Property<Guid>("StartedByOperatorId").HasColumnType("uuid").HasColumnName("started_by_operator_id");
                     b.Property<DateTimeOffset>("StartedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("started_at_utc");
+                    b.Property<Guid>("StartedBootIdentifier").HasColumnType("uuid").HasColumnName("started_boot_identifier");
+                    b.Property<long>("StartedMonotonicFrequency").HasColumnType("bigint").HasColumnName("started_monotonic_frequency");
+                    b.Property<long>("StartedMonotonicTimestamp").HasColumnType("bigint").HasColumnName("started_monotonic_timestamp");
+                    b.Property<long>("StartedSystemUptimeMilliseconds").HasColumnType("bigint").HasColumnName("started_system_uptime_milliseconds");
                     b.Property<Guid>("StationId").HasColumnType("uuid").HasColumnName("station_id");
                     b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
                     b.Property<Guid>("TariffId").HasColumnType("uuid").HasColumnName("tariff_id");
@@ -586,7 +591,7 @@ namespace GameNet.Server.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_sessions_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
                             t.HasCheckConstraint("ck_sessions_status_range", "status BETWEEN 1 AND 3");
-                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND ended_at_utc > started_at_utc) OR (status = 3 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL AND ended_at_utc > started_at_utc AND paid_at_utc >= ended_at_utc)");
+                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NOT NULL AND elapsed_ticks > 0) OR (status = 3 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL AND elapsed_ticks IS NOT NULL AND elapsed_ticks > 0)");
                         });
                 });
 
@@ -616,7 +621,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.ToTable("invoices", null, t =>
                         {
                             t.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
-                            t.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks > 0");
+                            t.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks IS NOT NULL AND elapsed_ticks > 0");
                             t.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
                             t.HasCheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 2");
                             t.HasCheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");

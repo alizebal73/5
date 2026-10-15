@@ -28,16 +28,26 @@ public sealed class InvoiceTests
     }
 
     [Fact]
-    public void Invoice_rejects_non_positive_amount_and_payment_before_issue()
+    public void Invoice_rejects_non_positive_amount()
     {
         var issuedAt = DateTimeOffset.Parse("2026-10-14T10:30:00Z");
         Assert.Throws<ArgumentOutOfRangeException>(() => Invoice.CreateForSession(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             "PC-1", "PC", 60_000L, TimeSpan.FromMinutes(30).Ticks, 0L, Guid.NewGuid(), issuedAt));
+    }
 
+    [Fact]
+    public void Invoice_state_transition_allows_paid_utc_before_issue_when_wall_clock_moves_backwards()
+    {
+        var issuedAt = DateTimeOffset.Parse("2026-10-14T10:30:00Z");
+        var paidAt = issuedAt.AddTicks(-1);
         var invoice = Invoice.CreateForSession(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             "PC-1", "PC", 60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L, Guid.NewGuid(), issuedAt);
-        Assert.Throws<ArgumentOutOfRangeException>(() => invoice.MarkPaid(Guid.NewGuid(), issuedAt.AddTicks(-1)));
+
+        invoice.MarkPaid(Guid.NewGuid(), paidAt);
+
+        Assert.Equal(InvoiceStatus.Paid, invoice.Status);
+        Assert.Equal(paidAt, invoice.PaidAtUtc);
     }
 }

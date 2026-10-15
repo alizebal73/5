@@ -93,6 +93,19 @@ public sealed class SessionService(
                     if (customer is null)
                         return Fail<SessionResponse>("sessions.customer_not_found", "Active customer was not found.");
 
+                    GameClockSnapshot startSnapshot;
+                    try
+                    {
+                        startSnapshot = clock.Capture();
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException
+                        or DllNotFoundException or EntryPointNotFoundException)
+                    {
+                        return Fail<SessionResponse>(
+                            "sessions.timing_recovery_required",
+                            "Authoritative timing source is unavailable. The Session was not started.");
+                    }
+
                     var session = Session.Start(
                         Guid.NewGuid(),
                         station.Id,
@@ -102,7 +115,11 @@ public sealed class SessionService(
                         tariff.Name,
                         tariff.HourlyRateToman,
                         command.Actor.OperatorId,
-                        clock.UtcNow);
+                        startSnapshot.UtcNow,
+                        startSnapshot.Timestamp,
+                        startSnapshot.TimestampFrequency,
+                        startSnapshot.SystemUptimeMilliseconds,
+                        startSnapshot.BootIdentifier);
                     await db.Sessions.AddAsync(session, token);
 
                     var response = ToResponse(session);
@@ -159,15 +176,45 @@ public sealed class SessionService(
                     if (session.Status != SessionStatus.Active)
                         return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Only an active session can be ended.");
 
-                    var endedAt = clock.UtcNow;
+                    GameClockSnapshot endSnapshot;
+                    try
+                    {
+                        endSnapshot = clock.Capture();
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException
+                        or DllNotFoundException or EntryPointNotFoundException)
+                    {
+                        return Fail<InvoicePreviewResponse>(
+                            "sessions.timing_recovery_required",
+                            "Authoritative timing source is unavailable. No invoice was created.");
+                    }
+
+                    if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
+                            session.StartedMonotonicTimestamp,
+                            session.StartedMonotonicFrequency,
+                            session.StartedSystemUptimeMilliseconds,
+                            session.StartedBootIdentifier,
+                            endSnapshot,
+                            out var elapsedTicks))
+                    {
+                        return Fail<InvoicePreviewResponse>(
+                            "sessions.timing_recovery_required",
+                            "Monotonic time continuity could not be verified. No invoice was created; timing recovery is required.");
+                    }
+
+                    var endedAt = endSnapshot.UtcNow;
                     var before = ToResponse(session);
                     try
                     {
-                        session.End(command.Actor.OperatorId, endedAt);
+                        session.End(command.Actor.OperatorId, endedAt, elapsedTicks);
                     }
                     catch (InvalidOperationException)
                     {
                         return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Session could not be ended from its current state.");
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        return Fail<InvoicePreviewResponse>("sessions.timing_recovery_required", "Session elapsed time is invalid; no invoice was created.");
                     }
 
                     audit.Append(new AuditRecord(
@@ -195,8 +242,7 @@ public sealed class SessionService(
                             session.TariffCodeSnapshot,
                             session.TariffNameSnapshot,
                             session.TariffHourlyRateTomanSnapshot,
-                            session.StartedAtUtc,
-                            endedAt,
+                            session.ElapsedTicks!.Value,
                             session.Version,
                             command.Actor.OperatorId,
                             endedAt,

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -130,6 +131,23 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var invoices = await ReadPayloadAsync<InvoicePreviewResponse[]>(response, cancellationToken);
         return invoices ?? Array.Empty<InvoicePreviewResponse>();
+    }
+
+    public async Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(
+        Guid invoiceId, CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Get, $"/api/v1/billing/invoices/{invoiceId:D}/outcome", authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadPayloadAsync<CashCheckoutOutcomeResponse>(response, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CashCheckoutOutcomeResponse>> GetRecentCashCheckoutsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Get, "/api/v1/billing/recent-cash-checkouts", authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var outcomes = await ReadPayloadAsync<CashCheckoutOutcomeResponse[]>(response, cancellationToken);
+        return outcomes ?? Array.Empty<CashCheckoutOutcomeResponse>();
     }
 
     public Task<CashCheckoutResponse> CheckoutCashAsync(
