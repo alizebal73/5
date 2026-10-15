@@ -67,4 +67,5 @@
   <system:String x:Key="Billing.CashReceived">Cash received (Toman)</system:String>
   <system:String x:Key="Billing.ConfirmCashCheckout">I reviewed the amount due, cash received and change, and confirm recording this payment.</system:String>
   <system:String x:Key="Billing.Checkout">Record cash payment</system:String>
+  <system:String x:Key="Billing.RecentCashCheckouts">Recent recorded cash payments (for reconnect/restart reconciliation)</system:String>
 </ResourceDictionary>

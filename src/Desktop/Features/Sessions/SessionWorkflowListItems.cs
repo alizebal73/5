@@ -1,3 +1,4 @@
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Sessions;
 
 namespace GameNet.Desktop.Features.Sessions;
@@ -27,4 +28,20 @@ public sealed record PendingInvoiceListItem(
 {
     public Guid Id => Invoice.InvoiceId;
     public string TariffNameSnapshot => Invoice.TariffNameSnapshot;
+}
+
+
+/// <summary>
+/// Read-only Server-derived proof of a recent completed checkout. This is intentionally
+/// independent from ViewModel memory so the operator can reconcile after Desktop restart.
+/// </summary>
+public sealed record CashCheckoutOutcomeListItem(
+    CashCheckoutOutcomeResponse Outcome,
+    string StationLabel,
+    string InvoiceIdentityText,
+    string AmountDisplayText,
+    string CashDetailsDisplayText,
+    string PaidAtDisplayText)
+{
+    public Guid Id => Outcome.InvoiceId;
 }

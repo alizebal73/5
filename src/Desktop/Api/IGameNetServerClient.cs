@@ -1,4 +1,5 @@
 using GameNet.Shared.Contracts.V1.Api;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -26,6 +27,8 @@ public interface IGameNetServerClient
     Task<SessionResponse> StartSessionAsync(StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<InvoicePreviewResponse> EndSessionAsync(Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default);
+    Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(Guid invoiceId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CashCheckoutOutcomeResponse>> GetRecentCashCheckoutsAsync(CancellationToken cancellationToken = default);
     Task<CashCheckoutResponse> CheckoutCashAsync(Guid invoiceId, CashCheckoutRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task LogoutAsync(CancellationToken cancellationToken = default);
     void ClearSession();

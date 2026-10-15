@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -64,6 +65,7 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
     public ObservableCollection<ActiveSessionListItem> ActiveSessions { get; } = [];
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
+    public ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; } = [];
 
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
@@ -268,11 +270,25 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                     FormatAmountDisplayText(invoice.AmountToman))).ToArray();
                 Replace(PendingInvoices, invoiceItems, SelectedPendingInvoice?.Id, x => x.Id, out var currentInvoice);
                 SelectedPendingInvoice = currentInvoice;
+
+                var recentOutcomes = await api.GetRecentCashCheckoutsAsync();
+                RecentCashCheckouts.Clear();
+                foreach (var outcome in recentOutcomes)
+                {
+                    RecentCashCheckouts.Add(new CashCheckoutOutcomeListItem(
+                        outcome,
+                        GetStationLabel(outcome.StationId),
+                        FormatInvoiceIdentityDisplayText(outcome.InvoiceId),
+                        FormatAmountDisplayText(outcome.AmountToman),
+                        FormatCashOutcomeDetailsDisplayText(outcome),
+                        FormatPaidAtDisplayText(outcome.PaidAtUtc)));
+                }
             }
             else
             {
                 PendingInvoices.Clear();
                 SelectedPendingInvoice = null;
+                RecentCashCheckouts.Clear();
             }
 
             OnPropertyChanged(nameof(CanManageTariffs));
@@ -456,10 +472,76 @@ public sealed class SessionWorkflowViewModel : ISessionWorkflowPort
                 $"پرداخت ثبت شد. مبلغ: {FormatToman(result.InvoiceAmountToman)}؛ دریافتی: {FormatToman(result.AmountReceivedToman)}؛ باقی‌مانده: {FormatToman(result.ChangeGivenToman)} تومان.",
                 $"Payment recorded. Due: {FormatToman(result.InvoiceAmountToman)}; received: {FormatToman(result.AmountReceivedToman)}; change: {FormatToman(result.ChangeGivenToman)} Toman.");
         }
+        catch (GameNetApiException ex) when (ex.Code is "billing.invoice_not_pending" or "billing.checkout_conflict")
+        {
+            await ReconcileCashCheckoutOutcomeAsync(invoice.InvoiceId);
+        }
+        catch (HttpRequestException)
+        {
+            await ReconcileCashCheckoutOutcomeAsync(invoice.InvoiceId);
+        }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
-        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پرداخت نامشخص است؛ ابتدا تازه‌سازی کنید و دوباره پول را ثبت نکنید.", "Payment result is unknown; refresh first and do not record cash again blindly."); }
         catch { ErrorMessage = Text("ثبت پرداخت انجام نشد.", "Cash checkout failed."); }
         finally { EndBusy(); }
+    }
+
+    private async Task ReconcileCashCheckoutOutcomeAsync(Guid invoiceId)
+    {
+        try
+        {
+            var outcome = await api.GetCashCheckoutOutcomeAsync(invoiceId);
+            if (outcome.Status == InvoiceStatusContract.Paid &&
+                outcome.PaymentId is not null &&
+                outcome.LedgerEntryId is not null &&
+                outcome.AmountReceivedToman is long received &&
+                outcome.ChangeGivenToman is long change)
+            {
+                // Invoice, Payment and Ledger identities are read back from durable Server state.
+                // Do not retry a checkout that has already committed, even if its HTTP response was lost.
+                pendingKeys.Remove("billing.cash");
+                await RefreshAsync();
+                ErrorMessage = string.Empty;
+                StatusMessage = Text(
+                    $"سرور تأیید کرد پرداخت قبلاً ثبت شده است. مبلغ: {FormatToman(outcome.AmountToman)}؛ دریافتی: {FormatToman(received)}؛ باقی‌مانده: {FormatToman(change)} تومان.",
+                    $"Server confirms payment was already recorded. Due: {FormatToman(outcome.AmountToman)}; received: {FormatToman(received)}; change: {FormatToman(change)} Toman. No second payment was sent.");
+                return;
+            }
+
+            // Pending means the transactional invoice/payment/ledger mutation did not commit.
+            // Refresh invalidates the cash entry and prior confirmation, requiring a fresh review.
+            await RefreshAsync();
+            ErrorMessage = Text(
+                "سرور تأیید کرد این صورتحساب هنوز باز است و پرداختی ثبت نشده؛ مبلغ دریافتی را دوباره بررسی و ثبت را مجدداً تأیید کنید.",
+                "Server confirms this invoice is still pending and no payment was recorded. Review the cash amount and explicitly confirm before retrying.");
+        }
+        catch (Exception ex) when (ex is GameNetApiException or HttpRequestException or TaskCanceledException)
+        {
+            ErrorMessage = Text(
+                "نتیجهٔ پرداخت هنوز قابل تأیید نیست. تا روشن‌شدن وضعیت سرور، پرداخت را دوباره ثبت نکنید.",
+                "Checkout outcome is still unverified. Do not record the cash again until the Server outcome can be confirmed.");
+        }
+    }
+
+    private static string FormatInvoiceIdentityDisplayText(Guid invoiceId) =>
+        Text($"شناسهٔ صورتحساب: {invoiceId:D}", $"Invoice: {invoiceId:D}");
+
+    private static string FormatPaidAtDisplayText(DateTimeOffset? paidAtUtc) =>
+        paidAtUtc is { } value
+            ? Text($"زمان ثبت: {value.ToLocalTime():g}", $"Paid: {value.ToLocalTime():g}")
+            : Text("زمان پرداخت در دسترس نیست", "Payment time unavailable");
+
+    private static string FormatCashOutcomeDetailsDisplayText(CashCheckoutOutcomeResponse outcome)
+    {
+        if (outcome.Status != InvoiceStatusContract.Paid ||
+            outcome.AmountReceivedToman is not long received ||
+            outcome.ChangeGivenToman is not long change ||
+            outcome.PaymentId is null ||
+            outcome.LedgerEntryId is null)
+            return Text("نیازمند بررسی نتیجهٔ پرداخت", "Checkout outcome requires reconciliation");
+
+        return Text(
+            $"دریافتی: {FormatToman(received)}؛ باقی‌مانده: {FormatToman(change)} تومان",
+            $"Received: {FormatToman(received)}; change: {FormatToman(change)} Toman");
     }
 
     private string GetStationLabel(Guid stationId)

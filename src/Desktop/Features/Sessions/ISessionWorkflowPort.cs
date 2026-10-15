@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
 
@@ -18,6 +19,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ObservableCollection<TariffResponse> Tariffs { get; }
     ObservableCollection<ActiveSessionListItem> ActiveSessions { get; }
     ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; }
+    ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; }
 
     ICommand RefreshCommand { get; }
     ICommand CreateTariffCommand { get; }
