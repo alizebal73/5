@@ -367,10 +367,10 @@ public sealed class SessionWorkflowViewModelTests
             client.FailNextCashCheckoutWithNetworkError = true;
             var error = WaitForErrorAsync(
                 viewModel,
-                message => message.Contains("Payment result is unknown", StringComparison.Ordinal));
+                message => message.Contains("Server confirms this invoice is still pending", StringComparison.Ordinal));
             Assert.True(viewModel.CheckoutCashCommand.CanExecute(null));
             viewModel.CheckoutCashCommand.Execute(null);
-            Assert.Contains("Payment result is unknown", await error);
+            Assert.Contains("Server confirms this invoice is still pending", await error);
 
             Assert.Single(viewModel.PendingInvoices);
             Assert.Equal(invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
