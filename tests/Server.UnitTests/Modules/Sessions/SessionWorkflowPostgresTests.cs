@@ -85,7 +85,11 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.StartsWith("W-", walkIn.Code, StringComparison.Ordinal);
                 Assert.Null(walkIn.DisplayName);
                 Assert.True(walkIn.IsActive);
-                Assert.Equal(clock.UtcNow, walkIn.CreatedAtUtc);
+                // PostgreSQL timestamptz persists microsecond precision; compare at that
+                // boundary instead of requiring .NET's finer 100-nanosecond tick precision.
+                Assert.Equal(
+                    clock.UtcNow.UtcDateTime.Ticks / 10,
+                    walkIn.CreatedAtUtc.UtcDateTime.Ticks / 10);
 
                 var replay = await service.StartAsync(startCommand, CancellationToken.None);
                 Assert.True(replay.IsSuccess);
