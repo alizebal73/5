@@ -88,7 +88,9 @@ public sealed class SessionWorkflowViewModelTests
     [Fact]
     public async Task Operator_view_model_completes_start_end_invoice_selection_and_cash_checkout_journey()
     {
-        var originalCulture = CultureInfo.CurrentUICulture;
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
         try
         {
@@ -164,7 +166,8 @@ public sealed class SessionWorkflowViewModelTests
         }
         finally
         {
-            CultureInfo.CurrentUICulture = originalCulture;
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
         }
     }
 
