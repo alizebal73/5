@@ -49,7 +49,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
-        InitializeCashCheckoutCommand();
+        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
+            !unresolvedCashCheckoutInvoiceId.HasValue &&
+            SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
+            TryParseToman(AmountReceivedText, out var received) &&
+            SelectedPendingInvoice is not null &&
+            received >= SelectedPendingInvoice.Invoice.AmountToman &&
+            ConfirmCashCheckout);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

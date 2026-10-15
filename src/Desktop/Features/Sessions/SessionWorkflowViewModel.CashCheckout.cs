@@ -17,17 +17,6 @@ public sealed partial class SessionWorkflowViewModel
     private bool confirmCashCheckout;
     private Guid? unresolvedCashCheckoutInvoiceId;
 
-    private void InitializeCashCheckoutCommand()
-    {
-        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
-            !unresolvedCashCheckoutInvoiceId.HasValue &&
-            SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
-            TryParseToman(AmountReceivedText, out var received) &&
-            SelectedPendingInvoice is not null &&
-            received >= SelectedPendingInvoice.Invoice.AmountToman &&
-            ConfirmCashCheckout);
-    }
-
     public PendingInvoiceListItem? SelectedPendingInvoice
     {
         get => selectedPendingInvoice;
