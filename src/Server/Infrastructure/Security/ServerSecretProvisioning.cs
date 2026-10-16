@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security;
 using System.Security.Cryptography;
 using Npgsql;
@@ -124,19 +125,21 @@ internal static class ServerSecretProvisioning
             throw new ServerSecretStoreException("The disposable test database connection string is invalid.");
         }
 
-        var host = builder.Host.Trim();
+        var host = builder.Host?.Trim() ?? string.Empty;
         if (!host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
             !host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
             throw new ServerSecretStoreException("Test secret provisioning accepts loopback PostgreSQL only.");
 
+        var database = builder.Database ?? string.Empty;
         if (!System.Text.RegularExpressions.Regex.IsMatch(
-                builder.Database,
+                database,
                 @"^gamenet_test_[A-Za-z0-9_]{1,48}$",
                 System.Text.RegularExpressions.RegexOptions.CultureInvariant))
             throw new ServerSecretStoreException("The test database name must begin with gamenet_test_.");
 
+        var username = builder.Username ?? string.Empty;
         if (!System.Text.RegularExpressions.Regex.IsMatch(
-                builder.Username,
+                username,
                 @"^gamenet_test_app_[A-Za-z0-9_]{1,40}$",
                 System.Text.RegularExpressions.RegexOptions.CultureInvariant))
             throw new ServerSecretStoreException("The test database login must be a dedicated gamenet_test_app_ role.");
@@ -150,6 +153,7 @@ internal static class ServerSecretProvisioning
         return builder;
     }
 
+    [SupportedOSPlatform("windows")]
     private static void RunDisposableTestProvisioningFromStandardInput()
     {
         if (!Console.IsInputRedirected)
@@ -195,8 +199,8 @@ internal static class ServerSecretProvisioning
                 var canReplicate = reader.GetBoolean(5);
                 var applicationObjectCount = reader.GetInt64(6);
 
-                if (!databaseName.Equals(builder.Database, StringComparison.Ordinal) ||
-                    !loginName.Equals(builder.Username, StringComparison.Ordinal) ||
+                if (!databaseName.Equals(database, StringComparison.Ordinal) ||
+                    !loginName.Equals(username, StringComparison.Ordinal) ||
                     isSuperUser || canCreateDatabase || canCreateRoles || canReplicate)
                     throw new ServerSecretStoreException("The disposable test database must use its dedicated non-superuser application role.");
 
