@@ -276,6 +276,59 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(checkout.Value.PaymentId, checkoutReplay.Value.PaymentId);
                 Assert.Equal(checkout.Value.LedgerEntryId, checkoutReplay.Value.LedgerEntryId);
 
+                var correctionOnlyActor = billingActor with
+                {
+                    Permissions = new HashSet<string>([Permissions.BillingCashTenderCorrect], StringComparer.Ordinal)
+                };
+                var correctionCommand = new CashTenderCorrectionCommand(
+                    ended.Value.InvoiceId,
+                    checkout.Value.PaymentId,
+                    ExpectedVersion: 0,
+                    CorrectedAmountReceivedToman: 45_000L,
+                    Reason: "Recorded cash received amount was entered incorrectly",
+                    IdempotencyKey: idempotencyPrefix + "tender-correction-v1",
+                    Actor: correctionOnlyActor);
+                var correction = await billing.CorrectCashTenderAsync(correctionCommand, CancellationToken.None);
+                Assert.True(correction.IsSuccess, correction.IsSuccess ? "" : correction.Error.Code);
+                Assert.Equal(1, correction.Value.Version);
+                Assert.Equal(50_000L, correction.Value.PreviousAmountReceivedToman);
+                Assert.Equal(20_000L, correction.Value.PreviousChangeGivenToman);
+                Assert.Equal(45_000L, correction.Value.CorrectedAmountReceivedToman);
+                Assert.Equal(15_000L, correction.Value.CorrectedChangeGivenToman);
+
+                var correctionReplay = await billing.CorrectCashTenderAsync(correctionCommand, CancellationToken.None);
+                Assert.True(correctionReplay.IsSuccess, correctionReplay.IsSuccess ? "" : correctionReplay.Error.Code);
+                Assert.Equal(correction.Value.CorrectionId, correctionReplay.Value.CorrectionId);
+                Assert.Equal(1, await db.CashTenderCorrections.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
+
+                var staleCorrection = await billing.CorrectCashTenderAsync(
+                    correctionCommand with
+                    {
+                        CorrectedAmountReceivedToman = 44_000L,
+                        Reason = "Correct a stale cash entry",
+                        IdempotencyKey = idempotencyPrefix + "tender-correction-stale"
+                    },
+                    CancellationToken.None);
+                Assert.False(staleCorrection.IsSuccess);
+                Assert.Equal("billing.tender_correction_version_conflict", staleCorrection.Error.Code);
+
+                var correctedOutcome = await billing.GetCashCheckoutOutcomeAsync(
+                    correctionOnlyActor, ended.Value.InvoiceId, CancellationToken.None);
+                Assert.True(correctedOutcome.IsSuccess, correctedOutcome.IsSuccess ? "" : correctedOutcome.Error.Code);
+                Assert.Equal(50_000L, correctedOutcome.Value.AmountReceivedToman);
+                Assert.Equal(20_000L, correctedOutcome.Value.ChangeGivenToman);
+                Assert.Equal(45_000L, correctedOutcome.Value.EffectiveAmountReceivedToman);
+                Assert.Equal(15_000L, correctedOutcome.Value.EffectiveChangeGivenToman);
+                Assert.Equal(correction.Value.CorrectionId, correctedOutcome.Value.CashTenderCorrectionId);
+                Assert.Equal(1, correctedOutcome.Value.CashTenderCorrectionVersion);
+
+                var correctedHistory = await billing.ListRecentCashCheckoutsAsync(correctionOnlyActor, CancellationToken.None);
+                Assert.True(correctedHistory.IsSuccess, correctedHistory.IsSuccess ? "" : correctedHistory.Error.Code);
+                Assert.Contains(correctedHistory.Value, x =>
+                    x.InvoiceId == ended.Value.InvoiceId &&
+                    x.EffectiveAmountReceivedToman == 45_000L &&
+                    x.EffectiveChangeGivenToman == 15_000L);
+
                 var reversalA = new CashSaleReversalCommand(
                     ended.Value.InvoiceId, checkout.Value.PaymentId, 30_000L,
                     "Test full cash-sale reversal", idempotencyPrefix + "reversal-a", billingActor);
@@ -312,6 +365,21 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(30_000L, reversedOutcome.Value.AmountToman);
                 Assert.Equal(50_000L, reversedOutcome.Value.AmountReceivedToman);
                 Assert.Equal(20_000L, reversedOutcome.Value.ChangeGivenToman);
+                Assert.Equal(45_000L, reversedOutcome.Value.EffectiveAmountReceivedToman);
+                Assert.Equal(15_000L, reversedOutcome.Value.EffectiveChangeGivenToman);
+                Assert.Equal(correction.Value.CorrectionId, reversedOutcome.Value.CashTenderCorrectionId);
+
+                var correctionAfterReversal = await billing.CorrectCashTenderAsync(
+                    correctionCommand with
+                    {
+                        ExpectedVersion = 1,
+                        CorrectedAmountReceivedToman = 44_000L,
+                        Reason = "Attempt after sale reversal",
+                        IdempotencyKey = idempotencyPrefix + "tender-correction-after-reversal"
+                    },
+                    CancellationToken.None);
+                Assert.False(correctionAfterReversal.IsSuccess);
+                Assert.Equal("billing.tender_correction_reversal_forbidden", correctionAfterReversal.Error.Code);
 
                 var recentOutcome = await billing.ListRecentCashCheckoutsAsync(reversalOnlyActor, CancellationToken.None);
                 Assert.True(recentOutcome.IsSuccess);
@@ -327,6 +395,7 @@ public sealed class SessionWorkflowPostgresTests
                 var saleLedger = ledgerEntries.Single(x => x.EntryType == BillingLedgerEntryType.CashSale);
                 var reversalLedger = ledgerEntries.Single(x => x.EntryType == BillingLedgerEntryType.CashSaleReversal);
                 var reversalRow = await db.CashSaleReversals.SingleAsync(x => x.InvoiceId == invoice.Id);
+                var correctionRow = await db.CashTenderCorrections.SingleAsync(x => x.InvoiceId == invoice.Id);
                 Assert.Equal(SessionStatus.Paid, session.Status);
                 Assert.Equal(InvoiceStatus.Reversed, invoice.Status);
                 Assert.Equal(PaymentMethod.Cash, payment.Method);
@@ -338,6 +407,11 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(BillingLedgerEntryType.CashSaleReversal, reversalLedger.EntryType);
                 Assert.Equal(invoice.AmountToman, reversalLedger.AmountToman);
                 Assert.Equal(reversal.ReversalId, reversalRow.Id);
+                Assert.Equal(correction.Value.CorrectionId, correctionRow.Id);
+                Assert.Equal(1, correctionRow.Version);
+                Assert.Equal(45_000L, correctionRow.CorrectedAmountReceivedToman);
+                Assert.Equal(15_000L, correctionRow.CorrectedChangeGivenToman);
+                Assert.Equal(1, await db.CashTenderCorrections.CountAsync(x => x.InvoiceId == invoice.Id));
                 Assert.Equal(1, await db.Payments.CountAsync(x => x.InvoiceId == invoice.Id));
                 Assert.Equal(2, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == invoice.Id));
                 Assert.Equal(1, await db.CashSaleReversals.CountAsync(x => x.InvoiceId == invoice.Id));
@@ -353,6 +427,7 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Contains("billing.cash_ledger_entry", audits);
                 Assert.Contains("billing.cash_sale_reversal", audits);
                 Assert.Contains("billing.cash_sale_reversal_ledger_entry", audits);
+                Assert.Contains("billing.cash_tender_correction", audits);
             }
         }
         finally
@@ -524,6 +599,8 @@ public sealed class SessionWorkflowPostgresTests
             $"DELETE FROM billing_ledger_entries WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM cash_sale_reversals WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM cash_tender_corrections WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(
