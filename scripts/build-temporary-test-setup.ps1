@@ -29,7 +29,7 @@ if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
 $shortCommit = $sourceCommit.Substring(0, 12)
 $deploymentRoot = Join-Path $repoRoot ("artifacts/deployment/GameNet-5-{0}-{1}-win-x64" -f $Version, $shortCommit)
 $deploymentPayload = Join-Path $deploymentRoot "payload"
-Invoke-Checked -Path (Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe") -Arguments @(
+Invoke-Checked -Path (Join-Path $PSHOME "pwsh.exe") -Arguments @(
     "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
     (Join-Path $repoRoot "scripts/publish-deployment-payloads.ps1"), "-Version", $Version
 )
@@ -107,7 +107,7 @@ GAMENET 5 — TEMPORARY ISOLATED TEST SETUP
 This is a temporary test installer, not a production release. Use it only on fresh, dedicated and isolated Windows x64 test PCs/VMs. Never run it on the live GameNet Manager/shop PC or point it at a real business database.
 
 WHAT YOU NEED
-- Windows x64 with built-in Windows PowerShell 5.1. Python and a separate .NET SDK are not required on the test PCs.
+- Windows x64. Setup bundles the portable PowerShell 7.6.4 runtime and self-contained app binaries; Python, standalone .NET SDK or a separate PowerShell installation is not required.
 - PostgreSQL 17 already installed and running on the Manager/Server test PC. This temporary installer does not install PostgreSQL.
 - Two clean, isolated Windows test PCs/VMs on the same test LAN: one Manager/Server + Desktop, and one dedicated Agent client.
 - Administrator access on both test PCs and a local PostgreSQL administrator password on the Manager test PC.
@@ -150,6 +150,30 @@ The exact tested source SHA and component hashes are in Setup\release-manifest.j
     [System.Text.UTF8Encoding]::new($true)
 )
 
+# Bundle a pinned, independently hash-verified portable PowerShell runtime so the test PCs need no separate install.
+$powerShellVersion = "7.6.4"
+$powerShellArchiveName = "PowerShell-7.6.4-win-x64.zip"
+$powerShellUrl = "https://github.com/PowerShell/PowerShell/releases/download/v7.6.4/PowerShell-7.6.4-win-x64.zip"
+$powerShellExpectedSha256 = "80832551c52809301e6071c8bac977beb5a2f1ec953eb4db9f94deb953333793"
+$powerShellArchive = Join-Path $workRoot $powerShellArchiveName
+Invoke-WebRequest -Uri $powerShellUrl -OutFile $powerShellArchive
+$powerShellActualSha256 = (Get-FileHash -LiteralPath $powerShellArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($powerShellActualSha256 -ne $powerShellExpectedSha256) {
+    throw "The downloaded PowerShell runtime SHA-256 did not match the pinned official release asset."
+}
+$powerShellTarget = Join-Path $setupRoot "PowerShell"
+New-Item -ItemType Directory -Force -Path $powerShellTarget | Out-Null
+Expand-Archive -LiteralPath $powerShellArchive -DestinationPath $powerShellTarget
+$bundledPwsh = Join-Path $powerShellTarget "pwsh.exe"
+if (-not (Test-Path -LiteralPath $bundledPwsh -PathType Leaf)) {
+    throw "The pinned PowerShell archive did not contain pwsh.exe."
+}
+$bundledVersion = (& $bundledPwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $bundledVersion -ne $powerShellVersion) {
+    throw "The bundled portable PowerShell runtime failed its exact-version startup check."
+}
+Remove-Item -LiteralPath $powerShellArchive -Force
+
 # Write an installer-contained manifest for exactly the files that this Setup payload contains.
 $releaseManifestFiles = @(
     Get-ChildItem -LiteralPath $payloadRoot -Recurse -File |
@@ -157,6 +181,7 @@ $releaseManifestFiles = @(
         Sort-Object FullName |
         ForEach-Object {
             $relative = [System.IO.Path]::GetRelativePath($payloadRoot, $_.FullName).Replace('\', '/')
+            if ($relative -notmatch '/') { $relative = "Setup/" + $relative }
             [ordered]@{
                 component = ($relative.Split("/")[0])
                 path = $relative
@@ -258,9 +283,14 @@ $manifest = [ordered]@{
     build = [ordered]@{
         target = "Windows x64"
         selfContainedComponents = $true
-        powershell = "Windows PowerShell 5.1 built into Windows"
         installerCompiler = "Inno Setup 6"
         builtUtc = [DateTimeOffset]::UtcNow.ToString("O")
+    }
+    bundledPowerShell = [ordered]@{
+        version = $powerShellVersion
+        archiveUrl = $powerShellUrl
+        archiveSha256 = $powerShellExpectedSha256
+        archiveHashVerifiedBeforeExtraction = $true
     }
     prerequisites = @(
         "Two clean isolated Windows x64 test machines/VMs",
