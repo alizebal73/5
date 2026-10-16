@@ -37,10 +37,36 @@ public sealed partial class SessionWorkflowViewModel
         {
             if (!Enum.IsDefined(value))
                 throw new ArgumentOutOfRangeException(nameof(value));
-            if (SetField(ref tariffStationType, value))
-                RaiseCommands();
+            var tariffStationTypeBeforeChange = tariffStationType;
+            if (!SetField(ref tariffStationType, value))
+                return;
+
+            // Keep the default form values consistent with the selected type, but preserve
+            // any custom code/name already entered by the operator.
+            if (string.Equals(TariffCode, DefaultTariffCode(tariffStationTypeBeforeChange), StringComparison.Ordinal))
+                TariffCode = DefaultTariffCode(value);
+            if (string.Equals(TariffName, DefaultTariffName(tariffStationTypeBeforeChange), StringComparison.Ordinal))
+                TariffName = DefaultTariffName(value);
+
+            RaiseCommands();
         }
     }
+
+    private static string DefaultTariffCode(StationTypeContract type) => type switch
+    {
+        StationTypeContract.Pc => "PC-STANDARD",
+        StationTypeContract.Ps5 => "PS5-STANDARD",
+        StationTypeContract.Foosball => "FOOSBALL-STANDARD",
+        _ => "STATION-STANDARD"
+    };
+
+    private static string DefaultTariffName(StationTypeContract type) => type switch
+    {
+        StationTypeContract.Pc => "PC Standard",
+        StationTypeContract.Ps5 => "PS5 Standard",
+        StationTypeContract.Foosball => "Foosball Standard",
+        _ => "Standard station"
+    };
 
     private void InitializeStationTypeOptions()
     {

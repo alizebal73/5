@@ -1144,10 +1144,10 @@ public sealed class SessionWorkflowViewModelTests
                 client, permission => permission == Permissions.SettingsWrite);
             await viewModel.RefreshAsync();
 
-            viewModel.TariffCode = "PS5-STANDARD";
-            viewModel.TariffName = "PS5 Standard";
-            viewModel.HourlyRateText = "120000";
             viewModel.TariffStationType = StationTypeContract.Ps5;
+            Assert.Equal("PS5-STANDARD", viewModel.TariffCode);
+            Assert.Equal("PS5 Standard", viewModel.TariffName);
+            viewModel.HourlyRateText = "120000";
 
             var statusTask = WaitForStatusAsync(
                 viewModel, message => message.Contains("Tariff PS5-STANDARD was created", StringComparison.Ordinal));
