@@ -89,6 +89,8 @@
   <system:String x:Key="Customer.SearchButton">Search / Refresh</system:String>
   <system:String x:Key="Customer.IncludeInactive">Include inactive and blocked customers</system:String>
   <system:String x:Key="Customer.SelectForSession">Customer for this Session (blank = Walk-in)</system:String>
+  <system:String x:Key="Customer.SessionSearch">Find a Session customer by code, name, nickname or phone</system:String>
+  <system:String x:Key="Customer.SessionSearchButton">Search Session customers</system:String>
   <system:String x:Key="Customer.WalkInHint">If no customer is selected, the Server creates a Walk-in identity.</system:String>
   <system:String x:Key="Customer.UseWalkIn">Use Walk-in customer</system:String>
   <system:String x:Key="Customer.Code">Customer code</system:String>
