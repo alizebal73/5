@@ -121,7 +121,7 @@ public sealed partial class SessionWorkflowPostgresTests
     }
 
     [Fact]
-    public async Task Session_transfer_rejects_cross_type_and_busy_destination_without_mutation()
+    public async Task Session_transfer_rejects_cross_type_without_mutation()
     {
         if (!IsExplicitlyEnabled()) return;
 
