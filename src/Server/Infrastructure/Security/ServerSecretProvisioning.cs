@@ -175,11 +175,11 @@ internal static class ServerSecretProvisioning
                     SELECT current_database(), current_user,
                            role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolreplication,
                            (SELECT COUNT(*)
-                            FROM pg_catalog.pg_class AS relation
-                            JOIN pg_catalog.pg_namespace AS schema ON schema.oid = relation.relnamespace
-                            WHERE schema.nspname !~ '^pg_'
-                              AND schema.nspname <> 'information_schema'
-                              AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f'))
+                            FROM pg_catalog.pg_class AS c
+                            JOIN pg_catalog.pg_namespace AS ns ON ns.oid = c.relnamespace
+                            WHERE ns.nspname !~ '^pg_'
+                              AND ns.nspname <> 'information_schema'
+                              AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f'))
                     FROM pg_catalog.pg_roles AS role
                     WHERE role.rolname = current_user;
                     """;
