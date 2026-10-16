@@ -1292,7 +1292,7 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     }
     Assert-ErrorCode $locked 401 "auth.invalid_credentials" "Do not disclose operator lockout state in login response"
 
-    Write-Host "IDENTITY / STATIONS / SESSION CASH WORKFLOW / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
+    Write-Host "IDENTITY / STATIONS / SESSION CASH CHECKOUT / TENDER CORRECTION / FULL REVERSAL / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
     $testSucceeded = $true
 }
 catch {
