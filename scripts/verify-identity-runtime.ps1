@@ -498,6 +498,48 @@ try {
     $stationKeyConflict = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationDifferentBody
     Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
 
+    # Create the tariff and prove the HTTP admission gate fails closed before any Agent is enrolled/bound.
+    $sessionTariffCode = "CI-SLICE1-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+    $sessionTariffHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-tariff-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $sessionTariffBody = @{
+        code = $sessionTariffCode
+        name = "CI Session Cash Tariff"
+        stationType = 1
+        hourlyRateToman = [long]60000
+        isDefault = $false
+    }
+    $sessionTariff = Invoke-IdentityRequest "POST" "/api/v1/tariffs" $sessionTariffHeaders $sessionTariffBody
+    Assert-Status $sessionTariff 201 "Create disposable PC tariff for Session cash workflow"
+    $sessionTariffId = [string]$sessionTariff.Json.data.id
+    if ([string]::IsNullOrWhiteSpace($sessionTariffId) -or
+        $sessionTariff.Json.data.hourlyRateToman -ne 60000 -or
+        $sessionTariff.Json.data.stationType -ne 1 -or
+        -not $sessionTariff.Json.data.isActive) {
+        throw "Disposable Session tariff did not return its expected authoritative identity and rate."
+    }
+
+
+    $unboundSessionStartHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-start-unbound-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $unboundSessionStart = Invoke-IdentityRequest "POST" "/api/v1/sessions" $unboundSessionStartHeaders @{
+        stationId = $stationId
+        tariffId = $sessionTariffId
+        customerId = $null
+    }
+    Assert-ErrorCode $unboundSessionStart 409 "sessions.agent_unavailable" "Reject PC Session start while Agent is unbound"
+    $activeAfterRejectedStart = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeAfterRejectedStart 200 "Check that rejected unbound Session start created no active Session"
+    if (@($activeAfterRejectedStart.Json.data).Count -ne 0) {
+        throw "Rejected Session start while the Agent was unbound left an active Session."
+    }
+
     $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
     $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
         deviceId = $stationDeviceId
@@ -643,29 +685,6 @@ try {
 
     # Exercise the real authenticated HTTP Session -> Invoice -> Cash workflow against
     # this script's disposable PostgreSQL database and real Kestrel Server.
-    $sessionTariffCode = "CI-SLICE1-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
-    $sessionTariffHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-session-tariff-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $sessionTariffBody = @{
-        code = $sessionTariffCode
-        name = "CI Session Cash Tariff"
-        stationType = 1
-        hourlyRateToman = [long]60000
-        isDefault = $false
-    }
-    $sessionTariff = Invoke-IdentityRequest "POST" "/api/v1/tariffs" $sessionTariffHeaders $sessionTariffBody
-    Assert-Status $sessionTariff 201 "Create disposable PC tariff for Session cash workflow"
-    $sessionTariffId = [string]$sessionTariff.Json.data.id
-    if ([string]::IsNullOrWhiteSpace($sessionTariffId) -or
-        $sessionTariff.Json.data.hourlyRateToman -ne 60000 -or
-        $sessionTariff.Json.data.stationType -ne 1 -or
-        -not $sessionTariff.Json.data.isActive) {
-        throw "Disposable Session tariff did not return its expected authoritative identity and rate."
-    }
-
     $sessionStartHeaders = @{
         "X-GameNet-Contract" = "v1"
         Authorization = "Bearer $accessToken"
