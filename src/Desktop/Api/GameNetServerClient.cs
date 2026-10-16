@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Billing;
+using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -64,6 +65,27 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         var stations = await ReadPayloadAsync<StationResponse[]>(response, cancellationToken);
         return stations ?? Array.Empty<StationResponse>();
     }
+
+    public async Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default)
+    {
+        var queryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(query)) queryParts.Add("query=" + Uri.EscapeDataString(query.Trim()));
+        queryParts.Add("includeInactive=" + includeInactive.ToString().ToLowerInvariant());
+        queryParts.Add("take=100");
+        using var request = CreateRequest(HttpMethod.Get, "/api/v1/customers?" + string.Join("&", queryParts), authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        var customers = await ReadPayloadAsync<CustomerResponse[]>(response, cancellationToken);
+        return customers ?? Array.Empty<CustomerResponse>();
+    }
+
+    public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<CreateCustomerRequest, CustomerResponse>(HttpMethod.Post, "/api/v1/customers", body, idempotencyKey, cancellationToken);
+
+    public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<UpdateCustomerRequest, CustomerResponse>(HttpMethod.Put, $"/api/v1/customers/{id:D}", body, idempotencyKey, cancellationToken);
+
+    public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<SetCustomerStatusRequest, CustomerResponse>(HttpMethod.Put, $"/api/v1/customers/{id:D}/status", body, idempotencyKey, cancellationToken);
 
     public Task<StationResponse> CreateStationAsync(CreateStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendStationMutationAsync(HttpMethod.Post, "/api/v1/stations", request, idempotencyKey, cancellationToken);
