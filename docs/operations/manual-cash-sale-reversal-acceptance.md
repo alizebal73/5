@@ -1,4 +1,4 @@
-# Manual WPF Acceptance and Financial Reconciliation — PC Cash Sale Reversal
+# Manual WPF Acceptance and Financial Reconciliation — Complete PC Cash Sale Lifecycle
 
 **Status:** procedure prepared; execution evidence is still required. This guide does not mark Issue #98 accepted.
 
@@ -7,10 +7,9 @@
 - Use a disposable Windows test PC/VM and a disposable PostgreSQL database only. Never run these tests against the live GameNet/Manager PC, a live customer station, or a database containing customer financial records.
 - The reversal API records the accounting reversal and audit trail; it does not transfer/dispense cash or control a cash drawer. Use simulated/test amounts only in this procedure. Never infer that real cash has been returned solely because the API reported success.
 - This runtime payload does not install/register Windows services. Before proceeding, require an independently reviewed, test-only Server/Agent service registration on the disposable machines, using the dedicated identities documented in the payload. Follow the extracted `LAN-SMOKE-README.md`; run `Tools\\inspect-manager-runtime-state.ps1` first. If service registration is unavailable, or preflight finds unexpected GameNet state, stop and record the test as BLOCKED. Do not invent a service registration or run setup actions on a live machine.
-- Integration commit containing PR #120: `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`. The tested source-tree SHA for the reversal code was `ad92960382088872b1da0441241f4d71ff3603f9`; its Git tree matches the merge commit tree.
-- Portable Runtime LAN Smoke Payload artifact: [run 38887541248](https://github.com/alizebal73/5/actions/runs/38887541248), artifact `runtime-lan-smoke-payload-38887541248`. Download and extract the outer Actions artifact ZIP to a temporary folder; verify the inner `GameNet5-RuntimeLanSmoke-*.zip` against the adjacent `SHA256SUMS.txt` before extracting it. Retain `manifest.json` and confirm its `source.testedCheckoutSha` is `ad92960382088872b1da0441241f4d71ff3603f9`. The artifact is portable payload only, not Setup/MSI and not proof of a live LAN acceptance test.
+- Select the current candidate commit from `integration/runtime-operator-v1` and record its full source SHA and Git tree. Build/download the Runtime LAN Smoke Payload from a workflow run that checked out that exact SHA; verify the inner `GameNet5-RuntimeLanSmoke-*.zip` against its adjacent `SHA256SUMS.txt`, and confirm `manifest.json` identifies the same tested checkout SHA. Do not reuse a payload from an earlier SHA merely because the changed files appear documentation-only. The artifact is portable payload only, not Setup/MSI, not a Windows Service installer, and not proof of live LAN acceptance.
 - Confirm the isolated Server is configured to point only at the disposable database. Snapshot/revert the VM and database before beginning. Stop if you cannot prove the environment is isolated.
-- Use a test operator with `stations.read`, `sessions.operate`, `billing.write`, and the dedicated `billing.cash-reverse` permission for the complete flow. Keep a second test operator with the same read/session/checkout permissions but without `billing.cash-reverse` for the denied-permission check. Do not grant these permissions to a production operator as part of this test.
+- Use a primary test operator with `stations.read`, `sessions.operate`, `billing.write`, `billing.cash-tender-correct`, and `billing.cash-reverse` for the complete flow. Also prepare least-privilege test identities that independently lack `billing.cash-tender-correct` and `billing.cash-reverse`, while retaining only the ordinary permissions needed to inspect the invoice/outcome. Verify each denied mutation is rejected and leaves the durable outcome unchanged. Never change a production operator role for this test.
 
 ## 2. Capture evidence before touching the UI
 
@@ -22,11 +21,13 @@ Record the date/time, Windows edition/build, test PC/VM name, Server endpoint, p
 2. **End and invoice:** end that Session. Record the invoice ID, tariff snapshot, elapsed duration and displayed integer-Toman amount. The Session should be waiting for settlement and the invoice pending payment.
 3. **Cash checkout:** enter a received-cash amount greater than or equal to the displayed invoice amount; confirm the exact cash and change. Record invoice amount, cash received, and change as three distinct values. Confirm the UI shows success only after the Server confirms it.
 4. **Verify recent checkout:** refresh and locate the paid invoice. Confirm the recorded invoice amount, payment ID, cash received, and change match the values just captured.
-5. **Full reversal:** select that exact paid cash sale, enter a meaningful reason of 3–256 printable characters, verify the invoice/payment identity and amount, check the explicit confirmation, and submit once. Record the reversal ID/time shown by the UI or Server outcome.
-6. **Post-reversal view:** refresh the workspace. The invoice must show `Reversed`; the original Session must remain settled/paid; the original payment and original sale must still be visible in persisted history. The reversal amount must equal the invoice amount applied, never gross cash received and never cash change.
-7. **Restart/reload recovery:** close and reopen the Desktop, authenticate to the same isolated Server, refresh recent checkouts, and verify the reversed outcome remains. Do not click Reverse again merely because a previous request timed out; reconcile the durable outcome first.
-8. **Permission boundary:** switch to the disposable operator without `billing.cash-reverse`. The UI must not permit reversal, and a direct request (if exercised) must be rejected by the Server. Run the read-only SQL below afterward and confirm no new reversal, ledger row, or success audit was created by the denied attempt.
-9. **Ambiguous-response case:** only attempt this if the isolated environment can reliably simulate a response being lost after the Server commits (for example, a controlled test proxy). A general network disconnect may prevent the request from reaching the Server and is not equivalent. After an ambiguous response, reload/reconcile the durable Server outcome before retrying. If the timing cannot be controlled, mark this manual case `NOT RUN`; the automated Desktop regression is separate evidence.
+5. **Correct the recorded cash tender (not the sale amount):** open the correction action for the same paid cash sale. Record the original cash received/change, the correction version, and the invoice/payment IDs. Enter a corrected cash-received value that is at least the invoice amount, a meaningful 3–256 character reason, and explicit confirmation. Submit once. Verify that the response shows version `1`, the previous facts equal the originally recorded facts, and corrected change equals corrected cash received minus the unchanged invoice amount.
+6. **Verify effective vs. original facts:** refresh/reopen the checkout outcome. Original Payment ID, invoice amount, original cash received/change, and original `CashSale` ledger entry must remain unchanged. The outcome projection must expose the correction ID/version, reason, and effective corrected received/change values. Replay after an intentionally controlled response-loss scenario only after first reconciling durable Server state; exact same idempotency key/payload must resolve to the same correction, while a changed payload with that key must conflict.
+7. **Full reversal:** select that exact paid cash sale, enter a meaningful reason of 3–256 printable characters, verify the invoice/payment identity and **exact invoice amount** (not gross cash received and not change), check explicit confirmation, and submit once. Record the reversal ID/time shown by the UI or Server outcome.
+8. **Post-reversal view:** refresh the workspace. The invoice must show `Reversed`; the original Session must remain settled/paid; the original Payment, original `CashSale` ledger, and append-only tender correction must remain visible in persisted history. The reversal amount must equal the invoice amount applied. The projected outcome should still show the effective corrected tender facts and the separate reversal/compensating-ledger IDs.
+9. **Restart/reload recovery:** close and reopen the Desktop, authenticate to the same isolated Server, refresh recent checkouts, and verify both correction and reversed outcome remain. Do not click Correct or Reverse again merely because a previous request timed out; reconcile the durable outcome first.
+10. **Permission boundary:** use the operator lacking `billing.cash-tender-correct` to verify correction is unavailable/403 without changing correction count or effective values. Separately use the operator lacking `billing.cash-reverse` to verify reversal is unavailable/403 without a reversal record, compensating ledger row, or success Audit.
+11. **Ambiguous-response case:** only attempt if the isolated environment can reliably simulate a response being lost after Server commit (for example, a controlled test proxy). A general network disconnect may prevent the request from reaching Server and is not equivalent. After an ambiguous result, reload/reconcile durable Server state before retry. If timing cannot be controlled, mark it `NOT RUN`; automated regression evidence is separate.
 
 **Stop immediately** if identities, amounts, statuses, or result messages disagree. Do not retry a financially ambiguous operation. Preserve the database snapshot, request/correlation IDs, timestamps, application logs, and screenshots for investigation.
 
@@ -85,7 +86,57 @@ SELECT r.*,
 FROM r;
 ```
 
-Expected: exactly one row with `reconciliation_status = PASS`, invoice status `3` (Reversed), Session status `3` (settled/paid), one Payment, one original `entry_type = 1` sale row, one reversal record, one `entry_type = 2` reversal ledger row, and net ledger effect `0`. The cash tender and change values must remain the original recorded values.
+Expected: exactly one row with `reconciliation_status = PASS`, invoice status `3` (Reversed), Session status `3` (settled/paid), one Payment, one original `entry_type = 1` sale row, one reversal record, one `entry_type = 2` reversal ledger row, and net ledger effect `0`. The cash tender and change columns in this query are the original Payment facts; they must remain unchanged after correction. Use Query D below to reconcile the append-only corrected facts.
+
+
+### D. Reconcile the append-only tender correction and effective amount/change
+
+Run this after correction and reversal. The correction is a history row; it must not update the original `payments` row or the original sale-ledger amount. Replace the invoice UUID.
+
+```sql
+WITH input AS (
+    SELECT 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AS invoice_id
+),
+base AS (
+    SELECT i.id AS invoice_id, i.amount_toman AS invoice_amount_toman,
+           p.id AS payment_id, p.amount_applied_toman,
+           p.amount_received_toman AS original_amount_received_toman,
+           p.change_given_toman AS original_change_given_toman,
+           sl.id AS original_sale_ledger_id, sl.amount_toman AS original_sale_ledger_amount_toman,
+           tc.id AS correction_id, tc.version AS correction_version,
+           tc.previous_amount_received_toman, tc.previous_change_given_toman,
+           tc.corrected_amount_received_toman, tc.corrected_change_given_toman,
+           tc.reason AS correction_reason, tc.corrected_by_operator_id, tc.correlation_id, tc.idempotency_key,
+           (SELECT count(*) FROM cash_tender_corrections all_tc WHERE all_tc.invoice_id = i.id) AS correction_count
+    FROM input x
+    JOIN invoices i ON i.id = x.invoice_id
+    LEFT JOIN payments p ON p.invoice_id = i.id
+    LEFT JOIN billing_ledger_entries sl ON sl.invoice_id = i.id AND sl.entry_type = 1
+    LEFT JOIN cash_tender_corrections tc
+      ON tc.invoice_id = i.id
+     AND tc.version = (SELECT max(tc2.version) FROM cash_tender_corrections tc2 WHERE tc2.invoice_id = i.id)
+)
+SELECT base.*,
+    CASE WHEN
+        correction_id IS NOT NULL
+        AND correction_version = 1
+        AND correction_count = 1
+        AND payment_id IS NOT NULL
+        AND amount_applied_toman = invoice_amount_toman
+        AND previous_amount_received_toman = original_amount_received_toman
+        AND previous_change_given_toman = original_change_given_toman
+        AND corrected_amount_received_toman >= invoice_amount_toman
+        AND corrected_change_given_toman = corrected_amount_received_toman - invoice_amount_toman
+        AND corrected_by_operator_id IS NOT NULL
+        AND length(btrim(correction_reason)) BETWEEN 3 AND 256
+        AND original_sale_ledger_id IS NOT NULL
+        AND original_sale_ledger_amount_toman = invoice_amount_toman
+    THEN 'PASS' ELSE 'FAIL' END AS correction_reconciliation_status
+FROM base;
+```
+
+Expected for this single-correction exercise: exactly one row with `correction_reconciliation_status = PASS`, `correction_version = 1`, and `correction_count = 1`. Example only: if the original received-cash amount was invoice + 500 and the corrected amount is invoice + 750, then the original change stays 500 while the corrected/effective change is 750. Use the actual captured values in the evidence; do not force the sample numbers onto another run.
+
 
 ### B. Confirm the two successful Audit events for the reversal
 
@@ -122,9 +173,9 @@ Attach to Issue #98:
 
 - [ ] Exact source SHA and Git tree; runtime ZIP SHA-256 and included manifest/checksum evidence.
 - [ ] Windows edition/build, disposable VM snapshot identifier, Server endpoint and disposable database name.
-- [ ] Screenshots of Start, End/invoice, cash entry/confirmation, paid outcome, reversal reason/confirmation, reversed outcome and post-restart history.
-- [ ] Invoice UUID, Session UUID, Payment UUID, original sale ledger UUID, reversal UUID, compensating ledger UUID, correlation ID and timestamps.
-- [ ] Output from queries A–C and an independent hand calculation of applied amount, received tender, change and net ledger effect.
+- [ ] Screenshots of Start, End/invoice, cash entry/confirmation, paid outcome, correction reason/confirmation/result, effective corrected outcome, reversal reason/confirmation, reversed outcome, and state after Desktop restart.
+- [ ] Invoice UUID, Session UUID, Payment UUID, original sale ledger UUID, correction UUID/version, reversal UUID, compensating ledger UUID, separate correlation IDs and timestamps.
+- [ ] Output from queries A–D, correction/reversal Audit evidence, and independent hand calculation of applied amount, original received/change, corrected received/change, and net ledger effect.
 - [ ] Permission-denial result, and ambiguous-response result or explicitly `NOT RUN` with reason.
 - [ ] Pass/fail per step, operator, date/time and any deviation.
 
