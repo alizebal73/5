@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using GameNet.Server.Infrastructure.Observability;
 using GameNet.Server.Modules.Customers.Contracts;
-using GameNet.Server.Modules.Customers.Infrastructure;
+using GameNet.Server.Modules.Customers.Application;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Protocol;
@@ -15,7 +15,7 @@ public static class CustomerEndpoints
     public static void MapCustomerEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/customers").RequireAuthorization("Operator");
-        group.MapGet("", async (CustomerManagementService service, HttpContext context, CancellationToken ct,
+        group.MapGet("", async (ICustomerManagementService service, HttpContext context, CancellationToken ct,
             string? query = null, bool includeInactive = false, int take = 100) =>
         {
             if (!TryGetActor(context, out var actor))
@@ -26,7 +26,7 @@ public static class CustomerEndpoints
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.CustomersRead);
 
-        group.MapPost("", async (CreateCustomerRequest request, CustomerManagementService service, HttpContext context, CancellationToken ct) =>
+        group.MapPost("", async (CreateCustomerRequest request, ICustomerManagementService service, HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor))
                 return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
@@ -38,7 +38,7 @@ public static class CustomerEndpoints
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.CustomersWrite);
 
-        group.MapPut("/{id:guid}", async (Guid id, UpdateCustomerRequest request, CustomerManagementService service,
+        group.MapPut("/{id:guid}", async (Guid id, UpdateCustomerRequest request, ICustomerManagementService service,
             HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor))
@@ -50,7 +50,7 @@ public static class CustomerEndpoints
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.CustomersWrite);
 
-        group.MapPut("/{id:guid}/status", async (Guid id, SetCustomerStatusRequest request, CustomerManagementService service,
+        group.MapPut("/{id:guid}/status", async (Guid id, SetCustomerStatusRequest request, ICustomerManagementService service,
             HttpContext context, CancellationToken ct) =>
         {
             if (!TryGetActor(context, out var actor))
