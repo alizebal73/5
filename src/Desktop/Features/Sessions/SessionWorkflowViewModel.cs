@@ -360,6 +360,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         stationLabels.Clear();
         ResetStationAndTariffChoices();
+        ResetSessionTransferState();
         Tariffs.Clear();
         ActiveSessions.Clear();
         PendingInvoices.Clear();

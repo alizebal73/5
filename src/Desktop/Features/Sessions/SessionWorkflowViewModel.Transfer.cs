@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Net.Http;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
+using GameNet.Desktop.Features.Identity;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
 
@@ -59,6 +60,7 @@ public sealed partial class SessionWorkflowViewModel
         var reason = SessionTransferReasonText?.Trim() ?? string.Empty;
         return !IsBusy &&
             CanOperateSessions &&
+            CanReadStations &&
             selected is { Status: SessionStatusContract.Active or SessionStatusContract.Paused } &&
             destination is { Status: StationStatusContract.Available } &&
             destination.Id != selected.StationId &&
@@ -149,8 +151,9 @@ public sealed partial class SessionWorkflowViewModel
         }
         catch (GameNetApiException ex)
         {
-            ErrorMessage = ErrorText(ex.Code);
+            var errorMessage = ErrorText(ex.Code);
             await TryRefreshAfterTransferFailureAsync();
+            ErrorMessage = errorMessage;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -169,8 +172,8 @@ public sealed partial class SessionWorkflowViewModel
             {
                 // Keep the idempotency key and form values: the outcome is still ambiguous.
                 ErrorMessage = Text(
-                    "نتیجهٔ انتقال نامشخص است؛ وضعیت را تازه‌سازی کنید و همان درخواست را بدون تغییر دوباره بررسی کنید.",
-                    "Transfer outcome is unknown. Refresh and reconcile before changing or resubmitting the request.");
+                    "نتیجهٔ تغییر تخصیص نامشخص است؛ وضعیت را تازه‌سازی کنید و همان درخواست را بدون تغییر دوباره بررسی کنید.",
+                    "Session reassignment outcome is unknown. Refresh and reconcile before changing or resubmitting the request.");
             }
         }
         catch
@@ -197,6 +200,6 @@ public sealed partial class SessionWorkflowViewModel
 
     private static string TransferSuccessText(string destinationCode) =>
         Text(
-            $"Session به ایستگاه {destinationCode} منتقل شد؛ تعرفه و زمان‌سنجی حفظ شدند.",
-            $"Session transferred to station {destinationCode}; tariff and timing were preserved.");
+            $"تخصیص Session به ایستگاه {destinationCode} تغییر کرد؛ تعرفه و زمان حفظ شدند. کنترل واقعی رایانه در این عملیات انجام نمی‌شود.",
+            $"Session assignment moved to station {destinationCode}; tariff and time were preserved. This command does not perform actual PC lock/unlock.");
 }

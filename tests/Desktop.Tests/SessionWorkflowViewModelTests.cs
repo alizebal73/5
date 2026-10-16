@@ -1218,9 +1218,9 @@ public sealed class SessionWorkflowViewModelTests
 
             var statusTask = WaitForStatusAsync(
                 viewModel,
-                message => message.Contains("Session transferred to station PS5-02", StringComparison.Ordinal));
+                message => message.Contains("Session assignment moved to station PS5-02", StringComparison.Ordinal));
             viewModel.TransferSessionCommand.Execute(null);
-            Assert.Contains("Session transferred to station PS5-02", await statusTask.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Contains("Session assignment moved to station PS5-02", await statusTask.WaitAsync(TimeSpan.FromSeconds(5)));
 
             Assert.Equal(session.Id, client.LastTransferredSessionId);
             Assert.NotNull(client.LastTransferRequest);
