@@ -40,7 +40,7 @@ WITH input AS (
 ),
 r AS (
     SELECT
-        i.id AS invoice_id, i.session_id, i.status AS invoice_status, i.amount_toman AS invoice_amount_toman,
+        i.id AS invoice_id, i.session_id, i.status AS invoice_status, i.amount_toman AS invoice_amount_toman, i.elapsed_ticks AS invoice_elapsed_ticks,
         i.paid_at_utc AS invoice_paid_at_utc, i.paid_by_operator_id AS invoice_paid_by_operator_id,
         s.status AS session_status, s.elapsed_ticks AS session_elapsed_ticks, s.paid_at_utc AS session_paid_at_utc,
         p.id AS payment_id, p.method AS payment_method, p.amount_applied_toman, p.amount_received_toman, p.change_given_toman,
@@ -66,7 +66,7 @@ SELECT r.*,
     CASE WHEN
         invoice_status = 3 AND session_status = 3
         AND invoice_paid_at_utc IS NOT NULL AND invoice_paid_by_operator_id IS NOT NULL
-        AND session_paid_at_utc IS NOT NULL AND session_elapsed_ticks > 0
+        AND session_paid_at_utc IS NOT NULL AND session_elapsed_ticks > 0 AND session_elapsed_ticks = invoice_elapsed_ticks AND session_paid_at_utc = invoice_paid_at_utc
         AND payment_count = 1 AND payment_id IS NOT NULL AND payment_method = 1
         AND amount_applied_toman = invoice_amount_toman
         AND amount_received_toman >= amount_applied_toman
