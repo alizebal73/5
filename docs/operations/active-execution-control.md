@@ -4,9 +4,9 @@
 
 ## Canonical refs
 
-- `main`: `b9288471f2047570eaf8d0d6552cf87bc0ddc214`; protected and intentionally unchanged.
-- `foundation/runtime-final-v2`: `71ef6534331e6ba5a8a460fd5b8846fe40e8567a`; certified Foundation checkpoint. It is not a routine product-feature target.
-- `integration/runtime-operator-v1`: active product-development branch. Query its live SHA; it changes with each merge.
+- main: b9288471f2047570eaf8d0d6552cf87bc0ddc214; protected and intentionally unchanged.
+- foundation/runtime-final-v2: 71ef6534331e6ba5a8a460fd5b8846fe40e8567a; certified Foundation checkpoint. It is not a routine product-feature target.
+- integration/runtime-operator-v1: active product-development branch. Query its live SHA; it changes with each merge.
 
 Foundation certification proves only the exact SHA tested. It does not prove physical Windows Service, ACL/DPAPI/TLS, installed UI, two-PC LAN, Setup/update/rollback or pilot readiness.
 
@@ -14,15 +14,21 @@ Foundation certification proves only the exact SHA tested. It does not prove phy
 
 **Deliver and accept the first complete PC walk-in Session-to-cash journey. Status: PARTIAL / NOT ACCEPTED.** This milestone is tracked in [Issue #98](https://github.com/alizebal73/5/issues/98).
 
-The Integration branch now has a partial WPF/API/Server/PostgreSQL path for fixed-hourly PC Sessions, invoice creation and cash checkout, plus automated Server/DB/UI-contract coverage. A green automated run is not a substitute for the remaining risk fixes and manual acceptance.
+The Integration branch has a partial WPF/API/Server/PostgreSQL path for fixed-hourly PC Sessions, invoice creation and cash checkout, plus automated Server/DB/UI-contract coverage. A green automated run is not a substitute for the remaining risk fixes and manual acceptance.
 
 ### Required order
 
 1. **Time contract and recovery — merged to Integration by PR #117; acceptance remains open.** The implementation persists a monotonic timestamp/frequency, independent system-uptime baseline and Windows boot identifier; billing uses persisted elapsed ticks, not UTC subtraction. UTC jumps and a Server process restart are supported only while same-boot continuity is verified. A Windows reboot or unprovable continuity fails closed without invoicing. The migration refuses to run while legacy active Sessions remain, so they must be ended/reconciled before upgrade. Real installed-Service/reboot behavior still needs operational acceptance.
+
 2. **Safe cash entry — merged to Integration by PR #117; acceptance remains open.** The implementation leaves the received-cash amount blank, requires a valid whole-Toman amount at least equal to the invoice, and requires explicit confirmation; changing the amount invalidates that confirmation. Manual WPF acceptance is still required.
+
 3. **Unknown checkout outcome — merged to Integration by PR #117; acceptance remains open.** The Server now looks up outcomes by invoice ID, validates persisted Invoice/Payment/Ledger consistency, and exposes recent completed checkouts across Desktop restart. Automated PostgreSQL and Desktop tests cover pending/paid lookup and simulated lost responses. Manual WPF lost-network/restart acceptance and independent database reconciliation remain required; a green CI run alone does not close this item.
-4. **Agent online policy — implementation candidate in PR #118; automated gates green on tested SHA `efdfee92e8e444c8843c165e5baadff8957780a1`.** Quick Validation/Foundation certification (run `38834034017`) passed PowerShell parsing, canonical build/tests, PostgreSQL clean-migration/schema/concurrency certification, isolated backup/restore, Desktop runtime and Agent auth/lease/heartbeat/fencing/reconnect runtime checks. Runtime Payload (run `38834034021`) also passed on that exact SHA; it is a portable payload, not Setup/MSI. The policy fails closed with no override in Slice 1: start is rejected for an unbound Agent, missing/revoked credential, expired lease or stale/future-invalid heartbeat; station list and Session-start share the policy, with a localized WPF explanation. PR merge/review and Slice 1 acceptance are still distinct; manual WPF start/end/invoice/cash and independent Session/Invoice/Payment/Ledger/Audit reconciliation remain open. Next after this gate is merged: define audited, permission-checked cash correction/reversal semantics without editing historical ledger entries.
-5. **Acceptance evidence.** Run WPF Start → End → Invoice → Cash on an isolated test environment. Independently reconcile Session, Invoice, Payment, Ledger and Audit against a hand calculation. Capture screenshots, the exact tested SHA and a fresh matching runtime payload. Close #98 only when its acceptance criteria are evidenced.
+
+4. **Agent online policy — merged to Integration by PR #118 at SHA b255b8be1cbd1a917f684975eb961e379ca1b2f8.** The policy fails closed when a PC Agent is unbound, lacks an active credential, has an expired lease or a stale/future-invalid heartbeat. Station listing and Session-start admission share the policy and WPF gives a localized actionable explanation. Post-merge Quick Validation run [38880919665](https://github.com/alizebal73/5/actions/runs/38880919665) and Full Foundation certification run [38880919577](https://github.com/alizebal73/5/actions/runs/38880919577) succeeded on the merge SHA. The post-merge Runtime Payload job was skipped; the pre-merge payload passed on PR head a47441a770fd05b666cf22985941875f56c660e5 in [run 38879582918](https://github.com/alizebal73/5/actions/runs/38879582918). A payload matching the final acceptance SHA is still required. Manual WPF acceptance and independent persisted-row reconciliation remain open.
+
+5. **Cash correction/reversal contract — proposed in [Cash Tender Correction and Cash Sale Reversal V1](../domain/cash-correction-and-reversal-v1.md).** This bounded design distinguishes correction of mis-recorded tender/change facts from a real full cash-sale reversal. A correction must not change the amount charged; a reversal returns the invoice amount applied (not gross tender/change), preserves original rows and appends a compensating, explicitly typed ledger effect. It also specifies dedicated permissions, mandatory reasons, idempotency, concurrency, migration/constraints, Audit and tests. The contract is not implementation evidence; no new endpoint or UI is enabled by this document. After this contract change is reviewed and integrated, implement it in a focused feature PR with migration, unit/PostgreSQL/idempotency/concurrency tests and then manual acceptance.
+
+6. **Acceptance evidence.** Run WPF Start → End → Invoice → Cash on an isolated test environment. Independently reconcile Session, Invoice, Payment, tender-correction/reversal records (once implemented), Ledger and Audit against a hand calculation. Capture screenshots, the exact tested SHA and a matching runtime payload hash. Close #98 only when its complete acceptance criteria are evidenced.
 
 Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card payments, PS5 and foosball billing are not implied complete by Slice 1.
 
@@ -33,7 +39,7 @@ Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card paym
 - **Issue #74 — security lifecycle:** credential rotation/revocation/recovery and log redaction remain pre-pilot/release gates. ADR acceptance is not implementation proof.
 - **Issue #16 — Setup/update/recovery/rollback:** required before release.
 - **Issue #34 — installed Windows Service, TLS private key, DPAPI/ACL and physical LAN acceptance:** required before release; process-based smoke is insufficient.
-- **Issue #67 — runner policy:** recent CI uses GitHub-hosted `windows-2025`, not the personal self-hosted runner. Never label hosted evidence as local-runner evidence or run untrusted PR code on a persistent personal runner.
+- **Issue #67 — runner policy:** recent CI uses GitHub-hosted windows-2025, not the personal self-hosted runner. Never label hosted evidence as local-runner evidence or run untrusted PR code on a persistent personal runner.
 
 ## Execution rules
 
