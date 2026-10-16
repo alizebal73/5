@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using GameNet.Shared.Contracts.V1.Billing;
+using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
 
@@ -16,12 +17,20 @@ namespace GameNet.Desktop.Features.Sessions;
 public interface ISessionWorkflowPort : INotifyPropertyChanged
 {
     ObservableCollection<StationResponse> PcStations { get; }
+    ObservableCollection<CustomerResponse> Customers { get; }
+    ObservableCollection<CustomerResponse> AvailableCustomers { get; }
     ObservableCollection<TariffResponse> Tariffs { get; }
     ObservableCollection<ActiveSessionListItem> ActiveSessions { get; }
     ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; }
     ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; }
 
     ICommand RefreshCommand { get; }
+    ICommand SearchCustomersCommand { get; }
+    ICommand CreateCustomerCommand { get; }
+    ICommand UpdateCustomerCommand { get; }
+    ICommand ActivateCustomerCommand { get; }
+    ICommand DeactivateCustomerCommand { get; }
+    ICommand BlockCustomerCommand { get; }
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
     ICommand EndSessionCommand { get; }
@@ -31,6 +40,8 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand CorrectCashTenderCommand { get; }
 
     bool CanManageTariffs { get; }
+    bool CanReadCustomers { get; }
+    bool CanWriteCustomers { get; }
     bool CanOperateSessions { get; }
     bool CanRecoverSessionTiming { get; }
     bool CanCheckout { get; }
@@ -41,6 +52,16 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     bool IsBusy { get; }
 
     StationResponse? SelectedStation { get; set; }
+    CustomerResponse? SelectedCustomer { get; set; }
+    CustomerResponse? SelectedManagedCustomer { get; set; }
+    string CustomerSearchText { get; set; }
+    string CustomerCodeText { get; set; }
+    string CustomerNameText { get; set; }
+    string CustomerNicknameText { get; set; }
+    string CustomerPhoneText { get; set; }
+    string CustomerStatusReasonText { get; set; }
+    bool CustomerIncludeInactive { get; set; }
+    string CustomerStatusSummaryText { get; }
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
     string ReconciledElapsedMinutesText { get; set; }
