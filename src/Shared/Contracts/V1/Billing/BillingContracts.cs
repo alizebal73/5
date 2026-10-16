@@ -24,7 +24,8 @@ public sealed record CashCheckoutOutcomeResponse(
     DateTimeOffset? PaidAtUtc,
     Guid? ReversalId = null,
     DateTimeOffset? ReversedAtUtc = null,
-    string? ReversalReason = null);
+    string? ReversalReason = null,
+    Guid? ReversalLedgerEntryId = null);
 
 public sealed record CashSaleReversalRequest(
     Guid PaymentId,

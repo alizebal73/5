@@ -179,7 +179,7 @@ public sealed class BillingService(
             invoice.TariffHourlyRateTomanSnapshot, invoice.ElapsedTicks, invoice.AmountToman,
             (InvoiceStatusContract)invoice.Status, payment?.Id, saleLedger?.Id,
             payment?.AmountReceivedToman, payment?.ChangeGivenToman, invoice.IssuedAtUtc, invoice.PaidAtUtc,
-            reversal?.Id, reversal?.ReversedAtUtc, reversal?.Reason));
+            reversal?.Id, reversal?.ReversedAtUtc, reversal?.Reason, reversalLedger?.Id));
     }
 
     public Task<Result<CashCheckoutResponse>> CheckoutCashAsync(

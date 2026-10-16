@@ -610,6 +610,7 @@ public sealed class SessionWorkflowViewModelTests
             Assert.Equal("Customer requested full reversal", client.LastCashSaleReversalRequest?.Reason);
             Assert.Single(client.CashSaleReversalIdempotencyKeys);
             Assert.Equal(InvoiceStatusContract.Reversed, client.CompletedCashOutcomes.Single().Status);
+            Assert.NotNull(client.CompletedCashOutcomes.Single().ReversalLedgerEntryId);
             Assert.Equal(30_000L, client.CompletedCashOutcomes.Single().AmountToman);
             Assert.Equal(50_000L, client.CompletedCashOutcomes.Single().AmountReceivedToman);
             Assert.Equal(20_000L, client.CompletedCashOutcomes.Single().ChangeGivenToman);
@@ -891,7 +892,8 @@ public sealed class SessionWorkflowViewModelTests
                 Status = InvoiceStatusContract.Reversed,
                 ReversalId = reversalId,
                 ReversedAtUtc = reversedAt,
-                ReversalReason = request.Reason
+                ReversalReason = request.Reason,
+                ReversalLedgerEntryId = reversalLedgerId
             };
 
             var response = new CashSaleReversalResponse(

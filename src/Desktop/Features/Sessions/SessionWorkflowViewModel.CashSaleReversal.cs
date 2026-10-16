@@ -264,6 +264,7 @@ public sealed partial class SessionWorkflowViewModel
         outcome.ReversalId is not null &&
         outcome.ReversedAtUtc is not null &&
         !string.IsNullOrWhiteSpace(outcome.ReversalReason) &&
+        outcome.ReversalLedgerEntryId is not null &&
         outcome.PaymentId is not null &&
         outcome.LedgerEntryId is not null &&
         outcome.PaidAtUtc is not null &&

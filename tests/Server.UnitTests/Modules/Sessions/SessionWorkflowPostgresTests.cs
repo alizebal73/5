@@ -308,6 +308,7 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.True(reversedOutcome.IsSuccess, reversedOutcome.IsSuccess ? "" : reversedOutcome.Error.Code);
                 Assert.Equal(InvoiceStatusContract.Reversed, reversedOutcome.Value.Status);
                 Assert.Equal(reversal.ReversalId, reversedOutcome.Value.ReversalId);
+                Assert.Equal(reversal.LedgerEntryId, reversedOutcome.Value.ReversalLedgerEntryId);
                 Assert.Equal(30_000L, reversedOutcome.Value.AmountToman);
                 Assert.Equal(50_000L, reversedOutcome.Value.AmountReceivedToman);
                 Assert.Equal(20_000L, reversedOutcome.Value.ChangeGivenToman);
