@@ -24,6 +24,7 @@ public sealed partial class SessionWorkflowViewModel
     public ObservableCollection<CustomerResponse> AvailableCustomers { get; } = [];
     public ICommand SearchCustomersCommand { get; private set; } = null!;
     public ICommand NewCustomerCommand { get; private set; } = null!;
+    public ICommand UseWalkInCustomerCommand { get; private set; } = null!;
     public ICommand CreateCustomerCommand { get; private set; } = null!;
     public ICommand UpdateCustomerCommand { get; private set; } = null!;
     public ICommand ActivateCustomerCommand { get; private set; } = null!;
@@ -84,6 +85,7 @@ public sealed partial class SessionWorkflowViewModel
     {
         SearchCustomersCommand = new AsyncUiAction(SearchCustomersAsync, () => !IsBusy && CanReadCustomers);
         NewCustomerCommand = new AsyncUiAction(NewCustomerAsync, () => !IsBusy && CanWriteCustomers);
+        UseWalkInCustomerCommand = new AsyncUiAction(UseWalkInCustomer, () => !IsBusy && SelectedCustomer is not null);
         CreateCustomerCommand = new AsyncUiAction(CreateCustomerAsync, () => !IsBusy && CanWriteCustomers &&
             SelectedManagedCustomer is null && !string.IsNullOrWhiteSpace(CustomerCodeText) && !string.IsNullOrWhiteSpace(CustomerNameText));
         UpdateCustomerCommand = new AsyncUiAction(UpdateCustomerProfileAsync, () => !IsBusy && CanWriteCustomers &&
@@ -94,6 +96,12 @@ public sealed partial class SessionWorkflowViewModel
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: CustomerStatusContract.Active } && IsValidCustomerReason(CustomerStatusReasonText));
         BlockCustomerCommand = new AsyncUiAction(() => SetCustomerStatusAsync(CustomerStatusContract.Blocked),
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Blocked } && IsValidCustomerReason(CustomerStatusReasonText));
+    }
+
+    private Task UseWalkInCustomer()
+    {
+        SelectedCustomer = null;
+        return Task.CompletedTask;
     }
 
     private async Task NewCustomerAsync()
@@ -291,6 +299,7 @@ public sealed partial class SessionWorkflowViewModel
     {
         (SearchCustomersCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (NewCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (UseWalkInCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CreateCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (UpdateCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ActivateCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
