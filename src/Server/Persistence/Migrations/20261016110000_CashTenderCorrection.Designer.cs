@@ -18,7 +18,7 @@ partial class CashTenderCorrection
         => CashTenderCorrectionTargetModel.Build(modelBuilder);
 }
 
-internal static class CashSaleReversalTargetModel
+internal static class CashTenderCorrectionTargetModel
 {
         public static void Build(ModelBuilder modelBuilder)
         {
