@@ -56,6 +56,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     StationResponse? SelectedStation { get; set; }
     CustomerResponse? SelectedCustomer { get; set; }
     CustomerResponse? SelectedManagedCustomer { get; set; }
+    bool IsNewCustomer { get; }
     string CustomerSearchText { get; set; }
     string CustomerCodeText { get; set; }
     string CustomerNameText { get; set; }
