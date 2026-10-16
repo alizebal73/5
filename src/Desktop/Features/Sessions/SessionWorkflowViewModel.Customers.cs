@@ -48,6 +48,8 @@ public sealed partial class SessionWorkflowViewModel
         set
         {
             if (!SetField(ref selectedManagedCustomer, value)) return;
+            if (selectedManagedCustomer?.Id != value?.Id)
+                CustomerStatusReasonText = string.Empty;
             if (value is not null)
             {
                 CustomerCodeText = value.Code;
@@ -96,7 +98,7 @@ public sealed partial class SessionWorkflowViewModel
         ActivateCustomerCommand = new AsyncUiAction(() => SetCustomerStatusAsync(CustomerStatusContract.Active),
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Active } && IsValidCustomerReason(CustomerStatusReasonText));
         DeactivateCustomerCommand = new AsyncUiAction(() => SetCustomerStatusAsync(CustomerStatusContract.Inactive),
-            () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: CustomerStatusContract.Active } && IsValidCustomerReason(CustomerStatusReasonText));
+            () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Inactive } && IsValidCustomerReason(CustomerStatusReasonText));
         BlockCustomerCommand = new AsyncUiAction(() => SetCustomerStatusAsync(CustomerStatusContract.Blocked),
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Blocked } && IsValidCustomerReason(CustomerStatusReasonText));
     }
