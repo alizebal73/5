@@ -89,6 +89,8 @@
   <system:String x:Key="Customer.SearchButton">جست‌وجو / تازه‌سازی</system:String>
   <system:String x:Key="Customer.IncludeInactive">نمایش مشتریان غیرفعال و مسدود</system:String>
   <system:String x:Key="Customer.SelectForSession">مشتری برای Session (خالی = مشتری گذری)</system:String>
+  <system:String x:Key="Customer.SessionSearch">جست‌وجوی مشتری برای Session با کد، نام، لقب یا موبایل</system:String>
+  <system:String x:Key="Customer.SessionSearchButton">جست‌وجوی مشتری Session</system:String>
   <system:String x:Key="Customer.WalkInHint">اگر مشتری انتخاب نشود، Server هویت مشتری گذری می‌سازد.</system:String>
   <system:String x:Key="Customer.UseWalkIn">استفاده از مشتری گذری</system:String>
   <system:String x:Key="Customer.Code">کد مشتری</system:String>
