@@ -85,6 +85,74 @@ public sealed class SessionTests
         Assert.Throws<ArgumentException>(() => session.MarkPaid(Guid.Empty, start.AddMinutes(1)));
     }
 
+    [Fact]
+    public void Session_transfer_preserves_tariff_and_active_monotonic_timing_baseline()
+    {
+        var session = NewSession(DateTimeOffset.Parse("2026-10-14T10:00:00Z"));
+        var targetStationId = Guid.NewGuid();
+        var operatorId = Guid.NewGuid();
+        var version = session.Version;
+        var customerId = session.CustomerId;
+        var tariffId = session.TariffId;
+        var rate = session.TariffHourlyRateTomanSnapshot;
+        var startUtc = session.StartedAtUtc;
+        var segmentTimestamp = session.CurrentSegmentStartedMonotonicTimestamp;
+        var segmentFrequency = session.CurrentSegmentStartedMonotonicFrequency;
+        var segmentUptime = session.CurrentSegmentStartedSystemUptimeMilliseconds;
+        var segmentBoot = session.CurrentSegmentStartedBootIdentifier;
+
+        session.TransferTo(targetStationId, operatorId);
+
+        Assert.Equal(targetStationId, session.StationId);
+        Assert.Equal(SessionStatus.Active, session.Status);
+        Assert.Equal(version + 1, session.Version);
+        Assert.Equal(customerId, session.CustomerId);
+        Assert.Equal(tariffId, session.TariffId);
+        Assert.Equal(rate, session.TariffHourlyRateTomanSnapshot);
+        Assert.Equal(startUtc, session.StartedAtUtc);
+        Assert.Equal(0L, session.AccumulatedElapsedTicks);
+        Assert.Equal(segmentTimestamp, session.CurrentSegmentStartedMonotonicTimestamp);
+        Assert.Equal(segmentFrequency, session.CurrentSegmentStartedMonotonicFrequency);
+        Assert.Equal(segmentUptime, session.CurrentSegmentStartedSystemUptimeMilliseconds);
+        Assert.Equal(segmentBoot, session.CurrentSegmentStartedBootIdentifier);
+    }
+
+    [Fact]
+    public void Paused_session_transfer_keeps_accumulated_time_and_paused_state()
+    {
+        var session = NewSession(DateTimeOffset.Parse("2026-10-14T10:00:00Z"));
+        session.Pause(Guid.NewGuid(), TimeSpan.FromMinutes(7).Ticks);
+        var targetStationId = Guid.NewGuid();
+        var operatorId = Guid.NewGuid();
+        var accumulated = session.AccumulatedElapsedTicks;
+        var version = session.Version;
+
+        session.TransferTo(targetStationId, operatorId);
+
+        Assert.Equal(targetStationId, session.StationId);
+        Assert.Equal(SessionStatus.Paused, session.Status);
+        Assert.Equal(version + 1, session.Version);
+        Assert.Equal(accumulated, session.AccumulatedElapsedTicks);
+        Assert.Null(session.CurrentSegmentStartedMonotonicTimestamp);
+        Assert.Null(session.CurrentSegmentStartedMonotonicFrequency);
+        Assert.Null(session.CurrentSegmentStartedSystemUptimeMilliseconds);
+        Assert.Null(session.CurrentSegmentStartedBootIdentifier);
+    }
+
+    [Fact]
+    public void Session_transfer_rejects_same_or_empty_target_and_settled_sessions()
+    {
+        var session = NewSession(DateTimeOffset.Parse("2026-10-14T10:00:00Z"));
+        Assert.Throws<InvalidOperationException>(() => session.TransferTo(session.StationId, Guid.NewGuid()));
+        Assert.Throws<ArgumentException>(() => session.TransferTo(Guid.Empty, Guid.NewGuid()));
+        Assert.Throws<ArgumentException>(() => session.TransferTo(Guid.NewGuid(), Guid.Empty));
+
+        session.End(Guid.NewGuid(), DateTimeOffset.Parse("2026-10-14T10:30:00Z"), TimeSpan.FromMinutes(30).Ticks);
+        Assert.Throws<InvalidOperationException>(() => session.TransferTo(Guid.NewGuid(), Guid.NewGuid()));
+        session.MarkPaid(Guid.NewGuid(), DateTimeOffset.Parse("2026-10-14T10:31:00Z"));
+        Assert.Throws<InvalidOperationException>(() => session.TransferTo(Guid.NewGuid(), Guid.NewGuid()));
+    }
+
     private static Session NewSession(DateTimeOffset start) => Session.Start(
         Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
         "PC-STANDARD", "PC Standard", 60_000L, Guid.NewGuid(), start,
