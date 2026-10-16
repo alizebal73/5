@@ -541,6 +541,10 @@ public sealed class StationBoardPermissionTests
             Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<SessionResponse> TransferSessionAsync(
+            Guid id, TransferSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(
             Guid id, ReconcileSessionTimingRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
