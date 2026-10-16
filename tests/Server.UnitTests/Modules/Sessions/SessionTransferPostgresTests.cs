@@ -288,6 +288,136 @@ public sealed partial class SessionWorkflowPostgresTests
         }
     }
 
+    [Fact]
+    public async Task Concurrent_session_transfers_cannot_claim_the_same_destination()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorOne = Guid.NewGuid();
+        var operatorTwo = Guid.NewGuid();
+        var sourceOneId = Guid.NewGuid();
+        var sourceTwoId = Guid.NewGuid();
+        var destinationId = Guid.NewGuid();
+        var sessionOneId = Guid.NewGuid();
+        var sessionTwoId = Guid.NewGuid();
+        var customerOneId = Guid.NewGuid();
+        var customerTwoId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlationPrefix = "transfer-race-" + token;
+        var idempotencyPrefix = "transfer-race-" + token + "-";
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+
+        try
+        {
+            await using (var seed = CreateContext(connectionString))
+            {
+                seed.Stations.AddRange(
+                    Station.Create(sourceOneId, "TR1-" + token[..9], "Transfer race source one", StationType.Ps5),
+                    Station.Create(sourceTwoId, "TR2-" + token[..9], "Transfer race source two", StationType.Ps5),
+                    Station.Create(destinationId, "TRD-" + token[..9], "Transfer race destination", StationType.Ps5));
+                var tariff = Tariff.CreateFixedHourly(
+                    tariffId, "TRT-" + token[..9], "Transfer race tariff",
+                    StationTypeContract.Ps5, 120_000L, false, clock.UtcNow);
+                seed.Tariffs.Add(tariff);
+                seed.Customers.AddRange(
+                    Customer.CreateWalkIn(customerOneId, clock.UtcNow),
+                    Customer.CreateWalkIn(customerTwoId, clock.UtcNow));
+                var snapshot = clock.Capture();
+                seed.Sessions.Add(Session.Start(
+                    sessionOneId, sourceOneId, customerOneId, tariffId, tariff.Code, tariff.Name,
+                    tariff.HourlyRateToman, operatorOne, snapshot.UtcNow, snapshot.Timestamp,
+                    snapshot.TimestampFrequency, snapshot.SystemUptimeMilliseconds, snapshot.BootIdentifier));
+                seed.Sessions.Add(Session.Start(
+                    sessionTwoId, sourceTwoId, customerTwoId, tariffId, tariff.Code, tariff.Name,
+                    tariff.HourlyRateToman, operatorTwo, snapshot.UtcNow, snapshot.Timestamp,
+                    snapshot.TimestampFrequency, snapshot.SystemUptimeMilliseconds, snapshot.BootIdentifier));
+                await seed.SaveChangesAsync();
+            }
+
+            Result<SessionResponse>[] results;
+            await using (var dbOne = CreateContext(connectionString))
+            await using (var dbTwo = CreateContext(connectionString))
+            {
+                var serviceOne = CreateService(dbOne, clock);
+                var serviceTwo = CreateService(dbTwo, clock);
+                var commandOne = new TransferSessionCommand(
+                    sessionOneId, destinationId, 1, "Customer requests another console", true,
+                    idempotencyPrefix + "one", Actor(operatorOne, correlationPrefix + "-one"));
+                var commandTwo = new TransferSessionCommand(
+                    sessionTwoId, destinationId, 1, "Customer requests another console", true,
+                    idempotencyPrefix + "two", Actor(operatorTwo, correlationPrefix + "-two"));
+
+                results = await Task.WhenAll(
+                    serviceOne.TransferAsync(commandOne, CancellationToken.None),
+                    serviceTwo.TransferAsync(commandTwo, CancellationToken.None));
+            }
+
+            Assert.Single(results.Where(result => result.IsSuccess));
+            var failed = Assert.Single(results.Where(result => !result.IsSuccess));
+            Assert.Equal("sessions.transfer_destination_occupied", failed.Error.Code);
+
+            await using (var verify = CreateContext(connectionString))
+            {
+                Assert.Equal(1, await verify.Sessions.AsNoTracking().CountAsync(x => x.StationId == destinationId));
+                Assert.Equal(2, await verify.Sessions.AsNoTracking()
+                    .CountAsync(x => x.Id == sessionOneId || x.Id == sessionTwoId));
+                Assert.Equal(1, await verify.AuditEntries.AsNoTracking()
+                    .CountAsync(x => x.Operation == "sessions.transfer" && x.CorrelationId.StartsWith(correlationPrefix)));
+            }
+        }
+        finally
+        {
+            await CleanupTransferRaceAsync(
+                connectionString,
+                [sessionOneId, sessionTwoId],
+                [customerOneId, customerTwoId],
+                [sourceOneId, sourceTwoId, destinationId],
+                tariffId,
+                correlationPrefix,
+                idempotencyPrefix);
+        }
+    }
+
+    private static async Task CleanupTransferRaceAsync(
+        string connectionString,
+        Guid[] sessionIds,
+        Guid[] customerIds,
+        Guid[] stationIds,
+        Guid tariffId,
+        string correlationPrefix,
+        string idempotencyPrefix)
+    {
+        await using var db = CreateContext(connectionString);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM audit_entries WHERE correlation_id LIKE {correlationPrefix + "%"}");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM billing_ledger_entries WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = ANY({stationIds}))");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM cash_sale_reversals WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = ANY({stationIds}))");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM cash_tender_corrections WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = ANY({stationIds}))");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = ANY({stationIds}))");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM invoices WHERE station_id = ANY({stationIds})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM sessions WHERE id = ANY({sessionIds})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM customers WHERE id = ANY({customerIds})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM agent_connection_leases WHERE device_id IN (SELECT agent_device_id FROM stations WHERE id = ANY({stationIds}))");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM agent_credentials WHERE device_id IN (SELECT agent_device_id FROM stations WHERE id = ANY({stationIds}))");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM tariffs WHERE id = {tariffId}");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM stations WHERE id = ANY({stationIds})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM idempotency_records WHERE key LIKE {idempotencyPrefix + "%"}");
+    }
+
     private static async Task CleanupTransferAsync(
         string connectionString,
         Guid[] sessionIds,

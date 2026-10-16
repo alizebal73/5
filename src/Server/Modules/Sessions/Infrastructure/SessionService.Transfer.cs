@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Sessions.Application;
@@ -155,7 +156,7 @@ public sealed partial class SessionService
                 },
                 cancellationToken);
         }
-        catch (PersistenceConflictException ex) when (string.Equals(ex.Code, "persistence.unique", StringComparison.Ordinal))
+        catch (PersistenceConflictException ex) when (IsStationOccupancyConflict(ex))
         {
             // The partial unique index remains the final arbiter if two transfers race for the same destination.
             return Fail<SessionResponse>(
@@ -170,5 +171,18 @@ public sealed partial class SessionService
         {
             return Fail<SessionResponse>("sessions.version_conflict", "Session changed concurrently; refresh before transferring it.");
         }
+    }
+
+    private static bool IsStationOccupancyConflict(PersistenceConflictException exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException postgres &&
+                string.Equals(postgres.SqlState, PostgresErrorCodes.UniqueViolation, StringComparison.Ordinal) &&
+                string.Equals(postgres.ConstraintName, "ux_sessions_one_unsettled_per_station", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
     }
 }
