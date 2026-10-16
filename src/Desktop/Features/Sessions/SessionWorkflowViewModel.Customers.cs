@@ -142,10 +142,17 @@ public sealed partial class SessionWorkflowViewModel
             var selectedSessionId = SelectedCustomer?.Id;
             var rows = await api.GetCustomersAsync(CustomerSearchText, CustomerIncludeInactive);
             if (generation != customerRefreshGeneration || !CanReadCustomers) return;
+
+            // Keep the session picker independent from the customer-manager search and
+            // include-inactive filter. Searching another profile must not silently clear
+            // the currently selected customer for the next Session.
+            var selectableCustomers = await api.GetCustomersAsync(query: null, includeInactive: false);
+            if (generation != customerRefreshGeneration || !CanReadCustomers) return;
+
             Replace(Customers, rows, selectedManagedId, x => x.Id, out var currentManaged);
             SelectedManagedCustomer = currentManaged;
             AvailableCustomers.Clear();
-            foreach (var row in rows.Where(x => x.Status == CustomerStatusContract.Active))
+            foreach (var row in selectableCustomers.Where(x => x.Status == CustomerStatusContract.Active))
                 AvailableCustomers.Add(row);
             SelectedCustomer = selectedSessionId.HasValue
                 ? AvailableCustomers.FirstOrDefault(x => x.Id == selectedSessionId.Value)
