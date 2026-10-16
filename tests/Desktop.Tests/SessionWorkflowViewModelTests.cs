@@ -118,6 +118,14 @@ public sealed class SessionWorkflowViewModelTests
             viewModel.SelectedStation = station;
             viewModel.SelectedTariff = tariff;
 
+            // Manager searches must not remove a valid customer from the independent
+            // Session picker or silently alter the identity used by StartSession.
+            viewModel.CustomerSearchText = "no such customer";
+            viewModel.SearchCustomersCommand.Execute(null);
+            Assert.Empty(viewModel.Customers);
+            Assert.Contains(viewModel.AvailableCustomers, x => x.Id == customer.Id);
+            Assert.Equal(customer.Id, viewModel.SelectedCustomer?.Id);
+
             var startStatus = WaitForStatusAsync(
                 viewModel, message => message.Contains("customer C-TEST-01", StringComparison.Ordinal));
             Assert.True(viewModel.StartSessionCommand.CanExecute(null));
