@@ -9,7 +9,7 @@ This package is a disposable, isolated Windows test installer, not a production 
 
 - Two fresh Windows x64 VMs or dedicated PCs on an isolated LAN: one Manager/Server + Desktop and one Agent client.
 - PostgreSQL 17 installed and running locally on the Manager/Server VM. The temporary Setup does not install PostgreSQL.
-- Administrative rights on both test machines. No Python or standalone .NET SDK is required on the test PCs; application binaries are self-contained.
+- Administrative rights on both test machines. Setup bundles its own PowerShell 7.6.4 runtime and self-contained app binaries; no Python, standalone .NET SDK or separate PowerShell installation is required on the test PCs.
 - A VM snapshot taken before setup. Revert it after acceptance, especially if setup fails partway through.
 
 Do not run this package on the live GameNet/shop PC, do not reuse a production database, and do not import any private server certificate or secret onto the Agent client.
