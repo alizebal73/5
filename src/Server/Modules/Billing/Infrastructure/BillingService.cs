@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GameNet.Server.Modules.Billing.Infrastructure;
 
-public sealed class BillingService(
+public sealed partial class BillingService(
     GameNetDbContext db,
     CommandMutationPipeline mutationPipeline,
     IRequestFingerprint requestFingerprint,
