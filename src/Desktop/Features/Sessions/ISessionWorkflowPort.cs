@@ -27,11 +27,13 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand EndSessionCommand { get; }
     ICommand CheckoutCashCommand { get; }
     ICommand ReverseCashSaleCommand { get; }
+    ICommand CorrectCashTenderCommand { get; }
 
     bool CanManageTariffs { get; }
     bool CanOperateSessions { get; }
     bool CanCheckout { get; }
     bool CanReverseCashSale { get; }
+    bool CanCorrectCashTender { get; }
     bool CanUseWorkspace { get; }
     bool CanReadStations { get; }
     bool IsBusy { get; }
@@ -44,6 +46,10 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string CashSaleReversalReasonText { get; set; }
     bool ConfirmCashSaleReversal { get; set; }
     string CashSaleReversalSummaryText { get; }
+    string CorrectedCashReceivedText { get; set; }
+    string CashTenderCorrectionReasonText { get; set; }
+    bool ConfirmCashTenderCorrection { get; set; }
+    string CashTenderCorrectionSummaryText { get; }
 
     string TariffCode { get; set; }
     string TariffName { get; set; }
