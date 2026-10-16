@@ -31,6 +31,7 @@ public sealed record CashTenderCorrectionCommand(
     int ExpectedVersion,
     long CorrectedAmountReceivedToman,
     string Reason,
+    bool Confirmed,
     string IdempotencyKey,
     BillingActorContext Actor);
 

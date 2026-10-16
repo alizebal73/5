@@ -670,6 +670,7 @@ public sealed class SessionWorkflowViewModelTests
             Assert.Equal(paymentId, client.LastCashTenderCorrectionRequest?.PaymentId);
             Assert.Equal(0, client.LastCashTenderCorrectionRequest?.ExpectedVersion);
             Assert.Equal(45_000L, client.LastCashTenderCorrectionRequest?.CorrectedAmountReceivedToman);
+            Assert.Equal(true, client.LastCashTenderCorrectionRequest?.Confirmed);
             Assert.False(string.IsNullOrWhiteSpace(client.CashTenderCorrectionIdempotencyKeys.Single()));
 
             var corrected = Assert.Single(client.CompletedCashOutcomes);

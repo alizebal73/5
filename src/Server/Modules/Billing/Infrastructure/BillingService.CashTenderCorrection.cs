@@ -22,6 +22,11 @@ public sealed partial class BillingService
             return Task.FromResult(Fail<CashTenderCorrectionResponse>(
                 "billing.forbidden", "Not allowed to correct recorded cash tender facts."));
 
+        if (!command.Confirmed)
+            return Task.FromResult(Fail<CashTenderCorrectionResponse>(
+                "billing.tender_correction_invalid",
+                "Explicit operator confirmation is required before correcting recorded cash tender facts."));
+
         var scope = $"billing.cash-tender-correct:{command.Actor.OperatorId:D}";
         var payload = new
         {
@@ -29,7 +34,8 @@ public sealed partial class BillingService
             command.PaymentId,
             command.ExpectedVersion,
             command.CorrectedAmountReceivedToman,
-            command.Reason
+            command.Reason,
+            command.Confirmed
         };
         return CorrectCashTenderCoreAsync(command, scope, payload, cancellationToken);
     }

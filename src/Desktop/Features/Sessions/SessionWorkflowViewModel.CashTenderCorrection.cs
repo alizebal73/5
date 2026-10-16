@@ -157,7 +157,7 @@ public sealed partial class SessionWorkflowViewModel
         {
             var response = await api.CorrectCashTenderAsync(
                 outcome.InvoiceId,
-                new CashTenderCorrectionRequest(paymentId, currentVersion, correctedReceived, reason),
+                new CashTenderCorrectionRequest(paymentId, currentVersion, correctedReceived, reason, Confirmed: true),
                 key);
 
             if (response.InvoiceId != outcome.InvoiceId ||

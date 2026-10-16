@@ -50,7 +50,8 @@ public sealed record CashTenderCorrectionRequest(
     Guid PaymentId,
     int ExpectedVersion,
     long CorrectedAmountReceivedToman,
-    string Reason);
+    string Reason,
+    bool Confirmed);
 
 public sealed record CashTenderCorrectionResponse(
     Guid CorrectionId,

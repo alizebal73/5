@@ -286,8 +286,20 @@ public sealed class SessionWorkflowPostgresTests
                     ExpectedVersion: 0,
                     CorrectedAmountReceivedToman: 45_000L,
                     Reason: "Recorded cash received amount was entered incorrectly",
+                    Confirmed: true,
                     IdempotencyKey: idempotencyPrefix + "tender-correction-v1",
                     Actor: correctionOnlyActor);
+                var unconfirmedCorrection = await billing.CorrectCashTenderAsync(
+                    correctionCommand with
+                    {
+                        Confirmed = false,
+                        IdempotencyKey = idempotencyPrefix + "tender-correction-unconfirmed"
+                    },
+                    CancellationToken.None);
+                Assert.False(unconfirmedCorrection.IsSuccess);
+                Assert.Equal("billing.tender_correction_invalid", unconfirmedCorrection.Error.Code);
+                Assert.Equal(0, await db.CashTenderCorrections.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
+
                 var correction = await billing.CorrectCashTenderAsync(correctionCommand, CancellationToken.None);
                 Assert.True(correction.IsSuccess, correction.IsSuccess ? "" : correction.Error.Code);
                 Assert.Equal(1, correction.Value.Version);

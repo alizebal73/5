@@ -112,7 +112,7 @@ public static class BillingEndpoints
 
             var command = new CashTenderCorrectionCommand(
                 invoiceId, request.PaymentId, request.ExpectedVersion, request.CorrectedAmountReceivedToman,
-                request.Reason, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+                request.Reason, request.Confirmed, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
             var result = await service.CorrectCashTenderAsync(command, cancellationToken);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CashTenderCorrectionResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
