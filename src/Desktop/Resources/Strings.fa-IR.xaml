@@ -90,6 +90,7 @@
   <system:String x:Key="Customer.IncludeInactive">نمایش مشتریان غیرفعال و مسدود</system:String>
   <system:String x:Key="Customer.SelectForSession">مشتری برای Session (خالی = مشتری گذری)</system:String>
   <system:String x:Key="Customer.WalkInHint">اگر مشتری انتخاب نشود، Server هویت مشتری گذری می‌سازد.</system:String>
+  <system:String x:Key="Customer.UseWalkIn">استفاده از مشتری گذری</system:String>
   <system:String x:Key="Customer.Code">کد مشتری</system:String>
   <system:String x:Key="Customer.Name">نام و نام خانوادگی</system:String>
   <system:String x:Key="Customer.Nickname">لقب / نام نمایشی</system:String>
