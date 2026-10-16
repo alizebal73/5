@@ -18,8 +18,12 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
         b.Property(x => x.Code).HasMaxLength(40).IsRequired().HasColumnName("code");
         b.Property(x => x.DisplayName).HasMaxLength(120).HasColumnName("display_name");
+        b.Property(x => x.Nickname).HasMaxLength(60).HasColumnName("nickname");
+        b.Property(x => x.PhoneNumber).HasMaxLength(32).HasColumnName("phone_number");
         b.Property(x => x.Kind).IsRequired().HasColumnName("kind");
         b.Property(x => x.IsActive).IsRequired().HasColumnName("is_active");
+        b.Property(x => x.IsBlocked).HasDefaultValue(false).IsRequired().HasColumnName("is_blocked");
+        b.Ignore(x => x.Status);
         b.Property(x => x.CreatedAtUtc).IsRequired().HasColumnName("created_at_utc");
         b.Property(x => x.Version).IsConcurrencyToken().IsRequired().HasColumnName("version");
         b.HasIndex(x => x.Code).IsUnique().HasDatabaseName("ux_customers_code");
