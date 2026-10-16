@@ -46,7 +46,8 @@ public sealed class CustomerManagementPostgresTests
             Assert.Equal("Test Nick", created.Value.Nickname);
             Assert.Equal("+989121234567", created.Value.PhoneNumber);
             Assert.Equal(CustomerStatusContract.Active, created.Value.Status);
-            var replay = await service.CreateAsync(new CreateCustomerCommand(code, "Test Customer", "Test Nick", "+989121234567", createKey, actor), CancellationToken.None);
+            var replay = await service.CreateAsync(new CreateCustomerCommand(
+                " " + code.ToLowerInvariant() + " ", " Test Customer ", " Test Nick ", "+۹۸۹۱۲۱۲۳۴۵۶۷", createKey, actor), CancellationToken.None);
             Assert.True(replay.IsSuccess);
             Assert.Equal(created.Value.Id, replay.Value.Id);
             var conflict = await service.CreateAsync(new CreateCustomerCommand(code, "Different Customer", null, null, createKey, actor), CancellationToken.None);
