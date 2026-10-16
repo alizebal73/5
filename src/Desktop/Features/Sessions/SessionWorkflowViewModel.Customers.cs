@@ -18,6 +18,7 @@ public sealed partial class SessionWorkflowViewModel
     private string customerPhoneText = string.Empty;
     private string customerStatusReasonText = string.Empty;
     private bool customerIncludeInactive = true;
+    private int customerRefreshGeneration;
 
     public ObservableCollection<CustomerResponse> Customers { get; } = [];
     public ObservableCollection<CustomerResponse> AvailableCustomers { get; } = [];
@@ -95,10 +96,11 @@ public sealed partial class SessionWorkflowViewModel
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Blocked } && IsValidCustomerReason(CustomerStatusReasonText));
     }
 
-    private Task NewCustomerAsync()
+    private async Task NewCustomerAsync()
     {
         SelectedManagedCustomer = null;
-        return Task.CompletedTask;
+        CustomerSearchText = string.Empty;
+        await RefreshCustomersAsync();
     }
 
     private async Task SearchCustomersAsync()
@@ -111,6 +113,7 @@ public sealed partial class SessionWorkflowViewModel
     {
         if (!CanReadCustomers)
         {
+            customerRefreshGeneration++;
             Customers.Clear();
             AvailableCustomers.Clear();
             SelectedManagedCustomer = null;
@@ -118,11 +121,13 @@ public sealed partial class SessionWorkflowViewModel
             return;
         }
 
+        var generation = ++customerRefreshGeneration;
         try
         {
             var selectedManagedId = SelectedManagedCustomer?.Id;
             var selectedSessionId = SelectedCustomer?.Id;
             var rows = await api.GetCustomersAsync(CustomerSearchText, CustomerIncludeInactive);
+            if (generation != customerRefreshGeneration || !CanReadCustomers) return;
             Replace(Customers, rows, selectedManagedId, x => x.Id, out var currentManaged);
             SelectedManagedCustomer = currentManaged;
             AvailableCustomers.Clear();
@@ -132,14 +137,19 @@ public sealed partial class SessionWorkflowViewModel
                 ? AvailableCustomers.FirstOrDefault(x => x.Id == selectedSessionId.Value)
                 : null;
         }
-        catch (GameNetApiException ex) { ErrorMessage = CustomerErrorText(ex.Code); }
+        catch (GameNetApiException ex)
+        {
+            if (generation == customerRefreshGeneration) ErrorMessage = CustomerErrorText(ex.Code);
+        }
         catch (HttpRequestException)
         {
-            ErrorMessage = Text("دریافت فهرست مشتریان ممکن نشد؛ اتصال به سرور را بررسی کنید.", "Could not load customers. Check the Server connection.");
+            if (generation == customerRefreshGeneration)
+                ErrorMessage = Text("دریافت فهرست مشتریان ممکن نشد؛ اتصال به سرور را بررسی کنید.", "Could not load customers. Check the Server connection.");
         }
         catch (TaskCanceledException)
         {
-            ErrorMessage = Text("پاسخ جست‌وجوی مشتری دریافت نشد؛ وضعیت را تازه‌سازی کنید.", "Customer search timed out. Refresh before retrying.");
+            if (generation == customerRefreshGeneration)
+                ErrorMessage = Text("پاسخ جست‌وجوی مشتری دریافت نشد؛ وضعیت را تازه‌سازی کنید.", "Customer search timed out. Refresh before retrying.");
         }
     }
 
@@ -229,6 +239,7 @@ public sealed partial class SessionWorkflowViewModel
 
     private void ResetCustomerState()
     {
+        customerRefreshGeneration++;
         Customers.Clear();
         AvailableCustomers.Clear();
         SelectedCustomer = null;
@@ -246,6 +257,19 @@ public sealed partial class SessionWorkflowViewModel
         OnPropertyChanged(nameof(CustomerStatusSummaryText));
         OnPropertyChanged(nameof(CanReadCustomers));
         OnPropertyChanged(nameof(CanWriteCustomers));
+        RaiseCustomerCommands();
+    }
+
+    private void EnforceCustomerPermissions()
+    {
+        if (!CanReadCustomers)
+        {
+            customerRefreshGeneration++;
+            Customers.Clear();
+            AvailableCustomers.Clear();
+            SelectedManagedCustomer = null;
+            SelectedCustomer = null;
+        }
         RaiseCustomerCommands();
     }
 
