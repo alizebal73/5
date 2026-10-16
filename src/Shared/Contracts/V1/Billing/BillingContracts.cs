@@ -21,4 +21,21 @@ public sealed record CashCheckoutOutcomeResponse(
     long? AmountReceivedToman,
     long? ChangeGivenToman,
     DateTimeOffset IssuedAtUtc,
-    DateTimeOffset? PaidAtUtc);
+    DateTimeOffset? PaidAtUtc,
+    Guid? ReversalId = null,
+    DateTimeOffset? ReversedAtUtc = null,
+    string? ReversalReason = null,
+    Guid? ReversalLedgerEntryId = null);
+
+public sealed record CashSaleReversalRequest(
+    Guid PaymentId,
+    long ConfirmedAmountToman,
+    string Reason);
+
+public sealed record CashSaleReversalResponse(
+    Guid ReversalId,
+    Guid InvoiceId,
+    Guid PaymentId,
+    Guid LedgerEntryId,
+    long AmountToman,
+    DateTimeOffset ReversedAtUtc);

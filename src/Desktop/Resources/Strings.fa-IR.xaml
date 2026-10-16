@@ -68,4 +68,7 @@
   <system:String x:Key="Billing.ConfirmCashCheckout">مبلغ صورتحساب، وجه دریافتی و باقی‌مانده را بررسی کرده‌ام و ثبت پرداخت را تأیید می‌کنم.</system:String>
   <system:String x:Key="Billing.Checkout">ثبت پرداخت نقدی</system:String>
   <system:String x:Key="Billing.RecentCashCheckouts">آخرین پرداخت‌های ثبت‌شده (برای تطبیق پس از قطع ارتباط)</system:String>
+  <system:String x:Key="Billing.CashReversalReason">علت برگشت کامل فروش نقدی (الزامی)</system:String>
+  <system:String x:Key="Billing.ConfirmCashSaleReversal">صورتحساب و پرداخت را بررسی کرده‌ام و بازگرداندن مبلغ صورتحساب، نه کل وجه دریافتی، را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Billing.ReverseCashSale">برگشت کامل فروش نقدی</system:String>
 </ResourceDictionary>

@@ -26,10 +26,12 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand StartSessionCommand { get; }
     ICommand EndSessionCommand { get; }
     ICommand CheckoutCashCommand { get; }
+    ICommand ReverseCashSaleCommand { get; }
 
     bool CanManageTariffs { get; }
     bool CanOperateSessions { get; }
     bool CanCheckout { get; }
+    bool CanReverseCashSale { get; }
     bool CanUseWorkspace { get; }
     bool CanReadStations { get; }
     bool IsBusy { get; }
@@ -38,6 +40,10 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
     PendingInvoiceListItem? SelectedPendingInvoice { get; set; }
+    CashCheckoutOutcomeListItem? SelectedRecentCashCheckout { get; set; }
+    string CashSaleReversalReasonText { get; set; }
+    bool ConfirmCashSaleReversal { get; set; }
+    string CashSaleReversalSummaryText { get; }
 
     string TariffCode { get; set; }
     string TariffName { get; set; }

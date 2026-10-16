@@ -559,6 +559,71 @@ public sealed class SessionWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task Dedicated_cash_reverse_permission_can_reconcile_a_lost_reversal_response_without_refunding_twice()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-08", "Cash reversal PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var invoiceId = Guid.NewGuid();
+            var paymentId = Guid.NewGuid();
+            var ledgerId = Guid.NewGuid();
+            var paidAt = DateTimeOffset.UtcNow;
+            var outcome = new CashCheckoutOutcomeResponse(
+                invoiceId, Guid.NewGuid(), station.Id, "PC-STD", "PC Standard",
+                60_000L, TimeSpan.FromMinutes(30).Ticks, 30_000L,
+                InvoiceStatusContract.Paid, paymentId, ledgerId, 50_000L, 20_000L,
+                paidAt.AddMinutes(-30), paidAt);
+            var client = new FakeGameNetServerClient([station], []);
+            client.CompletedCashOutcomes.Add(outcome);
+            client.LoseNextCashSaleReversalResponseAfterCommit = true;
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingCashReverse);
+
+            await viewModel.RefreshAsync();
+
+            Assert.True(viewModel.CanReverseCashSale);
+            Assert.True(viewModel.CanUseWorkspace);
+            Assert.False(viewModel.CanCheckout);
+            Assert.Single(viewModel.RecentCashCheckouts);
+            viewModel.SelectedRecentCashCheckout = viewModel.RecentCashCheckouts.Single();
+            Assert.Contains("returns only the invoice amount: 30,000 Toman", viewModel.CashSaleReversalSummaryText);
+
+            viewModel.CashSaleReversalReasonText = "Customer requested full reversal";
+            viewModel.ConfirmCashSaleReversal = true;
+            Assert.True(viewModel.ReverseCashSaleCommand.CanExecute(null));
+
+            var statusTask = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains("Server confirms the reversal was already recorded", StringComparison.Ordinal));
+            viewModel.ReverseCashSaleCommand.Execute(null);
+            Assert.Contains("Server confirms the reversal was already recorded", await statusTask);
+
+            Assert.Equal(invoiceId, client.LastCashSaleReversalInvoiceId);
+            Assert.Equal(paymentId, client.LastCashSaleReversalRequest?.PaymentId);
+            Assert.Equal(30_000L, client.LastCashSaleReversalRequest?.ConfirmedAmountToman);
+            Assert.Equal("Customer requested full reversal", client.LastCashSaleReversalRequest?.Reason);
+            Assert.Single(client.CashSaleReversalIdempotencyKeys);
+            Assert.Equal(InvoiceStatusContract.Reversed, client.CompletedCashOutcomes.Single().Status);
+            Assert.NotNull(client.CompletedCashOutcomes.Single().ReversalLedgerEntryId);
+            Assert.Equal(30_000L, client.CompletedCashOutcomes.Single().AmountToman);
+            Assert.Equal(50_000L, client.CompletedCashOutcomes.Single().AmountReceivedToman);
+            Assert.Equal(20_000L, client.CompletedCashOutcomes.Single().ChangeGivenToman);
+            Assert.False(viewModel.ReverseCashSaleCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
     public async Task Operator_without_permissions_cannot_open_or_mutate_session_workspace()
     {
         var station = new StationResponse(
@@ -584,6 +649,7 @@ public sealed class SessionWorkflowViewModelTests
         Assert.False(viewModel.StartSessionCommand.CanExecute(null));
         Assert.False(viewModel.EndSessionCommand.CanExecute(null));
         Assert.False(viewModel.CheckoutCashCommand.CanExecute(null));
+        Assert.False(viewModel.ReverseCashSaleCommand.CanExecute(null));
 
         await viewModel.RefreshAsync();
         Assert.Empty(viewModel.PcStations);
@@ -656,6 +722,10 @@ public sealed class SessionWorkflowViewModelTests
         public List<SessionResponse> ActiveSessions { get; } = [];
         public List<InvoicePreviewResponse> PendingInvoices { get; } = [];
         public List<string> CheckoutIdempotencyKeys { get; } = [];
+        public List<string> CashSaleReversalIdempotencyKeys { get; } = [];
+        public Guid? LastCashSaleReversalInvoiceId { get; private set; }
+        public CashSaleReversalRequest? LastCashSaleReversalRequest { get; private set; }
+        public bool LoseNextCashSaleReversalResponseAfterCommit { get; set; }
         public Exception? NextStartException { get; set; }
         public bool FailNextCashCheckoutWithNetworkError { get; set; }
         public bool FailNextCashCheckoutWithTimeout { get; set; }
@@ -797,6 +867,47 @@ public sealed class SessionWorkflowViewModelTests
 
             return Task.FromResult(response);
         }
+        public Task<CashSaleReversalResponse> ReverseCashSaleAsync(
+            Guid invoiceId, CashSaleReversalRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastCashSaleReversalInvoiceId = invoiceId;
+            LastCashSaleReversalRequest = request;
+            CashSaleReversalIdempotencyKeys.Add(idempotencyKey);
+
+            var index = CompletedCashOutcomes.FindIndex(x => x.InvoiceId == invoiceId);
+            if (index < 0)
+                return Task.FromException<CashSaleReversalResponse>(new GameNetApiException("billing.invoice_not_found", 404));
+
+            var outcome = CompletedCashOutcomes[index];
+            if (outcome.Status != InvoiceStatusContract.Paid ||
+                outcome.PaymentId != request.PaymentId ||
+                outcome.AmountToman != request.ConfirmedAmountToman)
+                return Task.FromException<CashSaleReversalResponse>(new GameNetApiException("billing.reversal_confirmation_mismatch", 409));
+
+            var reversedAt = DateTimeOffset.UtcNow;
+            var reversalId = Guid.NewGuid();
+            var reversalLedgerId = Guid.NewGuid();
+            CompletedCashOutcomes[index] = outcome with
+            {
+                Status = InvoiceStatusContract.Reversed,
+                ReversalId = reversalId,
+                ReversedAtUtc = reversedAt,
+                ReversalReason = request.Reason,
+                ReversalLedgerEntryId = reversalLedgerId
+            };
+
+            var response = new CashSaleReversalResponse(
+                reversalId, invoiceId, request.PaymentId, reversalLedgerId, request.ConfirmedAmountToman, reversedAt);
+            if (LoseNextCashSaleReversalResponseAfterCommit)
+            {
+                LoseNextCashSaleReversalResponseAfterCommit = false;
+                return Task.FromException<CashSaleReversalResponse>(
+                    new HttpRequestException("Simulated connection loss after a committed cash-sale reversal."));
+            }
+
+            return Task.FromResult(response);
+        }
+
         public Task LogoutAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public void ClearSession() { }
     }

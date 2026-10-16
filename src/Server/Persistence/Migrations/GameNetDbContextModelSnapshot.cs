@@ -623,8 +623,8 @@ namespace GameNet.Server.Persistence.Migrations
                             t.HasCheckConstraint("ck_invoices_amount_positive", "amount_toman > 0");
                             t.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks IS NOT NULL AND elapsed_ticks > 0");
                             t.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
-                            t.HasCheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 2");
-                            t.HasCheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status = 2 AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");
+                            t.HasCheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status IN (2, 3) AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");
                         });
                 });
 
@@ -660,13 +660,37 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<Guid>("InvoiceId").HasColumnType("uuid").HasColumnName("invoice_id");
                     b.Property<Guid>("PaymentId").HasColumnType("uuid").HasColumnName("payment_id");
                     b.HasKey("Id").HasName("pk_billing_ledger_entries");
-                    b.HasIndex("InvoiceId").IsUnique().HasDatabaseName("ux_billing_ledger_invoice_id");
+                    b.HasIndex("InvoiceId").IsUnique().HasDatabaseName("ux_billing_ledger_invoice_cash_sale").HasFilter("entry_type = 1");
+                    b.HasIndex("InvoiceId").IsUnique().HasDatabaseName("ux_billing_ledger_invoice_cash_reversal").HasFilter("entry_type = 2");
                     b.HasIndex("OccurredAtUtc").HasDatabaseName("ix_billing_ledger_occurred_at_utc");
-                    b.HasIndex("PaymentId").IsUnique().HasDatabaseName("ux_billing_ledger_payment_id");
+                    b.HasIndex("PaymentId").IsUnique().HasDatabaseName("ux_billing_ledger_payment_cash_sale").HasFilter("entry_type = 1");
+                    b.HasIndex("PaymentId").IsUnique().HasDatabaseName("ux_billing_ledger_payment_cash_reversal").HasFilter("entry_type = 2");
                     b.ToTable("billing_ledger_entries", null, t =>
                         {
                             t.HasCheckConstraint("ck_billing_ledger_amount_positive", "amount_toman > 0");
-                            t.HasCheckConstraint("ck_billing_ledger_entry_type", "entry_type = 1");
+                            t.HasCheckConstraint("ck_billing_ledger_entry_type", "entry_type IN (1, 2)");
+                        });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.CashSaleReversal", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<long>("AmountToman").HasColumnType("bigint").HasColumnName("amount_toman");
+                    b.Property<string>("CorrelationId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("correlation_id");
+                    b.Property<Guid>("InvoiceId").HasColumnType("uuid").HasColumnName("invoice_id");
+                    b.Property<string>("IdempotencyKey").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)").HasColumnName("idempotency_key");
+                    b.Property<Guid>("PaymentId").HasColumnType("uuid").HasColumnName("payment_id");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(256).HasColumnType("character varying(256)").HasColumnName("reason");
+                    b.Property<Guid>("ReversedByOperatorId").HasColumnType("uuid").HasColumnName("reversed_by_operator_id");
+                    b.Property<DateTimeOffset>("ReversedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("reversed_at_utc");
+                    b.HasKey("Id").HasName("pk_cash_sale_reversals");
+                    b.HasIndex("InvoiceId").IsUnique().HasDatabaseName("ux_cash_sale_reversals_invoice_id");
+                    b.HasIndex("PaymentId").IsUnique().HasDatabaseName("ux_cash_sale_reversals_payment_id");
+                    b.HasIndex("ReversedAtUtc").HasDatabaseName("ix_cash_sale_reversals_reversed_at_utc");
+                    b.ToTable("cash_sale_reversals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cash_sale_reversals_amount_positive", "amount_toman > 0");
+                            t.HasCheckConstraint("ck_cash_sale_reversals_reason_valid", "char_length(btrim(reason)) >= 3 AND btrim(reason) !~ '[[:cntrl:]]'");
                         });
                 });
 
@@ -716,6 +740,16 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasConstraintName("fk_billing_ledger_entries_payments_payment_id");
                 });
 
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.CashSaleReversal", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Invoice", null).WithMany()
+                        .HasForeignKey("InvoiceId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_cash_sale_reversals_invoices_invoice_id");
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Payment", null).WithMany()
+                        .HasForeignKey("PaymentId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_cash_sale_reversals_payments_payment_id");
+                });
+
             modelBuilder.Entity("GameNet.Server.Modules.Stations.Domain.Station", b =>
                 {
                     b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
@@ -733,5 +767,6 @@ namespace GameNet.Server.Persistence.Migrations
 
 #pragma warning restore 612, 618
         }
+
     }
 }

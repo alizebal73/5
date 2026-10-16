@@ -1,6 +1,6 @@
 # Action Catalog — GameNet 5
 
-**Status:** Current Identity/Station operations plus the partially implemented PC Session-to-cash path on Integration, snapshot 2026-10-15. Slice 1 remains unaccepted under [Issue #98](https://github.com/alizebal73/5/issues/98); this catalog is not a claim that the complete product or release is ready.
+**Status:** Current Identity/Station operations, the partially implemented PC Session-to-cash path and the full cash-sale reversal candidate under PR #120 on Integration, snapshot 2026-10-16. Slice 1 remains unaccepted under [Issue #98](https://github.com/alizebal73/5/issues/98); the reversal candidate is not approved for real-money use. This catalog is not a claim that the complete product or release is ready.
 
 Use the live Integration branch and relevant PR/Actions evidence when verifying code. This durable catalog deliberately avoids a mutable branch SHA.
 
@@ -10,7 +10,7 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - A Desktop operation uses `IGameNetServerClient` and typed Shared V1 contracts. Desktop/Agent never connect directly to PostgreSQL.
 - Mutations use the Server's stable error contract, actor/correlation data, idempotency and Audit behavior as listed below. Never invent a local success path or assume a timeout means the mutation failed.
 - `Desktop UI: yes` means an action is reachable in the current WPF shell. `Server API only` means the API exists, but no operator-management screen/command is currently wired in this Desktop shell.
-- This catalog covers current Identity/Station operations plus the partial Slice 1 Session-to-cash implementation in section 3. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments/refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
+- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, and the candidate full cash-sale reversal action. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments, tender correction, partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
 
 ## 1. Current Desktop Identity operations
 
@@ -199,5 +199,14 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **Permission / preconditions:** authenticated Operator with Server-side `billing.write`; received cash must cover the full invoice and expected Session version must match.
 - **Idempotency / concurrency:** stable key/request fingerprint plus one transaction spanning invoice, cash payment, ledger, Audit and Session settlement; replay must not append duplicate payment or ledger entries.
 - **Audit:** Server records checkout, Session-paid and ledger-entry transitions.
-- **UI entry / states:** `CheckoutCashCommand`; timeout requires refresh/reconciliation or same-key retry, not optimistic success. Card payments, Wallet, Debt, split allocation and refunds/reversals are outside this slice.
+- **UI entry / states:** `CheckoutCashCommand`; timeout requires refresh/reconciliation or same-key retry, not optimistic success. Checkout remains cash-only; reversals are a separate operation and never run through this command.
 - **Evidence:** `BillingService.CheckoutCashAsync`, `SessionSettlement.MarkPaidAsync`, billing/payment tests and `SessionWorkflowPostgresTests`.
+
+### `billing.cash-sale-reversal`
+- **Owner / outcome:** Billing; reverse one fully paid cash sale by the exact invoice amount applied. The original invoice amount, Payment, paid timestamp/operator and original `CashSale` ledger entry remain historical facts; the Invoice lifecycle becomes `Reversed`, and append-only reversal + typed compensating ledger records are added atomically.
+- **Contract:** `POST /api/v1/billing/invoices/{invoiceId}/cash-reversal`; `CashSaleReversalRequest → CashSaleReversalResponse`; required `Idempotency-Key`.
+- **Permission / preconditions:** authenticated Operator with the dedicated `billing.cash-reverse` permission. Server verifies a paid cash Payment, consistent original sale/ledger, matching Payment ID, exact confirmed invoice amount, and a mandatory 3–256 printable-character reason. Wallet/card payments and partial reversals are rejected/out of scope. Never refund gross tender or previously given change.
+- **Idempotency / concurrency:** shared `CommandMutationPipeline`, request fingerprint and transactional persistence; filtered unique indexes and a unique reversal record enforce at most one full reversal per invoice/payment under races. Same-intent retry replays the original response; changed intent conflicts.
+- **Audit:** reversal record, compensating ledger entry, invoice state and both Audit events share the same transaction. Original Payment/Ledger/Audit history is never edited or deleted.
+- **UI entry / states:** `ReverseCashSaleCommand` in the Session workflow WPF view. The operator selects a recent paid cash checkout, reviews the amount, enters a reason and explicitly confirms. If a response is lost, the command remains blocked until the durable Server outcome proves whether it committed; no optimistic success or blind second refund.
+- **Evidence / acceptance:** `BillingService.ReverseCashSaleAsync`, `CashSaleReversal`, migration `20261016100000_CashSaleReversal`, `CashSaleReversalTests`, `SessionWorkflowPostgresTests` and `SessionWorkflowViewModelTests`. PR #120 is a candidate; exact-head Quick/Foundation/Runtime checks, manual WPF acceptance and independent Invoice/Payment/Reversal/Ledger/Audit reconciliation remain required. Cash tender correction (fixing incorrect received/change facts) is a separate not-yet-implemented action.

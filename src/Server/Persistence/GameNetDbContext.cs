@@ -33,6 +33,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<BillingLedgerEntry> BillingLedgerEntries => Set<BillingLedgerEntry>();
+    public DbSet<CashSaleReversal> CashSaleReversals => Set<CashSaleReversal>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -74,6 +75,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
         modelBuilder.ApplyConfiguration(new InvoiceConfiguration());
         modelBuilder.ApplyConfiguration(new PaymentConfiguration());
         modelBuilder.ApplyConfiguration(new BillingLedgerEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new CashSaleReversalConfiguration());
     }
 
     private void RejectAuditMutation()
@@ -88,6 +90,12 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
             .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
         {
             throw new InvalidOperationException("BILLING_LEDGER_IS_APPEND_ONLY");
+        }
+
+        if (ChangeTracker.Entries<CashSaleReversal>()
+            .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException("CASH_SALE_REVERSAL_IS_APPEND_ONLY");
         }
     }
 }

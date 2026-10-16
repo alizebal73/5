@@ -68,4 +68,7 @@
   <system:String x:Key="Billing.ConfirmCashCheckout">I reviewed the amount due, cash received and change, and confirm recording this payment.</system:String>
   <system:String x:Key="Billing.Checkout">Record cash payment</system:String>
   <system:String x:Key="Billing.RecentCashCheckouts">Recent recorded cash payments (for reconnect/restart reconciliation)</system:String>
+  <system:String x:Key="Billing.CashReversalReason">Reason for full cash-sale reversal (required)</system:String>
+  <system:String x:Key="Billing.ConfirmCashSaleReversal">I checked the invoice/payment and confirm returning the invoice amount, not the gross cash tender.</system:String>
+  <system:String x:Key="Billing.ReverseCashSale">Reverse full cash sale</system:String>
 </ResourceDictionary>

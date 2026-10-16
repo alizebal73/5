@@ -276,20 +276,71 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(checkout.Value.PaymentId, checkoutReplay.Value.PaymentId);
                 Assert.Equal(checkout.Value.LedgerEntryId, checkoutReplay.Value.LedgerEntryId);
 
+                var reversalA = new CashSaleReversalCommand(
+                    ended.Value.InvoiceId, checkout.Value.PaymentId, 30_000L,
+                    "Test full cash-sale reversal", idempotencyPrefix + "reversal-a", billingActor);
+                var reversalB = reversalA with { IdempotencyKey = idempotencyPrefix + "reversal-b" };
+                await using var reverseDbA = CreateContext(connectionString);
+                await using var reverseDbB = CreateContext(connectionString);
+                var reverseBillingA = CreateBillingService(reverseDbA, clock);
+                var reverseBillingB = CreateBillingService(reverseDbB, clock);
+                var reversalAttempts = await Task.WhenAll(
+                    reverseBillingA.ReverseCashSaleAsync(reversalA, CancellationToken.None),
+                    reverseBillingB.ReverseCashSaleAsync(reversalB, CancellationToken.None))
+                    .WaitAsync(TimeSpan.FromSeconds(30));
+                Assert.Single(reversalAttempts, result => result.IsSuccess);
+                var winnerIndex = reversalAttempts[0].IsSuccess ? 0 : 1;
+                var winnerService = winnerIndex == 0 ? reverseBillingA : reverseBillingB;
+                var winnerCommand = winnerIndex == 0 ? reversalA : reversalB;
+                var reversal = reversalAttempts[winnerIndex].Value;
+                var failedAttempt = reversalAttempts[1 - winnerIndex];
+                Assert.False(failedAttempt.IsSuccess);
+                Assert.Contains(failedAttempt.Error.Code, new[] { "billing.sale_already_reversed", "billing.reversal_conflict" });
+                var replayedReversal = await winnerService.ReverseCashSaleAsync(winnerCommand, CancellationToken.None);
+                Assert.True(replayedReversal.IsSuccess);
+                Assert.Equal(reversal.ReversalId, replayedReversal.Value.ReversalId);
+
+                var reversalOnlyActor = billingActor with
+                {
+                    Permissions = new HashSet<string>([Permissions.BillingCashReverse], StringComparer.Ordinal)
+                };
+                var reversedOutcome = await billing.GetCashCheckoutOutcomeAsync(reversalOnlyActor, ended.Value.InvoiceId, CancellationToken.None);
+                Assert.True(reversedOutcome.IsSuccess, reversedOutcome.IsSuccess ? "" : reversedOutcome.Error.Code);
+                Assert.Equal(InvoiceStatusContract.Reversed, reversedOutcome.Value.Status);
+                Assert.Equal(reversal.ReversalId, reversedOutcome.Value.ReversalId);
+                Assert.Equal(reversal.LedgerEntryId, reversedOutcome.Value.ReversalLedgerEntryId);
+                Assert.Equal(30_000L, reversedOutcome.Value.AmountToman);
+                Assert.Equal(50_000L, reversedOutcome.Value.AmountReceivedToman);
+                Assert.Equal(20_000L, reversedOutcome.Value.ChangeGivenToman);
+
+                var recentOutcome = await billing.ListRecentCashCheckoutsAsync(reversalOnlyActor, CancellationToken.None);
+                Assert.True(recentOutcome.IsSuccess);
+                Assert.Contains(recentOutcome.Value, x => x.InvoiceId == ended.Value.InvoiceId &&
+                    x.Status == InvoiceStatusContract.Reversed && x.ReversalId == reversal.ReversalId);
+
+                // Original Payment and sale row remain immutable; the compensating ledger amount is positive.
+                db.ChangeTracker.Clear();
                 var session = await db.Sessions.SingleAsync(x => x.Id == started.Value.Id);
                 var invoice = await db.Invoices.SingleAsync(x => x.Id == ended.Value.InvoiceId);
                 var payment = await db.Payments.SingleAsync(x => x.InvoiceId == invoice.Id);
-                var ledger = await db.BillingLedgerEntries.SingleAsync(x => x.InvoiceId == invoice.Id);
+                var ledgerEntries = await db.BillingLedgerEntries.Where(x => x.InvoiceId == invoice.Id).ToArrayAsync();
+                var saleLedger = ledgerEntries.Single(x => x.EntryType == BillingLedgerEntryType.CashSale);
+                var reversalLedger = ledgerEntries.Single(x => x.EntryType == BillingLedgerEntryType.CashSaleReversal);
+                var reversalRow = await db.CashSaleReversals.SingleAsync(x => x.InvoiceId == invoice.Id);
                 Assert.Equal(SessionStatus.Paid, session.Status);
-                Assert.Equal(InvoiceStatus.Paid, invoice.Status);
+                Assert.Equal(InvoiceStatus.Reversed, invoice.Status);
                 Assert.Equal(PaymentMethod.Cash, payment.Method);
                 Assert.Equal(30_000L, payment.AmountAppliedToman);
                 Assert.Equal(50_000L, payment.AmountReceivedToman);
                 Assert.Equal(20_000L, payment.ChangeGivenToman);
-                Assert.Equal(BillingLedgerEntryType.CashSale, ledger.EntryType);
-                Assert.Equal(invoice.AmountToman, ledger.AmountToman);
+                Assert.Equal(BillingLedgerEntryType.CashSale, saleLedger.EntryType);
+                Assert.Equal(invoice.AmountToman, saleLedger.AmountToman);
+                Assert.Equal(BillingLedgerEntryType.CashSaleReversal, reversalLedger.EntryType);
+                Assert.Equal(invoice.AmountToman, reversalLedger.AmountToman);
+                Assert.Equal(reversal.ReversalId, reversalRow.Id);
                 Assert.Equal(1, await db.Payments.CountAsync(x => x.InvoiceId == invoice.Id));
-                Assert.Equal(1, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == invoice.Id));
+                Assert.Equal(2, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == invoice.Id));
+                Assert.Equal(1, await db.CashSaleReversals.CountAsync(x => x.InvoiceId == invoice.Id));
 
                 var audits = await db.AuditEntries.AsNoTracking()
                     .Where(x => x.CorrelationId == correlation)
@@ -300,6 +351,8 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Contains("billing.invoice_issued", audits);
                 Assert.Contains("billing.cash_checkout", audits);
                 Assert.Contains("billing.cash_ledger_entry", audits);
+                Assert.Contains("billing.cash_sale_reversal", audits);
+                Assert.Contains("billing.cash_sale_reversal_ledger_entry", audits);
             }
         }
         finally
@@ -417,7 +470,7 @@ public sealed class SessionWorkflowPostgresTests
 
     private static BillingActorContext BillingActor(Guid operatorId, string correlation) =>
         new(operatorId, correlation, "PostgreSQLTest",
-            new HashSet<string>([Permissions.BillingWrite], StringComparer.Ordinal));
+            new HashSet<string>([Permissions.BillingWrite, Permissions.BillingCashReverse], StringComparer.Ordinal));
 
     private static SessionService CreateService(GameNetDbContext db, IGameClock clock)
     {
@@ -469,6 +522,8 @@ public sealed class SessionWorkflowPostgresTests
             $"DELETE FROM audit_entries WHERE correlation_id = {correlation}");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM billing_ledger_entries WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM cash_sale_reversals WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(

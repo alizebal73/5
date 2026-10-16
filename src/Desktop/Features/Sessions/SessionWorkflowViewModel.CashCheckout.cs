@@ -222,11 +222,25 @@ public sealed partial class SessionWorkflowViewModel
 
     private static string FormatCashOutcomeDetailsDisplayText(CashCheckoutOutcomeResponse outcome)
     {
+        if (outcome.Status == InvoiceStatusContract.Reversed)
+        {
+            if (outcome.ReversalId is null || outcome.ReversedAtUtc is null ||
+                outcome.AmountReceivedToman is not long reversedReceived ||
+                outcome.ChangeGivenToman is not long reversedChange ||
+                outcome.PaymentId is null || outcome.LedgerEntryId is null)
+                return Text("سوابق برگشت نیازمند تطبیق است", "Reversal outcome requires reconciliation");
+
+            return Text(
+                $"برگشت کامل: {FormatToman(outcome.AmountToman)} تومان؛ دریافتی اولیه: {FormatToman(reversedReceived)}؛ باقی‌ماندهٔ اولیه: {FormatToman(reversedChange)} تومان",
+                $"Reversed in full: {FormatToman(outcome.AmountToman)} Toman; original received: {FormatToman(reversedReceived)}; original change: {FormatToman(reversedChange)} Toman");
+        }
+
         if (outcome.Status != InvoiceStatusContract.Paid ||
             outcome.AmountReceivedToman is not long received ||
             outcome.ChangeGivenToman is not long change ||
             outcome.PaymentId is null ||
-            outcome.LedgerEntryId is null)
+            outcome.LedgerEntryId is null ||
+            outcome.ReversalId is not null)
             return Text("نیازمند بررسی نتیجهٔ پرداخت", "Checkout outcome requires reconciliation");
 
         return Text(

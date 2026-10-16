@@ -43,7 +43,7 @@ public static class BillingEndpoints
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CashCheckoutOutcomeResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
-        }).RequireAuthorization(Permissions.BillingWrite);
+        });
 
         group.MapGet("/recent-cash-checkouts", async (
             IBillingService service,
@@ -57,7 +57,7 @@ public static class BillingEndpoints
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CashCheckoutOutcomeResponse[]>(result.Value.ToArray(), CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
-        }).RequireAuthorization(Permissions.BillingWrite);
+        });
 
         group.MapPost("/invoices/{invoiceId:guid}/cash", async (
             Guid invoiceId,
@@ -80,6 +80,25 @@ public static class BillingEndpoints
                 ? Results.Ok(new ApiEnvelope<CashCheckoutResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.BillingWrite);
+
+        group.MapPost("/invoices/{invoiceId:guid}/cash-reversal", async (
+            Guid invoiceId,
+            CashSaleReversalRequest request,
+            IBillingService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var command = new CashSaleReversalCommand(
+                invoiceId, request.PaymentId, request.ConfirmedAmountToman, request.Reason,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+            var result = await service.ReverseCashSaleAsync(command, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<CashSaleReversalResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.BillingCashReverse);
     }
 
     private static bool TryGetActor(HttpContext context, out BillingActorContext actor)
@@ -109,9 +128,11 @@ public static class BillingEndpoints
         {
             "billing.forbidden" => StatusCodes.Status403Forbidden,
             "billing.invoice_not_found" or "billing.session_not_found" => StatusCodes.Status404NotFound,
-            "billing.invoice_not_pending" or "billing.session_version_conflict" or "billing.session_not_ready" or
+            "billing.invoice_not_pending" or "billing.invoice_not_paid" or "billing.sale_already_reversed" or
+            "billing.reversal_conflict" or "billing.reversal_confirmation_mismatch" or
+            "billing.reversal_method_unsupported" or "billing.session_version_conflict" or "billing.session_not_ready" or
             "billing.checkout_conflict" or "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
-            "billing.cash_insufficient" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "billing.cash_insufficient" or "billing.reversal_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(
