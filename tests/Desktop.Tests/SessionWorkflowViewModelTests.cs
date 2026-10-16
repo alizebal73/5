@@ -10,6 +10,7 @@ using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Billing;
+using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Security;
@@ -980,6 +981,12 @@ public sealed class SessionWorkflowViewModelTests
         public Task<StationResponse> BindStationAgentAsync(Guid id, BindStationAgentRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<StationResponse> SetStationStatusAsync(Guid id, SetStationStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AgentCommandAcknowledgement> ProbeAgentHealthAsync(Guid stationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<CustomerResponse>>(Array.Empty<CustomerResponse>());
+        public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TariffResponse>>(tariffs
