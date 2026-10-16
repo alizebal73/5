@@ -25,7 +25,13 @@ public sealed record CashCheckoutOutcomeResponse(
     Guid? ReversalId = null,
     DateTimeOffset? ReversedAtUtc = null,
     string? ReversalReason = null,
-    Guid? ReversalLedgerEntryId = null);
+    Guid? ReversalLedgerEntryId = null,
+    long? EffectiveAmountReceivedToman = null,
+    long? EffectiveChangeGivenToman = null,
+    Guid? CashTenderCorrectionId = null,
+    int? CashTenderCorrectionVersion = null,
+    string? CashTenderCorrectionReason = null,
+    DateTimeOffset? CashTenderCorrectedAtUtc = null);
 
 public sealed record CashSaleReversalRequest(
     Guid PaymentId,
@@ -39,3 +45,21 @@ public sealed record CashSaleReversalResponse(
     Guid LedgerEntryId,
     long AmountToman,
     DateTimeOffset ReversedAtUtc);
+
+public sealed record CashTenderCorrectionRequest(
+    Guid PaymentId,
+    int ExpectedVersion,
+    long CorrectedAmountReceivedToman,
+    string Reason);
+
+public sealed record CashTenderCorrectionResponse(
+    Guid CorrectionId,
+    Guid InvoiceId,
+    Guid PaymentId,
+    int Version,
+    long PreviousAmountReceivedToman,
+    long PreviousChangeGivenToman,
+    long CorrectedAmountReceivedToman,
+    long CorrectedChangeGivenToman,
+    string Reason,
+    DateTimeOffset CorrectedAtUtc);
