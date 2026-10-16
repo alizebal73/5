@@ -17,7 +17,7 @@ public sealed class CustomerSessionAccess(GameNetDbContext db) : ICustomerSessio
     {
         var customer = await db.Customers.AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == customerId && x.IsActive, cancellationToken);
-        return customer is null ? null : new CustomerReference(customer.Id, customer.Code);
+        return customer is null ? null : new CustomerReference(customer.Id, customer.Code, customer.IsBlocked);
     }
 
     public async Task<CustomerReference> CreateWalkInAsync(

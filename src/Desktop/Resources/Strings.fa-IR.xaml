@@ -83,4 +83,24 @@
   <system:String x:Key="Session.TimingRecoveryReason">مدرک تطبیق / علت بازیابی (الزامی)</system:String>
   <system:String x:Key="Session.ConfirmTimingRecovery">مدت بازی را مستقل بررسی کرده‌ام و این بازیابی ثبت‌شونده در سوابق را تأیید می‌کنم.</system:String>
   <system:String x:Key="Session.TimingRecoverySubmit">تطبیق زمان و صدور صورتحساب</system:String>
+  <system:String x:Key="Customer.Section">مدیریت مشتریان</system:String>
+  <system:String x:Key="Customer.New">مشتری جدید</system:String>
+  <system:String x:Key="Customer.Search">جست‌وجو در کد، نام، لقب یا شماره</system:String>
+  <system:String x:Key="Customer.SearchButton">جست‌وجو / تازه‌سازی</system:String>
+  <system:String x:Key="Customer.IncludeInactive">نمایش مشتریان غیرفعال و مسدود</system:String>
+  <system:String x:Key="Customer.SelectForSession">مشتری برای Session (خالی = مشتری گذری)</system:String>
+  <system:String x:Key="Customer.SessionSearch">جست‌وجوی مشتری برای Session با کد، نام، لقب یا موبایل</system:String>
+  <system:String x:Key="Customer.SessionSearchButton">جست‌وجوی مشتری Session</system:String>
+  <system:String x:Key="Customer.WalkInHint">اگر مشتری انتخاب نشود، Server هویت مشتری گذری می‌سازد.</system:String>
+  <system:String x:Key="Customer.UseWalkIn">استفاده از مشتری گذری</system:String>
+  <system:String x:Key="Customer.Code">کد مشتری</system:String>
+  <system:String x:Key="Customer.Name">نام و نام خانوادگی</system:String>
+  <system:String x:Key="Customer.Nickname">لقب / نام نمایشی</system:String>
+  <system:String x:Key="Customer.Phone">شمارهٔ تماس (اختیاری)</system:String>
+  <system:String x:Key="Customer.Create">ثبت مشتری</system:String>
+  <system:String x:Key="Customer.Update">ذخیرهٔ تغییرات</system:String>
+  <system:String x:Key="Customer.StatusReason">علت تغییر وضعیت (الزامی)</system:String>
+  <system:String x:Key="Customer.Activate">فعال‌سازی</system:String>
+  <system:String x:Key="Customer.Deactivate">غیرفعال‌سازی</system:String>
+  <system:String x:Key="Customer.Block">مسدودسازی</system:String>
 </ResourceDictionary>

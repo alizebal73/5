@@ -9,6 +9,7 @@ using GameNet.Desktop.Features.Identity;
 using GameNet.Desktop.Features.Sessions;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Api;
+using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Tariffs;
 using Xunit;
@@ -224,6 +225,9 @@ public sealed class DesktopBindingAndPasswordContractTests
         var bindingPath = match.Success ? match.Groups[1].Value.Trim() : string.Empty;
         var memberName = bindingPath.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
 
+        if (string.Equals(memberName, "Customers", StringComparison.Ordinal) ||
+            string.Equals(memberName, "AvailableCustomers", StringComparison.Ordinal))
+            return typeof(CustomerResponse);
         if (string.Equals(memberName, "Tariffs", StringComparison.Ordinal))
             return typeof(TariffResponse);
         if (string.Equals(memberName, "ActiveSessions", StringComparison.Ordinal))

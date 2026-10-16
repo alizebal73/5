@@ -1,6 +1,6 @@
 # Action Catalog — GameNet 5
 
-**Status:** Current Identity/Station operations, the partially implemented PC Session-to-cash path, and full cash-sale reversal integrated into `integration/runtime-operator-v1` by PR #120 at merge SHA `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`, snapshot 2026-10-16. Slice 1 remains unaccepted under [Issue #98](https://github.com/alizebal73/5/issues/98); cash-sale reversal is not approved for real-money use. This catalog is not a claim that the complete product or release is ready.
+**Status:** Customer profile core is implemented on candidate branch `feature/customers-core-20261016`; exact-head CI and protected PR review remain pending. Current Identity/Station actions and the partial PC Session-to-cash flow remain on Integration. Slice 1 is not accepted under [Issue #98](https://github.com/alizebal73/5/issues/98); cash reversal is not approved for real-money use.
 
 Use the live Integration branch and relevant PR/Actions evidence when verifying code. This durable catalog deliberately avoids a mutable branch SHA.
 
@@ -106,7 +106,41 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - **UI entry / states:** `AgentHealthProbeCommand`; disabled for non-PC/unbound station; offline/timeout/denied/command rejection and confirmed acknowledgement followed by station re-read.
 - **Evidence:** `StationBoardViewModel`, `StationAgentHealthService`, `StationEndpoints`, `StationBoardPermissionTests`.
 
-## 3. Existing Identity Server operations not yet exposed in current Desktop
+## 3. Customer profile core
+
+### `customers.search-list`
+- **Owner / outcome:** Customers; return registered-customer profiles for management and Session selection.
+- **Contract:** `GET /api/v1/customers?query={query}&includeInactive={bool}&take={1..100}` → `CustomerResponse[]`.
+- **Permission / preconditions:** authenticated Operator with Server-side `customers.read`; query length is limited to 80 and results are capped at 100. Walk-in identities are excluded from profile management.
+- **Idempotency / Audit:** read-only; no mutation key or Audit.
+- **UI entry / states:** Customer manager search/refresh; only Active customers are offered for a new Session. Empty, denied, timeout and offline states do not create a customer.
+- **Evidence:** CustomerEndpoints, CustomerManagementService, GameNetServerClient.GetCustomersAsync and customer resource/binding tests.
+
+### `customers.create`
+- **Owner / outcome:** Customers; create a registered profile with unique code, display name, optional nickname and optional telephone.
+- **Contract:** `POST /api/v1/customers` → `CustomerResponse`; `Idempotency-Key` required.
+- **Permission / preconditions:** authenticated Operator and Server-side `customers.write`; the Server validates normalized code/name/nickname/phone and uniqueness.
+- **Idempotency / Audit:** shared transactional mutation pipeline and request fingerprint; success writes `customers.create` Audit. Reconcile/search after an ambiguous transport failure.
+- **UI entry / states:** Customer manager create command; code conflict, invalid profile, denied and unknown-response states are localized.
+- **Evidence:** Customer domain and opt-in PostgreSQL customer management tests.
+
+### `customers.update-profile`
+- **Owner / outcome:** Customers; edit display name, nickname and phone without changing customer identity/code or financial history.
+- **Contract:** `PUT /api/v1/customers/{id}`; `ExpectedVersion` and `Idempotency-Key` required.
+- **Permission / preconditions:** authenticated Operator and Server-side `customers.write`; registered customer must exist and the expected version must match.
+- **Audit / concurrency:** before/after Audit deliberately excludes phone and nickname contact details; stale writes fail with `customers.version_conflict`.
+- **UI entry / states:** select a registered customer, edit profile and save; reconcile an unknown write result before a new mutation.
+- **Evidence:** CustomerManagementService, domain version regression and PostgreSQL tests.
+
+### `customers.set-status`
+- **Owner / outcome:** Customers; activate, deactivate or block a registered profile.
+- **Contract:** `PUT /api/v1/customers/{id}/status`; expected version, 3–256 character reason and `Idempotency-Key` are required.
+- **Permission / preconditions:** authenticated Operator and Server-side `customers.write`; Walk-in identities cannot be changed through customer management.
+- **Audit / concurrency:** change is transactional, version-checked and audited with reason. Blocked customers are rejected by Session start; inactive customers cannot be selected for a new Session.
+- **UI entry / states:** explicit Activate, Deactivate and Block commands; status reason is mandatory.
+- **Evidence:** CustomerManagementService, SessionService blocked-customer policy and opt-in PostgreSQL tests.
+
+## 4. Existing Identity Server operations not yet exposed in current Desktop
 
 The endpoints below exist in the current Server, but this initial Desktop shell has no operator-management screen or command wired to them. Do not add a button for any of these until the associated requirement/vertical slice, typed ViewModel command, UI states, tests and exact-SHA evidence are ready.
 
@@ -121,21 +155,7 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 | `identity.roles.create` | `POST /api/v1/identity/roles` → role summary | `identity.roles.manage` | `Idempotency-Key`; reason required; mutation Audit | Not wired in current Desktop |
 | `identity.roles.update-permissions` | `PUT /api/v1/identity/roles/{id}/permissions` → role summary | `identity.roles.manage` | `Idempotency-Key`; reason required; before/after permissions in Audit | Not wired in current Desktop |
 
-## 4. Cross-cutting error and permission rules
-
-- Station list and health probe require `stations.read`; station mutation requires `stations.operate`. The Server checks these; UI `CanExecute` never grants authority.
-- Current station mutation typed error codes include `stations.forbidden`, `stations.invalid`, `stations.code_exists`, `stations.not_found`, `stations.agent_not_provisioned`, `stations.agent_not_applicable`, `stations.agent_not_bound`, `stations.device_already_bound`, `stations.version_conflict`, `stations.invalid_transition`, `idempotency.required`, `idempotency.in_flight`, `idempotency.key_reused` and `security.https_required`.
-- Login's current unauthenticated response normalizes invalid credentials, disabled accounts and locked accounts to avoid account-state disclosure; treat any client message as presentation, not as a second authority.
-- The current Windows shell uses inherited `LoginViewModel` DataContext for both shell and StationBoard View. The View has no direct database access, no business code-behind, and no invented success path.
-
-## 5. Verification evidence and future updates
-
-- View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
-- Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
-- For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
-- **Catalog completeness is intentionally limited** to current Identity/Station operations and the partial Slice 1 Session-to-cash actions in section 3. Future Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
-
-## 3. Partially implemented Slice 1 PC hourly Session-to-cash
+## 5. Partially implemented Slice 1 PC hourly Session-to-cash
 
 **Acceptance boundary:** This path is present in Integration but remains partial and is **not accepted as a complete feature**; see [Issue #98](https://github.com/alizebal73/5/issues/98). It supports fixed-hourly PC tariffs, a generated Walk-in customer when no customer is selected, Active → PendingSettlement → Paid, invoice creation and cash-only checkout. Fractional Toman amounts are rounded upward to the next whole Toman. Timing/restart semantics, deliberate cash entry, recovery after a committed-but-unacknowledged checkout, correction/reversal semantics, Agent-offline policy, full manual WPF acceptance and independent database reconciliation remain open. Pause/resume, transfer, prepaid/free time, wallet/debt, card payments, refunds and PS5/foosball billing are out of scope for this slice.
 
@@ -210,3 +230,18 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **Audit:** reversal record, compensating ledger entry, invoice state and both Audit events share the same transaction. Original Payment/Ledger/Audit history is never edited or deleted.
 - **UI entry / states:** `ReverseCashSaleCommand` in the Session workflow WPF view. The operator selects a recent paid cash checkout, reviews the amount, enters a reason and explicitly confirms. If a response is lost, the command remains blocked until the durable Server outcome proves whether it committed; no optimistic success or blind second refund.
 - **Evidence / acceptance:** `BillingService.ReverseCashSaleAsync`, `CashSaleReversal`, migration `20261016100000_CashSaleReversal`, `CashSaleReversalTests`, `SessionWorkflowPostgresTests` and `SessionWorkflowViewModelTests`. PR #120 was squash-merged to `integration/runtime-operator-v1` at merge SHA `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`. Its exact PR head `ad92960382088872b1da0441241f4d71ff3603f9` passed Quick Validation, Full Foundation (PostgreSQL, backup/restore, Desktop and Agent runtime certification), and the Runtime LAN Smoke Payload artifact build. Post-merge Quick Validation passed on the merge SHA. This action remains unaccepted for operational use until manual WPF acceptance/recovery testing and independent Invoice/Payment/Reversal/Ledger/Audit reconciliation are recorded. Cash tender correction remains a separate not-yet-implemented action.
+
+## 6. Cross-cutting error and permission rules
+
+- Station list and health probe require `stations.read`; station mutation requires `stations.operate`. The Server checks these; UI `CanExecute` never grants authority.
+- Current station mutation typed error codes include `stations.forbidden`, `stations.invalid`, `stations.code_exists`, `stations.not_found`, `stations.agent_not_provisioned`, `stations.agent_not_applicable`, `stations.agent_not_bound`, `stations.device_already_bound`, `stations.version_conflict`, `stations.invalid_transition`, `idempotency.required`, `idempotency.in_flight`, `idempotency.key_reused` and `security.https_required`.
+- Login's current unauthenticated response normalizes invalid credentials, disabled accounts and locked accounts to avoid account-state disclosure; treat any client message as presentation, not as a second authority.
+- The current Windows shell uses inherited `LoginViewModel` DataContext for both shell and StationBoard View. The View has no direct database access, no business code-behind, and no invented success path.
+
+## 7. Verification evidence and future updates
+
+- View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
+- Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
+- For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
+- **Catalog completeness is intentionally limited** to current Identity/Station actions, Customer profile core in section 3, and the partial Slice 1 Session-to-cash actions in section 4. Customer PIN/login, Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
+

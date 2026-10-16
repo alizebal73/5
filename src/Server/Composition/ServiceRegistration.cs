@@ -15,6 +15,7 @@ using GameNet.Server.Modules.Stations.Application;
 using GameNet.Server.Modules.Sessions.Application;
 using GameNet.Server.Modules.Tariffs.Application;
 using GameNet.Server.Modules.Customers.Contracts;
+using GameNet.Server.Modules.Customers.Application;
 using GameNet.Server.Modules.Customers.Infrastructure;
 using GameNet.Server.Modules.Stations.Contracts;
 using GameNet.Server.Modules.Stations.Infrastructure;
@@ -72,6 +73,7 @@ public static class ServiceRegistration
         services.AddScoped<IStationRepository, EfStationRepository>();
         services.AddScoped<StationService>();
         services.AddScoped<ICustomerSessionAccess, CustomerSessionAccess>();
+        services.AddScoped<ICustomerManagementService, CustomerManagementService>();
         services.AddScoped<IStationSessionAccess, StationSessionAccess>();
         services.AddScoped<ITariffSessionAccess, TariffSessionAccess>();
         services.AddScoped<IBillingInvoiceWriter, BillingInvoiceWriter>();

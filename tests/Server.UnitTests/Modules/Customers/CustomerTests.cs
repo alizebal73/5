@@ -36,6 +36,52 @@ public sealed class CustomerTests
     }
 
     [Fact]
+    public void Registered_profile_normalizes_phone_digits_and_optional_fields()
+    {
+        var customer = Customer.CreateRegistered(
+            Guid.NewGuid(), "c-010", " Test Person ", DateTimeOffset.UtcNow, "  Player  ", "+۹۸۹۱۲۱۲۳۴۵۶۷");
+        Assert.Equal("C-010", customer.Code);
+        Assert.Equal("Test Person", customer.DisplayName);
+        Assert.Equal("Player", customer.Nickname);
+        Assert.Equal("+989121234567", customer.PhoneNumber);
+        Assert.Equal(CustomerStatus.Active, customer.Status);
+    }
+
+    [Fact]
+    public void Profile_updates_increment_version_only_when_values_change_and_status_is_explicit()
+    {
+        var customer = Customer.CreateRegistered(
+            Guid.NewGuid(), "C-011", "Test Person", DateTimeOffset.UtcNow, "Player", "09121234567");
+        var initialVersion = customer.Version;
+        customer.UpdateProfile("Test Person", "Player", "09121234567");
+        Assert.Equal(initialVersion, customer.Version);
+        customer.UpdateProfile("Updated Person", "P2", "09121234568");
+        Assert.Equal(initialVersion + 1, customer.Version);
+        Assert.Equal("Updated Person", customer.DisplayName);
+        Assert.Equal("P2", customer.Nickname);
+        customer.SetStatus(CustomerStatus.Blocked);
+        Assert.True(customer.IsActive);
+        Assert.True(customer.IsBlocked);
+        Assert.Equal(CustomerStatus.Blocked, customer.Status);
+        var blockedVersion = customer.Version;
+        customer.SetStatus(CustomerStatus.Blocked);
+        Assert.Equal(blockedVersion, customer.Version);
+        customer.SetStatus(CustomerStatus.Inactive);
+        Assert.False(customer.IsActive);
+        Assert.False(customer.IsBlocked);
+        Assert.Equal(CustomerStatus.Inactive, customer.Status);
+    }
+
+    [Fact]
+    public void Registered_profile_rejects_invalid_phone_and_walkins_cannot_be_blocked()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Customer.CreateRegistered(Guid.NewGuid(), "C-012", "Test Person", DateTimeOffset.UtcNow, phoneNumber: "12abc"));
+        var customer = Customer.CreateWalkIn(Guid.NewGuid(), DateTimeOffset.UtcNow);
+        Assert.Throws<InvalidOperationException>(() => customer.SetStatus(CustomerStatus.Blocked));
+    }
+
+    [Fact]
     public void Walk_in_profile_cannot_be_renamed_and_deactivation_is_idempotent()
     {
         var customer = Customer.CreateWalkIn(Guid.NewGuid(), DateTimeOffset.UtcNow);

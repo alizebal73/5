@@ -10,6 +10,7 @@ using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Sessions;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Billing;
+using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Security;
@@ -86,6 +87,80 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+
+    [Fact]
+    public async Task Start_session_submits_the_selected_registered_customer_id()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-CUS-01", "Customer Test PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-CUS", "Customer Test Tariff", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var customer = new CustomerResponse(
+                Guid.NewGuid(), "C-TEST-01", "Test Player", "Player", "09121234567",
+                CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.Customers.Add(customer);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead or Permissions.SessionsOperate or Permissions.CustomersRead);
+
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.AvailableCustomers);
+            viewModel.SelectedCustomer = Assert.Single(viewModel.AvailableCustomers);
+            viewModel.SelectedStation = station;
+            viewModel.SelectedTariff = tariff;
+
+            // Manager searches must not remove a valid customer from the independent
+            // Session picker or silently alter the identity used by StartSession.
+            viewModel.CustomerSearchText = "no such customer";
+            viewModel.SearchCustomersCommand.Execute(null);
+            Assert.Empty(viewModel.Customers);
+            Assert.Contains(viewModel.AvailableCustomers, x => x.Id == customer.Id);
+            Assert.Equal(customer.Id, viewModel.SelectedCustomer?.Id);
+
+            // The dedicated Session picker can search older customers independently
+            // of the manager filter and resolves a concrete Server-owned customer ID.
+            viewModel.SessionCustomerSearchText = "C-TEST-01";
+            viewModel.SearchSessionCustomersCommand.Execute(null);
+            Assert.Single(viewModel.AvailableCustomers);
+            Assert.Equal(customer.Id, Assert.Single(viewModel.AvailableCustomers).Id);
+            Assert.Equal(customer.Id, viewModel.SelectedCustomer?.Id);
+
+            var startStatus = WaitForStatusAsync(
+                viewModel, message => message.Contains("customer C-TEST-01", StringComparison.Ordinal));
+            Assert.True(viewModel.StartSessionCommand.CanExecute(null));
+            viewModel.StartSessionCommand.Execute(null);
+            await client.StartRequestReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.NotNull(client.LastStartRequest);
+            Assert.Equal(customer.Id, client.LastStartRequest!.CustomerId);
+            Assert.False(string.IsNullOrWhiteSpace(client.LastStartIdempotencyKey));
+
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, customer.Id, tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman,
+                Guid.NewGuid(), DateTimeOffset.UtcNow, null, null, null, null,
+                SessionStatusContract.Active, 1);
+            client.ActiveSessions.Add(session);
+            client.StartSessionCompletion.SetResult(session);
+
+            Assert.Contains("C-TEST-01", await startStatus);
+            Assert.Equal(session.Id, viewModel.SelectedActiveSession?.Session.Id);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
 
     [Fact]
     public async Task Operator_view_model_completes_start_end_invoice_selection_and_cash_checkout_journey()
@@ -980,6 +1055,28 @@ public sealed class SessionWorkflowViewModelTests
         public Task<StationResponse> BindStationAgentAsync(Guid id, BindStationAgentRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<StationResponse> SetStationStatusAsync(Guid id, SetStationStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AgentCommandAcknowledgement> ProbeAgentHealthAsync(Guid stationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public List<CustomerResponse> Customers { get; } = [];
+
+        public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default)
+        {
+            IEnumerable<CustomerResponse> rows = Customers;
+            if (!includeInactive)
+                rows = rows.Where(x => x.Status == CustomerStatusContract.Active);
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var term = query.Trim();
+                rows = rows.Where(x =>
+                    x.Code.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    (x.DisplayName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (x.Nickname?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (x.PhoneNumber?.Contains(term, StringComparison.Ordinal) ?? false));
+            }
+            return Task.FromResult<IReadOnlyList<CustomerResponse>>(rows.Take(100).ToArray());
+        }
+        public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TariffResponse>>(tariffs

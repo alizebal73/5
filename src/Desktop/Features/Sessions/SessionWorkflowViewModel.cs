@@ -44,6 +44,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
             SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
+            (SelectedCustomer is null || SelectedCustomer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active) &&
             SelectedStation is not null &&
             !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
             !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
@@ -69,6 +70,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             correctedReceived != (selected.Outcome.EffectiveAmountReceivedToman ?? selected.Outcome.AmountReceivedToman) &&
             IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
             ConfirmCashTenderCorrection);
+        InitializeCustomerCommands();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -90,7 +92,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public bool CanCheckout => hasPermission(Permissions.BillingWrite);
     public bool CanReverseCashSale => hasPermission(Permissions.BillingCashReverse);
     public bool CanCorrectCashTender => hasPermission(Permissions.BillingCashTenderCorrect);
-    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender;
+    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender || CanReadCustomers || CanWriteCustomers;
     public bool CanReadStations => hasPermission(Permissions.StationsRead);
 
     public StationResponse? SelectedStation
@@ -345,7 +347,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 SelectedRecentCashCheckout = null;
             }
 
+            await RefreshCustomersAsync();
             OnPropertyChanged(nameof(CanManageTariffs));
+            OnPropertyChanged(nameof(CanReadCustomers));
+            OnPropertyChanged(nameof(CanWriteCustomers));
             OnPropertyChanged(nameof(CanOperateSessions));
             OnPropertyChanged(nameof(CanCheckout));
             OnPropertyChanged(nameof(CanReverseCashSale));
@@ -394,6 +399,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
+        EnforceCustomerPermissions();
     }
 
     public void Reset()
@@ -422,6 +428,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         TimingRecoveryReasonText = string.Empty;
         ConfirmTimingRecovery = false;
         timingRecoveryRequiredSessionId = null;
+        ResetCustomerState();
         OnPropertyChanged(nameof(CanRecoverSessionTiming));
         RaiseCommands();
         ErrorMessage = string.Empty;
@@ -474,19 +481,18 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         var stationId = SelectedStation.Id;
         var stationCode = SelectedStation.Code;
         var tariffId = SelectedTariff.Id;
-        var fingerprint = $"{stationId:D}|{tariffId:D}|walk-in";
+        var (customerId, customerCode, fingerprint) = BuildSessionStartContext(stationId, tariffId);
         var key = GetKey("session.start", fingerprint);
         BeginBusy();
         ErrorMessage = string.Empty;
         try
         {
             var session = await api.StartSessionAsync(
-                new StartSessionRequest(stationId, tariffId, null), key);
+                new StartSessionRequest(stationId, tariffId, customerId), key);
             pendingKeys.Remove("session.start");
             await RefreshAsync();
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
-            StatusMessage = Text($"Session برای {stationCode} شروع شد. کنترل قفل PC هنوز جداگانه در حال امکان‌سنجی است.",
-                $"Session started for {stationCode}. PC lock/unlock control is not included yet.");
+            StatusMessage = SessionStartedMessage(stationCode, customerCode);
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
@@ -628,6 +634,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.timing_recovery_not_required" => Text("پیوستگی زمان معتبر است؛ از پایان عادی Session استفاده کنید.", "Timing continuity is valid; use the normal End Session command."),
         "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
         "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
+        "sessions.customer_blocked" => Text("این مشتری مسدود است و نمی‌تواند Session جدیدی شروع کند.", "This customer is blocked and cannot start a new Session."),
         "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
         "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
         "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
@@ -673,6 +680,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReconcileSessionTimingCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        RaiseCustomerCommands();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)

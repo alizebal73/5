@@ -96,6 +96,8 @@ public sealed class SessionService(
                         : await customers.CreateWalkInAsync(clock.UtcNow, token);
                     if (customer is null)
                         return Fail<SessionResponse>("sessions.customer_not_found", "Active customer was not found.");
+                    if (customer.IsBlocked)
+                        return Fail<SessionResponse>("sessions.customer_blocked", "Blocked customers cannot start a Session.");
 
                     GameClockSnapshot startSnapshot;
                     try

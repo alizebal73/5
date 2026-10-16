@@ -83,4 +83,24 @@
   <system:String x:Key="Session.TimingRecoveryReason">Reconciliation evidence / reason (required)</system:String>
   <system:String x:Key="Session.ConfirmTimingRecovery">I independently verified the duration and confirm this audited timing reconciliation.</system:String>
   <system:String x:Key="Session.TimingRecoverySubmit">Reconcile timing and issue invoice</system:String>
+  <system:String x:Key="Customer.Section">Customer management</system:String>
+  <system:String x:Key="Customer.New">New customer</system:String>
+  <system:String x:Key="Customer.Search">Search code, name, nickname or phone</system:String>
+  <system:String x:Key="Customer.SearchButton">Search / Refresh</system:String>
+  <system:String x:Key="Customer.IncludeInactive">Include inactive and blocked customers</system:String>
+  <system:String x:Key="Customer.SelectForSession">Customer for this Session (blank = Walk-in)</system:String>
+  <system:String x:Key="Customer.SessionSearch">Find a Session customer by code, name, nickname or phone</system:String>
+  <system:String x:Key="Customer.SessionSearchButton">Search Session customers</system:String>
+  <system:String x:Key="Customer.WalkInHint">If no customer is selected, the Server creates a Walk-in identity.</system:String>
+  <system:String x:Key="Customer.UseWalkIn">Use Walk-in customer</system:String>
+  <system:String x:Key="Customer.Code">Customer code</system:String>
+  <system:String x:Key="Customer.Name">Full name</system:String>
+  <system:String x:Key="Customer.Nickname">Nickname / display name</system:String>
+  <system:String x:Key="Customer.Phone">Phone number (optional)</system:String>
+  <system:String x:Key="Customer.Create">Create customer</system:String>
+  <system:String x:Key="Customer.Update">Save changes</system:String>
+  <system:String x:Key="Customer.StatusReason">Reason for status change (required)</system:String>
+  <system:String x:Key="Customer.Activate">Activate</system:String>
+  <system:String x:Key="Customer.Deactivate">Deactivate</system:String>
+  <system:String x:Key="Customer.Block">Block</system:String>
 </ResourceDictionary>
