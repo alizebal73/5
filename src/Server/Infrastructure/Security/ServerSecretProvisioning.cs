@@ -171,6 +171,8 @@ internal static class ServerSecretProvisioning
         try
         {
             var builder = ValidateDisposableTestConnectionString(connection);
+            var expectedDatabase = builder.Database ?? string.Empty;
+            var expectedUsername = builder.Username ?? string.Empty;
             using (var db = new NpgsqlConnection(builder.ConnectionString))
             {
                 db.Open();
@@ -199,8 +201,8 @@ internal static class ServerSecretProvisioning
                 var canReplicate = reader.GetBoolean(5);
                 var applicationObjectCount = reader.GetInt64(6);
 
-                if (!databaseName.Equals(database, StringComparison.Ordinal) ||
-                    !loginName.Equals(username, StringComparison.Ordinal) ||
+                if (!databaseName.Equals(expectedDatabase, StringComparison.Ordinal) ||
+                    !loginName.Equals(expectedUsername, StringComparison.Ordinal) ||
                     isSuperUser || canCreateDatabase || canCreateRoles || canReplicate)
                     throw new ServerSecretStoreException("The disposable test database must use its dedicated non-superuser application role.");
 
