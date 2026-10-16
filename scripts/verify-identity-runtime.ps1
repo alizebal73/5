@@ -794,6 +794,181 @@ try {
         throw "Cash checkout replay created or returned a different Payment or ledger entry."
     }
 
+
+    # Continue the same end-to-end business journey through tender correction and full reversal.
+    # These calls use the same disposable PostgreSQL database and real HTTP Server as checkout.
+    $outcomeBeforeCorrection = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeBeforeCorrection 200 "Read durable cash checkout outcome before correcting tender facts"
+    if ([string]$outcomeBeforeCorrection.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [long]$outcomeBeforeCorrection.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$outcomeBeforeCorrection.Json.data.changeGivenToman -ne 500 -or
+        $null -ne $outcomeBeforeCorrection.Json.data.cashTenderCorrectionId -or
+        $null -ne $outcomeBeforeCorrection.Json.data.reversalId) {
+        throw "Initial cash checkout outcome did not preserve the original Payment/tender facts before correction."
+    }
+
+    $correctedAmountReceivedToman = [long]($invoiceAmount + 750)
+    $correctionReason = "CI end-to-end correction of deliberately mis-recorded cash received/change."
+    $unconfirmedCorrectionHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-correction-unconfirmed-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $unconfirmedCorrection = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $unconfirmedCorrectionHeaders @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 0
+        correctedAmountReceivedToman = $correctedAmountReceivedToman
+        reason = $correctionReason
+        confirmed = $false
+    }
+    Assert-ErrorCode $unconfirmedCorrection 400 "billing.tender_correction_invalid" "Reject cash tender correction without explicit confirmation"
+
+    $outcomeAfterUnconfirmedCorrection = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeAfterUnconfirmedCorrection 200 "Verify unconfirmed tender correction left the sale unchanged"
+    if ($null -ne $outcomeAfterUnconfirmedCorrection.Json.data.cashTenderCorrectionId -or
+        [long]$outcomeAfterUnconfirmedCorrection.Json.data.effectiveAmountReceivedToman -ne $amountReceived -or
+        [long]$outcomeAfterUnconfirmedCorrection.Json.data.effectiveChangeGivenToman -ne 500) {
+        throw "Unconfirmed tender correction mutated the durable cash checkout outcome."
+    }
+
+    $correctionHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-correction-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $correctionBody = @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 0
+        correctedAmountReceivedToman = $correctedAmountReceivedToman
+        reason = $correctionReason
+        confirmed = $true
+    }
+    $correction = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $correctionHeaders $correctionBody
+    Assert-Status $correction 200 "Correct recorded cash received/change facts over HTTP"
+    $correctedChangeGivenToman = [long]($correctedAmountReceivedToman - $invoiceAmount)
+    if ([string]::IsNullOrWhiteSpace([string]$correction.Json.data.correctionId) -or
+        [string]$correction.Json.data.invoiceId -ne $invoiceId -or
+        [string]$correction.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [int]$correction.Json.data.version -ne 1 -or
+        [long]$correction.Json.data.previousAmountReceivedToman -ne $amountReceived -or
+        [long]$correction.Json.data.previousChangeGivenToman -ne 500 -or
+        [long]$correction.Json.data.correctedAmountReceivedToman -ne $correctedAmountReceivedToman -or
+        [long]$correction.Json.data.correctedChangeGivenToman -ne $correctedChangeGivenToman) {
+        throw "Cash tender correction did not return the expected versioned, reconciled correction facts."
+    }
+
+    $correctionReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $correctionHeaders $correctionBody
+    Assert-Status $correctionReplay 200 "Replay identical cash tender correction over HTTP"
+    if ([string]$correctionReplay.Json.data.correctionId -ne [string]$correction.Json.data.correctionId -or
+        [int]$correctionReplay.Json.data.version -ne 1) {
+        throw "Cash tender correction replay produced a duplicate or different correction."
+    }
+
+    $correctionKeyConflict = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $correctionHeaders @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 0
+        correctedAmountReceivedToman = [long]($correctedAmountReceivedToman + 1)
+        reason = $correctionReason
+        confirmed = $true
+    }
+    Assert-ErrorCode $correctionKeyConflict 409 "idempotency.key_reused" "Reject changed tender correction payload under a reused idempotency key"
+
+    $outcomeAfterCorrection = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeAfterCorrection 200 "Read durable corrected tender facts over HTTP"
+    if ([string]$outcomeAfterCorrection.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [string]$outcomeAfterCorrection.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId -or
+        [long]$outcomeAfterCorrection.Json.data.amountToman -ne $invoiceAmount -or
+        [long]$outcomeAfterCorrection.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        [long]$outcomeAfterCorrection.Json.data.elapsedTicks -ne $elapsedTicks -or
+        [long]$outcomeAfterCorrection.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$outcomeAfterCorrection.Json.data.changeGivenToman -ne 500 -or
+        [long]$outcomeAfterCorrection.Json.data.effectiveAmountReceivedToman -ne $correctedAmountReceivedToman -or
+        [long]$outcomeAfterCorrection.Json.data.effectiveChangeGivenToman -ne $correctedChangeGivenToman -or
+        [string]$outcomeAfterCorrection.Json.data.cashTenderCorrectionId -ne [string]$correction.Json.data.correctionId -or
+        [int]$outcomeAfterCorrection.Json.data.cashTenderCorrectionVersion -ne 1) {
+        throw "Durable checkout projection did not preserve original Payment/ledger/tender facts and expose the corrected effective facts."
+    }
+
+    $reversalReason = "CI end-to-end full reversal after correcting recorded cash tender facts."
+    $wrongReversalHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-reversal-wrong-amount-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $wrongReversal = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-reversal") $wrongReversalHeaders @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        confirmedAmountToman = [long]($invoiceAmount + 1)
+        reason = $reversalReason
+    }
+    Assert-ErrorCode $wrongReversal 409 "billing.reversal_confirmation_mismatch" "Reject reversal without exact invoice/payment amount confirmation"
+
+    $outcomeAfterRejectedReversal = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeAfterRejectedReversal 200 "Verify rejected reversal left the paid sale intact"
+    if ([int]$outcomeAfterRejectedReversal.Json.data.status -ne 2 -or
+        $null -ne $outcomeAfterRejectedReversal.Json.data.reversalId) {
+        throw "Rejected cash reversal changed the paid invoice state."
+    }
+
+    $reversalHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-reversal-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $reversalBody = @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        confirmedAmountToman = $invoiceAmount
+        reason = $reversalReason
+    }
+    $reversal = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-reversal") $reversalHeaders $reversalBody
+    Assert-Status $reversal 200 "Reverse the full cash sale over HTTP"
+    if ([string]::IsNullOrWhiteSpace([string]$reversal.Json.data.reversalId) -or
+        [string]$reversal.Json.data.invoiceId -ne $invoiceId -or
+        [string]$reversal.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [string]$reversal.Json.data.ledgerEntryId -eq [string]$checkout.Json.data.ledgerEntryId -or
+        [long]$reversal.Json.data.amountToman -ne $invoiceAmount) {
+        throw "Cash sale reversal did not create a distinct, exact compensating ledger outcome."
+    }
+
+    $reversalReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-reversal") $reversalHeaders $reversalBody
+    Assert-Status $reversalReplay 200 "Replay identical cash sale reversal over HTTP"
+    if ([string]$reversalReplay.Json.data.reversalId -ne [string]$reversal.Json.data.reversalId -or
+        [string]$reversalReplay.Json.data.ledgerEntryId -ne [string]$reversal.Json.data.ledgerEntryId) {
+        throw "Cash sale reversal replay created a duplicate reversal or compensating ledger entry."
+    }
+
+    $correctionAfterReversal = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-correction-after-reversal-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 1
+        correctedAmountReceivedToman = [long]($correctedAmountReceivedToman + 100)
+        reason = "CI verifies tender correction is forbidden after reversal."
+        confirmed = $true
+    }
+    Assert-ErrorCode $correctionAfterReversal 409 "billing.tender_correction_reversal_forbidden" "Reject tender correction after a cash sale was reversed"
+
+    $finalCashOutcome = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $finalCashOutcome 200 "Reconcile final reversed cash checkout outcome"
+    if ([int]$finalCashOutcome.Json.data.status -ne 3 -or
+        [string]$finalCashOutcome.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [long]$finalCashOutcome.Json.data.amountToman -ne $invoiceAmount -or
+        [long]$finalCashOutcome.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        [long]$finalCashOutcome.Json.data.elapsedTicks -ne $elapsedTicks -or
+        [string]$finalCashOutcome.Json.data.cashTenderCorrectionReason -ne $correctionReason -or
+        [string]$finalCashOutcome.Json.data.reversalReason -ne $reversalReason -or
+        [string]$finalCashOutcome.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId -or
+        [string]$finalCashOutcome.Json.data.reversalId -ne [string]$reversal.Json.data.reversalId -or
+        [string]$finalCashOutcome.Json.data.reversalLedgerEntryId -ne [string]$reversal.Json.data.ledgerEntryId -or
+        [string]$finalCashOutcome.Json.data.cashTenderCorrectionId -ne [string]$correction.Json.data.correctionId -or
+        [long]$finalCashOutcome.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$finalCashOutcome.Json.data.changeGivenToman -ne 500 -or
+        [long]$finalCashOutcome.Json.data.effectiveAmountReceivedToman -ne $correctedAmountReceivedToman -or
+        [long]$finalCashOutcome.Json.data.effectiveChangeGivenToman -ne $correctedChangeGivenToman) {
+        throw "Final cash outcome did not reconcile original sale, correction history, and compensating reversal."
+    }
+
     $activeAfterCheckout = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
     Assert-Status $activeAfterCheckout 200 "Confirm no active Session remains after cash checkout"
     $remainingSessions = @($activeAfterCheckout.Json.data | Where-Object { [string]$_.id -eq $sessionId })
@@ -1125,7 +1300,7 @@ $stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
     }
     Assert-ErrorCode $locked 401 "auth.invalid_credentials" "Do not disclose operator lockout state in login response"
 
-    Write-Host "IDENTITY / STATIONS / SESSION CASH WORKFLOW / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
+    Write-Host "IDENTITY / STATIONS / SESSION CASH CHECKOUT / TENDER CORRECTION / FULL REVERSAL / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
     $testSucceeded = $true
 }
 catch {
