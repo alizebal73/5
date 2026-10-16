@@ -524,6 +524,9 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<string>("Code").IsRequired().HasMaxLength(40).HasColumnType("character varying(40)").HasColumnName("code");
                     b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
                     b.Property<string>("DisplayName").HasMaxLength(120).HasColumnType("character varying(120)").HasColumnName("display_name");
+                    b.Property<bool>("IsBlocked").HasDefaultValue(false).HasColumnType("boolean").HasColumnName("is_blocked");
+                    b.Property<string>("Nickname").HasMaxLength(60).HasColumnType("character varying(60)").HasColumnName("nickname");
+                    b.Property<string>("PhoneNumber").HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("phone_number");
                     b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
                     b.Property<int>("Kind").HasColumnType("integer").HasColumnName("kind");
                     b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
