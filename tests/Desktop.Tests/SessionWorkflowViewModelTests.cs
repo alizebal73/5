@@ -220,6 +220,50 @@ public sealed class SessionWorkflowViewModelTests
     }
 
     [Fact]
+    public async Task Start_session_shows_actionable_error_when_pc_agent_is_unavailable()
+    {
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-05", "Offline Agent PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, "agent-device-05", false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedStation = station;
+            viewModel.SelectedTariff = tariff;
+            client.NextStartException = new GameNetApiException("sessions.agent_unavailable", 409);
+
+            var error = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains(
+                    "This PC's Agent is not connected or has no active credential and fresh heartbeat/lease.",
+                    StringComparison.Ordinal));
+
+            Assert.True(viewModel.StartSessionCommand.CanExecute(null));
+            viewModel.StartSessionCommand.Execute(null);
+            var message = await error;
+
+            Assert.Contains("Check the Agent connection; the Session was not started.", message);
+            Assert.Equal(station.Id, client.LastStartRequest?.StationId);
+            Assert.False(string.IsNullOrWhiteSpace(client.LastStartIdempotencyKey));
+            Assert.Empty(viewModel.ActiveSessions);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
     public async Task Cash_checkout_does_not_prefill_received_amount_and_requires_fresh_explicit_confirmation()
     {
         var originalCulture = CultureInfo.CurrentCulture;
