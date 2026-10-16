@@ -1,6 +1,6 @@
 namespace GameNet.Server.Modules.Customers.Contracts;
 
-public sealed record CustomerReference(Guid Id, string Code);
+public sealed record CustomerReference(Guid Id, string Code, bool IsBlocked = false);
 
 /// <summary>
 /// Session orchestration accesses Customers only through this contract. Implementations
