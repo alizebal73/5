@@ -142,7 +142,7 @@ public sealed class CustomerManagementService(
             idempotencyKey, before is null ? null : JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
 
     private static string NormalizeSearchTerm(string value) =>
-        new(value.Select(ch => ch switch
+        new string(value.Select(ch => ch switch
         {
             >= '۰' and <= '۹' => (char)('0' + ch - '۰'),
             >= '٠' and <= '٩' => (char)('0' + ch - '٠'),
