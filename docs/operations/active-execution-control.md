@@ -38,6 +38,10 @@ The Integration branch has a partial WPF/API/Server/PostgreSQL path for fixed-ho
 
 
 
+
+
+10. **Customer profile core — candidate PR #127, not merged.** [PR #127](https://github.com/alizebal73/5/pull/127) adds registered-customer create/search/edit, optional nickname/phone, activate/deactivate/block, explicit reason and expected-version checks, server authorization, transactional idempotency, Audit, a PostgreSQL migration, WPF profile controls, and active-customer selection for PC Session start. The Server rejects blocked-customer starts. Domain, Desktop Session-selection, and opt-in PostgreSQL persistence/idempotency/Audit tests are included, including Persian-digit phone search and a blocked-customer admission regression. **Initial exact-head runs exposed compile and module-layer issues; corrections have been pushed. Re-read live PR head and wait for the exact final-head Foundation, Quick Validation and Runtime Payload runs before merge.** No interactive WPF or disposable-VM acceptance has been recorded. PIN/customer login, multi-device policy, Wallet/debt/gifts, VIP and statement/history projections remain outside this slice; do not imply that they are complete.
+
 Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card payments, PS5 and foosball billing are not implied complete by Slice 1.
 
 ## Deferred gates — not blanket blockers for safe product coding
