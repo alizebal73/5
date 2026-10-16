@@ -88,7 +88,7 @@ public sealed partial class SessionWorkflowViewModel
             return;
 
         var reason = TimingRecoveryReasonText.Trim();
-        var fingerprint = $\"{session.Id:D}|{session.Version}|{minutes}|{reason}|confirmed\";
+        var fingerprint = $"{session.Id:D}|{session.Version}|{minutes}|{reason}|confirmed";
         var key = GetKey("sessions.timing.recovery", fingerprint);
         var expectedElapsedTicks = checked(minutes * TimeSpan.TicksPerMinute);
         var submittedSessionId = session.Id;
