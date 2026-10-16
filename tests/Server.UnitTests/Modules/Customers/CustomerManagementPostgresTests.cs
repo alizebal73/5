@@ -56,6 +56,11 @@ public sealed class CustomerManagementPostgresTests
             var listed = await service.ListAsync(actor, "test nick", includeInactive: true, take: 20, CancellationToken.None);
             Assert.True(listed.IsSuccess);
             Assert.Contains(listed.Value, x => x.Id == created.Value.Id);
+
+            var searchedByPersianPhoneDigits = await service.ListAsync(
+                actor, "۹۸۹۱۲۱۲۳", includeInactive: true, take: 20, CancellationToken.None);
+            Assert.True(searchedByPersianPhoneDigits.IsSuccess);
+            Assert.Contains(searchedByPersianPhoneDigits.Value, x => x.Id == created.Value.Id);
             var edited = await service.UpdateProfileAsync(new UpdateCustomerProfileCommand(
                 created.Value.Id, "Updated Customer", "New Nick", "09121234567", created.Value.Version, "customer-edit-" + token, actor), CancellationToken.None);
             Assert.True(edited.IsSuccess, edited.IsSuccess ? "" : edited.Error.Code);
