@@ -1,5 +1,6 @@
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Billing;
+using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -16,6 +17,10 @@ public interface IGameNetServerClient
     Task<CurrentOperatorResponse> GetCurrentOperatorAsync(CancellationToken cancellationToken = default);
     Task<ChangeOwnPasswordResponse> ChangeOwnPasswordAsync(ChangeOwnPasswordRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StationResponse>> GetStationsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default);
+    Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<StationResponse> CreateStationAsync(CreateStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<StationResponse> RenameStationAsync(Guid id, RenameStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<StationResponse> BindStationAgentAsync(Guid id, BindStationAgentRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
