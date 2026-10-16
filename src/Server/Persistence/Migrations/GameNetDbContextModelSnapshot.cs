@@ -694,6 +694,36 @@ namespace GameNet.Server.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.CashTenderCorrection", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<string>("CorrelationId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("correlation_id");
+                    b.Property<DateTimeOffset>("CorrectedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("corrected_at_utc");
+                    b.Property<Guid>("CorrectedByOperatorId").HasColumnType("uuid").HasColumnName("corrected_by_operator_id");
+                    b.Property<long>("CorrectedAmountReceivedToman").HasColumnType("bigint").HasColumnName("corrected_amount_received_toman");
+                    b.Property<long>("CorrectedChangeGivenToman").HasColumnType("bigint").HasColumnName("corrected_change_given_toman");
+                    b.Property<string>("IdempotencyKey").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)").HasColumnName("idempotency_key");
+                    b.Property<Guid>("InvoiceId").HasColumnType("uuid").HasColumnName("invoice_id");
+                    b.Property<Guid>("PaymentId").HasColumnType("uuid").HasColumnName("payment_id");
+                    b.Property<long>("PreviousAmountReceivedToman").HasColumnType("bigint").HasColumnName("previous_amount_received_toman");
+                    b.Property<long>("PreviousChangeGivenToman").HasColumnType("bigint").HasColumnName("previous_change_given_toman");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(256).HasColumnType("character varying(256)").HasColumnName("reason");
+                    b.Property<int>("Version").HasColumnType("integer").HasColumnName("version");
+                    b.HasKey("Id").HasName("pk_cash_tender_corrections");
+                    b.HasIndex("CorrectedAtUtc").HasDatabaseName("ix_cash_tender_corrections_corrected_at_utc");
+                    b.HasIndex("InvoiceId", "Version").IsUnique().HasDatabaseName("ux_cash_tender_corrections_invoice_version");
+                    b.HasIndex("PaymentId", "Version").IsUnique().HasDatabaseName("ux_cash_tender_corrections_payment_version");
+                    b.ToTable("cash_tender_corrections", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cash_tender_corrections_corrected_change_nonnegative", "corrected_change_given_toman >= 0");
+                            t.HasCheckConstraint("ck_cash_tender_corrections_corrected_received_positive", "corrected_amount_received_toman > 0");
+                            t.HasCheckConstraint("ck_cash_tender_corrections_previous_change_nonnegative", "previous_change_given_toman >= 0");
+                            t.HasCheckConstraint("ck_cash_tender_corrections_previous_received_positive", "previous_amount_received_toman > 0");
+                            t.HasCheckConstraint("ck_cash_tender_corrections_reason_valid", "char_length(btrim(reason)) >= 3 AND btrim(reason) !~ '[[:cntrl:]]'");
+                            t.HasCheckConstraint("ck_cash_tender_corrections_version_positive", "version > 0");
+                        });
+                });
+
             modelBuilder.Entity("GameNet.Server.Modules.Sessions.Domain.Session", b =>
                 {
                     b.HasOne("GameNet.Server.Modules.Customers.Domain.Customer", null).WithMany()
@@ -748,6 +778,16 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasOne("GameNet.Server.Modules.Billing.Domain.Payment", null).WithMany()
                         .HasForeignKey("PaymentId").OnDelete(DeleteBehavior.Restrict).IsRequired()
                         .HasConstraintName("fk_cash_sale_reversals_payments_payment_id");
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.CashTenderCorrection", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Invoice", null).WithMany()
+                        .HasForeignKey("InvoiceId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_cash_tender_corrections_invoices_invoice_id");
+                    b.HasOne("GameNet.Server.Modules.Billing.Domain.Payment", null).WithMany()
+                        .HasForeignKey("PaymentId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_cash_tender_corrections_payments_payment_id");
                 });
 
             modelBuilder.Entity("GameNet.Server.Modules.Stations.Domain.Station", b =>

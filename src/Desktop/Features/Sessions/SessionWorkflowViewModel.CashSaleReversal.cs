@@ -32,6 +32,7 @@ public sealed partial class SessionWorkflowViewModel
                 CashSaleReversalReasonText = string.Empty;
                 ConfirmCashSaleReversal = false;
                 OnPropertyChanged(nameof(CashSaleReversalSummaryText));
+                OnPropertyChanged(nameof(CashTenderCorrectionSummaryText));
                 RaiseCommands();
             }
         }

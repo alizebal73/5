@@ -71,6 +71,11 @@
   <system:String x:Key="Billing.CashReversalReason">Reason for full cash-sale reversal (required)</system:String>
   <system:String x:Key="Billing.ConfirmCashSaleReversal">I checked the invoice/payment and confirm returning the invoice amount, not the gross cash tender.</system:String>
   <system:String x:Key="Billing.ReverseCashSale">Reverse full cash sale</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionTitle">Correct recorded cash received</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectedReceived">Correct cash received (Toman)</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionReason">Reason for correction (required)</system:String>
+  <system:String x:Key="Billing.ConfirmCashTenderCorrection">I verified the physical cash count and confirm correcting only the recorded cash received/change facts.</system:String>
+  <system:String x:Key="Billing.CorrectCashTender">Correct recorded cash details</system:String>
 
   <system:String x:Key="Session.TimingRecoveryTitle">Recover Session timing</system:String>
   <system:String x:Key="Session.TimingRecoveryInstructions">Use only when the Server cannot prove monotonic timing continuity (for example, after a Windows reboot). Enter the independently verified total play duration in whole minutes (1–43,200). The Server never estimates time from UTC; the original tariff snapshot is used.</system:String>

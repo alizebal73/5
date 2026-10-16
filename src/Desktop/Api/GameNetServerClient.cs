@@ -165,6 +165,11 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         SendMutationAsync<CashSaleReversalRequest, CashSaleReversalResponse>(
             HttpMethod.Post, $"/api/v1/billing/invoices/{invoiceId:D}/cash-reversal", body, idempotencyKey, cancellationToken);
 
+    public Task<CashTenderCorrectionResponse> CorrectCashTenderAsync(
+        Guid invoiceId, CashTenderCorrectionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<CashTenderCorrectionRequest, CashTenderCorrectionResponse>(
+            HttpMethod.Post, $"/api/v1/billing/invoices/{invoiceId:D}/cash-tender-correction", body, idempotencyKey, cancellationToken);
+
     private async Task<TResponse> SendMutationAsync<TRequest, TResponse>(
         HttpMethod method, string path, TRequest body, string idempotencyKey, CancellationToken cancellationToken)
     {

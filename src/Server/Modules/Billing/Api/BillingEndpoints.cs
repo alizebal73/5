@@ -99,6 +99,25 @@ public static class BillingEndpoints
                 ? Results.Ok(new ApiEnvelope<CashSaleReversalResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.BillingCashReverse);
+
+        group.MapPost("/invoices/{invoiceId:guid}/cash-tender-correction", async (
+            Guid invoiceId,
+            CashTenderCorrectionRequest request,
+            IBillingService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var command = new CashTenderCorrectionCommand(
+                invoiceId, request.PaymentId, request.ExpectedVersion, request.CorrectedAmountReceivedToman,
+                request.Reason, request.Confirmed, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+            var result = await service.CorrectCashTenderAsync(command, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<CashTenderCorrectionResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.BillingCashTenderCorrect);
     }
 
     private static bool TryGetActor(HttpContext context, out BillingActorContext actor)
@@ -131,8 +150,10 @@ public static class BillingEndpoints
             "billing.invoice_not_pending" or "billing.invoice_not_paid" or "billing.sale_already_reversed" or
             "billing.reversal_conflict" or "billing.reversal_confirmation_mismatch" or
             "billing.reversal_method_unsupported" or "billing.session_version_conflict" or "billing.session_not_ready" or
-            "billing.checkout_conflict" or "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
-            "billing.cash_insufficient" or "billing.reversal_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "billing.checkout_conflict" or "billing.tender_correction_version_conflict" or "billing.tender_correction_conflict" or
+            "billing.tender_correction_reversal_forbidden" or "billing.tender_correction_confirmation_mismatch" or
+            "billing.tender_correction_no_change" or "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
+            "billing.cash_insufficient" or "billing.reversal_invalid" or "billing.tender_correction_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(
