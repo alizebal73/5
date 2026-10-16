@@ -2,6 +2,8 @@
 
 **Snapshot:** 2026-10-16. This is the single current execution queue, not an immutable branch pointer. Before any merge, read the live branch SHA, PR head/base and exact required checks from GitHub. Keep event-level details in the relevant Issue, PR and Actions run; do not copy them into additional status documents.
 
+**Owner decision (2026-10-16):** complete the planned product capabilities first; create the real production Setup/update package only after the product scope is ready; perform installed-Windows/WPF/LAN/manual acceptance at the end against that exact release candidate. Temporary Setup bootstrapper PR #132 and issue #131 were closed without merging. Do not execute that installer on the live shop PC. Automated tests, code review, security checks, and disposable-database/PostgreSQL CI remain mandatory during implementation; this deferral is for physical/manual installation acceptance, not a blanket waiver of engineering tests.
+
 ## Canonical refs
 
 - main: b9288471f2047570eaf8d0d6552cf87bc0ddc214; protected and intentionally unchanged.
@@ -59,7 +61,17 @@ The Integration branch has a partial WPF/API/Server/PostgreSQL path for fixed-ho
 - Required evidence: domain transition/invalid-state tests; PostgreSQL migration, persistence, idempotency, Audit, station occupancy and reboot-while-paused test; Desktop pause/resume state tests; exact-head Quick Validation and Full Foundation/runtime gates.
 - The candidate is not accepted until those automated gates are green. Manual installed-Windows timing and billing acceptance under Issue #98 remains separate; do not use the live shop PC or production data. Issues #92 and #96 retain their existing gates.
 
-Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card payments, PS5 and foosball billing are not implied complete by Slice 1.
+Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card payments and richer PS5/foosball pricing are not implied complete by the Session slices.
+
+## Follow-on coherent product slice — Issue #133
+
+**Timed PS5 and foosball Sessions — candidate branch `feature/timed-non-pc-sessions-20261016`; not yet merged.** This child candidate builds on the Issue #129 pause/resume branch so the dependency can be reviewed independently.
+
+- Server permits an Available PS5/foosball station to start a timed Session without Agent enrollment; it continues to require authoritative Agent readiness for PC stations.
+- The chosen active fixed-hourly tariff must exactly match the selected station type. Server remains authoritative for monotonic time, immutable tariff snapshot, invoice amount, cash checkout, transaction, idempotency and Audit.
+- WPF selects PC/PS5/foosball stations, displays type clearly, filters tariffs to the selected type, and lets an authorized settings operator choose a type when creating a tariff; Persian and English strings are updated.
+- Candidate Desktop and PostgreSQL tests cover non-PC type filtering, tariff creation, start/end/cash and mismatched tariffs. Exact-head CI must still prove this integrated branch; physical/manual WPF checks are deferred to the final real Setup acceptance.
+- Excluded: controller/person/add-on pricing, tariff time bands, packages/free-time/VIP, customer multi-device policy, station transfer/release/cancel, real Windows PC control and Setup/update implementation.
 
 ## Deferred gates — not blanket blockers for safe product coding
 

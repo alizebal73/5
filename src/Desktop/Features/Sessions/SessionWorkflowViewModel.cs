@@ -55,7 +55,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             !string.IsNullOrWhiteSpace(TariffCode) && !string.IsNullOrWhiteSpace(TariffName) && TryParseToman(HourlyRateText, out var rate) && rate > 0);
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedStation is { Status: StationStatusContract.Available } station &&
-            station.Type is StationTypeContract.Pc or StationTypeContract.Ps5 or StationTypeContract.Foosball &&
+            station.Type is (StationTypeContract.Pc or StationTypeContract.Ps5 or StationTypeContract.Foosball) &&
             SelectedTariff is { IsActive: true } tariff &&
             tariff.StationType == station.Type &&
             (SelectedCustomer is null || SelectedCustomer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active) &&

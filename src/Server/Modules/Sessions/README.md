@@ -1,6 +1,6 @@
 # Sessions Module Boundary
 
-**Status: PARTIALLY IMPLEMENTED.** The first PC walk-in slice includes Session start/end, Station and Customer binding, a tariff snapshot, and the transition into pending settlement. The full Sessions module is not complete; Slice 1 acceptance is tracked in [Issue #98](https://github.com/alizebal73/5/issues/98). The current queue is in [Active Execution Control](../../../../docs/operations/active-execution-control.md).
+**Status: PARTIALLY IMPLEMENTED.** The Session → invoice → cash path is being extended from PC to PS5/foosball timed stations under [Issue #133](https://github.com/alizebal73/5/issues/133), reusing the same Server-authoritative lifecycle and financial pipeline. The Sessions module is not complete; Issue #98 acceptance and physical/manual evidence are reserved for the final installed release candidate. The current queue is in [Active Execution Control](../../../../docs/operations/active-execution-control.md).
 
 ## Ownership
 
@@ -8,15 +8,16 @@ Own authoritative Session state, Station/Customer binding, lifecycle and billabl
 
 ## Implemented in the current slice
 
-- Server-authorized PC Session start, pause/resume candidate, and end with persisted state and concurrency protection.
+- Server-authorized timed Session start/end for PC (with authoritative Agent readiness required) and the Issue #133 candidate for PS5/foosball (without inventing an Agent). Pause/resume is implemented on the parent candidate under Issue #129 / PR #130.
 - Walk-in customer binding when the operator does not select an existing customer.
 - Immutable hourly-tariff snapshot for the Session and invoice creation at end.
 - Transaction, idempotency, audit and PostgreSQL regression coverage for the supported path.
-- Candidate Issue #129 adds accumulated monotonic billable ticks, a persisted current-segment baseline, audited pause/resume commands, and an end path that excludes the paused interval, including pause across a Windows boot change. This candidate still requires exact-head CI and manual acceptance.
+- Timing remains Server-side monotonic elapsed time with an immutable fixed-hourly tariff snapshot; PS5/foosball must use a tariff whose type exactly matches the station, then use the existing invoice/cash path. No Agent is fabricated for non-PC stations.
+- Candidate Issue #129 / PR #130 adds accumulated monotonic billable ticks, persisted segment baselines, audited pause/resume and ending a paused Session without charging the paused interval, including across a Windows boot change. It remains subject to exact-head tests/review and final installed acceptance.
 
 ## Incomplete
 
-Extend/reduce/transfer/release/cancel, full customer multi-device limits, and the complete station-type timing rules remain future work. Candidate pause/resume is tracked in [Issue #129](https://github.com/alizebal73/5/issues/129) and is not merged or accepted until exact-head tests and runtime/manual evidence pass. The broader clock/recovery contract also needs physical installed-Windows acceptance before Session timing can be declared production-ready.
+Extend/reduce/transfer/release/cancel, full customer multi-device limits, richer PS5/foosball pricing (controller/person/add-ons), tariff time bands/free-time/VIP packages and full recovery remain future work. Issue #133 non-PC Sessions and Issue #129 pause/resume are candidates until exact-head automation passes and the dependent code is merged. Installed-Windows/WPF/LAN evidence is intentionally postponed to the final real Setup acceptance; Session timing is not declared production-ready before that gate.
 
 ## Implementation rules
 
