@@ -1,16 +1,16 @@
 # Cash Tender Correction and Cash Sale Reversal — V1 Contract
 
-**Status: proposed contract; not implemented and not enabled for operational use.** This contract is the next bounded Billing slice under [Issue #98](https://github.com/alizebal73/5/issues/98). Its purpose is to define safe behavior before adding endpoints or UI. Automated Foundation/Integration checks do not constitute acceptance of cash correction or reversal.
+**Status: partially implemented.** The full cash-sale reversal half of this V1 contract is implemented on `integration/runtime-operator-v1` by PR #120 (merge SHA `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`) but is not accepted for operational use. Cash tender correction remains proposed and unimplemented. Automated Foundation/Integration checks do not constitute acceptance of either operation.
 
-## 1. Existing contract and constraint
+## 1. Existing cash facts and migration status
 
 The current Slice 1 creates one paid Invoice, one immutable cash Payment, one CashSale ledger entry and Audit evidence in a transaction. Payment.AmountAppliedToman equals the invoice amount; AmountReceivedToman records cash tendered; ChangeGivenToman is received minus applied. The posted sale is only the invoice amount, not the gross tender.
 
-The current schema enforces one Payment per invoice and one ledger row per invoice/payment, requires positive ledger amounts and permits only CashSale. A correction/reversal implementation therefore needs a forward-only migration and revised, explicit database constraints. It must not simply append a second ledger row against today's constraints, change old amounts in place, or bypass them.
+The original Slice 1 schema enforced one Payment per invoice and one ledger row per invoice/payment, positive ledger amounts and only the CashSale type. PR #120 added a forward-only migration for full reversal: filtered uniqueness preserves one original sale and at most one compensating reversal per invoice/payment, and stored amounts remain positive magnitudes with an explicit reversal type. Do not rewrite historical Payment, Ledger or Audit rows. Any future cash-tender-correction action still needs its own append-only persistence/version contract and migration work.
 
 ## 2. Two operations with different meanings
 
-### A. Correct mis-recorded cash tender facts
+### A. Correct mis-recorded cash tender facts — not implemented
 
 Use this operation only when the recorded cash-received/change facts were entered incorrectly and the invoice charge itself remains correct.
 
@@ -20,7 +20,7 @@ Use this operation only when the recorded cash-received/change facts were entere
 - Apply an expected-version/concurrency check in the same transaction. A stale correction must conflict rather than overwrite a newer one. A repeated identical idempotency key and request returns the original result; reuse with a different request conflicts.
 - Do not allow a tender correction once the payment has been reversed. This operation records a correction of facts; it is not a cash refund and must not be used to force the cash drawer to an expected balance.
 
-### B. Reverse a posted cash sale by returning the amount charged
+### B. Reverse a posted cash sale by returning the amount charged — implemented on Integration; not yet accepted operationally
 
 Use this operation only when the business is actually returning the full amount applied to the invoice. V1 supports a **single full reversal only**; partial refunds, multiple partial allocations, wallet credit, and refund/reissue workflows are outside this slice.
 
@@ -46,7 +46,7 @@ The implementation design and forward-only migration must account for all curren
 
 ## 4. Required verification before acceptance
 
-Tests must be added with the implementation; this document does not satisfy them.
+The reversal migration and automated tests are implemented on Integration, but they are not operational acceptance. Cash-tender-correction persistence, domain rules, API/UI and its own tests remain outstanding.
 
 1. Domain tests: invalid/missing reason, invalid amount, checked arithmetic, tender/change calculation, stale correction version, invalid invoice/payment lifecycle, and rejection of a second full reversal.
 2. Disposable PostgreSQL tests: clean migration, historical data compatibility, all revised constraints/foreign keys, append-only history, one reversal under concurrent requests, rollback on failure and independent persisted-row reconciliation.
@@ -56,4 +56,4 @@ Tests must be added with the implementation; this document does not satisfy them
 
 ## 5. Explicit non-goals
 
-No invoice amount editing, deletion/rewrite of historical Payment/Ledger/Audit rows, partial refunds, wallet/debt/bonus handling, card payments, session reopening, automatic cash-drawer balancing, or generalized accounting/reporting changes. This remains unavailable for real customer money until implementation, tests, manual acceptance and the remaining Issue #98 criteria are complete.
+No invoice amount editing, deletion/rewrite of historical Payment/Ledger/Audit rows, partial refunds, wallet/debt/bonus handling, card payments, session reopening, automatic cash-drawer balancing, or generalized accounting/reporting changes. Full reversal remains unavailable for real customer money until manual WPF/recovery acceptance, independent financial reconciliation and the remaining Issue #98 criteria are complete. Cash-tender correction remains unimplemented.
