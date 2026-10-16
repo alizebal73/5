@@ -142,11 +142,18 @@
                   <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
                   <TextBlock Text="{Binding TariffNameSnapshot}" FontSize="11" Foreground="#475467"/>
                   <TextBlock Text="{Binding StartedAtDisplayText}" FontSize="10" Foreground="#667085"/>
+                  <TextBlock Text="{Binding StatusDisplayText}" FontSize="10" FontWeight="SemiBold" Foreground="#475467"/>
                 </StackPanel>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-          <Button Margin="0,5,0,10" Padding="8,5" Content="{DynamicResource Session.End}"
+          <TextBlock Text="{Binding SelectedActiveSession.StatusDisplayText}" Margin="0,5,0,4"
+                     FontSize="11" Foreground="#475467"/>
+          <Button Margin="0,2,0,4" Padding="8,5" Content="{DynamicResource Session.Pause}"
+                  Command="{Binding PauseSessionCommand}"/>
+          <Button Margin="0,2,0,4" Padding="8,5" Content="{DynamicResource Session.Resume}"
+                  Command="{Binding ResumeSessionCommand}"/>
+          <Button Margin="0,2,0,10" Padding="8,5" Content="{DynamicResource Session.End}"
                   Command="{Binding EndSessionCommand}"/>
           <StackPanel Margin="0,0,0,10"
                       Visibility="{Binding CanRecoverSessionTiming, Converter={StaticResource BooleanToVisibilityConverter}}">

@@ -56,6 +56,8 @@
   <system:String x:Key="Session.CustomerWalkIn">This slice creates a Walk-in customer and does not collect personal details.</system:String>
   <system:String x:Key="Session.ActiveTitle">Active Sessions</system:String>
   <system:String x:Key="Session.End">End and issue invoice</system:String>
+  <system:String x:Key="Session.Pause">Pause billing time</system:String>
+  <system:String x:Key="Session.Resume">Resume play</system:String>
   <system:String x:Key="Tariff.CreateTitle">Configure a PC tariff</system:String>
   <system:String x:Key="Tariff.Code">Tariff code</system:String>
   <system:String x:Key="Tariff.Name">Tariff name</system:String>
@@ -78,8 +80,8 @@
   <system:String x:Key="Billing.CorrectCashTender">Correct recorded cash details</system:String>
 
   <system:String x:Key="Session.TimingRecoveryTitle">Recover Session timing</system:String>
-  <system:String x:Key="Session.TimingRecoveryInstructions">Use only when the Server cannot prove monotonic timing continuity (for example, after a Windows reboot). Enter the independently verified total play duration in whole minutes (1–43,200). The Server never estimates time from UTC; the original tariff snapshot is used.</system:String>
-  <system:String x:Key="Session.TimingRecoveryMinutes">Verified total play duration (whole minutes)</system:String>
+  <system:String x:Key="Session.TimingRecoveryInstructions">Use only when the Server cannot prove monotonic timing continuity (for example, after a Windows reboot). Enter the independently verified total billable active time in whole minutes, excluding paused intervals (1–43,200). The Server never estimates time from UTC; the original tariff snapshot is used.</system:String>
+  <system:String x:Key="Session.TimingRecoveryMinutes">Verified total billable active time, excluding pauses (whole minutes)</system:String>
   <system:String x:Key="Session.TimingRecoveryReason">Reconciliation evidence / reason (required)</system:String>
   <system:String x:Key="Session.ConfirmTimingRecovery">I independently verified the duration and confirm this audited timing reconciliation.</system:String>
   <system:String x:Key="Session.TimingRecoverySubmit">Reconcile timing and issue invoice</system:String>

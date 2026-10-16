@@ -10,7 +10,7 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - A Desktop operation uses `IGameNetServerClient` and typed Shared V1 contracts. Desktop/Agent never connect directly to PostgreSQL.
 - Mutations use the Server's stable error contract, actor/correlation data, idempotency and Audit behavior as listed below. Never invent a local success path or assume a timeout means the mutation failed.
 - `Desktop UI: yes` means an action is reachable in the current WPF shell. `Server API only` means the API exists, but no operator-management screen/command is currently wired in this Desktop shell.
-- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, and the integrated full cash-sale reversal action. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments, tender correction, partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
+- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, the integrated full cash-sale reversal and cash-tender correction actions, and the candidate PC Session pause/resume slice under PR #130. Customer login/multi-device policy, Wallet/debt, card payments/partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
 
 ## 1. Current Desktop Identity operations
 
@@ -196,13 +196,32 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **Evidence:** Session domain tests and PostgreSQL replay/concurrency tests.
 
 ### `sessions.end`
-- **Owner / outcome:** Sessions; end an active Session and create the pending invoice needed for settlement.
+- **Owner / outcome:** Sessions; end an active or paused Session and create the pending invoice needed for settlement.
 - **Contract:** `POST /api/v1/sessions/{id}/end`; `EndSessionRequest(ExpectedVersion) → InvoicePreviewResponse`; `Idempotency-Key` required.
-- **Permission / preconditions:** authenticated Operator with Server-side `sessions.operate`; the expected Session version must match.
+- **Permission / preconditions:** authenticated Operator with Server-side `sessions.operate`; the expected Session version must match. A paused Session can be ended using its already accumulated active segments.
 - **Idempotency / concurrency:** stable key/request fingerprint, expected-version check, transaction coordinator and unique unsettled-session constraint.
-- **Audit:** Session end and invoice issuance are audited in the same atomic mutation boundary.
-- **UI entry / states:** `EndSessionCommand`; success produces `PendingPayment`, not a cash receipt or Debt. Pricing uses the fixed hourly snapshot and exact elapsed UTC duration; fractional Toman rounds up.
+- **Audit:** Session end and invoice issuance are audited in the same atomic mutation boundary; the audit snapshot records accumulated and final-segment ticks.
+- **UI entry / states:** `EndSessionCommand`; success produces `PendingPayment`, not a cash receipt or Debt. Pricing uses the fixed hourly snapshot and summed trusted monotonic active segments; paused time is excluded, and a running segment that loses continuity fails closed for timing recovery.
 - **Evidence:** `SessionService.EndAsync`, `BillingInvoiceWriter` and PostgreSQL certification.
+
+
+### `sessions.pause`
+- **Owner / outcome:** Sessions; pause an active PC Session and persist the trusted monotonic duration of its current active segment.
+- **Contract:** `POST /api/v1/sessions/{id}/pause`; `SessionLifecycleRequest(ExpectedVersion) → SessionResponse`; required `Idempotency-Key`.
+- **Permission / preconditions:** authenticated Operator with Server-side `sessions.operate`; Session must be Active and the current monotonic/boot baseline must be verifiable. If continuity is uncertain, no pause state is written and the existing timing-recovery path is required.
+- **Idempotency / concurrency:** shared transactional mutation pipeline, request fingerprint and optimistic expected Session version. A replay cannot accumulate the same segment twice.
+- **Audit:** before/after Session identity/state and accumulated ticks plus the paused segment's elapsed ticks are recorded in the same transaction.
+- **UI entry / states:** `PauseSessionCommand` in the Session workflow; paused Sessions remain in the station's occupied/active list, with Resume and End enabled and Pause disabled. A transport-ambiguous outcome is reconciled by refresh and the retained idempotency key.
+- **Evidence / acceptance:** `Session.Pause`, `SessionService.PauseAsync`, `SessionEndpoints`, `SessionWorkflowViewModel.Lifecycle`, domain tests and disposable-PostgreSQL pause/resume tests. Issue #129 tracks exact-head CI and manual acceptance.
+
+### `sessions.resume`
+- **Owner / outcome:** Sessions; resume a paused Session by opening a fresh authoritative monotonic timing segment.
+- **Contract:** `POST /api/v1/sessions/{id}/resume`; `SessionLifecycleRequest(ExpectedVersion) → SessionResponse`; required `Idempotency-Key`.
+- **Permission / preconditions:** authenticated Operator with Server-side `sessions.operate`; Session must be Paused and the Server must capture a valid current timing snapshot. A new Windows boot is allowed because the paused interval is excluded, not reconstructed.
+- **Idempotency / concurrency:** shared transactional mutation pipeline, request fingerprint and expected-version check; duplicate or stale resumes are rejected/replayed safely.
+- **Audit:** state and accumulated billable ticks are recorded with the new timing-segment boot identity.
+- **UI entry / states:** `ResumeSessionCommand` in the same replaceable Session capability; localized status indicates Active versus Paused. Resume does not reset accumulated ticks or the original tariff snapshot.
+- **Evidence / acceptance:** `Session.Resume`, `SessionService.ResumeAsync`, typed Shared V1 contracts, WPF commands/resources, domain tests and PostgreSQL test that resumes after a simulated Windows reboot. Issue #129 tracks exact-head gates and acceptance.
 
 ### `billing.pending-invoices.read`
 - **Owner / outcome:** Billing; list pending invoices with the current Session version used for optimistic settlement.
