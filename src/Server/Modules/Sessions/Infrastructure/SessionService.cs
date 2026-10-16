@@ -84,7 +84,7 @@ public sealed class SessionService(
                     var activeExists = await db.Sessions.AnyAsync(
                         x => x.StationId == station.Id && (x.Status == SessionStatus.Active || x.Status == SessionStatus.Paused), token);
                     if (activeExists)
-                        return Fail<SessionResponse>("sessions.station_has_active_session", "Station already has an active session.");
+                        return Fail<SessionResponse>("sessions.station_has_active_session", "Station already has an active or paused Session.");
 
                     var pendingSettlementExists = await db.Sessions.AnyAsync(
                         x => x.StationId == station.Id && x.Status == SessionStatus.PendingSettlement, token);
@@ -410,7 +410,7 @@ public sealed class SessionService(
                         Session = ToResponse(session),
                         AccumulatedElapsedTicks = session.AccumulatedElapsedTicks
                     };
-                    try { session.Resume(command.Actor.OperatorId, snapshot);
+                    try { session.Resume(command.Actor.OperatorId, snapshot); }
                     catch (InvalidOperationException) { return Fail<SessionResponse>("sessions.invalid_state", "Session could not be resumed from its current state."); }
                     catch (ArgumentException) { return Fail<SessionResponse>("sessions.timing_recovery_required", "Clock snapshot is invalid; the Session remains paused."); }
 

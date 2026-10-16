@@ -57,7 +57,7 @@
   <system:String x:Key="Session.ActiveTitle">Sessionهای فعال</system:String>
   <system:String x:Key="Session.End">پایان و صدور صورتحساب</system:String>
   <system:String x:Key="Session.Pause">توقف محاسبهٔ زمان</system:String>
-  <system:String x:Key="Session.Resume">ادامهٔ بازی</system>
+  <system:String x:Key="Session.Resume">ادامهٔ بازی</system:String>
   <system:String x:Key="Tariff.CreateTitle">تعریف تعرفهٔ PC</system:String>
   <system:String x:Key="Tariff.Code">کد تعرفه</system:String>
   <system:String x:Key="Tariff.Name">نام تعرفه</system:String>
