@@ -12,5 +12,5 @@ namespace GameNet.Server.Persistence.Migrations;
 partial class CashSaleReversal
 {
     protected override void BuildTargetModel(ModelBuilder modelBuilder)
-        => GameNetDbContextModelSnapshot.BuildMigrationTargetModel(modelBuilder);
+        => CashSaleReversalTargetModel.Build(modelBuilder);
 }
