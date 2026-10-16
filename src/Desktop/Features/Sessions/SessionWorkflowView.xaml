@@ -89,6 +89,22 @@
           </ListBox>
           <Button Margin="0,5,0,10" Padding="8,5" Content="{DynamicResource Session.End}"
                   Command="{Binding EndSessionCommand}"/>
+          <StackPanel Margin="0,0,0,10"
+                      Visibility="{Binding CanRecoverSessionTiming, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="{DynamicResource Session.TimingRecoveryTitle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="{DynamicResource Session.TimingRecoveryInstructions}" FontSize="10" Foreground="#854D0E"
+                       TextWrapping="Wrap" Margin="0,0,0,6"/>
+            <TextBlock Text="{DynamicResource Session.TimingRecoveryMinutes}" FontSize="12"/>
+            <TextBox Padding="5" Margin="0,3,0,6"
+                     Text="{Binding ReconciledElapsedMinutesText, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock Text="{DynamicResource Session.TimingRecoveryReason}" FontSize="12"/>
+            <TextBox Padding="5" Margin="0,3,0,6"
+                     Text="{Binding TimingRecoveryReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+            <CheckBox Content="{DynamicResource Session.ConfirmTimingRecovery}"
+                      IsChecked="{Binding ConfirmTimingRecovery, Mode=TwoWay}" Margin="0,0,0,8"/>
+            <Button Padding="8,6" Content="{DynamicResource Session.TimingRecoverySubmit}"
+                    Command="{Binding ReconcileSessionTimingCommand}"/>
+          </StackPanel>
           <TextBlock Text="{DynamicResource Billing.PendingTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
           <ListBox Height="132" ItemsSource="{Binding PendingInvoices}"
                    SelectedItem="{Binding SelectedPendingInvoice, Mode=TwoWay}">

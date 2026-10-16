@@ -623,6 +623,101 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+
+    [Fact]
+    public async Task Timing_recovery_requires_independent_permission_and_records_verified_duration_through_server()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-TIME-01", "Timing recovery PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var now = DateTimeOffset.UtcNow;
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, Guid.NewGuid(), Guid.NewGuid(), "PC-STD", "PC Standard",
+                60_000L, Guid.NewGuid(), now, null, null, null, null, SessionStatusContract.Active, 1);
+            var client = new FakeGameNetServerClient([station], []);
+            client.ActiveSessions.Add(session);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead or Permissions.SessionsOperate
+                    or Permissions.SessionsTimingRecover or Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedActiveSession = viewModel.ActiveSessions.Single();
+            client.NextEndException = new GameNetApiException("sessions.timing_recovery_required", 409);
+            var recoveryRequiredTask = WaitForErrorAsync(
+                viewModel,
+                message => message.Contains("timing continuity", StringComparison.Ordinal));
+            viewModel.EndSessionCommand.Execute(null);
+            Assert.Contains("timing continuity", await recoveryRequiredTask);
+            Assert.True(viewModel.CanRecoverSessionTiming);
+            viewModel.ReconciledElapsedMinutesText = "30";
+            viewModel.TimingRecoveryReasonText = "Verified play duration after reboot";
+            viewModel.ConfirmTimingRecovery = true;
+
+            Assert.True(viewModel.CanRecoverSessionTiming);
+            Assert.True(viewModel.ReconcileSessionTimingCommand.CanExecute(null));
+
+            var statusTask = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains("Session timing was reconciled", StringComparison.Ordinal));
+            viewModel.ReconcileSessionTimingCommand.Execute(null);
+            Assert.Contains("Session timing was reconciled", await statusTask);
+
+            Assert.Equal(session.Id, client.LastTimingRecoverySessionId);
+            Assert.Equal(session.Version, client.LastTimingRecoveryRequest?.ExpectedSessionVersion);
+            Assert.Equal(30L, client.LastTimingRecoveryRequest?.ReconciledElapsedMinutes);
+            Assert.Equal("Verified play duration after reboot", client.LastTimingRecoveryRequest?.Reason);
+            Assert.True(client.LastTimingRecoveryRequest?.Confirmed);
+            Assert.Single(client.TimingRecoveryIdempotencyKeys);
+            var invoice = Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(session.Id, invoice.Invoice.SessionId);
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks, invoice.Invoice.ElapsedTicks);
+            Assert.Equal(30_000L, invoice.Invoice.AmountToman);
+            Assert.Empty(viewModel.ActiveSessions);
+            Assert.False(viewModel.ReconcileSessionTimingCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Timing_recovery_command_is_disabled_without_separate_recovery_permission()
+    {
+        var station = new StationResponse(
+            Guid.NewGuid(), "PC-TIME-02", "Restricted timing recovery PC", StationTypeContract.Pc,
+            StationStatusContract.Available, 1, null, false, null, null, null);
+        var now = DateTimeOffset.UtcNow;
+        var session = new SessionResponse(
+            Guid.NewGuid(), station.Id, Guid.NewGuid(), Guid.NewGuid(), "PC-STD", "PC Standard",
+            60_000L, Guid.NewGuid(), now, null, null, null, null, SessionStatusContract.Active, 1);
+        var client = new FakeGameNetServerClient([station], []);
+        client.ActiveSessions.Add(session);
+        var viewModel = new SessionWorkflowViewModel(
+            client,
+            permission => permission is Permissions.StationsRead or Permissions.SessionsOperate or Permissions.BillingWrite);
+
+        await viewModel.RefreshAsync();
+        viewModel.SelectedActiveSession = viewModel.ActiveSessions.Single();
+        viewModel.ReconciledElapsedMinutesText = "30";
+        viewModel.TimingRecoveryReasonText = "Verified play duration after reboot";
+        viewModel.ConfirmTimingRecovery = true;
+
+        Assert.False(viewModel.CanRecoverSessionTiming);
+        Assert.False(viewModel.ReconcileSessionTimingCommand.CanExecute(null));
+        Assert.Equal(0, client.TimingRecoveryCallCount);
+        Assert.Single(viewModel.ActiveSessions);
+        Assert.Empty(viewModel.PendingInvoices);
+    }
+
     [Fact]
     public async Task Operator_without_permissions_cannot_open_or_mutate_session_workspace()
     {
@@ -727,6 +822,7 @@ public sealed class SessionWorkflowViewModelTests
         public CashSaleReversalRequest? LastCashSaleReversalRequest { get; private set; }
         public bool LoseNextCashSaleReversalResponseAfterCommit { get; set; }
         public Exception? NextStartException { get; set; }
+        public Exception? NextEndException { get; set; }
         public bool FailNextCashCheckoutWithNetworkError { get; set; }
         public bool FailNextCashCheckoutWithTimeout { get; set; }
         public bool FailNextCashCheckoutOutcomeLookupWithNetworkError { get; set; }
@@ -783,6 +879,11 @@ public sealed class SessionWorkflowViewModelTests
             LastEndedSessionId = id;
             LastEndRequest = request;
             LastEndIdempotencyKey = idempotencyKey;
+            if (NextEndException is { } error)
+            {
+                NextEndException = null;
+                return Task.FromException<InvoicePreviewResponse>(error);
+            }
 
             var session = ActiveSessions.Single(x => x.Id == id);
             ActiveSessions.Remove(session);
@@ -797,7 +898,44 @@ public sealed class SessionWorkflowViewModelTests
         }
 
         public List<CashCheckoutOutcomeResponse> CompletedCashOutcomes { get; } = [];
+        public List<string> TimingRecoveryIdempotencyKeys { get; } = [];
+        public Guid? LastTimingRecoverySessionId { get; private set; }
+        public ReconcileSessionTimingRequest? LastTimingRecoveryRequest { get; private set; }
+        public int TimingRecoveryCallCount { get; private set; }
+        private readonly Dictionary<string, InvoicePreviewResponse> timingRecoveryReplays = new(StringComparer.Ordinal);
         public bool LoseNextCashCheckoutResponseAfterCommit { get; set; }
+
+        public Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(
+            Guid id,
+            ReconcileSessionTimingRequest request,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            TimingRecoveryCallCount++;
+            LastTimingRecoverySessionId = id;
+            LastTimingRecoveryRequest = request;
+            TimingRecoveryIdempotencyKeys.Add(idempotencyKey);
+            if (timingRecoveryReplays.TryGetValue(idempotencyKey, out var replay))
+                return Task.FromResult(replay);
+
+            var session = ActiveSessions.SingleOrDefault(x => x.Id == id);
+            if (session is null || session.Version != request.ExpectedSessionVersion ||
+                request.ReconciledElapsedMinutes is < 1 or > 43_200 || !request.Confirmed)
+                return Task.FromException<InvoicePreviewResponse>(
+                    new GameNetApiException("sessions.timing_recovery_invalid", 400));
+
+            var elapsedTicks = checked(request.ReconciledElapsedMinutes * TimeSpan.TicksPerMinute);
+            var amount = checked((session.TariffHourlyRateTomanSnapshot * request.ReconciledElapsedMinutes + 59L) / 60L);
+            var invoice = new InvoicePreviewResponse(
+                Guid.NewGuid(), session.Id, checked(session.Version + 1), session.StationId,
+                session.CustomerId, session.TariffId, session.TariffCodeSnapshot,
+                session.TariffNameSnapshot, session.TariffHourlyRateTomanSnapshot,
+                elapsedTicks, amount, InvoiceStatusContract.PendingPayment, DateTimeOffset.UtcNow, null);
+            ActiveSessions.Remove(session);
+            PendingInvoices.Add(invoice);
+            timingRecoveryReplays.Add(idempotencyKey, invoice);
+            return Task.FromResult(invoice);
+        }
 
         public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(PendingInvoices.ToArray());

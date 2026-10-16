@@ -67,6 +67,31 @@ public static class SessionEndpoints
                 ? Results.Ok(new ApiEnvelope<InvoicePreviewResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.SessionsOperate);
+        group.MapPost("/{id:guid}/timing-recovery", async (
+            Guid id,
+            ReconcileSessionTimingRequest request,
+            ISessionService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var command = new ReconcileSessionTimingCommand(
+                id,
+                request.ExpectedSessionVersion,
+                request.ReconciledElapsedMinutes,
+                request.Reason,
+                request.Confirmed,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(),
+                actor);
+            var result = await service.ReconcileTimingAsync(command, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<InvoicePreviewResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        })
+        .RequireAuthorization(Permissions.SessionsOperate)
+        .RequireAuthorization(Permissions.SessionsTimingRecover);
     }
 
     internal static bool TryGetActor(HttpContext context, out SessionActorContext actor)
@@ -95,8 +120,9 @@ public static class SessionEndpoints
             "sessions.not_found" or "sessions.station_not_found" or "sessions.tariff_not_found" or "sessions.customer_not_found" => StatusCodes.Status404NotFound,
             "sessions.station_unavailable" or "sessions.agent_unavailable" or "sessions.station_has_active_session" or "sessions.station_pending_settlement" or "sessions.tariff_station_mismatch" or
             "sessions.version_conflict" or "sessions.invalid_state" or "sessions.invalid_clock" or "sessions.amount_overflow" or
+            "sessions.timing_recovery_required" or "sessions.timing_recovery_not_required" or
             "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
-            "sessions.pc_only" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "sessions.pc_only" or "sessions.timing_recovery_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(
