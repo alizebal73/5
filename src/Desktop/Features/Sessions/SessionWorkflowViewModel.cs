@@ -402,7 +402,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
-        RaiseCustomerCommands();
+        EnforceCustomerPermissions();
     }
 
     public void Reset()
