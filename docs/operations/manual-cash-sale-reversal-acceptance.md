@@ -1,6 +1,6 @@
 # Manual WPF Acceptance and Financial Reconciliation — Complete PC Cash Sale Lifecycle
 
-**Status:** procedure prepared; execution evidence is still required. This guide does not mark Issue #98 accepted.
+**Status:** procedure prepared; execution evidence is still required. This guide does not mark Issue #98 accepted. It covers the normal PC Session → cash checkout → tender correction → full reversal path. The separate Windows boot-discontinuity timing-recovery scenario is also required and is documented in the [timing-recovery runbook](manual-session-timing-recovery-acceptance.md).
 
 ## 1. Safety boundary and exact candidate
 
