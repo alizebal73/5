@@ -7,6 +7,7 @@ using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
+using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
