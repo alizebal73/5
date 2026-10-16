@@ -353,9 +353,10 @@ public sealed class SessionService(
                     catch (ArgumentOutOfRangeException) { return Fail<SessionResponse>("sessions.timing_recovery_invalid", "Active segment duration is invalid."); }
                     catch (OverflowException) { return Fail<SessionResponse>("sessions.amount_overflow", "Accumulated billable Session duration exceeded the supported range."); }
 
+                    var response = ToResponse(session);
                     var after = new
                     {
-                        Session = ToResponse(session),
+                        Session = response,
                         AccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
                         PausedSegmentElapsedTicks = segmentTicks
                     };
@@ -364,7 +365,7 @@ public sealed class SessionService(
                         "Session", session.Id.ToString("D"), null, command.Actor.CorrelationId,
                         command.Actor.Source, "Succeeded", command.IdempotencyKey,
                         JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
-                    return Result<SessionResponse>.Success(after);
+                    return Result<SessionResponse>.Success(response);
                 },
                 cancellationToken);
         }
@@ -414,9 +415,10 @@ public sealed class SessionService(
                     catch (InvalidOperationException) { return Fail<SessionResponse>("sessions.invalid_state", "Session could not be resumed from its current state."); }
                     catch (ArgumentException) { return Fail<SessionResponse>("sessions.timing_recovery_required", "Clock snapshot is invalid; the Session remains paused."); }
 
+                    var response = ToResponse(session);
                     var after = new
                     {
-                        Session = ToResponse(session),
+                        Session = response,
                         AccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
                         NewSegmentBootIdentifier = snapshot.BootIdentifier
                     };
@@ -425,7 +427,7 @@ public sealed class SessionService(
                         "Session", session.Id.ToString("D"), null, command.Actor.CorrelationId,
                         command.Actor.Source, "Succeeded", command.IdempotencyKey,
                         JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
-                    return Result<SessionResponse>.Success(after);
+                    return Result<SessionResponse>.Success(response);
                 },
                 cancellationToken);
         }

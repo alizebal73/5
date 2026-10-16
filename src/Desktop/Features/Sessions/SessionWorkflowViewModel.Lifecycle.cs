@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
+using GameNet.Desktop.Features.Identity;
 using GameNet.Shared.Contracts.V1.Sessions;
 
 namespace GameNet.Desktop.Features.Sessions;
