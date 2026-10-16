@@ -126,6 +126,14 @@ public sealed class SessionWorkflowViewModelTests
             Assert.Contains(viewModel.AvailableCustomers, x => x.Id == customer.Id);
             Assert.Equal(customer.Id, viewModel.SelectedCustomer?.Id);
 
+            // The dedicated Session picker can search older customers independently
+            // of the manager filter and resolves a concrete Server-owned customer ID.
+            viewModel.SessionCustomerSearchText = "C-TEST-01";
+            viewModel.SearchSessionCustomersCommand.Execute(null);
+            Assert.Single(viewModel.AvailableCustomers);
+            Assert.Equal(customer.Id, Assert.Single(viewModel.AvailableCustomers).Id);
+            Assert.Equal(customer.Id, viewModel.SelectedCustomer?.Id);
+
             var startStatus = WaitForStatusAsync(
                 viewModel, message => message.Contains("customer C-TEST-01", StringComparison.Ordinal));
             Assert.True(viewModel.StartSessionCommand.CanExecute(null));
