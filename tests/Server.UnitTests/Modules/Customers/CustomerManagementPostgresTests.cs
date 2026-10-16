@@ -95,11 +95,9 @@ public sealed class CustomerManagementPostgresTests
     private static GameNetDbContext CreateContext(string connectionString) =>
         new(new DbContextOptionsBuilder<GameNetDbContext>().UseNpgsql(connectionString).Options);
 
-    private sealed class TestClock : GameNet.Server.Modules.Sessions.Application.IGameClock
+    private sealed class TestClock : GameNet.Shared.Primitives.IGameClock
     {
         public DateTimeOffset UtcNow { get; } = DateTimeOffset.UtcNow;
-        public GameNet.Server.Modules.Sessions.Application.GameClockSnapshot Capture() =>
-            new(UtcNow, 1000, TimeSpan.TicksPerSecond, 10_000, Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0"));
     }
 
     private sealed class TestFingerprint : IRequestFingerprint
