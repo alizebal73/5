@@ -62,7 +62,13 @@ public sealed class Customer
         IsActive=active; IsBlocked=blocked; Version=checked(Version+1);
     }
 
-    public void Deactivate()=>SetStatus(CustomerStatus.Inactive);
+    public void Deactivate()
+    {
+        if (!IsActive && !IsBlocked) return;
+        IsActive = false;
+        IsBlocked = false;
+        Version = checked(Version + 1);
+    }
 
     private static string NormalizeCode(string code)
     {
