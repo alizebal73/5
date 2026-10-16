@@ -173,15 +173,15 @@ internal static class ServerSecretProvisioning
                 using var command = db.CreateCommand();
                 command.CommandText = """
                     SELECT current_database(), current_user,
-                           role.rolsuper, role.rolcreatedb, role.rolcreaterole, role.rolreplication,
+                           r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolreplication,
                            (SELECT COUNT(*)
                             FROM pg_catalog.pg_class AS c
                             JOIN pg_catalog.pg_namespace AS ns ON ns.oid = c.relnamespace
                             WHERE ns.nspname !~ '^pg_'
                               AND ns.nspname <> 'information_schema'
                               AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f'))
-                    FROM pg_catalog.pg_roles AS role
-                    WHERE role.rolname = current_user;
+                    FROM pg_catalog.pg_roles AS r
+                    WHERE r.rolname = current_user;
                     """;
                 using var reader = command.ExecuteReader();
                 if (!reader.Read())
