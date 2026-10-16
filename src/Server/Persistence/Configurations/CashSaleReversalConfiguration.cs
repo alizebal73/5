@@ -9,7 +9,12 @@ public sealed class CashSaleReversalConfiguration : IEntityTypeConfiguration<Cas
     public void Configure(EntityTypeBuilder<CashSaleReversal> b)
     {
         b.ToTable("cash_sale_reversals", table =>
-            table.HasCheckConstraint("ck_cash_sale_reversals_amount_positive", "amount_toman > 0"));
+        {
+            table.HasCheckConstraint("ck_cash_sale_reversals_amount_positive", "amount_toman > 0");
+            table.HasCheckConstraint(
+                "ck_cash_sale_reversals_reason_valid",
+                "char_length(btrim(reason)) >= 3 AND btrim(reason) !~ '[[:cntrl:]]'");
+        });
         b.HasKey(x => x.Id).HasName("pk_cash_sale_reversals");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
         b.Property(x => x.InvoiceId).IsRequired().HasColumnName("invoice_id");

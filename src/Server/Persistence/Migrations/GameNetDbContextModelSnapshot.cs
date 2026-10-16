@@ -690,6 +690,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.ToTable("cash_sale_reversals", null, t =>
                         {
                             t.HasCheckConstraint("ck_cash_sale_reversals_amount_positive", "amount_toman > 0");
+                            t.HasCheckConstraint("ck_cash_sale_reversals_reason_valid", "char_length(btrim(reason)) >= 3 AND btrim(reason) !~ '[[:cntrl:]]'");
                         });
                 });
 

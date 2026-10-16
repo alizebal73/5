@@ -51,6 +51,9 @@ public partial class CashSaleReversal : Migration
             {
                 table.PrimaryKey("pk_cash_sale_reversals", x => x.id);
                 table.CheckConstraint("ck_cash_sale_reversals_amount_positive", "amount_toman > 0");
+                table.CheckConstraint(
+                    "ck_cash_sale_reversals_reason_valid",
+                    "char_length(btrim(reason)) >= 3 AND btrim(reason) !~ '[[:cntrl:]]'");
                 table.ForeignKey(name: "fk_cash_sale_reversals_invoices_invoice_id", column: x => x.invoice_id,
                     principalTable: "invoices", principalColumn: "id", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey(name: "fk_cash_sale_reversals_payments_payment_id", column: x => x.payment_id,
@@ -75,6 +78,9 @@ public partial class CashSaleReversal : Migration
                 END IF;
                 IF EXISTS (SELECT 1 FROM invoices WHERE status = 3) THEN
                     RAISE EXCEPTION 'CASH_SALE_REVERSAL_DOWN_BLOCKED: reversed invoice lifecycle prevents downgrade';
+                END IF;
+                IF EXISTS (SELECT 1 FROM billing_ledger_entries WHERE entry_type = 2) THEN
+                    RAISE EXCEPTION 'CASH_SALE_REVERSAL_DOWN_BLOCKED: compensating ledger history prevents downgrade';
                 END IF;
             END $$;
             """);
