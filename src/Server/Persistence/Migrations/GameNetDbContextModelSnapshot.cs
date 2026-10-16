@@ -768,9 +768,5 @@ namespace GameNet.Server.Persistence.Migrations
 #pragma warning restore 612, 618
         }
 
-        public static void BuildMigrationTargetModel(ModelBuilder modelBuilder)
-        {
-            new GameNetDbContextModelSnapshot().BuildModel(modelBuilder);
-        }
     }
 }
