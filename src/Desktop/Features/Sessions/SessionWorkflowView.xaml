@@ -76,7 +76,8 @@
                 </ListBox.ItemTemplate>
               </ListBox>
               <TextBlock Text="{DynamicResource Customer.Code}" FontSize="12" Margin="0,6,0,0"/>
-              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerCodeText, UpdateSourceTrigger=PropertyChanged}"/>
+              <TextBox Padding="5" Margin="0,2,0,5" IsEnabled="{Binding IsNewCustomer}"
+                       Text="{Binding CustomerCodeText, UpdateSourceTrigger=PropertyChanged}"/>
               <TextBlock Text="{DynamicResource Customer.Name}" FontSize="12"/>
               <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerNameText, UpdateSourceTrigger=PropertyChanged}"/>
               <TextBlock Text="{DynamicResource Customer.Nickname}" FontSize="12"/>
