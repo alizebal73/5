@@ -108,7 +108,14 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ActiveSessionListItem? SelectedActiveSession
     {
         get => selectedActiveSession;
-        set { if (SetField(ref selectedActiveSession, value)) RaiseCommands(); }
+        set
+        {
+            if (SetField(ref selectedActiveSession, value))
+            {
+                OnPropertyChanged(nameof(CanRecoverSessionTiming));
+                RaiseCommands();
+            }
+        }
     }
 
     public string TariffCode { get => tariffCode; set { if (SetField(ref tariffCode, value)) RaiseCommands(); } }
@@ -380,6 +387,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         OnPropertyChanged(nameof(CanManageTariffs));
         OnPropertyChanged(nameof(CanOperateSessions));
+        OnPropertyChanged(nameof(CanRecoverSessionTiming));
         OnPropertyChanged(nameof(CanCheckout));
         OnPropertyChanged(nameof(CanReverseCashSale));
         OnPropertyChanged(nameof(CanCorrectCashTender));
@@ -410,6 +418,11 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         ConfirmCashTenderCorrection = false;
         CashSaleReversalReasonText = string.Empty;
         ConfirmCashSaleReversal = false;
+        ReconciledElapsedMinutesText = string.Empty;
+        TimingRecoveryReasonText = string.Empty;
+        ConfirmTimingRecovery = false;
+        timingRecoveryRequiredSessionId = null;
+        OnPropertyChanged(nameof(CanRecoverSessionTiming));
         RaiseCommands();
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
@@ -500,7 +513,16 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             StatusMessage = Text($"صورتحساب صادر شد: {FormatToman(invoice.AmountToman)} تومان.",
                 $"Invoice issued: {FormatToman(invoice.AmountToman)} Toman.");
         }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (GameNetApiException ex)
+        {
+            if (string.Equals(ex.Code, "sessions.timing_recovery_required", StringComparison.Ordinal))
+            {
+                timingRecoveryRequiredSessionId = session.Id;
+                OnPropertyChanged(nameof(CanRecoverSessionTiming));
+                RaiseCommands();
+            }
+            ErrorMessage = ErrorText(ex.Code);
+        }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
         }
         catch { ErrorMessage = Text("پایان Session انجام نشد.", "Ending the Session failed."); }
@@ -602,6 +624,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.station_unavailable" => Text("این ایستگاه آمادهٔ شروع Session نیست.", "This station is not available for a new Session."),
         "sessions.agent_unavailable" => Text("Agent این PC متصل یا دارای اعتبار/heartbeat معتبر نیست؛ اتصال Agent را بررسی کنید. Session شروع نشد.", "This PC's Agent is not connected or has no active credential and fresh heartbeat/lease. Check the Agent connection; the Session was not started."),
         "sessions.timing_recovery_required" or "sessions.invalid_clock" => Text("پیوستگی زمان جلسه قابل تأیید نیست؛ صورتحساب صادر نشد و بازیابی زمان لازم است.", "Session timing continuity could not be verified. No invoice was created; timing recovery is required."),
+        "sessions.timing_recovery_invalid" => Text("مدت، علت یا تأیید بازیابی زمان معتبر نیست.", "The recovery duration, reason, or confirmation is invalid."),
+        "sessions.timing_recovery_not_required" => Text("پیوستگی زمان معتبر است؛ از پایان عادی Session استفاده کنید.", "Timing continuity is valid; use the normal End Session command."),
         "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
         "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
         "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
@@ -648,6 +672,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (ReconcileSessionTimingCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)

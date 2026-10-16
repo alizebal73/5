@@ -25,12 +25,14 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
     ICommand EndSessionCommand { get; }
+    ICommand ReconcileSessionTimingCommand { get; }
     ICommand CheckoutCashCommand { get; }
     ICommand ReverseCashSaleCommand { get; }
     ICommand CorrectCashTenderCommand { get; }
 
     bool CanManageTariffs { get; }
     bool CanOperateSessions { get; }
+    bool CanRecoverSessionTiming { get; }
     bool CanCheckout { get; }
     bool CanReverseCashSale { get; }
     bool CanCorrectCashTender { get; }
@@ -41,6 +43,9 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     StationResponse? SelectedStation { get; set; }
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
+    string ReconciledElapsedMinutesText { get; set; }
+    string TimingRecoveryReasonText { get; set; }
+    bool ConfirmTimingRecovery { get; set; }
     PendingInvoiceListItem? SelectedPendingInvoice { get; set; }
     CashCheckoutOutcomeListItem? SelectedRecentCashCheckout { get; set; }
     string CashSaleReversalReasonText { get; set; }

@@ -76,4 +76,11 @@
   <system:String x:Key="Billing.CashTenderCorrectionReason">علت اصلاح (الزامی)</system:String>
   <system:String x:Key="Billing.ConfirmCashTenderCorrection">موجودی واقعی وجه نقد را بررسی کرده‌ام و فقط اصلاح سابقهٔ وجه دریافتی و باقی‌مانده را تأیید می‌کنم.</system:String>
   <system:String x:Key="Billing.CorrectCashTender">ثبت اصلاح سوابق وجه نقد</system:String>
+
+  <system:String x:Key="Session.TimingRecoveryTitle">بازیابی زمان Session</system:String>
+  <system:String x:Key="Session.TimingRecoveryInstructions">فقط وقتی استفاده کنید که سرور نتواند پیوستگی زمان یکنواخت را اثبات کند؛ برای نمونه پس از راه‌اندازی مجدد ویندوز. مدت کل بازی را که مستقل بررسی کرده‌اید، به دقیقهٔ صحیح وارد کنید (۱ تا ۴۳٬۲۰۰). سرور زمان را از اختلاف ساعت UTC حدس نمی‌زند و از تعرفهٔ ثابت زمان شروع استفاده می‌کند.</system:String>
+  <system:String x:Key="Session.TimingRecoveryMinutes">مدت کل بازیِ تأییدشده (دقیقهٔ صحیح)</system:String>
+  <system:String x:Key="Session.TimingRecoveryReason">مدرک تطبیق / علت بازیابی (الزامی)</system:String>
+  <system:String x:Key="Session.ConfirmTimingRecovery">مدت بازی را مستقل بررسی کرده‌ام و این بازیابی ثبت‌شونده در سوابق را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Session.TimingRecoverySubmit">تطبیق زمان و صدور صورتحساب</system:String>
 </ResourceDictionary>

@@ -516,6 +516,216 @@ public sealed class SessionWorkflowPostgresTests
         }
     }
 
+
+    [Fact]
+    public async Task Session_end_after_server_process_restart_and_utc_jump_uses_monotonic_elapsed_time()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorId = Guid.NewGuid();
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlation = "timing-utc-" + token;
+        var idempotencyPrefix = "timing-utc-" + token + "-";
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+        Guid? customerId = null;
+
+        try
+        {
+            await using (var setup = CreateContext(connectionString))
+            {
+                var station = Station.Create(stationId, "TU-" + token[..12], "Timing UTC PC", StationType.Pc);
+                setup.Stations.Add(station);
+                setup.Tariffs.Add(Tariff.CreateFixedHourly(
+                    tariffId, "TU-" + token[..12], "Timing UTC tariff",
+                    StationTypeContract.Pc, 60_000L, false, clock.UtcNow));
+                await setup.SaveChangesAsync();
+                await BindActiveAgentAsync(setup, station, clock, token);
+            }
+
+            SessionResponse started;
+            await using (var startDb = CreateContext(connectionString))
+            {
+                var start = await CreateService(startDb, clock).StartAsync(
+                    new StartSessionCommand(
+                        stationId, tariffId, null, idempotencyPrefix + "start", Actor(operatorId, correlation)),
+                    CancellationToken.None);
+                Assert.True(start.IsSuccess, start.IsSuccess ? "" : start.Error.Code);
+                started = start.Value;
+                customerId = started.CustomerId;
+            }
+
+            // A new scoped context/service represents a Server process restart. UTC jumps
+            // backwards, while monotonic timestamp, OS uptime and boot identity remain valid.
+            clock.Advance(TimeSpan.FromMinutes(30));
+            clock.JumpWallClock(TimeSpan.FromHours(-4));
+
+            await using (var endDb = CreateContext(connectionString))
+            {
+                var service = CreateService(endDb, clock);
+                var recoveryActor = new SessionActorContext(
+                    operatorId, correlation, "PostgreSQLTest",
+                    new HashSet<string>(
+                        [Permissions.SessionsOperate, Permissions.SessionsTimingRecover, Permissions.BillingWrite],
+                        StringComparer.Ordinal));
+                var unnecessaryRecovery = await service.ReconcileTimingAsync(
+                    new ReconcileSessionTimingCommand(
+                        started.Id, started.Version, 31,
+                        "Attempted manual timing although monotonic continuity is valid", true,
+                        idempotencyPrefix + "unnecessary-recovery", recoveryActor),
+                    CancellationToken.None);
+                Assert.False(unnecessaryRecovery.IsSuccess);
+                Assert.Equal("sessions.timing_recovery_not_required", unnecessaryRecovery.Error.Code);
+                Assert.Equal(0, await endDb.Invoices.CountAsync(x => x.SessionId == started.Id));
+
+                var ended = await service.EndAsync(
+                    new EndSessionCommand(
+                        started.Id, started.Version, idempotencyPrefix + "end", Actor(operatorId, correlation)),
+                    CancellationToken.None);
+                Assert.True(ended.IsSuccess, ended.IsSuccess ? "" : ended.Error.Code);
+                Assert.Equal(TimeSpan.FromMinutes(30).Ticks, ended.Value.ElapsedTicks);
+                Assert.Equal(30_000L, ended.Value.AmountToman);
+                Assert.True(ended.Value.IssuedAtUtc < started.StartedAtUtc);
+            }
+
+            await using var verify = CreateContext(connectionString);
+            var savedSession = await verify.Sessions.AsNoTracking().SingleAsync(x => x.Id == started.Id);
+            Assert.Equal(SessionStatus.PendingSettlement, savedSession.Status);
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks, savedSession.ElapsedTicks);
+            Assert.Equal(1, await verify.Invoices.CountAsync(x => x.SessionId == started.Id));
+            var auditOperations = await verify.AuditEntries.AsNoTracking()
+                .Where(x => x.CorrelationId == correlation)
+                .Select(x => x.Operation)
+                .ToArrayAsync();
+            Assert.Contains("sessions.start", auditOperations);
+            Assert.Contains("sessions.end", auditOperations);
+            Assert.Contains("billing.invoice_issued", auditOperations);
+            Assert.DoesNotContain("sessions.timing.reconciled", auditOperations);
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, stationId, tariffId, customerId, correlation, idempotencyPrefix);
+        }
+    }
+
+    [Fact]
+    public async Task Windows_reboot_fails_closed_until_dual_permission_audited_timing_reconciliation()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorId = Guid.NewGuid();
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlation = "timing-recovery-" + token;
+        var idempotencyPrefix = "timing-recovery-" + token + "-";
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+        Guid? customerId = null;
+
+        try
+        {
+            await using (var setup = CreateContext(connectionString))
+            {
+                var station = Station.Create(stationId, "TR-" + token[..12], "Timing recovery PC", StationType.Pc);
+                setup.Stations.Add(station);
+                setup.Tariffs.Add(Tariff.CreateFixedHourly(
+                    tariffId, "TR-" + token[..12], "Timing recovery tariff",
+                    StationTypeContract.Pc, 60_000L, false, clock.UtcNow));
+                await setup.SaveChangesAsync();
+                await BindActiveAgentAsync(setup, station, clock, token);
+            }
+
+            SessionResponse started;
+            await using (var startDb = CreateContext(connectionString))
+            {
+                var start = await CreateService(startDb, clock).StartAsync(
+                    new StartSessionCommand(
+                        stationId, tariffId, null, idempotencyPrefix + "start", Actor(operatorId, correlation)),
+                    CancellationToken.None);
+                Assert.True(start.IsSuccess, start.IsSuccess ? "" : start.Error.Code);
+                started = start.Value;
+                customerId = started.CustomerId;
+            }
+
+            clock.Advance(TimeSpan.FromMinutes(30));
+            clock.SimulateWindowsReboot();
+
+            await using (var db = CreateContext(connectionString))
+            {
+                var service = CreateService(db, clock);
+                var normalEnd = await service.EndAsync(
+                    new EndSessionCommand(
+                        started.Id, started.Version, idempotencyPrefix + "normal-end", Actor(operatorId, correlation)),
+                    CancellationToken.None);
+                Assert.False(normalEnd.IsSuccess);
+                Assert.Equal("sessions.timing_recovery_required", normalEnd.Error.Code);
+                Assert.Equal(0, await db.Invoices.CountAsync(x => x.SessionId == started.Id));
+                Assert.Equal(SessionStatus.Active,
+                    (await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == started.Id)).Status);
+
+                var denied = await service.ReconcileTimingAsync(
+                    new ReconcileSessionTimingCommand(
+                        started.Id, started.Version, 30,
+                        "Verified play duration after Windows reboot", true,
+                        idempotencyPrefix + "denied-recovery", Actor(operatorId, correlation)),
+                    CancellationToken.None);
+                Assert.False(denied.IsSuccess);
+                Assert.Equal("sessions.forbidden", denied.Error.Code);
+                Assert.Equal(0, await db.Invoices.CountAsync(x => x.SessionId == started.Id));
+            }
+
+            var recoveryActor = new SessionActorContext(
+                operatorId, correlation, "PostgreSQLTest",
+                new HashSet<string>(
+                    [Permissions.SessionsOperate, Permissions.SessionsTimingRecover, Permissions.BillingWrite],
+                    StringComparer.Ordinal));
+            var command = new ReconcileSessionTimingCommand(
+                started.Id, started.Version, 30,
+                "Verified play duration after Windows reboot", true,
+                idempotencyPrefix + "authorized-recovery", recoveryActor);
+
+            await using (var recoveryDb = CreateContext(connectionString))
+            {
+                var service = CreateService(recoveryDb, clock);
+                var reconciled = await service.ReconcileTimingAsync(command, CancellationToken.None);
+                Assert.True(reconciled.IsSuccess, reconciled.IsSuccess ? "" : reconciled.Error.Code);
+                Assert.Equal(started.Id, reconciled.Value.SessionId);
+                Assert.Equal(InvoiceStatusContract.PendingPayment, reconciled.Value.Status);
+                Assert.Equal(TimeSpan.FromMinutes(30).Ticks, reconciled.Value.ElapsedTicks);
+                Assert.Equal(30_000L, reconciled.Value.AmountToman);
+
+                var replay = await service.ReconcileTimingAsync(command, CancellationToken.None);
+                Assert.True(replay.IsSuccess, replay.IsSuccess ? "" : replay.Error.Code);
+                Assert.Equal(reconciled.Value.InvoiceId, replay.Value.InvoiceId);
+                Assert.Equal(reconciled.Value.AmountToman, replay.Value.AmountToman);
+            }
+
+            await using var verify = CreateContext(connectionString);
+            var savedSession = await verify.Sessions.AsNoTracking().SingleAsync(x => x.Id == started.Id);
+            Assert.Equal(SessionStatus.PendingSettlement, savedSession.Status);
+            Assert.Equal(TimeSpan.FromMinutes(30).Ticks, savedSession.ElapsedTicks);
+            Assert.Equal(1, await verify.Invoices.CountAsync(x => x.SessionId == started.Id));
+            var recoveryAudit = await verify.AuditEntries.AsNoTracking()
+                .Where(x => x.CorrelationId == correlation && x.Operation == "sessions.timing.reconciled")
+                .SingleAsync();
+            Assert.Equal("Verified play duration after Windows reboot", recoveryAudit.Reason);
+            Assert.Contains("\"operator_reconciliation\"", recoveryAudit.AfterJson ?? string.Empty);
+            var operations = await verify.AuditEntries.AsNoTracking()
+                .Where(x => x.CorrelationId == correlation)
+                .Select(x => x.Operation)
+                .ToArrayAsync();
+            Assert.Contains("sessions.timing.reconciled", operations);
+            Assert.Contains("billing.invoice_issued", operations);
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, stationId, tariffId, customerId, correlation, idempotencyPrefix);
+        }
+    }
+
     private static async Task BindActiveAgentAsync(
         GameNetDbContext db,
         Station station,
@@ -638,12 +848,12 @@ public sealed class SessionWorkflowPostgresTests
     {
         private long timestamp;
         private long uptimeMilliseconds = 5_000;
-        private static readonly Guid BootId = Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0");
+        private Guid bootId = Guid.Parse("04ad13fd-6cb2-4b17-a54d-5e0a48f3e9f0");
 
         public DateTimeOffset UtcNow { get; private set; } = utcNow;
 
         public GameClockSnapshot Capture() => new(
-            UtcNow, timestamp, TimeSpan.TicksPerSecond, uptimeMilliseconds, BootId);
+            UtcNow, timestamp, TimeSpan.TicksPerSecond, uptimeMilliseconds, bootId);
 
         public void Advance(TimeSpan amount)
         {
@@ -653,6 +863,13 @@ public sealed class SessionWorkflowPostgresTests
         }
 
         public void JumpWallClock(TimeSpan amount) => UtcNow = UtcNow.Add(amount);
+
+        public void SimulateWindowsReboot()
+        {
+            timestamp = 1_000;
+            uptimeMilliseconds = 5_000;
+            bootId = Guid.NewGuid();
+        }
     }
 
     private sealed class TestRequestFingerprint : IRequestFingerprint

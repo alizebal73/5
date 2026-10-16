@@ -526,6 +526,10 @@ public sealed class StationBoardPermissionTests
             Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(
+            Guid id, ReconcileSessionTimingRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<InvoicePreviewResponse>>(PendingInvoicesResponse ?? Array.Empty<InvoicePreviewResponse>());
