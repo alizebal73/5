@@ -84,6 +84,7 @@
   <system:String x:Key="Session.ConfirmTimingRecovery">مدت بازی را مستقل بررسی کرده‌ام و این بازیابی ثبت‌شونده در سوابق را تأیید می‌کنم.</system:String>
   <system:String x:Key="Session.TimingRecoverySubmit">تطبیق زمان و صدور صورتحساب</system:String>
   <system:String x:Key="Customer.Section">مدیریت مشتریان</system:String>
+  <system:String x:Key="Customer.New">مشتری جدید</system:String>
   <system:String x:Key="Customer.Search">جست‌وجو در کد، نام، لقب یا شماره</system:String>
   <system:String x:Key="Customer.SearchButton">جست‌وجو / تازه‌سازی</system:String>
   <system:String x:Key="Customer.IncludeInactive">نمایش مشتریان غیرفعال و مسدود</system:String>
