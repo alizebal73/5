@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Net.Http;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
@@ -90,7 +91,7 @@ public sealed partial class SessionWorkflowViewModel
 
         TransferDestinationChoices.Clear();
         if (selectedSession is not null &&
-            selectedSession.Status is SessionStatusContract.Active or SessionStatusContract.Paused &&
+            selectedSession.Status is (SessionStatusContract.Active or SessionStatusContract.Paused) &&
             sourceStation is not null)
         {
             var compatible = StationChoices
