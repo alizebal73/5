@@ -569,6 +569,11 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
                     b.Property<Guid?>("EndedByOperatorId").HasColumnType("uuid").HasColumnName("ended_by_operator_id");
                     b.Property<DateTimeOffset?>("EndedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("ended_at_utc");
+                    b.Property<long>("AccumulatedElapsedTicks").HasColumnType("bigint").HasColumnName("accumulated_elapsed_ticks");
+                    b.Property<Guid?>("CurrentSegmentStartedBootIdentifier").HasColumnType("uuid").HasColumnName("current_segment_started_boot_identifier");
+                    b.Property<long?>("CurrentSegmentStartedMonotonicFrequency").HasColumnType("bigint").HasColumnName("current_segment_started_monotonic_frequency");
+                    b.Property<long?>("CurrentSegmentStartedMonotonicTimestamp").HasColumnType("bigint").HasColumnName("current_segment_started_monotonic_timestamp");
+                    b.Property<long?>("CurrentSegmentStartedSystemUptimeMilliseconds").HasColumnType("bigint").HasColumnName("current_segment_started_system_uptime_milliseconds");
                     b.Property<long?>("ElapsedTicks").HasColumnType("bigint").HasColumnName("elapsed_ticks");
                     b.Property<Guid?>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
                     b.Property<DateTimeOffset?>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
@@ -588,13 +593,13 @@ namespace GameNet.Server.Persistence.Migrations
                     b.HasKey("Id").HasName("pk_sessions");
                     b.HasIndex("CustomerId", "Status").HasDatabaseName("ix_sessions_customer_status");
                     b.HasIndex("StartedAtUtc").HasDatabaseName("ix_sessions_started_at_utc");
-                    b.HasIndex("StationId").IsUnique().HasDatabaseName("ux_sessions_one_unsettled_per_station").HasFilter("status IN (1, 2)");
+                    b.HasIndex("StationId").IsUnique().HasDatabaseName("ux_sessions_one_unsettled_per_station").HasFilter("status IN (1, 2, 4)");
                     b.HasIndex("TariffId").HasDatabaseName("ix_sessions_tariff_id");
                     b.ToTable("sessions", null, t =>
                         {
                             t.HasCheckConstraint("ck_sessions_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
-                            t.HasCheckConstraint("ck_sessions_status_range", "status BETWEEN 1 AND 3");
-                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NOT NULL AND elapsed_ticks > 0) OR (status = 3 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL AND elapsed_ticks IS NOT NULL AND elapsed_ticks > 0)");
+                            t.HasCheckConstraint("ck_sessions_status_range", "status BETWEEN 1 AND 4");
+                            t.HasCheckConstraint("ck_sessions_time_state", "(status = 1 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NULL AND accumulated_elapsed_ticks >= 0 AND current_segment_started_monotonic_timestamp IS NOT NULL AND current_segment_started_monotonic_frequency IS NOT NULL AND current_segment_started_monotonic_frequency > 0 AND current_segment_started_system_uptime_milliseconds IS NOT NULL AND current_segment_started_system_uptime_milliseconds >= 0 AND current_segment_started_boot_identifier IS NOT NULL) OR (status = 4 AND ended_at_utc IS NULL AND ended_by_operator_id IS NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NULL AND accumulated_elapsed_ticks > 0 AND current_segment_started_monotonic_timestamp IS NULL AND current_segment_started_monotonic_frequency IS NULL AND current_segment_started_system_uptime_milliseconds IS NULL AND current_segment_started_boot_identifier IS NULL) OR (status = 2 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL AND elapsed_ticks IS NOT NULL AND elapsed_ticks > 0 AND accumulated_elapsed_ticks = elapsed_ticks AND current_segment_started_monotonic_timestamp IS NULL AND current_segment_started_monotonic_frequency IS NULL AND current_segment_started_system_uptime_milliseconds IS NULL AND current_segment_started_boot_identifier IS NULL) OR (status = 3 AND ended_at_utc IS NOT NULL AND ended_by_operator_id IS NOT NULL AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL AND elapsed_ticks IS NOT NULL AND elapsed_ticks > 0 AND accumulated_elapsed_ticks = elapsed_ticks AND current_segment_started_monotonic_timestamp IS NULL AND current_segment_started_monotonic_frequency IS NULL AND current_segment_started_system_uptime_milliseconds IS NULL AND current_segment_started_boot_identifier IS NULL)");
                         });
                 });
 

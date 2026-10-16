@@ -37,6 +37,8 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
     ICommand EndSessionCommand { get; }
+    ICommand PauseSessionCommand { get; }
+    ICommand ResumeSessionCommand { get; }
     ICommand ReconcileSessionTimingCommand { get; }
     ICommand CheckoutCashCommand { get; }
     ICommand ReverseCashSaleCommand { get; }

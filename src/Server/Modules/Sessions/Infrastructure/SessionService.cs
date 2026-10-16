@@ -82,7 +82,7 @@ public sealed class SessionService(
                         return Fail<SessionResponse>("sessions.tariff_station_mismatch", "Tariff is not for PC stations.");
 
                     var activeExists = await db.Sessions.AnyAsync(
-                        x => x.StationId == station.Id && x.Status == SessionStatus.Active, token);
+                        x => x.StationId == station.Id && (x.Status == SessionStatus.Active || x.Status == SessionStatus.Paused), token);
                     if (activeExists)
                         return Fail<SessionResponse>("sessions.station_has_active_session", "Station already has an active session.");
 
@@ -179,37 +179,62 @@ public sealed class SessionService(
                         return Fail<InvoicePreviewResponse>("sessions.not_found", "Session was not found.");
                     if (session.Version != command.ExpectedVersion)
                         return Fail<InvoicePreviewResponse>("sessions.version_conflict", "Session changed; refresh before ending it.");
-                    if (session.Status != SessionStatus.Active)
-                        return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Only an active session can be ended.");
+                    if (session.Status is not (SessionStatus.Active or SessionStatus.Paused))
+                        return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Only an active or paused session can be ended.");
 
-                    GameClockSnapshot endSnapshot;
-                    try
+                    long elapsedTicks;
+                    DateTimeOffset endedAt;
+                    if (session.Status == SessionStatus.Paused)
                     {
-                        endSnapshot = clock.Capture();
+                        elapsedTicks = session.AccumulatedElapsedTicks;
+                        endedAt = clock.UtcNow;
                     }
-                    catch (Exception ex) when (ex is InvalidOperationException
-                        or DllNotFoundException or EntryPointNotFoundException)
+                    else
                     {
-                        return Fail<InvoicePreviewResponse>(
-                            "sessions.timing_recovery_required",
-                            "Authoritative timing source is unavailable. No invoice was created.");
+                        if (session.CurrentSegmentStartedMonotonicTimestamp is not long segmentTimestamp ||
+                            session.CurrentSegmentStartedMonotonicFrequency is not long segmentFrequency ||
+                            session.CurrentSegmentStartedSystemUptimeMilliseconds is not long segmentUptime ||
+                            session.CurrentSegmentStartedBootIdentifier is not Guid segmentBoot)
+                            return Fail<InvoicePreviewResponse>("sessions.timing_recovery_required", "The active timing baseline is missing; no invoice was created.");
+
+                        GameClockSnapshot endSnapshot;
+                        try
+                        {
+                            endSnapshot = clock.Capture();
+                        }
+                        catch (Exception ex) when (ex is InvalidOperationException
+                            or DllNotFoundException or EntryPointNotFoundException)
+                        {
+                            return Fail<InvoicePreviewResponse>(
+                                "sessions.timing_recovery_required",
+                                "Authoritative timing source is unavailable. No invoice was created.");
+                        }
+
+                        if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
+                                segmentTimestamp, segmentFrequency, segmentUptime, segmentBoot,
+                                endSnapshot, out var currentSegmentTicks))
+                        {
+                            return Fail<InvoicePreviewResponse>(
+                                "sessions.timing_recovery_required",
+                                "Monotonic time continuity could not be verified. No invoice was created; timing recovery is required.");
+                        }
+
+                        try { elapsedTicks = checked(session.AccumulatedElapsedTicks + currentSegmentTicks); }
+                        catch (OverflowException)
+                        {
+                            return Fail<InvoicePreviewResponse>("sessions.amount_overflow", "Billable Session duration exceeded the supported range.");
+                        }
+                        endedAt = endSnapshot.UtcNow;
                     }
 
-                    if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
-                            session.StartedMonotonicTimestamp,
-                            session.StartedMonotonicFrequency,
-                            session.StartedSystemUptimeMilliseconds,
-                            session.StartedBootIdentifier,
-                            endSnapshot,
-                            out var elapsedTicks))
+                    if (elapsedTicks <= 0)
+                        return Fail<InvoicePreviewResponse>("sessions.timing_recovery_invalid", "Billable Session duration must be positive.");
+                    var before = new
                     {
-                        return Fail<InvoicePreviewResponse>(
-                            "sessions.timing_recovery_required",
-                            "Monotonic time continuity could not be verified. No invoice was created; timing recovery is required.");
-                    }
-
-                    var endedAt = endSnapshot.UtcNow;
-                    var before = ToResponse(session);
+                        Session = ToResponse(session),
+                        AccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
+                        FinalSegmentElapsedTicks = elapsedTicks - session.AccumulatedElapsedTicks
+                    };
                     try
                     {
                         session.End(command.Actor.OperatorId, endedAt, elapsedTicks);
@@ -236,7 +261,12 @@ public sealed class SessionService(
                         "Succeeded",
                         command.IdempotencyKey,
                         JsonSerializer.Serialize(before),
-                        JsonSerializer.Serialize(ToResponse(session))));
+                        JsonSerializer.Serialize(new
+                        {
+                            Session = ToResponse(session),
+                            BillableElapsedTicks = elapsedTicks,
+                            AccumulatedElapsedTicks = session.AccumulatedElapsedTicks
+                        })));
 
                     var invoiceResult = await invoices.CreatePendingAsync(
                         new CreatePendingInvoiceCommand(
@@ -268,6 +298,140 @@ public sealed class SessionService(
         catch (PersistenceConflictException)
         {
             return Fail<InvoicePreviewResponse>("sessions.version_conflict", "Session changed concurrently; refresh and try again.");
+        }
+    }
+
+    public async Task<Result<SessionResponse>> PauseAsync(
+        PauseSessionCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
+            return Fail<SessionResponse>("sessions.forbidden", "Not allowed to pause sessions.");
+
+        try
+        {
+            return await mutationPipeline.ExecuteAsync(
+                $"sessions.pause:{command.Actor.OperatorId:D}", "session.pause",
+                command.IdempotencyKey,
+                requestFingerprint.Compute(new { command.SessionId, command.ExpectedVersion }),
+                200, Lease, Retention,
+                async token =>
+                {
+                    var session = await db.Sessions.SingleOrDefaultAsync(x => x.Id == command.SessionId, token);
+                    if (session is null)
+                        return Fail<SessionResponse>("sessions.not_found", "Session was not found.");
+                    if (session.Version != command.ExpectedVersion)
+                        return Fail<SessionResponse>("sessions.version_conflict", "Session changed; refresh before pausing it.");
+                    if (session.Status != SessionStatus.Active)
+                        return Fail<SessionResponse>("sessions.invalid_state", "Only an active Session can be paused.");
+
+                    if (session.CurrentSegmentStartedMonotonicTimestamp is not long segmentTimestamp ||
+                        session.CurrentSegmentStartedMonotonicFrequency is not long segmentFrequency ||
+                        session.CurrentSegmentStartedSystemUptimeMilliseconds is not long segmentUptime ||
+                        session.CurrentSegmentStartedBootIdentifier is not Guid segmentBoot)
+                        return Fail<SessionResponse>("sessions.timing_recovery_required", "The active timing baseline is missing; no state changed.");
+
+                    GameClockSnapshot snapshot;
+                    try { snapshot = clock.Capture(); }
+                    catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException or EntryPointNotFoundException)
+                    {
+                        return Fail<SessionResponse>("sessions.timing_recovery_required", "Authoritative timing source is unavailable; no state changed.");
+                    }
+
+                    if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
+                            segmentTimestamp, segmentFrequency, segmentUptime, segmentBoot, snapshot,
+                            out var segmentTicks))
+                        return Fail<SessionResponse>("sessions.timing_recovery_required", "Monotonic continuity cannot be proven. Recover timing or leave the Session unchanged.");
+
+                    var before = new
+                    {
+                        Session = ToResponse(session),
+                        AccumulatedElapsedTicks = session.AccumulatedElapsedTicks
+                    };
+                    try { session.Pause(command.Actor.OperatorId, segmentTicks); }
+                    catch (InvalidOperationException) { return Fail<SessionResponse>("sessions.invalid_state", "Session could not be paused from its current state."); }
+                    catch (ArgumentOutOfRangeException) { return Fail<SessionResponse>("sessions.timing_recovery_invalid", "Active segment duration is invalid."); }
+                    catch (OverflowException) { return Fail<SessionResponse>("sessions.amount_overflow", "Accumulated billable Session duration exceeded the supported range."); }
+
+                    var after = new
+                    {
+                        Session = ToResponse(session),
+                        AccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
+                        PausedSegmentElapsedTicks = segmentTicks
+                    };
+                    audit.Append(new AuditRecord(
+                        snapshot.UtcNow, "Operator", command.Actor.OperatorId.ToString("D"), "sessions.pause",
+                        "Session", session.Id.ToString("D"), null, command.Actor.CorrelationId,
+                        command.Actor.Source, "Succeeded", command.IdempotencyKey,
+                        JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
+                    return Result<SessionResponse>.Success(after);
+                },
+                cancellationToken);
+        }
+        catch (PersistenceConflictException)
+        {
+            return Fail<SessionResponse>("sessions.version_conflict", "Session changed concurrently; refresh and try again.");
+        }
+    }
+
+    public async Task<Result<SessionResponse>> ResumeAsync(
+        ResumeSessionCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
+            return Fail<SessionResponse>("sessions.forbidden", "Not allowed to resume sessions.");
+
+        try
+        {
+            return await mutationPipeline.ExecuteAsync(
+                $"sessions.resume:{command.Actor.OperatorId:D}", "session.resume",
+                command.IdempotencyKey,
+                requestFingerprint.Compute(new { command.SessionId, command.ExpectedVersion }),
+                200, Lease, Retention,
+                async token =>
+                {
+                    var session = await db.Sessions.SingleOrDefaultAsync(x => x.Id == command.SessionId, token);
+                    if (session is null)
+                        return Fail<SessionResponse>("sessions.not_found", "Session was not found.");
+                    if (session.Version != command.ExpectedVersion)
+                        return Fail<SessionResponse>("sessions.version_conflict", "Session changed; refresh before resuming it.");
+                    if (session.Status != SessionStatus.Paused)
+                        return Fail<SessionResponse>("sessions.invalid_state", "Only a paused Session can be resumed.");
+
+                    GameClockSnapshot snapshot;
+                    try { snapshot = clock.Capture(); }
+                    catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException or EntryPointNotFoundException)
+                    {
+                        return Fail<SessionResponse>("sessions.timing_recovery_required", "Authoritative timing source is unavailable; the Session remains paused.");
+                    }
+
+                    var before = new
+                    {
+                        Session = ToResponse(session),
+                        AccumulatedElapsedTicks = session.AccumulatedElapsedTicks
+                    };
+                    try { session.Resume(command.Actor.OperatorId, snapshot);
+                    catch (InvalidOperationException) { return Fail<SessionResponse>("sessions.invalid_state", "Session could not be resumed from its current state."); }
+                    catch (ArgumentException) { return Fail<SessionResponse>("sessions.timing_recovery_required", "Clock snapshot is invalid; the Session remains paused."); }
+
+                    var after = new
+                    {
+                        Session = ToResponse(session),
+                        AccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
+                        NewSegmentBootIdentifier = snapshot.BootIdentifier
+                    };
+                    audit.Append(new AuditRecord(
+                        snapshot.UtcNow, "Operator", command.Actor.OperatorId.ToString("D"), "sessions.resume",
+                        "Session", session.Id.ToString("D"), null, command.Actor.CorrelationId,
+                        command.Actor.Source, "Succeeded", command.IdempotencyKey,
+                        JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
+                    return Result<SessionResponse>.Success(after);
+                },
+                cancellationToken);
+        }
+        catch (PersistenceConflictException)
+        {
+            return Fail<SessionResponse>("sessions.version_conflict", "Session changed concurrently; refresh and try again.");
         }
     }
 
@@ -317,19 +481,20 @@ public sealed class SessionService(
                         return Fail<InvoicePreviewResponse>("sessions.version_conflict", "Session changed; refresh before reconciling timing.");
                     if (session.Status != SessionStatus.Active)
                         return Fail<InvoicePreviewResponse>("sessions.invalid_state", "Only an active Session may enter timing recovery.");
+                    if (elapsedTicks < session.AccumulatedElapsedTicks)
+                        return Fail<InvoicePreviewResponse>("sessions.timing_recovery_invalid", "Reconciled billable duration cannot be less than already recorded active segments.");
 
                     // Manual reconciliation is not an alternate fast path. If the monotonic
                     // baseline is still trustworthy, the operator must use the normal End command.
                     try
                     {
                         var current = clock.Capture();
-                        if (MonotonicElapsedTime.TryCalculateElapsedTicks(
-                                session.StartedMonotonicTimestamp,
-                                session.StartedMonotonicFrequency,
-                                session.StartedSystemUptimeMilliseconds,
-                                session.StartedBootIdentifier,
-                                current,
-                                out _))
+                        if (session.CurrentSegmentStartedMonotonicTimestamp is long segmentTimestamp &&
+                            session.CurrentSegmentStartedMonotonicFrequency is long segmentFrequency &&
+                            session.CurrentSegmentStartedSystemUptimeMilliseconds is long segmentUptime &&
+                            session.CurrentSegmentStartedBootIdentifier is Guid segmentBoot &&
+                            MonotonicElapsedTime.TryCalculateElapsedTicks(
+                                segmentTimestamp, segmentFrequency, segmentUptime, segmentBoot, current, out _))
                             return Fail<InvoicePreviewResponse>(
                                 "sessions.timing_recovery_not_required",
                                 "Timing continuity is valid. End the Session using the normal monotonic timing path.");
@@ -354,7 +519,12 @@ public sealed class SessionService(
                             "The Server UTC event clock is unavailable. No invoice was created.");
                     }
 
-                    var before = ToResponse(session);
+                    var before = new
+                    {
+                        Session = ToResponse(session),
+                        PreviouslyAccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
+                        ReconciledBillableElapsedTicks = elapsedTicks
+                    };
                     try
                     {
                         session.End(command.Actor.OperatorId, reconciledAtUtc, elapsedTicks);
@@ -371,6 +541,7 @@ public sealed class SessionService(
                     var after = new
                     {
                         Session = ToResponse(session),
+                        AccumulatedElapsedTicks = session.AccumulatedElapsedTicks,
                         ReconciledElapsedMinutes = command.ReconciledElapsedMinutes,
                         Reason = reason,
                         Method = "operator_reconciliation"
@@ -434,7 +605,7 @@ public sealed class SessionService(
         if (!actor.Permissions.Contains(Permissions.SessionsOperate))
             return Fail<IReadOnlyList<SessionResponse>>("sessions.forbidden", "Not allowed to read sessions.");
 
-        var query = db.Sessions.AsNoTracking().Where(x => x.Status == SessionStatus.Active);
+        var query = db.Sessions.AsNoTracking().Where(x => x.Status == SessionStatus.Active || x.Status == SessionStatus.Paused);
         if (stationId.HasValue)
             query = query.Where(x => x.StationId == stationId.Value);
 

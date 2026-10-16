@@ -48,8 +48,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedStation is not null &&
             !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
             !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
+        PauseSessionCommand = new AsyncUiAction(PauseSessionAsync, () => !IsBusy && CanOperateSessions && SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
+        ResumeSessionCommand = new AsyncUiAction(ResumeSessionAsync, () => !IsBusy && CanOperateSessions && SelectedActiveSession?.Session.Status == SessionStatusContract.Paused);
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
+            SelectedActiveSession?.Session.Status is SessionStatusContract.Active or SessionStatusContract.Paused);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
             !unresolvedCashCheckoutInvoiceId.HasValue &&
             SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
@@ -72,9 +74,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             ConfirmCashTenderCorrection);
         InitializeCustomerCommands();
     }
-
     public event PropertyChangedEventHandler? PropertyChanged;
-
     public ObservableCollection<StationResponse> PcStations { get; } = [];
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
     public ObservableCollection<ActiveSessionListItem> ActiveSessions { get; } = [];
@@ -676,6 +676,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (CreateTariffCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        RaiseLifecycleCommands();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();

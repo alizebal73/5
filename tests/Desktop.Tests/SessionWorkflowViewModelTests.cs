@@ -1005,6 +1005,67 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task Pause_resume_workflow_uses_server_transitions_and_keeps_paused_sessions_endable()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-PAUSE-01", "Pause/resume PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-PAUSE", "Pause/resume Tariff", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, Guid.NewGuid(), tariff.Id, tariff.Code, tariff.Name,
+                tariff.HourlyRateToman, Guid.NewGuid(), DateTimeOffset.UtcNow,
+                null, null, null, null, SessionStatusContract.Active, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.ActiveSessions.Add(session);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedActiveSession = Assert.Single(viewModel.ActiveSessions);
+            Assert.True(viewModel.PauseSessionCommand.CanExecute(null));
+            Assert.False(viewModel.ResumeSessionCommand.CanExecute(null));
+
+            var pausedStatus = WaitForStatusAsync(
+                viewModel, message => message.Contains("Billing time paused", StringComparison.Ordinal));
+            viewModel.PauseSessionCommand.Execute(null);
+            Assert.Contains("Billing time paused", await pausedStatus);
+            Assert.Equal(session.Id, client.LastPauseSessionId);
+            Assert.Equal(1, client.LastPauseRequest?.ExpectedVersion);
+            Assert.Single(client.PauseSessionIdempotencyKeys);
+            Assert.Equal(SessionStatusContract.Paused, viewModel.SelectedActiveSession?.Session.Status);
+            Assert.False(viewModel.PauseSessionCommand.CanExecute(null));
+            Assert.True(viewModel.ResumeSessionCommand.CanExecute(null));
+            Assert.True(viewModel.EndSessionCommand.CanExecute(null));
+
+            var resumedStatus = WaitForStatusAsync(
+                viewModel, message => message.Contains("fresh monotonic timing segment", StringComparison.Ordinal));
+            viewModel.ResumeSessionCommand.Execute(null);
+            Assert.Contains("fresh monotonic timing segment", await resumedStatus);
+            Assert.Equal(session.Id, client.LastResumeSessionId);
+            Assert.Equal(2, client.LastResumeRequest?.ExpectedVersion);
+            Assert.Single(client.ResumeSessionIdempotencyKeys);
+            Assert.Equal(SessionStatusContract.Active, viewModel.SelectedActiveSession?.Session.Status);
+            Assert.Equal(3, viewModel.SelectedActiveSession?.Session.Version);
+            Assert.True(viewModel.PauseSessionCommand.CanExecute(null));
+            Assert.False(viewModel.ResumeSessionCommand.CanExecute(null));
+            Assert.True(viewModel.EndSessionCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
     private sealed class FakeGameNetServerClient(
         IReadOnlyList<StationResponse> stations,
         IReadOnlyList<TariffResponse> tariffs) : IGameNetServerClient
@@ -1124,6 +1185,51 @@ public sealed class SessionWorkflowViewModelTests
                 DateTimeOffset.UtcNow, null);
             PendingInvoices.Add(invoice);
             return Task.FromResult(invoice);
+        }
+
+        public Guid? LastPauseSessionId { get; private set; }
+        public SessionLifecycleRequest? LastPauseRequest { get; private set; }
+        public List<string> PauseSessionIdempotencyKeys { get; } = [];
+        public Guid? LastResumeSessionId { get; private set; }
+        public SessionLifecycleRequest? LastResumeRequest { get; private set; }
+        public List<string> ResumeSessionIdempotencyKeys { get; } = [];
+
+        public Task<SessionResponse> PauseSessionAsync(
+            Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastPauseSessionId = id;
+            LastPauseRequest = request;
+            PauseSessionIdempotencyKeys.Add(idempotencyKey);
+            var index = ActiveSessions.FindIndex(x => x.Id == id);
+            if (index < 0)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.not_found", 404));
+            var current = ActiveSessions[index];
+            if (current.Version != request.ExpectedVersion)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.version_conflict", 409));
+            if (current.Status != SessionStatusContract.Active)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.invalid_state", 409));
+            var updated = current with { Status = SessionStatusContract.Paused, Version = checked(current.Version + 1) };
+            ActiveSessions[index] = updated;
+            return Task.FromResult(updated);
+        }
+
+        public Task<SessionResponse> ResumeSessionAsync(
+            Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastResumeSessionId = id;
+            LastResumeRequest = request;
+            ResumeSessionIdempotencyKeys.Add(idempotencyKey);
+            var index = ActiveSessions.FindIndex(x => x.Id == id);
+            if (index < 0)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.not_found", 404));
+            var current = ActiveSessions[index];
+            if (current.Version != request.ExpectedVersion)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.version_conflict", 409));
+            if (current.Status != SessionStatusContract.Paused)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.invalid_state", 409));
+            var updated = current with { Status = SessionStatusContract.Active, Version = checked(current.Version + 1) };
+            ActiveSessions[index] = updated;
+            return Task.FromResult(updated);
         }
 
         public List<CashCheckoutOutcomeResponse> CompletedCashOutcomes { get; } = [];

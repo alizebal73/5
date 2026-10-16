@@ -8,14 +8,15 @@ Own authoritative Session state, Station/Customer binding, lifecycle and billabl
 
 ## Implemented in the current slice
 
-- Server-authorized PC Session start/end with persisted state and concurrency protection.
+- Server-authorized PC Session start, pause/resume candidate, and end with persisted state and concurrency protection.
 - Walk-in customer binding when the operator does not select an existing customer.
 - Immutable hourly-tariff snapshot for the Session and invoice creation at end.
 - Transaction, idempotency, audit and PostgreSQL regression coverage for the supported path.
+- Candidate Issue #129 adds accumulated monotonic billable ticks, a persisted current-segment baseline, audited pause/resume commands, and an end path that excludes the paused interval, including pause across a Windows boot change. This candidate still requires exact-head CI and manual acceptance.
 
 ## Incomplete
 
-Pause/resume/extend/reduce/transfer/release/recovery, full customer multi-device limits, and the complete station-type timing rules remain future work. The clock contract also needs the monotonic-elapsed-time versus UTC/restart recovery issue closed before Session timing can be accepted as robust.
+Extend/reduce/transfer/release/cancel, full customer multi-device limits, and the complete station-type timing rules remain future work. Candidate pause/resume is tracked in [Issue #129](https://github.com/alizebal73/5/issues/129) and is not merged or accepted until exact-head tests and runtime/manual evidence pass. The broader clock/recovery contract also needs physical installed-Windows acceptance before Session timing can be declared production-ready.
 
 ## Implementation rules
 

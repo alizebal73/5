@@ -56,6 +56,8 @@
   <system:String x:Key="Session.CustomerWalkIn">در این برش، مشتری گذری ساخته می‌شود؛ اطلاعات شخصی دریافت نمی‌کنیم.</system:String>
   <system:String x:Key="Session.ActiveTitle">Sessionهای فعال</system:String>
   <system:String x:Key="Session.End">پایان و صدور صورتحساب</system:String>
+  <system:String x:Key="Session.Pause">توقف محاسبهٔ زمان</system:String>
+  <system:String x:Key="Session.Resume">ادامهٔ بازی</system>
   <system:String x:Key="Tariff.CreateTitle">تعریف تعرفهٔ PC</system:String>
   <system:String x:Key="Tariff.Code">کد تعرفه</system:String>
   <system:String x:Key="Tariff.Name">نام تعرفه</system:String>
@@ -78,8 +80,8 @@
   <system:String x:Key="Billing.CorrectCashTender">ثبت اصلاح سوابق وجه نقد</system:String>
 
   <system:String x:Key="Session.TimingRecoveryTitle">بازیابی زمان Session</system:String>
-  <system:String x:Key="Session.TimingRecoveryInstructions">فقط وقتی استفاده کنید که سرور نتواند پیوستگی زمان یکنواخت را اثبات کند؛ برای نمونه پس از راه‌اندازی مجدد ویندوز. مدت کل بازی را که مستقل بررسی کرده‌اید، به دقیقهٔ صحیح وارد کنید (۱ تا ۴۳٬۲۰۰). سرور زمان را از اختلاف ساعت UTC حدس نمی‌زند و از تعرفهٔ ثابت زمان شروع استفاده می‌کند.</system:String>
-  <system:String x:Key="Session.TimingRecoveryMinutes">مدت کل بازیِ تأییدشده (دقیقهٔ صحیح)</system:String>
+  <system:String x:Key="Session.TimingRecoveryInstructions">فقط وقتی استفاده کنید که سرور نتواند پیوستگی زمان یکنواخت را اثبات کند؛ برای نمونه پس از راه‌اندازی مجدد ویندوز. مجموع زمان‌های فعال قابل‌صورتحساب را که مستقل بررسی کرده‌اید، به دقیقهٔ صحیح وارد کنید؛ زمان‌های توقف را حساب نکنید (۱ تا ۴۳٬۲۰۰). سرور زمان را از اختلاف ساعت UTC حدس نمی‌زند و از تعرفهٔ ثابت زمان شروع استفاده می‌کند.</system:String>
+  <system:String x:Key="Session.TimingRecoveryMinutes">کل زمان قابل‌صورتحساب تأییدشده، بدون زمان‌های توقف (دقیقهٔ صحیح)</system:String>
   <system:String x:Key="Session.TimingRecoveryReason">مدرک تطبیق / علت بازیابی (الزامی)</system:String>
   <system:String x:Key="Session.ConfirmTimingRecovery">مدت بازی را مستقل بررسی کرده‌ام و این بازیابی ثبت‌شونده در سوابق را تأیید می‌کنم.</system:String>
   <system:String x:Key="Session.TimingRecoverySubmit">تطبیق زمان و صدور صورتحساب</system:String>

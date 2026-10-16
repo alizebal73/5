@@ -49,6 +49,44 @@ public static class SessionEndpoints
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.SessionsOperate);
 
+        group.MapPost("/{id:guid}/pause", async (
+            Guid id,
+            SessionLifecycleRequest request,
+            ISessionService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var command = new PauseSessionCommand(
+                id, request.ExpectedVersion,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+            var result = await service.PauseAsync(command, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<SessionResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.SessionsOperate);
+
+        group.MapPost("/{id:guid}/resume", async (
+            Guid id,
+            SessionLifecycleRequest request,
+            ISessionService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var command = new ResumeSessionCommand(
+                id, request.ExpectedVersion,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+            var result = await service.ResumeAsync(command, cancellationToken);
+            return result.IsSuccess
+                ? Results.Ok(new ApiEnvelope<SessionResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.SessionsOperate);
+
         group.MapPost("/{id:guid}/end", async (
             Guid id,
             EndSessionRequest request,

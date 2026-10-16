@@ -48,6 +48,17 @@ The Integration branch has a partial WPF/API/Server/PostgreSQL path for fixed-ho
 
     **Manual acceptance remains NOT RUN:** no interactive WPF acceptance, disposable-VM runtime/session test, or read-only database/financial reconciliation has been recorded. Never use live shop PCs/database or real money for this slice. Customer PIN/login, multi-device policy, Wallet/debt/gifts, VIP and statement/history projections remain future work; Slice 1 cash-sale acceptance under [Issue #98](https://github.com/alizebal73/5/issues/98) remains a separate open gate.
 
+
+## Follow-on coherent product slice — Issue #129
+
+**PC Session pause/resume — candidate branch `feature/session-pause-resume-20261016`; not yet merged.** This slice deliberately crosses Domain, Server transaction/idempotency/Audit, Shared V1 API, PostgreSQL migration/constraints, Desktop API, stable Session capability port, WPF controls, Persian/English resources, Action Catalog and automated tests together.
+
+- Pause snapshots the current active monotonic segment into persisted accumulated billable ticks; the Station remains occupied and cannot receive a second Session.
+- Resume starts a new monotonic/boot baseline without resetting accumulated billable ticks. Reboot time while paused is excluded automatically.
+- End while Active adds the final verified active segment; End while Paused invoices accumulated segments only. An untrusted running segment still fails closed into the existing timing-recovery flow.
+- Required evidence: domain transition/invalid-state tests; PostgreSQL migration, persistence, idempotency, Audit, station occupancy and reboot-while-paused test; Desktop pause/resume state tests; exact-head Quick Validation and Full Foundation/runtime gates.
+- The candidate is not accepted until those automated gates are green. Manual installed-Windows timing and billing acceptance under Issue #98 remains separate; do not use the live shop PC or production data. Issues #92 and #96 retain their existing gates.
+
 Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card payments, PS5 and foosball billing are not implied complete by Slice 1.
 
 ## Deferred gates — not blanket blockers for safe product coding
