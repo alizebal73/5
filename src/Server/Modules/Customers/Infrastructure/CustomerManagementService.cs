@@ -36,7 +36,7 @@ public sealed class CustomerManagementService(
         if (!includeInactive) query = query.Where(x => x.IsActive && !x.IsBlocked);
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Trim().ToUpperInvariant();
+            var term = NormalizeSearchTerm(search.Trim());
             query = query.Where(x => x.Code.ToUpper().Contains(term) ||
                 (x.DisplayName != null && x.DisplayName.ToUpper().Contains(term)) ||
                 (x.Nickname != null && x.Nickname.ToUpper().Contains(term)) ||
@@ -140,6 +140,14 @@ public sealed class CustomerManagementService(
         audit.Append(new AuditRecord(clock.UtcNow, "Operator", actor.OperatorId.ToString("D"), operation,
             "Customer", customer.Id.ToString("D"), reason, actor.CorrelationId, actor.Source, "Succeeded",
             idempotencyKey, before is null ? null : JsonSerializer.Serialize(before), JsonSerializer.Serialize(after)));
+
+    private static string NormalizeSearchTerm(string value) =>
+        new(value.Select(ch => ch switch
+        {
+            >= '۰' and <= '۹' => (char)('0' + ch - '۰'),
+            >= '٠' and <= '٩' => (char)('0' + ch - '٠'),
+            _ => ch
+        }).ToArray()).ToUpperInvariant();
 
     private static bool IsValidReason(string? value) =>
         !string.IsNullOrWhiteSpace(value) && value.Trim().Length is >= 3 and <= 256 && !value.Any(char.IsControl);
