@@ -9,7 +9,7 @@
 - Integration commit containing PR #120: `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`. The tested source-tree SHA for the reversal code was `ad92960382088872b1da0441241f4d71ff3603f9`; its Git tree matches the merge commit tree.
 - Portable Runtime LAN Smoke Payload artifact: [run 38887541248](https://github.com/alizebal73/5/actions/runs/38887541248), artifact `runtime-lan-smoke-payload-38887541248`. Download and extract the outer Actions artifact ZIP to a temporary folder; verify the inner `GameNet5-RuntimeLanSmoke-*.zip` against the adjacent `SHA256SUMS.txt` before extracting it. Retain `manifest.json` and confirm its `source.testedCheckoutSha` is `ad92960382088872b1da0441241f4d71ff3603f9`. The artifact is portable payload only, not Setup/MSI and not proof of a live LAN acceptance test.
 - Confirm the isolated Server is configured to point only at the disposable database. Snapshot/revert the VM and database before beginning. Stop if you cannot prove the environment is isolated.
-- Use a test operator with the minimum permissions needed: `sessions.operate`, `billing.write`, and `billing.cash-reverse`. Keep a second test operator without `billing.cash-reverse` for the denied-permission check. Do not grant these roles to a production operator as part of this test.
+- Use a test operator with `stations.read`, `sessions.operate`, `billing.write`, and the dedicated `billing.cash-reverse` permission for the complete flow. Keep a second test operator with the same read/session/checkout permissions but without `billing.cash-reverse` for the denied-permission check. Do not grant these permissions to a production operator as part of this test.
 
 ## 2. Capture evidence before touching the UI
 
