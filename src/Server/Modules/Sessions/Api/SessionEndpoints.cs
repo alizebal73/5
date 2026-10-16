@@ -118,6 +118,7 @@ public static class SessionEndpoints
         {
             "sessions.forbidden" => StatusCodes.Status403Forbidden,
             "sessions.not_found" or "sessions.station_not_found" or "sessions.tariff_not_found" or "sessions.customer_not_found" => StatusCodes.Status404NotFound,
+            "sessions.customer_blocked" => StatusCodes.Status409Conflict,
             "sessions.station_unavailable" or "sessions.agent_unavailable" or "sessions.station_has_active_session" or "sessions.station_pending_settlement" or "sessions.tariff_station_mismatch" or
             "sessions.version_conflict" or "sessions.invalid_state" or "sessions.invalid_clock" or "sessions.amount_overflow" or
             "sessions.timing_recovery_required" or "sessions.timing_recovery_not_required" or
