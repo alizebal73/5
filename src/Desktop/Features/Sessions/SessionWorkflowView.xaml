@@ -30,6 +30,20 @@
           <TextBlock Text="{DynamicResource Session.PcStation}" FontSize="12"/>
           <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding PcStations}"
                     DisplayMemberPath="Code" SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
+          <TextBlock Text="{DynamicResource Customer.SelectForSession}" FontSize="12"/>
+          <ComboBox Margin="0,3,0,6" Padding="5" ItemsSource="{Binding AvailableCustomers}"
+                    SelectedItem="{Binding SelectedCustomer, Mode=TwoWay}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel>
+                  <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                  <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#667085"/>
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{DynamicResource Customer.WalkInHint}" FontSize="10" Foreground="#667085"
+                     TextWrapping="Wrap" Margin="0,0,0,8"/>
           <TextBlock Text="{DynamicResource Session.Tariff}" FontSize="12"/>
           <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding Tariffs}"
                     SelectedItem="{Binding SelectedTariff, Mode=TwoWay}">
@@ -43,8 +57,44 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
           <Button Padding="8,6" Content="{DynamicResource Session.Start}" Command="{Binding StartSessionCommand}"/>
-          <TextBlock Text="{DynamicResource Session.CustomerWalkIn}" FontSize="11" Foreground="#667085"
-                     TextWrapping="Wrap" Margin="0,6,0,0"/>
+          <Expander Header="{DynamicResource Customer.Section}" Margin="0,12,0,0" IsExpanded="False">
+            <StackPanel Margin="0,5,0,0">
+              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerSearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource Customer.Search}"/>
+              <CheckBox Content="{DynamicResource Customer.IncludeInactive}" IsChecked="{Binding CustomerIncludeInactive}" Margin="0,0,0,5"/>
+              <Button Content="{DynamicResource Customer.SearchButton}" Command="{Binding SearchCustomersCommand}" Padding="6,4" Margin="0,0,0,5"/>
+              <ListBox Height="115" ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedManagedCustomer, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,1">
+                      <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                      <TextBlock Text="{Binding DisplayName}" FontSize="11"/>
+                      <TextBlock Text="{Binding Status}" FontSize="10" Foreground="#667085"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="{DynamicResource Customer.Code}" FontSize="12" Margin="0,6,0,0"/>
+              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerCodeText, UpdateSourceTrigger=PropertyChanged}"/>
+              <TextBlock Text="{DynamicResource Customer.Name}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerNameText, UpdateSourceTrigger=PropertyChanged}"/>
+              <TextBlock Text="{DynamicResource Customer.Nickname}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerNicknameText, UpdateSourceTrigger=PropertyChanged}"/>
+              <TextBlock Text="{DynamicResource Customer.Phone}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerPhoneText, UpdateSourceTrigger=PropertyChanged}"/>
+              <WrapPanel Margin="0,0,0,6">
+                <Button Content="{DynamicResource Customer.Create}" Command="{Binding CreateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                <Button Content="{DynamicResource Customer.Update}" Command="{Binding UpdateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+              </WrapPanel>
+              <TextBlock Text="{Binding CustomerStatusSummaryText}" FontSize="11" Margin="0,0,0,5"/>
+              <TextBlock Text="{DynamicResource Customer.StatusReason}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerStatusReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+              <WrapPanel>
+                <Button Content="{DynamicResource Customer.Activate}" Command="{Binding ActivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                <Button Content="{DynamicResource Customer.Deactivate}" Command="{Binding DeactivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                <Button Content="{DynamicResource Customer.Block}" Command="{Binding BlockCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+              </WrapPanel>
+            </StackPanel>
+          </Expander>
         </StackPanel>
 
         <StackPanel Grid.Column="1" Margin="8,0">
