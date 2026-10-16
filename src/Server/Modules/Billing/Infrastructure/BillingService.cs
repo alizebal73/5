@@ -60,7 +60,8 @@ public sealed class BillingService(
         Guid invoiceId,
         CancellationToken cancellationToken)
     {
-        if (!actor.Permissions.Contains(Permissions.BillingWrite))
+        if (!actor.Permissions.Contains(Permissions.BillingWrite) &&
+            !actor.Permissions.Contains(Permissions.BillingCashReverse))
             return Fail<CashCheckoutOutcomeResponse>("billing.forbidden", "Not allowed to reconcile cash checkout outcomes.");
         if (invoiceId == Guid.Empty)
             return Fail<CashCheckoutOutcomeResponse>("billing.invoice_not_found", "Invoice was not found.");
@@ -85,7 +86,8 @@ public sealed class BillingService(
         BillingActorContext actor,
         CancellationToken cancellationToken)
     {
-        if (!actor.Permissions.Contains(Permissions.BillingWrite))
+        if (!actor.Permissions.Contains(Permissions.BillingWrite) &&
+            !actor.Permissions.Contains(Permissions.BillingCashReverse))
             return Fail<IReadOnlyList<CashCheckoutOutcomeResponse>>(
                 "billing.forbidden", "Not allowed to read recent cash checkout outcomes.");
 

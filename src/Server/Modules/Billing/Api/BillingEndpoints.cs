@@ -43,7 +43,7 @@ public static class BillingEndpoints
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CashCheckoutOutcomeResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
-        }).RequireAuthorization(Permissions.BillingWrite);
+        });
 
         group.MapGet("/recent-cash-checkouts", async (
             IBillingService service,
@@ -57,7 +57,7 @@ public static class BillingEndpoints
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CashCheckoutOutcomeResponse[]>(result.Value.ToArray(), CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
-        }).RequireAuthorization(Permissions.BillingWrite);
+        });
 
         group.MapPost("/invoices/{invoiceId:guid}/cash", async (
             Guid invoiceId,

@@ -56,6 +56,11 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedPendingInvoice is not null &&
             received >= SelectedPendingInvoice.Invoice.AmountToman &&
             ConfirmCashCheckout);
+        ReverseCashSaleCommand = new AsyncUiAction(ReverseCashSaleAsync, () => !IsBusy && CanReverseCashSale &&
+            !unresolvedCashSaleReversalInvoiceId.HasValue &&
+            SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } &&
+            IsValidCashSaleReversalReason(CashSaleReversalReasonText) &&
+            ConfirmCashSaleReversal);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -75,7 +80,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public bool CanManageTariffs => hasPermission(Permissions.SettingsWrite);
     public bool CanOperateSessions => hasPermission(Permissions.SessionsOperate);
     public bool CanCheckout => hasPermission(Permissions.BillingWrite);
-    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout;
+    public bool CanReverseCashSale => hasPermission(Permissions.BillingCashReverse);
+    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale;
     public bool CanReadStations => hasPermission(Permissions.StationsRead);
 
     public StationResponse? SelectedStation
@@ -169,6 +175,43 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 }
             }
 
+            if (unresolvedCashSaleReversalInvoiceId is Guid unresolvedReversalInvoiceId)
+            {
+                CashCheckoutOutcomeResponse reversalOutcome;
+                try
+                {
+                    reversalOutcome = await api.GetCashCheckoutOutcomeAsync(unresolvedReversalInvoiceId);
+                }
+                catch
+                {
+                    ErrorMessage = Text(
+                        "نتیجهٔ برگشت فروش هنوز قابل تأیید نیست؛ تا تطبیق با سرور، درخواست را تکرار نکنید.",
+                        "Cash-sale reversal is still unverified. Do not retry until its durable Server outcome can be reconciled.");
+                    return;
+                }
+
+                if (IsConfirmedReversedCashSaleOutcome(reversalOutcome))
+                {
+                    unresolvedCashSaleReversalInvoiceId = null;
+                    pendingKeys.Remove("billing.cash-reversal");
+                    RaiseCommands();
+                }
+                else if (IsConfirmedPaidCashSaleWithoutReversal(reversalOutcome))
+                {
+                    unresolvedCashSaleReversalInvoiceId = null;
+                    CashSaleReversalReasonText = string.Empty;
+                    ConfirmCashSaleReversal = false;
+                    RaiseCommands();
+                }
+                else
+                {
+                    ErrorMessage = Text(
+                        "وضعیت صورتحساب و برگشت با هم سازگار نیست؛ عملیات دوباره مسدود است.",
+                        "Invoice and reversal records do not reconcile. The reversal command remains blocked.");
+                    return;
+                }
+            }
+
             ErrorMessage = string.Empty;
             if (CanReadStations)
             {
@@ -249,7 +292,16 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                     FormatAmountDisplayText(invoice.AmountToman))).ToArray();
                 Replace(PendingInvoices, invoiceItems, SelectedPendingInvoice?.Id, x => x.Id, out var currentInvoice);
                 SelectedPendingInvoice = currentInvoice;
+            }
+            else
+            {
+                PendingInvoices.Clear();
+                SelectedPendingInvoice = null;
+            }
 
+            if (CanCheckout || CanReverseCashSale)
+            {
+                var selectedRecentInvoiceId = SelectedRecentCashCheckout?.Id;
                 var recentOutcomes = await api.GetRecentCashCheckoutsAsync();
                 RecentCashCheckouts.Clear();
                 foreach (var outcome in recentOutcomes)
@@ -262,17 +314,21 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                         FormatCashOutcomeDetailsDisplayText(outcome),
                         FormatPaidAtDisplayText(outcome.PaidAtUtc)));
                 }
+
+                SelectedRecentCashCheckout = selectedRecentInvoiceId.HasValue
+                    ? RecentCashCheckouts.FirstOrDefault(x => x.Id == selectedRecentInvoiceId.Value)
+                    : null;
             }
             else
             {
-                PendingInvoices.Clear();
-                SelectedPendingInvoice = null;
                 RecentCashCheckouts.Clear();
+                SelectedRecentCashCheckout = null;
             }
 
             OnPropertyChanged(nameof(CanManageTariffs));
             OnPropertyChanged(nameof(CanOperateSessions));
             OnPropertyChanged(nameof(CanCheckout));
+            OnPropertyChanged(nameof(CanReverseCashSale));
             OnPropertyChanged(nameof(CanReadStations));
             OnPropertyChanged(nameof(CanUseWorkspace));
             StatusMessage = stationLabelsUnavailable
@@ -306,6 +362,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanManageTariffs));
         OnPropertyChanged(nameof(CanOperateSessions));
         OnPropertyChanged(nameof(CanCheckout));
+        OnPropertyChanged(nameof(CanReverseCashSale));
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
@@ -318,18 +375,24 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         Tariffs.Clear();
         ActiveSessions.Clear();
         PendingInvoices.Clear();
+        RecentCashCheckouts.Clear();
+        SelectedRecentCashCheckout = null;
         SelectedStation = null;
         SelectedTariff = null;
         SelectedActiveSession = null;
         SelectedPendingInvoice = null;
         pendingKeys.Clear();
         unresolvedCashCheckoutInvoiceId = null;
+        unresolvedCashSaleReversalInvoiceId = null;
+        CashSaleReversalReasonText = string.Empty;
+        ConfirmCashSaleReversal = false;
         RaiseCommands();
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
         OnPropertyChanged(nameof(CanManageTariffs));
         OnPropertyChanged(nameof(CanOperateSessions));
         OnPropertyChanged(nameof(CanCheckout));
+        OnPropertyChanged(nameof(CanReverseCashSale));
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
     }
@@ -520,6 +583,9 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
         "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
         "billing.cash_insufficient" => Text("وجه دریافتی کمتر از صورتحساب است.", "Cash received is less than the invoice amount."),
+        "billing.reversal_method_unsupported" => Text("این عملیات فقط برای پرداخت نقدی پشتیبانی می‌شود.", "This operation supports cash payments only."),
+        "billing.reversal_invalid" => Text("علت یا اطلاعات برگشت معتبر نیست.", "The reversal reason or request is invalid."),
+        "billing.reversal_confirmation_mismatch" => Text("صورتحساب، پرداخت یا مبلغ تأییدشده با اطلاعات سرور تطبیق ندارد.", "The confirmed invoice, payment, or amount does not match Server state."),
         "billing.invoice_not_pending" => Text("این صورتحساب در انتظار پرداخت نیست.", "This invoice is not awaiting payment."),
         "idempotency.in_flight" => Text("این درخواست هنوز در حال پردازش است؛ کمی بعد وضعیت را تازه‌سازی کنید.", "This request is still processing; refresh its status before retrying."),
         "idempotency.key_reused" => Text("کلید تکرار درخواست با اطلاعات متفاوت استفاده شده است.", "The idempotency key was reused with different request data."),
@@ -551,6 +617,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
