@@ -136,7 +136,12 @@ base AS (
            tc.previous_amount_received_toman, tc.previous_change_given_toman,
            tc.corrected_amount_received_toman, tc.corrected_change_given_toman,
            tc.reason AS correction_reason, tc.corrected_by_operator_id, tc.correlation_id, tc.idempotency_key,
-           (SELECT count(*) FROM cash_tender_corrections all_tc WHERE all_tc.invoice_id = i.id) AS correction_count
+           (SELECT count(*) FROM cash_tender_corrections all_tc WHERE all_tc.invoice_id = i.id) AS correction_count,
+           (SELECT count(*) FROM audit_entries a
+             WHERE a.operation = 'billing.cash_tender_correction'
+               AND a.reference_type = 'CashTenderCorrection'
+               AND a.reference_id = tc.id::text
+               AND a.outcome = 'Succeeded') AS correction_audit_count
     FROM input x
     JOIN invoices i ON i.id = x.invoice_id
     LEFT JOIN payments p ON p.invoice_id = i.id
@@ -150,6 +155,7 @@ SELECT base.*,
         correction_id IS NOT NULL
         AND correction_version = 1
         AND correction_count = 1
+        AND correction_audit_count = 1
         AND payment_id IS NOT NULL
         AND amount_applied_toman = invoice_amount_toman
         AND previous_amount_received_toman = original_amount_received_toman
@@ -164,7 +170,7 @@ SELECT base.*,
 FROM base;
 ```
 
-Expected for this single-correction exercise: exactly one row with `correction_reconciliation_status = PASS`, `correction_version = 1`, and `correction_count = 1`. Example only: if the original received-cash amount was invoice + 500 and the corrected amount is invoice + 750, then the original change stays 500 while the corrected/effective change is 750. Use the actual captured values in the evidence; do not force the sample numbers onto another run.
+Expected for this single-correction exercise: exactly one row with `correction_reconciliation_status = PASS`, `correction_version = 1`, `correction_count = 1`, and `correction_audit_count = 1`. The successful correction Audit must reference this correction ID and retain its recorded reason/correlation ID. Example only: if the original received-cash amount was invoice + 500 and the corrected amount is invoice + 750, then the original change stays 500 while the corrected/effective change is 750. Use the actual captured values in the evidence; do not force the sample numbers onto another run.
 
 
 ## 5. Evidence record and acceptance decision
