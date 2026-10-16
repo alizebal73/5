@@ -9,6 +9,7 @@ public static class Permissions
     public const string SessionsOperate = "sessions.operate";
     public const string BillingWrite = "billing.write";
     public const string BillingCashReverse = "billing.cash-reverse";
+    public const string BillingCashTenderCorrect = "billing.cash-tender-correct";
     public const string WalletWrite = "wallet.write";
     public const string InventoryWrite = "inventory.write";
     public const string ReportsRead = "reports.read";
