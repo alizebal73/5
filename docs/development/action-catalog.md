@@ -133,7 +133,7 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
 - Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
 - For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
-- **Catalog completeness is intentionally limited** to current Identity/Station operations and the partial Slice 1 Session-to-cash actions in section 3. Future Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
+- **Catalog completeness is intentionally limited** to current Identity/Station actions, Customer profile core in section 3, and the partial Slice 1 Session-to-cash actions in section 4. Customer PIN/login, Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
 
 ## 3. Customer profile core
 
