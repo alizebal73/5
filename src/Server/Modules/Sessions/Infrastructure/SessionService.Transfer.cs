@@ -143,7 +143,7 @@ public sealed partial class SessionService
                         "sessions.transfer",
                         "Session",
                         session.Id.ToString("D"),
-                        null,
+                        normalized.Reason,
                         normalized.Actor.CorrelationId,
                         normalized.Actor.Source,
                         "Succeeded",
