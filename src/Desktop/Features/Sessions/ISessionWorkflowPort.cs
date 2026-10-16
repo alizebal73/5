@@ -26,6 +26,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
 
     ICommand RefreshCommand { get; }
     ICommand SearchCustomersCommand { get; }
+    ICommand SearchSessionCustomersCommand { get; }
     ICommand NewCustomerCommand { get; }
     ICommand UseWalkInCustomerCommand { get; }
     ICommand CreateCustomerCommand { get; }
@@ -58,6 +59,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     CustomerResponse? SelectedManagedCustomer { get; set; }
     bool IsNewCustomer { get; }
     string CustomerSearchText { get; set; }
+    string SessionCustomerSearchText { get; set; }
     string CustomerCodeText { get; set; }
     string CustomerNameText { get; set; }
     string CustomerNicknameText { get; set; }
