@@ -10,7 +10,8 @@ public enum SessionStatusContract
 public enum InvoiceStatusContract
 {
     PendingPayment = 1,
-    Paid = 2
+    Paid = 2,
+    Reversed = 3
 }
 
 public sealed record StartSessionRequest(Guid StationId, Guid TariffId, Guid? CustomerId);

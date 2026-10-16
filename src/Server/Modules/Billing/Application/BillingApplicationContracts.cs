@@ -17,6 +17,14 @@ public sealed record CashCheckoutCommand(
     string IdempotencyKey,
     BillingActorContext Actor);
 
+public sealed record CashSaleReversalCommand(
+    Guid InvoiceId,
+    Guid PaymentId,
+    long ConfirmedAmountToman,
+    string Reason,
+    string IdempotencyKey,
+    BillingActorContext Actor);
+
 public interface IBillingService
 {
     Task<Result<IReadOnlyList<InvoicePreviewResponse>>> ListPendingInvoicesAsync(
@@ -34,5 +42,9 @@ public interface IBillingService
 
     Task<Result<CashCheckoutResponse>> CheckoutCashAsync(
         CashCheckoutCommand command,
+        CancellationToken cancellationToken);
+
+    Task<Result<CashSaleReversalResponse>> ReverseCashSaleAsync(
+        CashSaleReversalCommand command,
         CancellationToken cancellationToken);
 }

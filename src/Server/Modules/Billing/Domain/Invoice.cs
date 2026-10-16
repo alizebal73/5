@@ -89,6 +89,17 @@ public sealed class Invoice
         Status = InvoiceStatus.Paid;
     }
 
+    public void MarkReversed()
+    {
+        if (Status != InvoiceStatus.Paid)
+            throw new InvalidOperationException("INVOICE_NOT_PAID_FOR_REVERSAL");
+        if (PaidAtUtc is null || PaidByOperatorId is null)
+            throw new InvalidOperationException("INVOICE_PAID_FACTS_MISSING");
+
+        // Only the lifecycle projection changes; original paid facts and invoice amount remain immutable.
+        Status = InvoiceStatus.Reversed;
+    }
+
     private static string NormalizeSnapshot(string value, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("Tariff snapshot is required.", parameterName);

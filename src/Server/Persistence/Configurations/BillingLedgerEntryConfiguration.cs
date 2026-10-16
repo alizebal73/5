@@ -11,7 +11,7 @@ public sealed class BillingLedgerEntryConfiguration : IEntityTypeConfiguration<B
         b.ToTable("billing_ledger_entries", table =>
         {
             table.HasCheckConstraint("ck_billing_ledger_amount_positive", "amount_toman > 0");
-            table.HasCheckConstraint("ck_billing_ledger_entry_type", "entry_type = 1");
+            table.HasCheckConstraint("ck_billing_ledger_entry_type", "entry_type IN (1, 2)");
         });
         b.HasKey(x => x.Id).HasName("pk_billing_ledger_entries");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
@@ -21,8 +21,14 @@ public sealed class BillingLedgerEntryConfiguration : IEntityTypeConfiguration<B
         b.Property(x => x.AmountToman).IsRequired().HasColumnName("amount_toman");
         b.Property(x => x.ActorId).IsRequired().HasColumnName("actor_id");
         b.Property(x => x.OccurredAtUtc).IsRequired().HasColumnName("occurred_at_utc");
-        b.HasIndex(x => x.InvoiceId).IsUnique().HasDatabaseName("ux_billing_ledger_invoice_id");
-        b.HasIndex(x => x.PaymentId).IsUnique().HasDatabaseName("ux_billing_ledger_payment_id");
+        b.HasIndex(x => x.InvoiceId).IsUnique().HasFilter("entry_type = 1")
+            .HasDatabaseName("ux_billing_ledger_invoice_cash_sale");
+        b.HasIndex(x => x.InvoiceId).IsUnique().HasFilter("entry_type = 2")
+            .HasDatabaseName("ux_billing_ledger_invoice_cash_reversal");
+        b.HasIndex(x => x.PaymentId).IsUnique().HasFilter("entry_type = 1")
+            .HasDatabaseName("ux_billing_ledger_payment_cash_sale");
+        b.HasIndex(x => x.PaymentId).IsUnique().HasFilter("entry_type = 2")
+            .HasDatabaseName("ux_billing_ledger_payment_cash_reversal");
         b.HasIndex(x => x.OccurredAtUtc).HasDatabaseName("ix_billing_ledger_occurred_at_utc");
         b.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_billing_ledger_entries_invoices_invoice_id");
         b.HasOne<Payment>().WithMany().HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_billing_ledger_entries_payments_payment_id");

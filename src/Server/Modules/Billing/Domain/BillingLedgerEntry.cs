@@ -47,4 +47,22 @@ public sealed class BillingLedgerEntry
         return new BillingLedgerEntry(id, invoiceId, paymentId, BillingLedgerEntryType.CashSale,
             amountToman, actorId, occurredAtUtc);
     }
+
+    public static BillingLedgerEntry RecordCashSaleReversal(
+        Guid id,
+        Guid invoiceId,
+        Guid paymentId,
+        long amountToman,
+        Guid actorId,
+        DateTimeOffset occurredAtUtc)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Ledger entry id is required.", nameof(id));
+        if (invoiceId == Guid.Empty) throw new ArgumentException("Invoice id is required.", nameof(invoiceId));
+        if (paymentId == Guid.Empty) throw new ArgumentException("Payment id is required.", nameof(paymentId));
+        if (actorId == Guid.Empty) throw new ArgumentException("Actor id is required.", nameof(actorId));
+        if (amountToman <= 0) throw new ArgumentOutOfRangeException(nameof(amountToman));
+
+        return new BillingLedgerEntry(id, invoiceId, paymentId, BillingLedgerEntryType.CashSaleReversal,
+            amountToman, actorId, occurredAtUtc);
+    }
 }
