@@ -420,7 +420,7 @@ public sealed class SessionWorkflowPostgresTests
             new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock)),
             new TestRequestFingerprint(),
             new CustomerSessionAccess(db),
-            new StationSessionAccess(db),
+            new StationSessionAccess(db, clock),
             new TariffSessionAccess(db),
             new BillingInvoiceWriter(db, audit, clock),
             audit,
