@@ -877,6 +877,9 @@ try {
     Assert-Status $outcomeAfterCorrection 200 "Read durable corrected tender facts over HTTP"
     if ([string]$outcomeAfterCorrection.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
         [string]$outcomeAfterCorrection.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId -or
+        [long]$outcomeAfterCorrection.Json.data.amountToman -ne $invoiceAmount -or
+        [long]$outcomeAfterCorrection.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        [long]$outcomeAfterCorrection.Json.data.elapsedTicks -ne $elapsedTicks -or
         [long]$outcomeAfterCorrection.Json.data.amountReceivedToman -ne $amountReceived -or
         [long]$outcomeAfterCorrection.Json.data.changeGivenToman -ne 500 -or
         [long]$outcomeAfterCorrection.Json.data.effectiveAmountReceivedToman -ne $correctedAmountReceivedToman -or
@@ -950,6 +953,11 @@ try {
     Assert-Status $finalCashOutcome 200 "Reconcile final reversed cash checkout outcome"
     if ([int]$finalCashOutcome.Json.data.status -ne 3 -or
         [string]$finalCashOutcome.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [long]$finalCashOutcome.Json.data.amountToman -ne $invoiceAmount -or
+        [long]$finalCashOutcome.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        [long]$finalCashOutcome.Json.data.elapsedTicks -ne $elapsedTicks -or
+        [string]$finalCashOutcome.Json.data.cashTenderCorrectionReason -ne $correctionReason -or
+        [string]$finalCashOutcome.Json.data.reversalReason -ne $reversalReason -or
         [string]$finalCashOutcome.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId -or
         [string]$finalCashOutcome.Json.data.reversalId -ne [string]$reversal.Json.data.reversalId -or
         [string]$finalCashOutcome.Json.data.reversalLedgerEntryId -ne [string]$reversal.Json.data.ledgerEntryId -or
