@@ -999,6 +999,136 @@ public sealed class SessionWorkflowPostgresTests
         }
     }
 
+    [Theory]
+    [InlineData(StationType.Ps5, StationTypeContract.Ps5)]
+    [InlineData(StationType.Foosball, StationTypeContract.Foosball)]
+    public async Task Non_pc_timed_session_uses_the_matching_tariff_and_existing_cash_pipeline(
+        StationType stationType,
+        StationTypeContract tariffType)
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorId = Guid.NewGuid();
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlation = "timed-station-" + token;
+        var idempotencyPrefix = "timed-station-" + token + "-";
+        Guid? customerId = null;
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+
+        try
+        {
+            await using var db = CreateContext(connectionString);
+            var station = Station.Create(
+                stationId, "TM-" + token[..12], "Timed non-PC station", stationType);
+            var tariff = Tariff.CreateFixedHourly(
+                tariffId, "TM-" + token[..12], "Timed non-PC tariff",
+                tariffType, 120_000L, false, clock.UtcNow);
+            db.Stations.Add(station);
+            db.Tariffs.Add(tariff);
+            await db.SaveChangesAsync();
+
+            var service = CreateService(db, clock);
+            var actor = Actor(operatorId, correlation);
+            var billing = CreateBillingService(db, clock);
+            var billingActor = BillingActor(operatorId, correlation);
+            var startCommand = new StartSessionCommand(
+                stationId, tariffId, null, idempotencyPrefix + "start", actor);
+
+            // No Agent binding, credential, lease, or heartbeat is created for this station.
+            var started = await service.StartAsync(startCommand, CancellationToken.None);
+            Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
+            Assert.Equal(SessionStatusContract.Active, started.Value.Status);
+            Assert.Equal(tariffId, started.Value.TariffId);
+            customerId = started.Value.CustomerId;
+
+            var replay = await service.StartAsync(startCommand, CancellationToken.None);
+            Assert.True(replay.IsSuccess);
+            Assert.Equal(started.Value.Id, replay.Value.Id);
+            Assert.Equal(1, await db.Sessions.CountAsync(x => x.StationId == stationId));
+
+            clock.Advance(TimeSpan.FromMinutes(15));
+            var ended = await service.EndAsync(
+                new EndSessionCommand(
+                    started.Value.Id, started.Value.Version, idempotencyPrefix + "end", actor),
+                CancellationToken.None);
+            Assert.True(ended.IsSuccess, ended.IsSuccess ? "" : ended.Error.Code);
+            Assert.Equal(InvoiceStatusContract.PendingPayment, ended.Value.Status);
+            Assert.Equal(TimeSpan.FromMinutes(15).Ticks, ended.Value.ElapsedTicks);
+            Assert.Equal(30_000L, ended.Value.AmountToman);
+
+            var checkout = await billing.CheckoutCashAsync(
+                new CashCheckoutCommand(
+                    ended.Value.InvoiceId, ended.Value.AmountToman, ended.Value.SessionVersion,
+                    idempotencyPrefix + "cash", billingActor),
+                CancellationToken.None);
+            Assert.True(checkout.IsSuccess, checkout.IsSuccess ? "" : checkout.Error.Code);
+            Assert.Equal(30_000L, checkout.Value.InvoiceAmountToman);
+            Assert.Equal(30_000L, checkout.Value.AmountReceivedToman);
+            Assert.Equal(0L, checkout.Value.ChangeGivenToman);
+
+            var invoice = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == ended.Value.InvoiceId);
+            Assert.Equal(InvoiceStatus.Paid, invoice.Status);
+            Assert.Single(await db.Payments.AsNoTracking().Where(x => x.InvoiceId == invoice.Id).ToArrayAsync());
+            Assert.Single(await db.BillingLedgerEntries.AsNoTracking().Where(x => x.InvoiceId == invoice.Id).ToArrayAsync());
+            var session = await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == started.Value.Id);
+            Assert.Equal(SessionStatus.Paid, session.Status);
+            Assert.Equal(TimeSpan.FromMinutes(15).Ticks, session.ElapsedTicks);
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, stationId, tariffId, customerId, correlation, idempotencyPrefix);
+        }
+    }
+
+    [Theory]
+    [InlineData(StationType.Ps5, StationTypeContract.Foosball)]
+    [InlineData(StationType.Foosball, StationTypeContract.Ps5)]
+    public async Task Non_pc_timed_session_rejects_a_tariff_of_another_station_type(
+        StationType stationType,
+        StationTypeContract tariffType)
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorId = Guid.NewGuid();
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlation = "timed-mismatch-" + token;
+        var idempotencyPrefix = "timed-mismatch-" + token + "-";
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+
+        try
+        {
+            await using var db = CreateContext(connectionString);
+            db.Stations.Add(Station.Create(
+                stationId, "TMX-" + token[..10], "Mismatched timed station", stationType));
+            db.Tariffs.Add(Tariff.CreateFixedHourly(
+                tariffId, "TMX-" + token[..10], "Mismatched timed tariff",
+                tariffType, 120_000L, false, clock.UtcNow));
+            await db.SaveChangesAsync();
+
+            var customerCount = await db.Customers.CountAsync();
+            var result = await CreateService(db, clock).StartAsync(
+                new StartSessionCommand(
+                    stationId, tariffId, null, idempotencyPrefix + "start",
+                    Actor(operatorId, correlation)),
+                CancellationToken.None);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("sessions.tariff_station_mismatch", result.Error.Code);
+            Assert.Empty(await db.Sessions.Where(x => x.StationId == stationId).ToArrayAsync());
+            Assert.Equal(customerCount, await db.Customers.CountAsync());
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, stationId, tariffId, null, correlation, idempotencyPrefix);
+        }
+    }
+
     private static BillingActorContext BillingActor(Guid operatorId, string correlation) =>
         new(operatorId, correlation, "PostgreSQLTest",
             new HashSet<string>([Permissions.BillingWrite, Permissions.BillingCashReverse], StringComparer.Ordinal));

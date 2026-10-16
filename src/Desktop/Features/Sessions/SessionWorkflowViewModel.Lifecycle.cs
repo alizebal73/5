@@ -35,8 +35,8 @@ public sealed partial class SessionWorkflowViewModel
             await RefreshAsync();
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == paused.Id);
             StatusMessage = Text(
-                $"زمان صورتحساب PC {GetStationLabel(session.StationId)} متوقف شد. مدت توقف محاسبه نمی‌شود.",
-                $"Billing time paused for PC {GetStationLabel(session.StationId)}. Paused time is not billed.");
+                $"زمان صورتحساب ایستگاه {GetStationLabel(session.StationId)} متوقف شد. مدت توقف محاسبه نمی‌شود.",
+                $"Billing time paused for station {GetStationLabel(session.StationId)}. Paused time is not billed.");
         }
         catch (GameNetApiException ex)
         {
@@ -80,8 +80,8 @@ public sealed partial class SessionWorkflowViewModel
             await RefreshAsync();
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == resumed.Id);
             StatusMessage = Text(
-                $"بازی PC {GetStationLabel(session.StationId)} ادامه یافت؛ زمان‌سنجی از نقطهٔ جدید شروع شد.",
-                $"Play resumed on PC {GetStationLabel(session.StationId)}; a fresh monotonic timing segment has started.");
+                $"بازی در ایستگاه {GetStationLabel(session.StationId)} ادامه یافت؛ زمان‌سنجی از نقطهٔ جدید شروع شد.",
+                $"Play resumed on station {GetStationLabel(session.StationId)}; a fresh monotonic timing segment has started.");
         }
         catch (GameNetApiException ex)
         {

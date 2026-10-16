@@ -27,9 +27,18 @@
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="0" Margin="0,0,8,0">
           <TextBlock Text="{DynamicResource Session.StartTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-          <TextBlock Text="{DynamicResource Session.PcStation}" FontSize="12"/>
-          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding PcStations}"
-                    DisplayMemberPath="Code" SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
+          <TextBlock Text="{DynamicResource Session.Station}" FontSize="12"/>
+          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding StationChoices}"
+                    SelectedItem="{Binding SelectedStationChoice, Mode=TwoWay}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel>
+                  <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                  <TextBlock Text="{Binding TypeDisplayText}" FontSize="11" Foreground="#667085"/>
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
           <TextBlock Text="{DynamicResource Customer.SelectForSession}" FontSize="12"/>
           <TextBox Margin="0,3,0,4" Padding="5"
                    Text="{Binding SessionCustomerSearchText, UpdateSourceTrigger=PropertyChanged}"
@@ -109,6 +118,10 @@
         <StackPanel Grid.Column="1" Margin="8,0">
           <TextBlock Text="{DynamicResource Tariff.CreateTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
           <StackPanel Visibility="{Binding CanManageTariffs, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="{DynamicResource Tariff.StationType}" FontSize="12"/>
+            <ComboBox Margin="0,3,0,7" Padding="5" ItemsSource="{Binding StationTypeOptions}"
+                      DisplayMemberPath="DisplayText" SelectedValuePath="Type"
+                      SelectedValue="{Binding TariffStationType, Mode=TwoWay}"/>
             <TextBlock Text="{DynamicResource Tariff.Code}" FontSize="12"/>
             <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding TariffCode, UpdateSourceTrigger=PropertyChanged}"/>
             <TextBlock Text="{DynamicResource Tariff.Name}" FontSize="12"/>

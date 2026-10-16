@@ -16,7 +16,8 @@ namespace GameNet.Desktop.Features.Sessions;
 /// </summary>
 public interface ISessionWorkflowPort : INotifyPropertyChanged
 {
-    ObservableCollection<StationResponse> PcStations { get; }
+    ObservableCollection<SessionStationOption> StationChoices { get; }
+    ObservableCollection<SessionStationTypeOption> StationTypeOptions { get; }
     ObservableCollection<CustomerResponse> Customers { get; }
     ObservableCollection<CustomerResponse> AvailableCustomers { get; }
     ObservableCollection<TariffResponse> Tariffs { get; }
@@ -57,6 +58,8 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     bool IsBusy { get; }
 
     StationResponse? SelectedStation { get; set; }
+    SessionStationOption? SelectedStationChoice { get; set; }
+    StationTypeContract TariffStationType { get; set; }
     CustomerResponse? SelectedCustomer { get; set; }
     CustomerResponse? SelectedManagedCustomer { get; set; }
     bool IsNewCustomer { get; }

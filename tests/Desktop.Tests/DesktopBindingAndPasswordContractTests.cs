@@ -230,6 +230,8 @@ public sealed class DesktopBindingAndPasswordContractTests
             return typeof(CustomerResponse);
         if (string.Equals(memberName, "Tariffs", StringComparison.Ordinal))
             return typeof(TariffResponse);
+        if (string.Equals(memberName, "StationChoices", StringComparison.Ordinal))
+            return typeof(SessionStationOption);
         if (string.Equals(memberName, "ActiveSessions", StringComparison.Ordinal))
             return typeof(ActiveSessionListItem);
         if (string.Equals(memberName, "PendingInvoices", StringComparison.Ordinal))

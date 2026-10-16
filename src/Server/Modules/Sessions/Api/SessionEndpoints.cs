@@ -161,7 +161,7 @@ public static class SessionEndpoints
             "sessions.version_conflict" or "sessions.invalid_state" or "sessions.invalid_clock" or "sessions.amount_overflow" or
             "sessions.timing_recovery_required" or "sessions.timing_recovery_not_required" or
             "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
-            "sessions.pc_only" or "sessions.timing_recovery_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "sessions.pc_only" or "sessions.station_type_unsupported" or "sessions.timing_recovery_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(

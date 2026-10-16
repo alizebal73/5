@@ -350,7 +350,7 @@ public sealed class StationBoardPermissionTests
         Assert.True(workflow.CanReadStations);
         Assert.True(workflow.CanCheckout);
         Assert.False(workflow.CanOperateSessions);
-        Assert.Empty(workflow.PcStations);
+        Assert.Empty(workflow.StationChoices);
         Assert.Empty(workflow.ActiveSessions);
         Assert.Single(workflow.PendingInvoices);
         Assert.Equal("PC-01", workflow.PendingInvoices[0].StationLabel);

@@ -948,7 +948,7 @@ public sealed class SessionWorkflowViewModelTests
         Assert.False(viewModel.ReverseCashSaleCommand.CanExecute(null));
 
         await viewModel.RefreshAsync();
-        Assert.Empty(viewModel.PcStations);
+        Assert.Empty(viewModel.StationChoices);
         Assert.Empty(viewModel.ActiveSessions);
         Assert.Empty(viewModel.PendingInvoices);
     }
@@ -1066,10 +1066,114 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+    [Theory]
+    [InlineData(StationTypeContract.Ps5, "PS5-01", "PS5-HOURLY", "PS5 console")]
+    [InlineData(StationTypeContract.Foosball, "FB-01", "FB-HOURLY", "Foosball table")]
+    public async Task Session_workflow_filters_matching_tariffs_and_starts_non_agent_timed_stations(
+        StationTypeContract stationType,
+        string stationCode,
+        string tariffCode,
+        string expectedTypeLabel)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), stationCode, "Timed station", stationType,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var pcTariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), tariffCode, "Timed Station Tariff", stationType,
+                120_000L, false, true, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient([station], [pcTariff, tariff]);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.StationChoices);
+            Assert.Equal(expectedTypeLabel, viewModel.StationChoices[0].TypeDisplayText);
+
+            viewModel.SelectedStation = station;
+            Assert.Single(viewModel.Tariffs);
+            Assert.Equal(stationType, viewModel.Tariffs[0].StationType);
+            Assert.Equal(tariff.Id, viewModel.SelectedTariff?.Id);
+            Assert.True(viewModel.StartSessionCommand.CanExecute(null));
+
+            var statusTask = WaitForStatusAsync(
+                viewModel, message => message.Contains("Session started for", StringComparison.Ordinal));
+            viewModel.StartSessionCommand.Execute(null);
+            await client.StartRequestReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.NotNull(client.LastStartRequest);
+            Assert.Equal(station.Id, client.LastStartRequest!.StationId);
+            Assert.Equal(tariff.Id, client.LastStartRequest.TariffId);
+
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman,
+                Guid.NewGuid(), DateTimeOffset.UtcNow, null, null, null, null,
+                SessionStatusContract.Active, 1);
+            client.ActiveSessions.Add(session);
+            client.StartSessionCompletion.SetResult(session);
+
+            Assert.Contains(station.Code, await statusTask);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Tariff_creation_submits_the_explicitly_selected_station_type()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var client = new FakeGameNetServerClient([], []);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.SettingsWrite);
+            await viewModel.RefreshAsync();
+
+            viewModel.TariffStationType = StationTypeContract.Ps5;
+            Assert.Equal("PS5-STANDARD", viewModel.TariffCode);
+            Assert.Equal("PS5 Standard", viewModel.TariffName);
+            viewModel.HourlyRateText = "120000";
+
+            var statusTask = WaitForStatusAsync(
+                viewModel, message => message.Contains("Tariff PS5-STANDARD was created", StringComparison.Ordinal));
+            Assert.True(viewModel.CreateTariffCommand.CanExecute(null));
+            viewModel.CreateTariffCommand.Execute(null);
+            Assert.Contains("Tariff PS5-STANDARD was created", await statusTask);
+            Assert.NotNull(client.LastCreateTariffRequest);
+            Assert.Equal(StationTypeContract.Ps5, client.LastCreateTariffRequest!.StationType);
+            Assert.Single(viewModel.Tariffs);
+            Assert.Equal(StationTypeContract.Ps5, viewModel.Tariffs[0].StationType);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
     private sealed class FakeGameNetServerClient(
         IReadOnlyList<StationResponse> stations,
         IReadOnlyList<TariffResponse> tariffs) : IGameNetServerClient
     {
+        private readonly List<TariffResponse> tariffRows = tariffs.ToList();
+        public CreateTariffRequest? LastCreateTariffRequest { get; private set; }
+        public string? LastCreateTariffIdempotencyKey { get; private set; }
+
         public TaskCompletionSource<bool> StartRequestReceived { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1140,11 +1244,21 @@ public sealed class SessionWorkflowViewModelTests
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<TariffResponse>>(tariffs
+            Task.FromResult<IReadOnlyList<TariffResponse>>(tariffRows
                 .Where(tariff => stationType is null || tariff.StationType == stationType)
                 .ToArray());
 
-        public Task<TariffResponse> CreateTariffAsync(CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<TariffResponse> CreateTariffAsync(CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastCreateTariffRequest = request;
+            LastCreateTariffIdempotencyKey = idempotencyKey;
+            var created = new TariffResponse(
+                Guid.NewGuid(), request.Code.Trim().ToUpperInvariant(), request.Name.Trim(),
+                request.StationType, request.HourlyRateToman, request.IsDefault, true,
+                DateTimeOffset.UtcNow, 1);
+            tariffRows.Add(created);
+            return Task.FromResult(created);
+        }
 
         public Task<IReadOnlyList<SessionResponse>> GetActiveSessionsAsync(Guid? stationId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<SessionResponse>>(ActiveSessions
