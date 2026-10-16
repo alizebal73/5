@@ -115,7 +115,7 @@ public sealed partial class SessionWorkflowViewModel
 
             stationLabels.Clear();
             foreach (var station in stations)
-                stationLabels[station.Id] = $"{station.Code} — {StationTypeDisplayText(station.Type)}";
+                stationLabels[station.Id] = station.Code;
 
             if (CanOperateSessions)
             {
