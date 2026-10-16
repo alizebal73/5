@@ -50,6 +50,7 @@ Source: "{#PayloadRoot}\Desktop\*"; DestDir: "{app}\Desktop"; Flags: ignoreversi
 Source: "{#PayloadRoot}\Agent\*"; DestDir: "{app}\Agent"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: agent
 
 Source: "{#PayloadRoot}\release-manifest.json"; DestDir: "{app}\Setup"; Flags: ignoreversion
+Source: "{#PayloadRoot}\Setup\PowerShell\*"; DestDir: "{app}\Setup\PowerShell"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadRoot}\README-TestSetup.txt"; DestDir: "{app}\Setup"; Flags: ignoreversion
 Source: "{#PayloadRoot}\Install-TestRuntime.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
 Source: "{#PayloadRoot}\Remove-TestRuntime.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
@@ -70,10 +71,10 @@ Name: "{group}\GameNet Manager (TEST)"; Filename: "{app}\Desktop\GameNet.Manager
 Name: "{group}\Temporary Setup Instructions"; Filename: "{app}\Setup\README-TestSetup.txt"
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Install-TestRuntime.ps1"" -InstallRoot ""{app}"" -Mode ""{code:GetSetupModeArg}"""; Flags: waituntilterminated
+Filename: "{app}\Setup\PowerShell\pwsh.exe"; Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Install-TestRuntime.ps1"" -InstallRoot ""{app}"" -Mode ""{code:GetSetupModeArg}"""; Flags: waituntilterminated
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Remove-TestRuntime.ps1"" -InstallRoot ""{app}"""; Flags: runhidden waituntilterminated
+Filename: "{app}\Setup\PowerShell\pwsh.exe"; Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Remove-TestRuntime.ps1"" -InstallRoot ""{app}"""; Flags: runhidden waituntilterminated
 
 [Code]
 function GetSetupModeArg(Param: String): String;
