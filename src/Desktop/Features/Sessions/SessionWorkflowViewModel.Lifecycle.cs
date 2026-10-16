@@ -41,7 +41,7 @@ public sealed partial class SessionWorkflowViewModel
         {
             ErrorMessage = ErrorText(ex.Code);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             // Keep the fingerprint/key so a refresh and retry can safely reconcile the
             // ambiguous outcome through the server's idempotency record.
@@ -86,7 +86,7 @@ public sealed partial class SessionWorkflowViewModel
         {
             ErrorMessage = ErrorText(ex.Code);
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             var message = Text(
                 "نتیجهٔ ادامه نامشخص است؛ وضعیت را تازه‌سازی کنید و پیش از ارسال درخواست تازه، Session را بررسی کنید.",
