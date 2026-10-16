@@ -10,7 +10,7 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - A Desktop operation uses `IGameNetServerClient` and typed Shared V1 contracts. Desktop/Agent never connect directly to PostgreSQL.
 - Mutations use the Server's stable error contract, actor/correlation data, idempotency and Audit behavior as listed below. Never invent a local success path or assume a timeout means the mutation failed.
 - `Desktop UI: yes` means an action is reachable in the current WPF shell. `Server API only` means the API exists, but no operator-management screen/command is currently wired in this Desktop shell.
-- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, and the integrated full cash-sale reversal action. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments, partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Cash tender correction is implemented as a separate audited operation; its manual acceptance remains open. Define any new action contract before adding its UI Command.
+- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, the integrated full cash-sale reversal and cash-tender correction actions, and the candidate PC Session pause/resume slice under PR #130. Customer login/multi-device policy, Wallet/debt, card payments/partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
 
 ## 1. Current Desktop Identity operations
 
