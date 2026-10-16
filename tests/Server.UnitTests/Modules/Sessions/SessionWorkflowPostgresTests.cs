@@ -136,6 +136,24 @@ public sealed class SessionWorkflowPostgresTests
                 lease.LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5);
                 await db.SaveChangesAsync();
 
+                // Blocked registered customers must be rejected by the Server boundary,
+                // even when a live Agent lease and a valid tariff are available.
+                var blockedCustomer = Customer.CreateRegistered(
+                    Guid.NewGuid(), "CB-" + token[..12], "Blocked PostgreSQL customer", clock.UtcNow);
+                blockedCustomer.SetStatus(CustomerStatus.Blocked);
+                db.Customers.Add(blockedCustomer);
+                await db.SaveChangesAsync();
+
+                var blockedCustomerStart = await service.StartAsync(
+                    new StartSessionCommand(
+                        stationId, tariffId, blockedCustomer.Id, startKey + "-blocked-customer", actor),
+                    CancellationToken.None);
+                Assert.False(blockedCustomerStart.IsSuccess);
+                Assert.Equal("sessions.customer_blocked", blockedCustomerStart.Error.Code);
+                Assert.Equal(0, await db.Sessions.CountAsync(x => x.StationId == stationId));
+                db.Customers.Remove(blockedCustomer);
+                await db.SaveChangesAsync();
+
                 var startCommand = new StartSessionCommand(stationId, tariffId, null, startKey, actor);
                 var started = await service.StartAsync(startCommand, CancellationToken.None);
                 Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
