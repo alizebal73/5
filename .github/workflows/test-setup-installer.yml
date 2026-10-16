@@ -1,0 +1,145 @@
+name: Temporary Test Setup Installer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
+      - "feature/**"
+    paths:
+      - ".github/workflows/test-setup-installer.yml"
+      - "installer/**"
+      - "scripts/build-temporary-test-setup.ps1"
+      - "scripts/publish-deployment-payloads.ps1"
+      - "scripts/modules/ServerTlsCertificate.psm1"
+      - "scripts/configure-server-tls.ps1"
+      - "scripts/trust-server-certificate.ps1"
+      - "scripts/configure-runtime-endpoint.ps1"
+      - "scripts/write-protected-server-settings.ps1"
+      - "scripts/finalize-server-setup.ps1"
+      - "scripts/bootstrap-admin.ps1"
+      - "scripts/configure-agent-runtime-state.ps1"
+      - "scripts/provision-agent-enrollment.ps1"
+      - "scripts/test-runtime-endpoint.ps1"
+      - "src/Server/**"
+      - "src/Desktop/**"
+      - "src/Client/**"
+      - "src/Shared/**"
+      - "tests/**"
+      - "GameNet.slnx"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-test-setup- ${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-setup:
+    name: Build temporary Setup.exe and verify payload
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      GAMENET_EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Enforce repository runner policy
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Verify exact source SHA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = ((& git rev-parse HEAD) -join "").Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:GAMENET_EXPECTED_SOURCE_SHA) {
+            throw "Setup build checkout does not match the expected PR head SHA."
+          }
+          Write-Host "EXACT_TESTED_SOURCE_SHA=$actual"
+
+      - name: Install pinned Inno Setup compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+          $candidates = @(
+            (Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"),
+            (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+          )
+          if (-not ($candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) })) {
+            choco install innosetup --version=6.4.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Pinned Inno Setup 6.4.3 installation failed." }
+          }
+          $iscc = $candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($iscc)) {
+            $iscc = Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw "Inno Setup compiler is not present after installation." }
+          Write-Host "INNO_SETUP_COMPILER=$iscc"
+
+      - name: Canonical build and automated tests
+        shell: pwsh
+        timeout-minutes: 25
+        run: .\scripts\verify.ps1
+
+      - name: Parse setup PowerShell sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = @(
+            Get-ChildItem .\installer -Recurse -File -Filter "*.ps1"
+            Get-Item .\scripts\build-temporary-test-setup.ps1
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              $errors | Format-List ErrorId, Message, Extent
+              throw "PowerShell syntax error in $($file.FullName)."
+            }
+          }
+
+      - name: Build Setup.exe and verify hashes
+        shell: pwsh
+        timeout-minutes: 30
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "0.1.0-test.${{ github.run_number }}.${{ github.run_attempt }}"
+          .\scripts\build-temporary-test-setup.ps1 -Version $version -OutputDirectory "artifacts/test-setup/out"
+          $manifest = Get-Content .\artifacts\test-setup\out\setup-manifest.json -Raw | ConvertFrom-Json
+          $actual = ((& git rev-parse HEAD) -join "").Trim()
+          if ($LASTEXITCODE -ne 0 -or $manifest.source.commit -ne $actual -or $actual -ne $env:GAMENET_EXPECTED_SOURCE_SHA) {
+            throw "Setup manifest is not tied to the exact tested source SHA."
+          }
+          $exe = Get-FileHash .\artifacts\test-setup\out\GameNet5-TestSetup.exe -Algorithm SHA256
+          if ($exe.Hash.ToLowerInvariant() -ne $manifest.includedInstaller.sha256) {
+            throw "Setup.exe hash does not match its manifest."
+          }
+          Write-Host "SETUP_EXE_SHA256=$($exe.Hash.ToLowerInvariant())"
+
+      - name: Upload temporary Setup and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamenet5-test-setup-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/test-setup/out/GameNet5-TestSetup.exe
+            artifacts/test-setup/out/setup-manifest.json
+            artifacts/test-setup/out/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
