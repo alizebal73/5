@@ -47,8 +47,9 @@ public sealed partial class SessionWorkflowViewModel
         get => selectedManagedCustomer;
         set
         {
+            var previousCustomerId = selectedManagedCustomer?.Id;
             if (!SetField(ref selectedManagedCustomer, value)) return;
-            if (selectedManagedCustomer?.Id != value?.Id)
+            if (previousCustomerId != value?.Id)
                 CustomerStatusReasonText = string.Empty;
             if (value is not null)
             {
