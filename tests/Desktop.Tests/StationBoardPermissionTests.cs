@@ -546,6 +546,10 @@ public sealed class StationBoardPermissionTests
             Guid invoiceId, CashSaleReversalRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<CashTenderCorrectionResponse> CorrectCashTenderAsync(
+            Guid invoiceId, CashTenderCorrectionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task LogoutAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public void ClearSession() { }
