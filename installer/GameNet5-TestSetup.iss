@@ -4,13 +4,6 @@
 #define PayloadRoot GetEnv("GAMENET_TEST_SETUP_PAYLOAD_ROOT")
 #define SetupOutputDir GetEnv("GAMENET_TEST_SETUP_OUTPUT_DIR")
 
-#if PayloadRoot == ""
-  #error GAMENET_TEST_SETUP_PAYLOAD_ROOT is required
-#endif
-#if SetupOutputDir == ""
-  #error GAMENET_TEST_SETUP_OUTPUT_DIR is required
-#endif
-
 [Setup]
 AppId={{97B7505B-9343-4A12-9F58-2E306B0E251A}
 AppName=GameNet 5 Temporary Test Setup
