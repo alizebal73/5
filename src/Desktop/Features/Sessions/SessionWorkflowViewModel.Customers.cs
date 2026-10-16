@@ -32,6 +32,7 @@ public sealed partial class SessionWorkflowViewModel
     public ICommand BlockCustomerCommand { get; private set; } = null!;
 
     public bool CanReadCustomers => hasPermission(Permissions.CustomersRead);
+    public bool IsNewCustomer => SelectedManagedCustomer is null;
     public bool CanWriteCustomers => hasPermission(Permissions.CustomersWrite);
 
     public CustomerResponse? SelectedCustomer
@@ -61,6 +62,7 @@ public sealed partial class SessionWorkflowViewModel
                 CustomerPhoneText = string.Empty;
             }
             OnPropertyChanged(nameof(CustomerStatusSummaryText));
+            OnPropertyChanged(nameof(IsNewCustomer));
             RaiseCustomerCommands();
         }
     }
