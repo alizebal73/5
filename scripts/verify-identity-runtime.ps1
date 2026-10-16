@@ -498,8 +498,7 @@ try {
     $stationKeyConflict = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationDifferentBody
     Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
 
-    # Exercise the real authenticated HTTP Session -> Invoice -> Cash workflow against
-    # this script's disposable PostgreSQL database and real Kestrel Server.
+    # Create the tariff and prove the HTTP admission gate fails closed before any Agent is enrolled/bound.
     $sessionTariffCode = "CI-SLICE1-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
     $sessionTariffHeaders = @{
         "X-GameNet-Contract" = "v1"
@@ -523,124 +522,23 @@ try {
         throw "Disposable Session tariff did not return its expected authoritative identity and rate."
     }
 
-    $sessionStartHeaders = @{
+
+    $unboundSessionStartHeaders = @{
         "X-GameNet-Contract" = "v1"
         Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-session-start-" + [Guid]::NewGuid().ToString("N"))
+        "Idempotency-Key" = ("ci-session-start-unbound-" + [Guid]::NewGuid().ToString("N"))
     }
-    $sessionStartBody = @{ stationId = $stationId; tariffId = $sessionTariffId; customerId = $null }
-    $sessionStart = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders $sessionStartBody
-    Assert-Status $sessionStart 201 "Start disposable PC walk-in Session over HTTP"
-    $sessionId = [string]$sessionStart.Json.data.id
-    $walkInCustomerId = [string]$sessionStart.Json.data.customerId
-    if ([string]::IsNullOrWhiteSpace($sessionId) -or
-        [string]::IsNullOrWhiteSpace($walkInCustomerId) -or
-        $sessionStart.Json.data.status -ne 1 -or
-        $sessionStart.Json.data.tariffHourlyRateTomanSnapshot -ne 60000) {
-        throw "Session start did not return the expected active walk-in Session and tariff snapshot."
+    $unboundSessionStart = Invoke-IdentityRequest "POST" "/api/v1/sessions" $unboundSessionStartHeaders @{
+        stationId = $stationId
+        tariffId = $sessionTariffId
+        customerId = $null
     }
-
-    $sessionStartReplay = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders $sessionStartBody
-    Assert-Status $sessionStartReplay 201 "Replay identical Session start over HTTP"
-    if ([string]$sessionStartReplay.Json.data.id -ne $sessionId -or
-        [string]$sessionStartReplay.Json.data.customerId -ne $walkInCustomerId) {
-        throw "Session start idempotency replay returned a different Session or Walk-in Customer."
+    Assert-ErrorCode $unboundSessionStart 409 "sessions.agent_unavailable" "Reject PC Session start while Agent is unbound"
+    $activeAfterRejectedStart = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeAfterRejectedStart 200 "Check that rejected unbound Session start created no active Session"
+    if (@($activeAfterRejectedStart.Json.data).Count -ne 0) {
+        throw "Rejected Session start while the Agent was unbound left an active Session."
     }
-    $sessionStartConflict = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders @{
-        stationId = $stationId; tariffId = [Guid]::NewGuid().ToString(); customerId = $null
-    }
-    Assert-ErrorCode $sessionStartConflict 409 "idempotency.key_reused" "Reject changed Session start intent using the same idempotency key"
-
-    $activeSessions = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
-    Assert-Status $activeSessions 200 "List active Session over HTTP"
-    $activeMatch = @($activeSessions.Json.data | Where-Object { [string]$_.id -eq $sessionId }) | Select-Object -First 1
-    if (-not $activeMatch) { throw "Started Session was not returned by the authoritative active-Session endpoint." }
-
-    Start-Sleep -Milliseconds 1200
-    $sessionEndHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-session-end-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $sessionEndBody = @{ expectedVersion = [int]$sessionStart.Json.data.version }
-    $sessionEnd = Invoke-IdentityRequest "POST" ("/api/v1/sessions/" + $sessionId + "/end") $sessionEndHeaders $sessionEndBody
-    Assert-Status $sessionEnd 200 "End Session and preview invoice over HTTP"
-    $invoiceId = [string]$sessionEnd.Json.data.invoiceId
-    $invoiceAmount = [long]$sessionEnd.Json.data.amountToman
-    $elapsedTicks = [long]$sessionEnd.Json.data.elapsedTicks
-    if ([string]::IsNullOrWhiteSpace($invoiceId) -or
-        $sessionEnd.Json.data.status -ne 1 -or
-        $sessionEnd.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
-        $elapsedTicks -le 0 -or $invoiceAmount -le 0) {
-        throw "End Session did not return a positive, pending invoice with the original tariff snapshot."
-    }
-    $expectedInvoiceAmount = [long][Math]::Ceiling(
-        ([decimal]60000 * [decimal]$elapsedTicks) / [decimal]([TimeSpan]::TicksPerHour))
-    if ($invoiceAmount -ne $expectedInvoiceAmount) {
-        throw "Invoice amount does not reconcile to the Server-reported elapsed ticks and 60,000 Toman/hour snapshot."
-    }
-
-    $sessionEndReplay = Invoke-IdentityRequest "POST" ("/api/v1/sessions/" + $sessionId + "/end") $sessionEndHeaders $sessionEndBody
-    Assert-Status $sessionEndReplay 200 "Replay Session end and invoice creation over HTTP"
-    if ([string]$sessionEndReplay.Json.data.invoiceId -ne $invoiceId -or
-        [long]$sessionEndReplay.Json.data.amountToman -ne $invoiceAmount) {
-        throw "Session end idempotency replay returned a different invoice or amount."
-    }
-
-    $pendingInvoices = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
-    Assert-Status $pendingInvoices 200 "List pending invoices over HTTP"
-    $pendingMatch = @($pendingInvoices.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId }) | Select-Object -First 1
-    if (-not $pendingMatch) { throw "New invoice was not returned by the authoritative pending-invoice endpoint." }
-
-    $underpayHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-session-underpay-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $underpayBody = @{ amountReceivedToman = [long]($invoiceAmount - 1); expectedSessionVersion = [int]$sessionEnd.Json.data.sessionVersion }
-    $underpay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $underpayHeaders $underpayBody
-    Assert-ErrorCode $underpay 400 "billing.cash_insufficient" "Reject insufficient cash without settling the invoice"
-
-    $pendingAfterUnderpay = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
-    Assert-Status $pendingAfterUnderpay 200 "Confirm pending invoices after rejected cash checkout"
-    $stillPending = @($pendingAfterUnderpay.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
-    if ($stillPending.Count -eq 0) {
-        throw "An insufficient-cash attempt removed or settled the pending invoice."
-    }
-
-    $checkoutHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-session-cash-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $amountReceived = [long]($invoiceAmount + 500)
-    $checkoutBody = @{ amountReceivedToman = $amountReceived; expectedSessionVersion = [int]$sessionEnd.Json.data.sessionVersion }
-    $checkout = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $checkoutHeaders $checkoutBody
-    Assert-Status $checkout 200 "Settle invoice with cash over HTTP"
-    if ([string]::IsNullOrWhiteSpace([string]$checkout.Json.data.paymentId) -or
-        [string]::IsNullOrWhiteSpace([string]$checkout.Json.data.ledgerEntryId) -or
-        [long]$checkout.Json.data.invoiceAmountToman -ne $invoiceAmount -or
-        [long]$checkout.Json.data.amountReceivedToman -ne $amountReceived -or
-        [long]$checkout.Json.data.changeGivenToman -ne 500) {
-        throw "Cash checkout did not reconcile invoice, received cash, and change."
-    }
-
-    $checkoutReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $checkoutHeaders $checkoutBody
-    Assert-Status $checkoutReplay 200 "Replay successful cash checkout over HTTP"
-    if ([string]$checkoutReplay.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
-        [string]$checkoutReplay.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId) {
-        throw "Cash checkout replay created or returned a different Payment or ledger entry."
-    }
-
-    $activeAfterCheckout = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
-    Assert-Status $activeAfterCheckout 200 "Confirm no active Session remains after cash checkout"
-    $remainingSessions = @($activeAfterCheckout.Json.data | Where-Object { [string]$_.id -eq $sessionId })
-    if ($remainingSessions.Count -ne 0) { throw "Paid Session remained in the active-Session endpoint." }
-
-    $pendingAfterCheckout = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
-    Assert-Status $pendingAfterCheckout 200 "Confirm no pending invoice remains after cash checkout"
-    $remainingInvoices = @($pendingAfterCheckout.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
-    if ($remainingInvoices.Count -ne 0) { throw "Paid invoice remained in the pending-invoice endpoint." }
 
     $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
     $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
@@ -784,6 +682,127 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "credential.bin") -PathType Leaf)) {
         throw "The Agent did not persist its per-device DPAPI credential after enrollment."
     }
+
+    # Exercise the real authenticated HTTP Session -> Invoice -> Cash workflow against
+    # this script's disposable PostgreSQL database and real Kestrel Server.
+    $sessionStartHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-start-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $sessionStartBody = @{ stationId = $stationId; tariffId = $sessionTariffId; customerId = $null }
+    $sessionStart = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders $sessionStartBody
+    Assert-Status $sessionStart 201 "Start disposable PC walk-in Session over HTTP"
+    $sessionId = [string]$sessionStart.Json.data.id
+    $walkInCustomerId = [string]$sessionStart.Json.data.customerId
+    if ([string]::IsNullOrWhiteSpace($sessionId) -or
+        [string]::IsNullOrWhiteSpace($walkInCustomerId) -or
+        $sessionStart.Json.data.status -ne 1 -or
+        $sessionStart.Json.data.tariffHourlyRateTomanSnapshot -ne 60000) {
+        throw "Session start did not return the expected active walk-in Session and tariff snapshot."
+    }
+
+    $sessionStartReplay = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders $sessionStartBody
+    Assert-Status $sessionStartReplay 201 "Replay identical Session start over HTTP"
+    if ([string]$sessionStartReplay.Json.data.id -ne $sessionId -or
+        [string]$sessionStartReplay.Json.data.customerId -ne $walkInCustomerId) {
+        throw "Session start idempotency replay returned a different Session or Walk-in Customer."
+    }
+    $sessionStartConflict = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders @{
+        stationId = $stationId; tariffId = [Guid]::NewGuid().ToString(); customerId = $null
+    }
+    Assert-ErrorCode $sessionStartConflict 409 "idempotency.key_reused" "Reject changed Session start intent using the same idempotency key"
+
+    $activeSessions = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeSessions 200 "List active Session over HTTP"
+    $activeMatch = @($activeSessions.Json.data | Where-Object { [string]$_.id -eq $sessionId }) | Select-Object -First 1
+    if (-not $activeMatch) { throw "Started Session was not returned by the authoritative active-Session endpoint." }
+
+    Start-Sleep -Milliseconds 1200
+    $sessionEndHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-end-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $sessionEndBody = @{ expectedVersion = [int]$sessionStart.Json.data.version }
+    $sessionEnd = Invoke-IdentityRequest "POST" ("/api/v1/sessions/" + $sessionId + "/end") $sessionEndHeaders $sessionEndBody
+    Assert-Status $sessionEnd 200 "End Session and preview invoice over HTTP"
+    $invoiceId = [string]$sessionEnd.Json.data.invoiceId
+    $invoiceAmount = [long]$sessionEnd.Json.data.amountToman
+    $elapsedTicks = [long]$sessionEnd.Json.data.elapsedTicks
+    if ([string]::IsNullOrWhiteSpace($invoiceId) -or
+        $sessionEnd.Json.data.status -ne 1 -or
+        $sessionEnd.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        $elapsedTicks -le 0 -or $invoiceAmount -le 0) {
+        throw "End Session did not return a positive, pending invoice with the original tariff snapshot."
+    }
+    $expectedInvoiceAmount = [long][Math]::Ceiling(
+        ([decimal]60000 * [decimal]$elapsedTicks) / [decimal]([TimeSpan]::TicksPerHour))
+    if ($invoiceAmount -ne $expectedInvoiceAmount) {
+        throw "Invoice amount does not reconcile to the Server-reported elapsed ticks and 60,000 Toman/hour snapshot."
+    }
+
+    $sessionEndReplay = Invoke-IdentityRequest "POST" ("/api/v1/sessions/" + $sessionId + "/end") $sessionEndHeaders $sessionEndBody
+    Assert-Status $sessionEndReplay 200 "Replay Session end and invoice creation over HTTP"
+    if ([string]$sessionEndReplay.Json.data.invoiceId -ne $invoiceId -or
+        [long]$sessionEndReplay.Json.data.amountToman -ne $invoiceAmount) {
+        throw "Session end idempotency replay returned a different invoice or amount."
+    }
+
+    $pendingInvoices = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
+    Assert-Status $pendingInvoices 200 "List pending invoices over HTTP"
+    $pendingMatch = @($pendingInvoices.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId }) | Select-Object -First 1
+    if (-not $pendingMatch) { throw "New invoice was not returned by the authoritative pending-invoice endpoint." }
+
+    $underpayHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-underpay-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $underpayBody = @{ amountReceivedToman = [long]($invoiceAmount - 1); expectedSessionVersion = [int]$sessionEnd.Json.data.sessionVersion }
+    $underpay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $underpayHeaders $underpayBody
+    Assert-ErrorCode $underpay 400 "billing.cash_insufficient" "Reject insufficient cash without settling the invoice"
+
+    $pendingAfterUnderpay = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
+    Assert-Status $pendingAfterUnderpay 200 "Confirm pending invoices after rejected cash checkout"
+    $stillPending = @($pendingAfterUnderpay.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
+    if ($stillPending.Count -eq 0) {
+        throw "An insufficient-cash attempt removed or settled the pending invoice."
+    }
+
+    $checkoutHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-cash-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $amountReceived = [long]($invoiceAmount + 500)
+    $checkoutBody = @{ amountReceivedToman = $amountReceived; expectedSessionVersion = [int]$sessionEnd.Json.data.sessionVersion }
+    $checkout = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $checkoutHeaders $checkoutBody
+    Assert-Status $checkout 200 "Settle invoice with cash over HTTP"
+    if ([string]::IsNullOrWhiteSpace([string]$checkout.Json.data.paymentId) -or
+        [string]::IsNullOrWhiteSpace([string]$checkout.Json.data.ledgerEntryId) -or
+        [long]$checkout.Json.data.invoiceAmountToman -ne $invoiceAmount -or
+        [long]$checkout.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$checkout.Json.data.changeGivenToman -ne 500) {
+        throw "Cash checkout did not reconcile invoice, received cash, and change."
+    }
+
+    $checkoutReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $checkoutHeaders $checkoutBody
+    Assert-Status $checkoutReplay 200 "Replay successful cash checkout over HTTP"
+    if ([string]$checkoutReplay.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [string]$checkoutReplay.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId) {
+        throw "Cash checkout replay created or returned a different Payment or ledger entry."
+    }
+
+    $activeAfterCheckout = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeAfterCheckout 200 "Confirm no active Session remains after cash checkout"
+    $remainingSessions = @($activeAfterCheckout.Json.data | Where-Object { [string]$_.id -eq $sessionId })
+    if ($remainingSessions.Count -ne 0) { throw "Paid Session remained in the active-Session endpoint." }
+
+    $pendingAfterCheckout = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
+    Assert-Status $pendingAfterCheckout 200 "Confirm no pending invoice remains after cash checkout"
+    $remainingInvoices = @($pendingAfterCheckout.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
+    if ($remainingInvoices.Count -ne 0) { throw "Paid invoice remained in the pending-invoice endpoint." }
 
     $healthProbe = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
     Assert-Status $healthProbe 200 "Dispatch safe Agent health-probe command"
