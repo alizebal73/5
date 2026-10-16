@@ -89,6 +89,64 @@ public sealed class SessionWorkflowViewModelTests
 
 
     [Fact]
+    public async Task Start_session_submits_the_selected_registered_customer_id()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-CUS-01", "Customer Test PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-CUS", "Customer Test Tariff", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var customer = new CustomerResponse(
+                Guid.NewGuid(), "C-TEST-01", "Test Player", "Player", "09121234567",
+                CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.Customers.Add(customer);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead or Permissions.SessionsOperate or Permissions.CustomersRead);
+
+            await viewModel.RefreshAsync();
+            Assert.Single(viewModel.AvailableCustomers);
+            viewModel.SelectedCustomer = Assert.Single(viewModel.AvailableCustomers);
+            viewModel.SelectedStation = station;
+            viewModel.SelectedTariff = tariff;
+
+            var startStatus = WaitForStatusAsync(
+                viewModel, message => message.Contains("customer C-TEST-01", StringComparison.Ordinal));
+            Assert.True(viewModel.StartSessionCommand.CanExecute(null));
+            viewModel.StartSessionCommand.Execute(null);
+            await client.StartRequestReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.NotNull(client.LastStartRequest);
+            Assert.Equal(customer.Id, client.LastStartRequest!.CustomerId);
+            Assert.False(string.IsNullOrWhiteSpace(client.LastStartIdempotencyKey));
+
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, customer.Id, tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman,
+                Guid.NewGuid(), DateTimeOffset.UtcNow, null, null, null, null,
+                SessionStatusContract.Active, 1);
+            client.ActiveSessions.Add(session);
+            client.StartSessionCompletion.SetResult(session);
+
+            Assert.Contains("C-TEST-01", await startStatus);
+            Assert.Equal(session.Id, viewModel.SelectedActiveSession?.Session.Id);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
     public async Task Operator_view_model_completes_start_end_invoice_selection_and_cash_checkout_journey()
     {
         var originalCulture = CultureInfo.CurrentCulture;
@@ -982,8 +1040,24 @@ public sealed class SessionWorkflowViewModelTests
         public Task<StationResponse> SetStationStatusAsync(Guid id, SetStationStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AgentCommandAcknowledgement> ProbeAgentHealthAsync(Guid stationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<CustomerResponse>>(Array.Empty<CustomerResponse>());
+        public List<CustomerResponse> Customers { get; } = [];
+
+        public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default)
+        {
+            IEnumerable<CustomerResponse> rows = Customers;
+            if (!includeInactive)
+                rows = rows.Where(x => x.Status == CustomerStatusContract.Active);
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var term = query.Trim();
+                rows = rows.Where(x =>
+                    x.Code.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    (x.DisplayName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (x.Nickname?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (x.PhoneNumber?.Contains(term, StringComparison.Ordinal) ?? false));
+            }
+            return Task.FromResult<IReadOnlyList<CustomerResponse>>(rows.Take(100).ToArray());
+        }
         public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
