@@ -392,6 +392,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public void NotifyPermissionsChanged()
     {
         OnPropertyChanged(nameof(CanManageTariffs));
+        OnPropertyChanged(nameof(CanReadCustomers));
+        OnPropertyChanged(nameof(CanWriteCustomers));
         OnPropertyChanged(nameof(CanOperateSessions));
         OnPropertyChanged(nameof(CanRecoverSessionTiming));
         OnPropertyChanged(nameof(CanCheckout));
@@ -400,6 +402,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
+        RaiseCustomerCommands();
     }
 
     public void Reset()
