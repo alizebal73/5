@@ -138,6 +138,22 @@
                 <Button Padding="8,6" Content="{DynamicResource Billing.ReverseCashSale}"
                         Command="{Binding ReverseCashSaleCommand}"/>
               </StackPanel>
+              <StackPanel Margin="0,10,0,0"
+                          Visibility="{Binding CanCorrectCashTender, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <TextBlock Text="{DynamicResource Billing.CashTenderCorrectionTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                <TextBlock Text="{Binding CashTenderCorrectionSummaryText}" FontSize="11" Foreground="#344054"
+                           TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock Text="{DynamicResource Billing.CashTenderCorrectedReceived}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,3,0,6"
+                         Text="{Binding CorrectedCashReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="{DynamicResource Billing.CashTenderCorrectionReason}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,3,0,6"
+                         Text="{Binding CashTenderCorrectionReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+                <CheckBox Content="{DynamicResource Billing.ConfirmCashTenderCorrection}"
+                          IsChecked="{Binding ConfirmCashTenderCorrection, Mode=TwoWay}" Margin="0,0,0,8"/>
+                <Button Padding="8,6" Content="{DynamicResource Billing.CorrectCashTender}"
+                        Command="{Binding CorrectCashTenderCommand}"/>
+              </StackPanel>
             </StackPanel>
           </Expander>
         </StackPanel>

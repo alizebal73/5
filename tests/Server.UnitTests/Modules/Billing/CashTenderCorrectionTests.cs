@@ -70,11 +70,14 @@ public sealed class CashTenderCorrectionTests
     }
 
     [Fact]
-    public void Correction_checks_overflow_while_deriving_change()
+    public void Correction_derives_change_at_the_largest_representable_received_amount()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => CashTenderCorrection.Create(
+        var correction = CashTenderCorrection.Create(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1,
-            long.MaxValue, long.MaxValue - 1, 1L, long.MaxValue, Guid.NewGuid(),
-            "Correct received amount", "correlation", Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow));
+            10L, 9L, 1L, long.MaxValue, Guid.NewGuid(),
+            "Correct received amount", "correlation", Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow);
+
+        Assert.Equal(long.MaxValue, correction.CorrectedAmountReceivedToman);
+        Assert.Equal(long.MaxValue - 1, correction.CorrectedChangeGivenToman);
     }
 }

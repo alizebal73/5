@@ -348,6 +348,11 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             StatusMessage = stationLabelsUnavailable
                 ? Text("کد ایستگاه در دسترس نبود؛ در صورت نمایش صورتحساب، شناسهٔ ایستگاه استفاده می‌شود.", "Station codes were unavailable; invoice rows will use station IDs.")
                 : Text("وضعیت Sessionها، تعرفه‌ها و صورتحساب‌ها به‌روزرسانی شد.", "Sessions, tariffs and pending invoices were refreshed.");
+            if (!string.IsNullOrWhiteSpace(cashTenderCorrectionRefreshMessage))
+            {
+                StatusMessage = cashTenderCorrectionRefreshMessage;
+                cashTenderCorrectionRefreshMessage = null;
+            }
         }
         catch (GameNetApiException ex)
         {

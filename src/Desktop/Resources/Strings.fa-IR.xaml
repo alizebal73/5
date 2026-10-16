@@ -71,4 +71,9 @@
   <system:String x:Key="Billing.CashReversalReason">علت برگشت کامل فروش نقدی (الزامی)</system:String>
   <system:String x:Key="Billing.ConfirmCashSaleReversal">صورتحساب و پرداخت را بررسی کرده‌ام و بازگرداندن مبلغ صورتحساب، نه کل وجه دریافتی، را تأیید می‌کنم.</system:String>
   <system:String x:Key="Billing.ReverseCashSale">برگشت کامل فروش نقدی</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionTitle">اصلاح سوابق وجه نقد دریافتی</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectedReceived">وجه نقد اصلاح‌شده (تومان)</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionReason">علت اصلاح (الزامی)</system:String>
+  <system:String x:Key="Billing.ConfirmCashTenderCorrection">موجودی واقعی وجه نقد را بررسی کرده‌ام و فقط اصلاح سابقهٔ وجه دریافتی و باقی‌مانده را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Billing.CorrectCashTender">ثبت اصلاح سوابق وجه نقد</system:String>
 </ResourceDictionary>

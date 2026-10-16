@@ -623,6 +623,132 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+
+    [Fact]
+    public async Task Cash_tender_correction_updates_effective_facts_and_preserves_original_payment_facts()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var invoiceId = Guid.NewGuid();
+            var paymentId = Guid.NewGuid();
+            var ledgerEntryId = Guid.NewGuid();
+            var stationId = Guid.NewGuid();
+            var issuedAt = DateTimeOffset.UtcNow.AddMinutes(-30);
+            var paidAt = DateTimeOffset.UtcNow;
+            var originalOutcome = new CashCheckoutOutcomeResponse(
+                invoiceId, Guid.NewGuid(), stationId, "PC-STD", "PC Standard", 60_000L,
+                TimeSpan.FromMinutes(30).Ticks, 30_000L, InvoiceStatusContract.Paid,
+                paymentId, ledgerEntryId, 50_000L, 20_000L, issuedAt, paidAt);
+            var client = new FakeGameNetServerClient(
+                Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
+            client.CompletedCashOutcomes.Add(originalOutcome);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingCashTenderCorrect);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedRecentCashCheckout = Assert.Single(viewModel.RecentCashCheckouts);
+            viewModel.CorrectedCashReceivedText = "45000";
+            viewModel.CashTenderCorrectionReasonText = "Cash received was keyed incorrectly";
+
+            Assert.False(viewModel.CorrectCashTenderCommand.CanExecute(null));
+            viewModel.ConfirmCashTenderCorrection = true;
+            Assert.True(viewModel.CorrectCashTenderCommand.CanExecute(null));
+
+            var completed = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains("Cash tender facts corrected at version 1.", StringComparison.Ordinal));
+            viewModel.CorrectCashTenderCommand.Execute(null);
+            var status = await completed;
+
+            Assert.Contains("The invoice amount and sale ledger were unchanged.", status);
+            Assert.Equal(1, client.CashTenderCorrectionWriteCount);
+            Assert.Equal(invoiceId, client.LastCashTenderCorrectionInvoiceId);
+            Assert.Equal(paymentId, client.LastCashTenderCorrectionRequest?.PaymentId);
+            Assert.Equal(0, client.LastCashTenderCorrectionRequest?.ExpectedVersion);
+            Assert.Equal(45_000L, client.LastCashTenderCorrectionRequest?.CorrectedAmountReceivedToman);
+            Assert.False(string.IsNullOrWhiteSpace(client.CashTenderCorrectionIdempotencyKeys.Single()));
+
+            var corrected = Assert.Single(client.CompletedCashOutcomes);
+            Assert.Equal(30_000L, corrected.AmountToman);
+            Assert.Equal(paymentId, corrected.PaymentId);
+            Assert.Equal(ledgerEntryId, corrected.LedgerEntryId);
+            Assert.Equal(50_000L, corrected.AmountReceivedToman);
+            Assert.Equal(20_000L, corrected.ChangeGivenToman);
+            Assert.Equal(45_000L, corrected.EffectiveAmountReceivedToman);
+            Assert.Equal(15_000L, corrected.EffectiveChangeGivenToman);
+            Assert.Equal(1, corrected.CashTenderCorrectionVersion);
+            Assert.Equal("Cash received was keyed incorrectly", corrected.CashTenderCorrectionReason);
+            Assert.NotNull(corrected.CashTenderCorrectionId);
+            Assert.NotNull(corrected.CashTenderCorrectedAtUtc);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Cash_tender_correction_recovers_committed_result_after_response_loss_without_second_write()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var invoiceId = Guid.NewGuid();
+            var paymentId = Guid.NewGuid();
+            var stationId = Guid.NewGuid();
+            var originalOutcome = new CashCheckoutOutcomeResponse(
+                invoiceId, Guid.NewGuid(), stationId, "PC-STD", "PC Standard", 60_000L,
+                TimeSpan.FromMinutes(30).Ticks, 30_000L, InvoiceStatusContract.Paid,
+                paymentId, Guid.NewGuid(), 50_000L, 20_000L,
+                DateTimeOffset.UtcNow.AddMinutes(-30), DateTimeOffset.UtcNow);
+            var client = new FakeGameNetServerClient(
+                Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
+            client.CompletedCashOutcomes.Add(originalOutcome);
+            client.LoseNextCashTenderCorrectionResponseAfterCommit = true;
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission == Permissions.BillingCashTenderCorrect);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedRecentCashCheckout = Assert.Single(viewModel.RecentCashCheckouts);
+            viewModel.CorrectedCashReceivedText = "45000";
+            viewModel.CashTenderCorrectionReasonText = "Correct recorded cash amount";
+            viewModel.ConfirmCashTenderCorrection = true;
+
+            var reconciled = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains(
+                    "Server confirms the tender correction was recorded at version 1.",
+                    StringComparison.Ordinal));
+            Assert.True(viewModel.CorrectCashTenderCommand.CanExecute(null));
+            viewModel.CorrectCashTenderCommand.Execute(null);
+            var status = await reconciled;
+
+            Assert.Contains("The invoice amount and sale ledger were unchanged.", status);
+            Assert.Equal(1, client.CashTenderCorrectionWriteCount);
+            Assert.Single(client.CashTenderCorrectionIdempotencyKeys);
+            Assert.False(viewModel.CorrectCashTenderCommand.CanExecute(null));
+            var corrected = Assert.Single(client.CompletedCashOutcomes);
+            Assert.Equal(50_000L, corrected.AmountReceivedToman);
+            Assert.Equal(20_000L, corrected.ChangeGivenToman);
+            Assert.Equal(45_000L, corrected.EffectiveAmountReceivedToman);
+            Assert.Equal(15_000L, corrected.EffectiveChangeGivenToman);
+            Assert.Equal(1, corrected.CashTenderCorrectionVersion);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
     [Fact]
     public async Task Operator_without_permissions_cannot_open_or_mutate_session_workspace()
     {
@@ -723,6 +849,12 @@ public sealed class SessionWorkflowViewModelTests
         public List<InvoicePreviewResponse> PendingInvoices { get; } = [];
         public List<string> CheckoutIdempotencyKeys { get; } = [];
         public List<string> CashSaleReversalIdempotencyKeys { get; } = [];
+        public List<string> CashTenderCorrectionIdempotencyKeys { get; } = [];
+        public Guid? LastCashTenderCorrectionInvoiceId { get; private set; }
+        public CashTenderCorrectionRequest? LastCashTenderCorrectionRequest { get; private set; }
+        public int CashTenderCorrectionWriteCount { get; private set; }
+        public bool LoseNextCashTenderCorrectionResponseAfterCommit { get; set; }
+        private readonly Dictionary<string, CashTenderCorrectionResponse> cashTenderCorrectionResponses = new(StringComparer.Ordinal);
         public Guid? LastCashSaleReversalInvoiceId { get; private set; }
         public CashSaleReversalRequest? LastCashSaleReversalRequest { get; private set; }
         public bool LoseNextCashSaleReversalResponseAfterCommit { get; set; }
@@ -903,6 +1035,74 @@ public sealed class SessionWorkflowViewModelTests
                 LoseNextCashSaleReversalResponseAfterCommit = false;
                 return Task.FromException<CashSaleReversalResponse>(
                     new HttpRequestException("Simulated connection loss after a committed cash-sale reversal."));
+            }
+
+            return Task.FromResult(response);
+        }
+
+
+        public Task<CashTenderCorrectionResponse> CorrectCashTenderAsync(
+            Guid invoiceId,
+            CashTenderCorrectionRequest request,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            LastCashTenderCorrectionInvoiceId = invoiceId;
+            LastCashTenderCorrectionRequest = request;
+            CashTenderCorrectionIdempotencyKeys.Add(idempotencyKey);
+
+            if (cashTenderCorrectionResponses.TryGetValue(idempotencyKey, out var replay))
+                return Task.FromResult(replay);
+
+            var index = CompletedCashOutcomes.FindIndex(x => x.InvoiceId == invoiceId);
+            if (index < 0)
+                return Task.FromException<CashTenderCorrectionResponse>(
+                    new GameNetApiException("billing.invoice_not_found", 404));
+
+            var outcome = CompletedCashOutcomes[index];
+            if (outcome.Status != InvoiceStatusContract.Paid || outcome.ReversalId is not null ||
+                outcome.PaymentId != request.PaymentId ||
+                outcome.AmountReceivedToman is not long originalReceived ||
+                outcome.ChangeGivenToman is not long originalChange ||
+                outcome.PaidAtUtc is null || outcome.LedgerEntryId is null)
+                return Task.FromException<CashTenderCorrectionResponse>(
+                    new GameNetApiException("billing.checkout_outcome_inconsistent", 409));
+
+            var version = outcome.CashTenderCorrectionVersion ?? 0;
+            var currentReceived = outcome.EffectiveAmountReceivedToman ?? originalReceived;
+            var currentChange = outcome.EffectiveChangeGivenToman ?? originalChange;
+            if (version != request.ExpectedVersion)
+                return Task.FromException<CashTenderCorrectionResponse>(
+                    new GameNetApiException("billing.tender_correction_version_conflict", 409));
+            if (currentReceived < outcome.AmountToman || currentChange != currentReceived - outcome.AmountToman ||
+                request.CorrectedAmountReceivedToman < outcome.AmountToman ||
+                request.CorrectedAmountReceivedToman == currentReceived)
+                return Task.FromException<CashTenderCorrectionResponse>(
+                    new GameNetApiException("billing.tender_correction_invalid", 409));
+
+            var correctedAt = DateTimeOffset.UtcNow;
+            var correctedChange = checked(request.CorrectedAmountReceivedToman - outcome.AmountToman);
+            var response = new CashTenderCorrectionResponse(
+                Guid.NewGuid(), invoiceId, request.PaymentId, checked(version + 1),
+                currentReceived, currentChange, request.CorrectedAmountReceivedToman,
+                correctedChange, request.Reason, correctedAt);
+            CompletedCashOutcomes[index] = outcome with
+            {
+                EffectiveAmountReceivedToman = request.CorrectedAmountReceivedToman,
+                EffectiveChangeGivenToman = correctedChange,
+                CashTenderCorrectionId = response.CorrectionId,
+                CashTenderCorrectionVersion = response.Version,
+                CashTenderCorrectionReason = response.Reason,
+                CashTenderCorrectedAtUtc = response.CorrectedAtUtc
+            };
+            cashTenderCorrectionResponses.Add(idempotencyKey, response);
+            CashTenderCorrectionWriteCount++;
+
+            if (LoseNextCashTenderCorrectionResponseAfterCommit)
+            {
+                LoseNextCashTenderCorrectionResponseAfterCommit = false;
+                return Task.FromException<CashTenderCorrectionResponse>(
+                    new HttpRequestException("Simulated connection loss after a committed cash tender correction."));
             }
 
             return Task.FromResult(response);
