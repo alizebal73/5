@@ -358,6 +358,11 @@ function Invoke-ManagerSetup {
         throw "Isolation confirmation was not entered. No install steps were started."
     }
 
+    $firewallDisplayName = "GameNet 5 Test Server HTTPS 5080"
+    if (Get-NetFirewallRule -DisplayName $firewallDisplayName -ErrorAction SilentlyContinue) {
+        throw "The test HTTPS firewall rule already exists. Setup refuses to modify existing firewall state."
+    }
+
     $serverIp = Get-LocalServerIPv4
     $database = New-DisposableTestDatabase
     $serverServiceCreated = $false
@@ -403,10 +408,6 @@ function Invoke-ManagerSetup {
             if ([string]::IsNullOrEmpty($oldDotNet)) { Remove-Item Env:DOTNET_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:DOTNET_ENVIRONMENT = $oldDotNet }
         }
 
-        $firewallDisplayName = "GameNet 5 Test Server HTTPS 5080"
-        if (Get-NetFirewallRule -DisplayName $firewallDisplayName -ErrorAction SilentlyContinue) {
-            throw "The test HTTPS firewall rule already exists. Setup refuses to modify existing firewall state."
-        }
         New-NetFirewallRule -DisplayName $firewallDisplayName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $ServerPort -RemoteAddress LocalSubnet -Profile Any | Out-Null
         Invoke-CheckedNative -FilePath (Join-Path $env:SystemRoot "System32\sc.exe") -Arguments @("config", $ServerServiceName, "start= delayed-auto") -FailureMessage "Could not set the test Server service startup mode."
         Start-Service -Name $ServerServiceName
