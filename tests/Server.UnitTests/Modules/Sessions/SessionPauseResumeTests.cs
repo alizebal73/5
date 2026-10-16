@@ -65,6 +65,10 @@ public sealed class SessionPauseResumeTests
 
         // The caller can end a paused Session without consulting a possibly changed
         // monotonic clock. The long interval after pause must not enter elapsedTicks.
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            session.End(operatorId, pausedAt.AddHours(6), checked(alreadyBilled + TimeSpan.FromMinutes(1).Ticks)));
+        Assert.Equal(SessionStatus.Paused, session.Status);
+
         session.End(operatorId, pausedAt.AddHours(6), alreadyBilled);
 
         Assert.Equal(SessionStatus.PendingSettlement, session.Status);

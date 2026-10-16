@@ -155,6 +155,8 @@ public sealed class Session
             throw new ArgumentException("Operator id is required.", nameof(endedByOperatorId));
         if (elapsedTicks <= 0 || elapsedTicks < AccumulatedElapsedTicks)
             throw new ArgumentOutOfRangeException(nameof(elapsedTicks), "Session billable time must be positive and cannot omit accumulated segments.");
+        if (Status == SessionStatus.Paused && elapsedTicks != AccumulatedElapsedTicks)
+            throw new ArgumentOutOfRangeException(nameof(elapsedTicks), "A paused Session must end using only its already accumulated active segments.");
 
         // UTC is an event timestamp, not the duration authority; it may move backwards.
         EndedByOperatorId = endedByOperatorId;
