@@ -1,25 +1,28 @@
 # Customers Module Boundary
 
-**Status: PARTIALLY IMPLEMENTED.** The first PC slice can create/bind a Walk-in customer when no existing Customer is selected. This is not completion of the customer profile, PIN or customer-management workflows.
+**Status:** Customer profile core is implemented on candidate branch `feature/customers-core-20261016`; exact-head CI and protected PR review remain pending.
 
 ## Ownership
 
-Own stable customer identity/code, profile, optional customer PIN, activation/deactivation and profile history. PINs must be stored only as salted hashes and never returned. Customers does not own Wallet/debt, Session lifecycle or Station state.
+Own registered customer identity/code, profile, optional nickname and phone, activation/block status, and profile writes. Customers does not own Wallet/debt, Session lifecycle or Station state.
 
-## Implemented in the current slice
+## Implemented in this candidate slice
 
-- Walk-in customer creation/binding needed by the first PC Session flow.
-- Persisted identity binding and regression coverage proving that Session and invoice views resolve the authoritative Customer/Station associations.
+- Create and bounded search/list of registered customers with Server-side authorization.
+- Edit name, nickname and optional phone with optimistic concurrency (`ExpectedVersion`).
+- Activate, deactivate or block a customer with mandatory reason and Audit.
+- Durable API contracts, PostgreSQL migration, request idempotency and audit events.
+- Select a registered active customer when starting a PC Session; inactive/blocked customers cannot start a new Session. Walk-in behavior remains available when no customer is selected.
+- Domain tests and an opt-in PostgreSQL lifecycle/idempotency/audit regression.
 
-## Incomplete
+## Incomplete by design
 
-Operator-facing customer search/profile editing, PIN lifecycle, activation/deactivation, profile history, Wallet/debt presentation, login/multi-device policy and the complete customer management UI remain future work.
+Customer PIN/login, multi-device session policy, Wallet/debt/Gift balances, VIP plan/history, customer statements and full account-activity projections are not part of this slice. Do not duplicate financial/session state into the Customers table.
 
 ## Implementation rules
 
-- Implement through a requirement-tracked slice using [Definition of Ready](../../../../docs/planning/definition-of-ready.md).
-- Keep business rules in Domain/Application; use Infrastructure for persistence/integrations and Api for contracts/endpoints.
-- Keep EF/DbContext out of Domain/Application/Api; do not reach into another module's implementation namespace.
-- Add unit, PostgreSQL and concurrency/regression tests with the behavior being changed.
-- Sensitive mutations require appropriate permissions, transaction/idempotency and audit.
-- Do not add placeholder endpoints or successful fake responses. Apply [Definition of Done](../../../../docs/planning/definition-of-done.md) before claiming a slice complete.
+- Keep business rules in Domain; Infrastructure owns persistence and integrations; Api owns HTTP boundaries.
+- Desktop/Agent never connect directly to PostgreSQL.
+- Add domain, PostgreSQL, permission, idempotency and concurrency tests with each behavior change.
+- Sensitive mutations require server-side authorization, transactional idempotency and Audit.
+- Do not describe a candidate as accepted until exact-SHA CI and required acceptance evidence are recorded.
