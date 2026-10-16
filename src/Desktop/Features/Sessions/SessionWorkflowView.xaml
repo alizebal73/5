@@ -42,6 +42,8 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
+          <Button Content="{DynamicResource Customer.UseWalkIn}" Command="{Binding UseWalkInCustomerCommand}"
+                  Padding="5,3" Margin="0,0,0,8" HorizontalAlignment="Left"/>
           <TextBlock Text="{DynamicResource Customer.WalkInHint}" FontSize="10" Foreground="#667085"
                      TextWrapping="Wrap" Margin="0,0,0,8"/>
           <TextBlock Text="{DynamicResource Session.Tariff}" FontSize="12"/>
