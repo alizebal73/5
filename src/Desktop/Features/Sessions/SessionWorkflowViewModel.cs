@@ -21,6 +21,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
+    private SessionStationOption? selectedStationChoice;
+    private IReadOnlyList<TariffResponse> allActiveTariffs = [];
     private TariffResponse? selectedTariff;
     private ActiveSessionListItem? selectedActiveSession;
     private PendingInvoiceListItem? selectedPendingInvoice;
@@ -30,6 +32,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     private string errorMessage = string.Empty;
     private string statusMessage = string.Empty;
     private bool isDefaultTariff = true;
+    private StationTypeContract tariffStationType = StationTypeContract.Pc;
     private bool isBusy;
     private int busyDepth;
 
@@ -38,16 +41,26 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
 
+        foreach (var stationType in new[]
+        {
+            StationTypeContract.Pc,
+            StationTypeContract.Ps5,
+            StationTypeContract.Foosball
+        })
+            StationTypeOptions.Add(new SessionStationTypeOption(stationType, StationTypeDisplayText(stationType)));
+
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
         CreateTariffCommand = new AsyncUiAction(CreateTariffAsync, () => !IsBusy && CanManageTariffs &&
+            Enum.IsDefined(TariffStationType) &&
             !string.IsNullOrWhiteSpace(TariffCode) && !string.IsNullOrWhiteSpace(TariffName) && TryParseToman(HourlyRateText, out var rate) && rate > 0);
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
-            SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
+            SelectedStation is { Status: StationStatusContract.Available } station &&
+            station.Type is StationTypeContract.Pc or StationTypeContract.Ps5 or StationTypeContract.Foosball &&
+            SelectedTariff is { IsActive: true } tariff &&
+            tariff.StationType == station.Type &&
             (SelectedCustomer is null || SelectedCustomer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active) &&
-            SelectedStation is not null &&
-            !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
-            !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
+            !ActiveSessions.Any(x => x.Session.StationId == station.Id) &&
+            !PendingInvoices.Any(x => x.Invoice.StationId == station.Id));
         PauseSessionCommand = new AsyncUiAction(PauseSessionAsync, () => !IsBusy && CanOperateSessions && SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
         ResumeSessionCommand = new AsyncUiAction(ResumeSessionAsync, () => !IsBusy && CanOperateSessions && SelectedActiveSession?.Session.Status == SessionStatusContract.Paused);
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
@@ -75,7 +88,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         InitializeCustomerCommands();
     }
     public event PropertyChangedEventHandler? PropertyChanged;
-    public ObservableCollection<StationResponse> PcStations { get; } = [];
+    public ObservableCollection<SessionStationOption> StationChoices { get; } = [];
+    public ObservableCollection<SessionStationTypeOption> StationTypeOptions { get; } = [];
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
     public ObservableCollection<ActiveSessionListItem> ActiveSessions { get; } = [];
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
@@ -98,7 +112,31 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public StationResponse? SelectedStation
     {
         get => selectedStation;
-        set { if (SetField(ref selectedStation, value)) RaiseCommands(); }
+        set
+        {
+            if (!SetField(ref selectedStation, value))
+                return;
+
+            var matchingChoice = StationChoices.FirstOrDefault(x => x.Station.Id == value?.Id);
+            if (selectedStationChoice?.Station.Id != matchingChoice?.Station.Id)
+            {
+                selectedStationChoice = matchingChoice;
+                OnPropertyChanged(nameof(SelectedStationChoice));
+            }
+
+            ApplyTariffFilter(selectedTariff?.Id);
+            RaiseCommands();
+        }
+    }
+
+    public SessionStationOption? SelectedStationChoice
+    {
+        get => selectedStationChoice;
+        set
+        {
+            if (SetField(ref selectedStationChoice, value))
+                SelectedStation = value?.Station;
+        }
     }
 
     public TariffResponse? SelectedTariff
@@ -124,6 +162,17 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public string TariffName { get => tariffName; set { if (SetField(ref tariffName, value)) RaiseCommands(); } }
     public string HourlyRateText { get => hourlyRateText; set { if (SetField(ref hourlyRateText, value)) RaiseCommands(); } }
     public bool IsDefaultTariff { get => isDefaultTariff; set { if (SetField(ref isDefaultTariff, value)) RaiseCommands(); } }
+    public StationTypeContract TariffStationType
+    {
+        get => tariffStationType;
+        set
+        {
+            if (!Enum.IsDefined(value))
+                throw new ArgumentOutOfRangeException(nameof(value));
+            if (SetField(ref tariffStationType, value))
+                RaiseCommands();
+        }
+    }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
 
@@ -241,8 +290,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 try
                 {
                     stations = (await api.GetStationsAsync())
-                        .Where(x => x.Type == StationTypeContract.Pc)
-                        .OrderBy(x => x.Code, StringComparer.Ordinal)
+                        .OrderBy(x => x.Type)
+                        .ThenBy(x => x.Code, StringComparer.Ordinal)
                         .ToArray();
                 }
                 catch (Exception ex) when (!CanOperateSessions &&
@@ -255,35 +304,41 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
 
                 stationLabels.Clear();
                 foreach (var station in stations)
-                    stationLabels[station.Id] = station.Code;
+                    stationLabels[station.Id] = $"{station.Code} — {StationTypeDisplayText(station.Type)}";
 
                 if (CanOperateSessions)
                 {
-                    Replace(PcStations, stations, SelectedStation?.Id, x => x.Id, out var currentStation);
-                    SelectedStation = currentStation;
+                    var choices = stations
+                        .Select(station => new SessionStationOption(station, StationTypeDisplayText(station.Type)))
+                        .ToArray();
+                    Replace(StationChoices, choices, SelectedStation?.Id, x => x.Station.Id, out var currentChoice);
+                    SelectedStationChoice = currentChoice;
+                    SelectedStation = currentChoice?.Station;
                 }
                 else
                 {
                     // Station labels may be visible to a cashier without granting Session operations.
-                    PcStations.Clear();
+                    StationChoices.Clear();
+                    SelectedStationChoice = null;
                     SelectedStation = null;
                 }
             }
             else
             {
                 stationLabels.Clear();
-                PcStations.Clear();
+                StationChoices.Clear();
+                SelectedStationChoice = null;
                 SelectedStation = null;
             }
 
             if (CanOperateSessions || CanManageTariffs)
             {
-                var tariffs = await api.GetTariffsAsync(StationTypeContract.Pc);
-                Replace(Tariffs, tariffs, SelectedTariff?.Id, x => x.Id, out var currentTariff);
-                SelectedTariff = currentTariff;
+                allActiveTariffs = (await api.GetTariffsAsync()).ToArray();
+                ApplyTariffFilter(SelectedTariff?.Id);
             }
             else
             {
+                allActiveTariffs = [];
                 Tariffs.Clear();
                 SelectedTariff = null;
             }
@@ -405,8 +460,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public void Reset()
     {
         stationLabels.Clear();
-        PcStations.Clear();
+        allActiveTariffs = [];
+        StationChoices.Clear();
         Tariffs.Clear();
+        SelectedStationChoice = null;
         ActiveSessions.Clear();
         PendingInvoices.Clear();
         RecentCashCheckouts.Clear();
@@ -451,13 +508,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             return;
         }
 
-        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{rate}|{IsDefaultTariff}";
+        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{(int)TariffStationType}|{rate}|{IsDefaultTariff}";
         var key = GetKey("tariff.create", fingerprint);
         BeginBusy();
         try
         {
             var created = await api.CreateTariffAsync(
-                new CreateTariffRequest(TariffCode, TariffName, StationTypeContract.Pc, rate, IsDefaultTariff),
+                new CreateTariffRequest(TariffCode, TariffName, TariffStationType, rate, IsDefaultTariff),
                 key);
             pendingKeys.Remove("tariff.create");
             await RefreshAsync();
@@ -537,10 +594,31 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
 
     private string GetStationLabel(Guid stationId)
     {
-        return stationLabels.TryGetValue(stationId, out var stationCode) &&
-               !string.IsNullOrWhiteSpace(stationCode)
-            ? stationCode
+        return stationLabels.TryGetValue(stationId, out var stationLabel) &&
+               !string.IsNullOrWhiteSpace(stationLabel)
+            ? stationLabel
             : Text($"ایستگاه {stationId:D}", $"Station {stationId:D}");
+    }
+
+    private static string StationTypeDisplayText(StationTypeContract type) => type switch
+    {
+        StationTypeContract.Pc => Text("رایانه (PC)", "PC workstation"),
+        StationTypeContract.Ps5 => Text("کنسول PS5", "PS5 console"),
+        StationTypeContract.Foosball => Text("فوتبال‌دستی", "Foosball table"),
+        _ => Text("نوع نامشخص", "Unknown station type")
+    };
+
+    private void ApplyTariffFilter(Guid? preferredTariffId = null)
+    {
+        var compatibleTariffs = allActiveTariffs
+            .Where(tariff => SelectedStation is null || tariff.StationType == SelectedStation.Type)
+            .ToArray();
+
+        var requestedId = preferredTariffId ?? selectedTariff?.Id;
+        Replace(Tariffs, compatibleTariffs, requestedId, tariff => tariff.Id, out var currentTariff);
+        SelectedTariff = currentTariff
+            ?? Tariffs.FirstOrDefault(tariff => tariff.IsDefault)
+            ?? Tariffs.FirstOrDefault();
     }
 
     private static string FormatStartedAtDisplayText(DateTimeOffset startedAtUtc)
@@ -632,10 +710,11 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.timing_recovery_required" or "sessions.invalid_clock" => Text("پیوستگی زمان جلسه قابل تأیید نیست؛ صورتحساب صادر نشد و بازیابی زمان لازم است.", "Session timing continuity could not be verified. No invoice was created; timing recovery is required."),
         "sessions.timing_recovery_invalid" => Text("مدت، علت یا تأیید بازیابی زمان معتبر نیست.", "The recovery duration, reason, or confirmation is invalid."),
         "sessions.timing_recovery_not_required" => Text("پیوستگی زمان معتبر است؛ از پایان عادی Session استفاده کنید.", "Timing continuity is valid; use the normal End Session command."),
-        "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
-        "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
+        "sessions.station_has_active_session" => Text("برای این ایستگاه یک Session فعال ثبت شده است.", "This station already has an active Session."),
+        "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی این ایستگاه را تسویه کنید.", "Pay this station's previous Session invoice before starting another."),
         "sessions.customer_blocked" => Text("این مشتری مسدود است و نمی‌تواند Session جدیدی شروع کند.", "This customer is blocked and cannot start a new Session."),
-        "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
+        "sessions.tariff_station_mismatch" => Text("نوع تعرفه باید با نوع ایستگاه انتخاب‌شده یکسان باشد.", "The tariff type must match the selected station type."),
+        "sessions.station_type_unsupported" => Text("نوع این ایستگاه برای محاسبهٔ زمان پشتیبانی نمی‌شود.", "This station type is not supported for timed Sessions."),
         "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
         "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
         "billing.cash_insufficient" => Text("وجه دریافتی کمتر از صورتحساب است.", "Cash received is less than the invoice amount."),
