@@ -130,7 +130,7 @@ public static class BillingEndpoints
             "billing.invoice_not_found" or "billing.session_not_found" => StatusCodes.Status404NotFound,
             "billing.invoice_not_pending" or "billing.invoice_not_paid" or "billing.sale_already_reversed" or
             "billing.reversal_conflict" or "billing.reversal_confirmation_mismatch" or
-            "billing.session_version_conflict" or "billing.session_not_ready" or
+            "billing.reversal_method_unsupported" or "billing.session_version_conflict" or "billing.session_not_ready" or
             "billing.checkout_conflict" or "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
             "billing.cash_insufficient" or "billing.reversal_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError

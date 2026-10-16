@@ -379,6 +379,10 @@ public sealed class BillingService(
                         return Fail<CashSaleReversalResponse>("billing.checkout_outcome_inconsistent",
                             "Invoice, Payment and original sale ledger do not reconcile; no reversal was performed.");
 
+                    if (payment.Method != PaymentMethod.Cash)
+                        return Fail<CashSaleReversalResponse>("billing.reversal_method_unsupported",
+                            "Only cash payments can be reversed by the V1 cash-sale reversal operation.");
+
                     if (command.PaymentId != payment.Id || command.ConfirmedAmountToman != invoice.AmountToman)
                         return Fail<CashSaleReversalResponse>("billing.reversal_confirmation_mismatch",
                             "Confirm the original payment and exact invoice amount before reversing.");
