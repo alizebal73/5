@@ -260,8 +260,22 @@ public sealed partial class SessionWorkflowViewModel
         RaiseCustomerCommands();
     }
 
+    private (Guid? CustomerId, string? CustomerCode, string Fingerprint) BuildSessionStartContext(Guid stationId, Guid tariffId)
+    {
+        var customerId = SelectedCustomer?.Id;
+        var customerCode = SelectedCustomer?.Code;
+        var fingerprint = $"{stationId:D}|{tariffId:D}|{(customerId?.ToString("D") ?? "walk-in")}";
+        return (customerId, customerCode, fingerprint);
+    }
+
+    private string SessionStartedMessage(string stationCode, string? customerCode) => customerCode is null
+        ? Text($"Session برای {stationCode} با مشتری گذری شروع شد.", $"Session started for {stationCode} with a Walk-in customer.")
+        : Text($"Session برای {stationCode} و مشتری {customerCode} شروع شد.", $"Session started for {stationCode} for customer {customerCode}.");
+
     private void EnforceCustomerPermissions()
     {
+        OnPropertyChanged(nameof(CanReadCustomers));
+        OnPropertyChanged(nameof(CanWriteCustomers));
         if (!CanReadCustomers)
         {
             customerRefreshGeneration++;
