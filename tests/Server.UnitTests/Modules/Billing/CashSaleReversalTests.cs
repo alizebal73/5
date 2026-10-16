@@ -27,6 +27,7 @@ public sealed class CashSaleReversalTests
 
         Assert.Equal(BillingLedgerEntryType.CashSaleReversal, entry.EntryType);
         Assert.Equal(30_000L, entry.AmountToman);
+        Assert.Equal(-30_000L, entry.GetSignedAmountToman());
         Assert.Equal(invoiceId, entry.InvoiceId);
         Assert.Equal(paymentId, entry.PaymentId);
     }

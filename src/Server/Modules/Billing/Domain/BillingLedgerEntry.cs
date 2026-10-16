@@ -48,6 +48,16 @@ public sealed class BillingLedgerEntry
             amountToman, actorId, occurredAtUtc);
     }
 
+    /// <summary>
+    /// Signed contribution used by future cash-ledger projections. Stored ledger amounts remain positive magnitudes.
+    /// </summary>
+    public long GetSignedAmountToman() => EntryType switch
+    {
+        BillingLedgerEntryType.CashSale => AmountToman,
+        BillingLedgerEntryType.CashSaleReversal => checked(-AmountToman),
+        _ => throw new InvalidOperationException("Unsupported billing ledger entry type.")
+    };
+
     public static BillingLedgerEntry RecordCashSaleReversal(
         Guid id,
         Guid invoiceId,
