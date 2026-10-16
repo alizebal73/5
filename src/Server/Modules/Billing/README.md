@@ -16,7 +16,7 @@ Own immutable invoices, payment records/allocation, pending settlement, cash che
 
 ## Incomplete
 
-Full cash-sale reversal is being implemented under the bounded V1 contract, with dedicated permission, mandatory reason, idempotency, a forward-only migration and a compensating typed ledger entry. It remains unaccepted for operational use until exact-SHA gates, UI acceptance and independent financial reconciliation are complete. Cash tender correction is specified but not implemented. Card payments, Wallet/debt, partial allocations and manual WPF/database reconciliation remain open. The overall first Session-to-cash journey is not accepted for real-money use.
+The current candidate implements full cash-sale reversal through the Server and the operator WPF workflow, under the bounded V1 contract. It has dedicated permission, mandatory reason and confirmation, idempotency, a forward-only migration, an append-only reversal record and a compensating typed ledger entry. It remains unaccepted for operational use until exact-SHA gates, manual WPF/recovery acceptance and independent financial reconciliation are complete. Cash tender correction is specified but not implemented. Card payments, Wallet/debt, partial allocations and the overall first Session-to-cash acceptance remain open.
 
 The requirements are in [Cash Correction and Reversal V1](../../../../docs/domain/cash-correction-and-reversal-v1.md). This implementation is a separate narrow slice; tender correction remains a later task.
 

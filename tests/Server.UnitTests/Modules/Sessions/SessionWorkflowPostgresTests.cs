@@ -300,7 +300,11 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.True(replayedReversal.IsSuccess);
                 Assert.Equal(reversal.ReversalId, replayedReversal.Value.ReversalId);
 
-                var reversedOutcome = await billing.GetCashCheckoutOutcomeAsync(billingActor, ended.Value.InvoiceId, CancellationToken.None);
+                var reversalOnlyActor = billingActor with
+                {
+                    Permissions = new HashSet<string>([Permissions.BillingCashReverse], StringComparer.Ordinal)
+                };
+                var reversedOutcome = await billing.GetCashCheckoutOutcomeAsync(reversalOnlyActor, ended.Value.InvoiceId, CancellationToken.None);
                 Assert.True(reversedOutcome.IsSuccess, reversedOutcome.IsSuccess ? "" : reversedOutcome.Error.Code);
                 Assert.Equal(InvoiceStatusContract.Reversed, reversedOutcome.Value.Status);
                 Assert.Equal(reversal.ReversalId, reversedOutcome.Value.ReversalId);
@@ -308,7 +312,7 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(50_000L, reversedOutcome.Value.AmountReceivedToman);
                 Assert.Equal(20_000L, reversedOutcome.Value.ChangeGivenToman);
 
-                var recentOutcome = await billing.ListRecentCashCheckoutsAsync(billingActor, CancellationToken.None);
+                var recentOutcome = await billing.ListRecentCashCheckoutsAsync(reversalOnlyActor, CancellationToken.None);
                 Assert.True(recentOutcome.IsSuccess);
                 Assert.Contains(recentOutcome.Value, x => x.InvoiceId == ended.Value.InvoiceId &&
                     x.Status == InvoiceStatusContract.Reversed && x.ReversalId == reversal.ReversalId);
