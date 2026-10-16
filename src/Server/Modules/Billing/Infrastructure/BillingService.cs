@@ -61,7 +61,8 @@ public sealed partial class BillingService(
         CancellationToken cancellationToken)
     {
         if (!actor.Permissions.Contains(Permissions.BillingWrite) &&
-            !actor.Permissions.Contains(Permissions.BillingCashReverse))
+            !actor.Permissions.Contains(Permissions.BillingCashReverse) &&
+            !actor.Permissions.Contains(Permissions.BillingCashTenderCorrect))
             return Fail<CashCheckoutOutcomeResponse>("billing.forbidden", "Not allowed to reconcile cash checkout outcomes.");
         if (invoiceId == Guid.Empty)
             return Fail<CashCheckoutOutcomeResponse>("billing.invoice_not_found", "Invoice was not found.");
@@ -79,7 +80,9 @@ public sealed partial class BillingService(
             .SingleOrDefaultAsync(x => x.InvoiceId == invoiceId && x.EntryType == BillingLedgerEntryType.CashSaleReversal, cancellationToken);
         var reversal = await db.CashSaleReversals.AsNoTracking()
             .SingleOrDefaultAsync(x => x.InvoiceId == invoiceId, cancellationToken);
-        return ToCheckoutOutcome(invoice, payment, saleLedger, reversal, reversalLedger);
+        var tenderCorrections = await db.CashTenderCorrections.AsNoTracking()
+            .Where(x => x.InvoiceId == invoiceId).OrderBy(x => x.Version).ToArrayAsync(cancellationToken);
+        return ToCheckoutOutcome(invoice, payment, saleLedger, reversal, reversalLedger, tenderCorrections);
     }
 
     public async Task<Result<IReadOnlyList<CashCheckoutOutcomeResponse>>> ListRecentCashCheckoutsAsync(
@@ -87,7 +90,8 @@ public sealed partial class BillingService(
         CancellationToken cancellationToken)
     {
         if (!actor.Permissions.Contains(Permissions.BillingWrite) &&
-            !actor.Permissions.Contains(Permissions.BillingCashReverse))
+            !actor.Permissions.Contains(Permissions.BillingCashReverse) &&
+            !actor.Permissions.Contains(Permissions.BillingCashTenderCorrect))
             return Fail<IReadOnlyList<CashCheckoutOutcomeResponse>>(
                 "billing.forbidden", "Not allowed to read recent cash checkout outcomes.");
 
@@ -113,10 +117,14 @@ public sealed partial class BillingService(
             .ToArrayAsync(cancellationToken);
         var reversals = await db.CashSaleReversals.AsNoTracking()
             .Where(x => invoiceIds.Contains(x.InvoiceId)).ToArrayAsync(cancellationToken);
+        var tenderCorrections = await db.CashTenderCorrections.AsNoTracking()
+            .Where(x => invoiceIds.Contains(x.InvoiceId)).OrderBy(x => x.Version).ToArrayAsync(cancellationToken);
         var paymentsByInvoice = payments.ToDictionary(x => x.InvoiceId);
         var salesByInvoice = saleEntries.ToDictionary(x => x.InvoiceId);
         var reversalEntriesByInvoice = reversalEntries.ToDictionary(x => x.InvoiceId);
         var reversalsByInvoice = reversals.ToDictionary(x => x.InvoiceId);
+        var tenderCorrectionsByInvoice = tenderCorrections.GroupBy(x => x.InvoiceId)
+            .ToDictionary(x => x.Key, x => (IReadOnlyList<CashTenderCorrection>)x.OrderBy(y => y.Version).ToArray());
 
         var outcomes = new List<CashCheckoutOutcomeResponse>(invoices.Length);
         foreach (var invoice in invoices)
@@ -125,7 +133,9 @@ public sealed partial class BillingService(
             salesByInvoice.TryGetValue(invoice.Id, out var sale);
             reversalsByInvoice.TryGetValue(invoice.Id, out var reversal);
             reversalEntriesByInvoice.TryGetValue(invoice.Id, out var reversalEntry);
-            var outcome = ToCheckoutOutcome(invoice, payment, sale, reversal, reversalEntry);
+            tenderCorrectionsByInvoice.TryGetValue(invoice.Id, out var invoiceCorrections);
+            var outcome = ToCheckoutOutcome(invoice, payment, sale, reversal, reversalEntry,
+                invoiceCorrections ?? Array.Empty<CashTenderCorrection>());
             if (!outcome.IsSuccess)
                 return Fail<IReadOnlyList<CashCheckoutOutcomeResponse>>(
                     outcome.Error.Code, outcome.Error.Message);
@@ -137,12 +147,18 @@ public sealed partial class BillingService(
 
     private static Result<CashCheckoutOutcomeResponse> ToCheckoutOutcome(
         Invoice invoice, Payment? payment, BillingLedgerEntry? saleLedger,
-        CashSaleReversal? reversal, BillingLedgerEntry? reversalLedger)
+        CashSaleReversal? reversal, BillingLedgerEntry? reversalLedger,
+        IReadOnlyList<CashTenderCorrection> tenderCorrections)
     {
+        if (!TryProjectCashTenderHistory(invoice, payment, tenderCorrections,
+                out var latestTenderCorrection, out var effectiveReceived, out var effectiveChange))
+            return Fail<CashCheckoutOutcomeResponse>("billing.checkout_outcome_inconsistent",
+                "Cash tender correction history does not reconcile to the original Payment.");
+
         if (invoice.Status == InvoiceStatus.PendingPayment)
         {
             if (payment is not null || saleLedger is not null || reversal is not null ||
-                reversalLedger is not null || invoice.PaidAtUtc is not null)
+                reversalLedger is not null || tenderCorrections.Count > 0 || invoice.PaidAtUtc is not null)
                 return Fail<CashCheckoutOutcomeResponse>("billing.checkout_outcome_inconsistent",
                     "Pending invoice has persisted payment or reversal data; reconciliation is required.");
         }
@@ -179,7 +195,9 @@ public sealed partial class BillingService(
             invoice.TariffHourlyRateTomanSnapshot, invoice.ElapsedTicks, invoice.AmountToman,
             (InvoiceStatusContract)invoice.Status, payment?.Id, saleLedger?.Id,
             payment?.AmountReceivedToman, payment?.ChangeGivenToman, invoice.IssuedAtUtc, invoice.PaidAtUtc,
-            reversal?.Id, reversal?.ReversedAtUtc, reversal?.Reason, reversalLedger?.Id));
+            reversal?.Id, reversal?.ReversedAtUtc, reversal?.Reason, reversalLedger?.Id,
+            effectiveReceived, effectiveChange, latestTenderCorrection?.Id, latestTenderCorrection?.Version,
+            latestTenderCorrection?.Reason, latestTenderCorrection?.CorrectedAtUtc));
     }
 
     public Task<Result<CashCheckoutResponse>> CheckoutCashAsync(
