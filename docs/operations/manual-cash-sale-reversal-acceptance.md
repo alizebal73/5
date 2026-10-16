@@ -89,6 +89,35 @@ FROM r;
 Expected: exactly one row with `reconciliation_status = PASS`, invoice status `3` (Reversed), Session status `3` (settled/paid), one Payment, one original `entry_type = 1` sale row, one reversal record, one `entry_type = 2` reversal ledger row, and net ledger effect `0`. The cash tender and change columns in this query are the original Payment facts; they must remain unchanged after correction. Use Query D below to reconcile the append-only corrected facts.
 
 
+### B. Confirm the two successful Audit events for the reversal
+
+```sql
+WITH input AS (
+    SELECT 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AS invoice_id
+)
+SELECT
+    a.id, a.occurred_at_utc, a.actor_type, a.actor_id, a.operation, a.reference_type, a.reference_id,
+    a.reason, a.correlation_id, a.outcome, a.idempotency_key, a.before_json, a.after_json
+FROM input x
+JOIN cash_sale_reversals r ON r.invoice_id = x.invoice_id
+JOIN audit_entries a ON a.correlation_id = r.correlation_id
+WHERE a.operation IN ('billing.cash_sale_reversal', 'billing.cash_sale_reversal_ledger_entry')
+ORDER BY a.occurred_at_utc, a.operation;
+```
+
+Expected: two rows, both with `outcome = Succeeded`, the recorded operator/reason/correlation/idempotency key, and references to the reversal record and compensating ledger row respectively. Inspect `before_json`/`after_json` to confirm the original sale/payment identities and the recorded reversal result.
+
+### C. Check there is no duplicate reversal record or ledger entry
+
+```sql
+SELECT
+    (SELECT count(*) FROM cash_sale_reversals WHERE invoice_id = 'PASTE-TEST-INVOICE-UUID-HERE'::uuid) AS reversal_records,
+    (SELECT count(*) FROM billing_ledger_entries WHERE invoice_id = 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AND entry_type = 1) AS original_sale_entries,
+    (SELECT count(*) FROM billing_ledger_entries WHERE invoice_id = 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AND entry_type = 2) AS reversal_entries;
+```
+
+Expected: `1`, `1`, `1` respectively. Anything else is a stop condition, not a reason to delete rows.
+
 ### D. Reconcile the append-only tender correction and effective amount/change
 
 Run this after correction and reversal. The correction is a history row; it must not update the original `payments` row or the original sale-ledger amount. Replace the invoice UUID.
@@ -137,35 +166,6 @@ FROM base;
 
 Expected for this single-correction exercise: exactly one row with `correction_reconciliation_status = PASS`, `correction_version = 1`, and `correction_count = 1`. Example only: if the original received-cash amount was invoice + 500 and the corrected amount is invoice + 750, then the original change stays 500 while the corrected/effective change is 750. Use the actual captured values in the evidence; do not force the sample numbers onto another run.
 
-
-### B. Confirm the two successful Audit events for the reversal
-
-```sql
-WITH input AS (
-    SELECT 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AS invoice_id
-)
-SELECT
-    a.id, a.occurred_at_utc, a.actor_type, a.actor_id, a.operation, a.reference_type, a.reference_id,
-    a.reason, a.correlation_id, a.outcome, a.idempotency_key, a.before_json, a.after_json
-FROM input x
-JOIN cash_sale_reversals r ON r.invoice_id = x.invoice_id
-JOIN audit_entries a ON a.correlation_id = r.correlation_id
-WHERE a.operation IN ('billing.cash_sale_reversal', 'billing.cash_sale_reversal_ledger_entry')
-ORDER BY a.occurred_at_utc, a.operation;
-```
-
-Expected: two rows, both with `outcome = Succeeded`, the recorded operator/reason/correlation/idempotency key, and references to the reversal record and compensating ledger row respectively. Inspect `before_json`/`after_json` to confirm the original sale/payment identities and the recorded reversal result.
-
-### C. Check there is no duplicate reversal record or ledger entry
-
-```sql
-SELECT
-    (SELECT count(*) FROM cash_sale_reversals WHERE invoice_id = 'PASTE-TEST-INVOICE-UUID-HERE'::uuid) AS reversal_records,
-    (SELECT count(*) FROM billing_ledger_entries WHERE invoice_id = 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AND entry_type = 1) AS original_sale_entries,
-    (SELECT count(*) FROM billing_ledger_entries WHERE invoice_id = 'PASTE-TEST-INVOICE-UUID-HERE'::uuid AND entry_type = 2) AS reversal_entries;
-```
-
-Expected: `1`, `1`, `1` respectively. Anything else is a stop condition, not a reason to delete rows.
 
 ## 5. Evidence record and acceptance decision
 
