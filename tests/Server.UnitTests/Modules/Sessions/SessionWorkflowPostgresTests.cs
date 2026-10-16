@@ -208,6 +208,13 @@ public sealed class SessionWorkflowPostgresTests
                 Assert.Equal(0, await db.Payments.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
                 Assert.Equal(0, await db.BillingLedgerEntries.CountAsync(x => x.InvoiceId == ended.Value.InvoiceId));
 
+                // The 30-minute fake-time jump represents billing duration, not an Agent outage.
+                // Refresh authoritative Agent liveness before isolating the pending-settlement rule.
+                lease.LastHeartbeatAtUtc = clock.UtcNow;
+                lease.LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5);
+                lease.UpdatedAtUtc = clock.UtcNow;
+                await db.SaveChangesAsync();
+
                 var blockedStart = await service.StartAsync(
                     new StartSessionCommand(
                         stationId, tariffId, null, idempotencyPrefix + "start-before-settlement", actor),
