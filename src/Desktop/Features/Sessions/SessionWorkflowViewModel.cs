@@ -61,6 +61,14 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } &&
             IsValidCashSaleReversalReason(CashSaleReversalReasonText) &&
             ConfirmCashSaleReversal);
+        CorrectCashTenderCommand = new AsyncUiAction(CorrectCashTenderAsync, () => !IsBusy && CanCorrectCashTender &&
+            unresolvedCashTenderCorrection is null &&
+            SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } selected &&
+            TryParseToman(CorrectedCashReceivedText, out var correctedReceived) &&
+            correctedReceived >= selected.Outcome.AmountToman &&
+            correctedReceived != (selected.Outcome.EffectiveAmountReceivedToman ?? selected.Outcome.AmountReceivedToman) &&
+            IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
+            ConfirmCashTenderCorrection);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -81,7 +89,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public bool CanOperateSessions => hasPermission(Permissions.SessionsOperate);
     public bool CanCheckout => hasPermission(Permissions.BillingWrite);
     public bool CanReverseCashSale => hasPermission(Permissions.BillingCashReverse);
-    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale;
+    public bool CanCorrectCashTender => hasPermission(Permissions.BillingCashTenderCorrect);
+    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender;
     public bool CanReadStations => hasPermission(Permissions.StationsRead);
 
     public StationResponse? SelectedStation
@@ -212,6 +221,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 }
             }
 
+            if (unresolvedCashTenderCorrection is not null &&
+                !await ReconcileCashTenderCorrectionBeforeRefreshAsync())
+                return;
+
             ErrorMessage = string.Empty;
             if (CanReadStations)
             {
@@ -299,7 +312,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 SelectedPendingInvoice = null;
             }
 
-            if (CanCheckout || CanReverseCashSale)
+            if (CanCheckout || CanReverseCashSale || CanCorrectCashTender)
             {
                 var selectedRecentInvoiceId = SelectedRecentCashCheckout?.Id;
                 var recentOutcomes = await api.GetRecentCashCheckoutsAsync();
@@ -329,6 +342,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             OnPropertyChanged(nameof(CanOperateSessions));
             OnPropertyChanged(nameof(CanCheckout));
             OnPropertyChanged(nameof(CanReverseCashSale));
+            OnPropertyChanged(nameof(CanCorrectCashTender));
             OnPropertyChanged(nameof(CanReadStations));
             OnPropertyChanged(nameof(CanUseWorkspace));
             StatusMessage = stationLabelsUnavailable
@@ -363,6 +377,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanOperateSessions));
         OnPropertyChanged(nameof(CanCheckout));
         OnPropertyChanged(nameof(CanReverseCashSale));
+        OnPropertyChanged(nameof(CanCorrectCashTender));
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
@@ -384,6 +399,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         pendingKeys.Clear();
         unresolvedCashCheckoutInvoiceId = null;
         unresolvedCashSaleReversalInvoiceId = null;
+        unresolvedCashTenderCorrection = null;
+        CorrectedCashReceivedText = string.Empty;
+        CashTenderCorrectionReasonText = string.Empty;
+        ConfirmCashTenderCorrection = false;
         CashSaleReversalReasonText = string.Empty;
         ConfirmCashSaleReversal = false;
         RaiseCommands();
@@ -393,6 +412,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanOperateSessions));
         OnPropertyChanged(nameof(CanCheckout));
         OnPropertyChanged(nameof(CanReverseCashSale));
+        OnPropertyChanged(nameof(CanCorrectCashTender));
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
     }
@@ -618,6 +638,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)
