@@ -97,6 +97,9 @@ foreach ($scriptName in $scriptNames) {
 New-Item -ItemType Directory -Force -Path (Join-Path $scriptsRoot "modules") | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/modules/ServerTlsCertificate.psm1") -Destination (Join-Path $scriptsRoot "modules")
 
+$sourcePayloadManifestPath = Join-Path $payloadRoot "release-manifest.json"
+$sourcePayloadManifestSha256 = (Get-FileHash -LiteralPath $sourcePayloadManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+
 $readmeText = @'
 GAMENET 5 — TEMPORARY ISOLATED TEST SETUP
 ========================================
@@ -147,8 +150,64 @@ The exact tested source SHA and component hashes are in Setup\release-manifest.j
     [System.Text.UTF8Encoding]::new($true)
 )
 
+# Write an installer-contained manifest for exactly the files that this Setup payload contains.
+$releaseManifestFiles = @(
+    Get-ChildItem -LiteralPath $payloadRoot -Recurse -File |
+        Where-Object { -not [string]::Equals($_.FullName, $sourcePayloadManifestPath, [StringComparison]::OrdinalIgnoreCase) } |
+        Sort-Object FullName |
+        ForEach-Object {
+            $relative = [System.IO.Path]::GetRelativePath($payloadRoot, $_.FullName).Replace('\', '/')
+            [ordered]@{
+                component = ($relative.Split("/")[0])
+                path = $relative
+                sizeBytes = $_.Length
+                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+        }
+)
+$sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_HEAD_REF)) {
+    $env:GITHUB_HEAD_REF
+} elseif (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REF_NAME)) {
+    $env:GITHUB_REF_NAME
+} else {
+    ((& git -C $repoRoot branch --show-current 2>$null | Out-String).Trim())
+}
+if ([string]::IsNullOrWhiteSpace($sourceRef)) { $sourceRef = "detached-checkout" }
+$bundledManifest = [ordered]@{
+    schemaVersion = 1
+    product = "GameNet 5"
+    artifactType = "temporary-test-setup-payload"
+    isInstaller = $false
+    productionCertified = $false
+    sourcePayloadManifestSha256 = $sourcePayloadManifestSha256
+    source = [ordered]@{
+        repository = "alizebal73/5"
+        ref = $sourceRef
+        commit = $sourceCommit
+    }
+    target = [ordered]@{
+        operatingSystem = "Windows"
+        architecture = "x64"
+        runtimeIdentifier = "win-x64"
+        selfContained = $true
+    }
+    components = @(
+        [ordered]@{ name = "Server"; entryPoint = "Server/GameNet.Server.exe" },
+        [ordered]@{ name = "Desktop"; entryPoint = "Desktop/GameNet.Manager.Desktop.exe" },
+        [ordered]@{ name = "Agent"; entryPoint = "Agent/GameNet.Agent.exe" }
+    )
+    files = $releaseManifestFiles
+}
+[System.IO.File]::WriteAllText(
+    $sourcePayloadManifestPath,
+    (ConvertTo-Json -InputObject $bundledManifest -Depth 12) + [Environment]::NewLine,
+    [System.Text.UTF8Encoding]::new($false)
+)
+
 # Parse every PowerShell helper that ships with this installer before compilation.
-foreach ($script in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "installer") -File -Filter "*.ps1") + @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "scripts") -Recurse -File | Where-Object { $_.Name -in $scriptNames -or $_.Name -eq "ServerTlsCertificate.psm1" })) {
+$sourceScripts = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "installer") -File -Filter "*.ps1")
+$sourceScripts += @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "scripts") -Recurse -File | Where-Object { $_.Name -in $scriptNames -or $_.Name -eq "ServerTlsCertificate.psm1" })
+foreach ($script in $sourceScripts) {
     $tokens = $null
     $errors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors)
@@ -193,7 +252,7 @@ $manifest = [ordered]@{
     version = $Version
     source = [ordered]@{
         repository = "alizebal73/5"
-        ref = ((& git -C $repoRoot branch --show-current 2>$null | Out-String).Trim())
+        ref = $sourceRef
         commit = $sourceCommit
     }
     build = [ordered]@{
