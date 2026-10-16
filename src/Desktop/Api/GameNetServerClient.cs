@@ -124,6 +124,11 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         SendMutationAsync<EndSessionRequest, InvoicePreviewResponse>(
             HttpMethod.Post, $"/api/v1/sessions/{id:D}/end", body, idempotencyKey, cancellationToken);
 
+    public Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(
+        Guid id, ReconcileSessionTimingRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<ReconcileSessionTimingRequest, InvoicePreviewResponse>(
+            HttpMethod.Post, $"/api/v1/sessions/{id:D}/timing-recovery", body, idempotencyKey, cancellationToken);
+
     public async Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(
         CancellationToken cancellationToken = default)
     {
