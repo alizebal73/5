@@ -58,6 +58,11 @@
   <system:String x:Key="Session.End">End and issue invoice</system:String>
   <system:String x:Key="Session.Pause">Pause billing time</system:String>
   <system:String x:Key="Session.Resume">Resume play</system:String>
+  <system:String x:Key="Session.TransferTitle">Transfer Session to another station</system:String>
+  <system:String x:Key="Session.TransferDestination">Available station of the same type</system:String>
+  <system:String x:Key="Session.TransferReason">Reason for transfer (5–300 characters)</system:String>
+  <system:String x:Key="Session.ConfirmTransfer">I verified the destination and confirm that the Session should move without repricing.</system:String>
+  <system:String x:Key="Session.TransferSubmit">Transfer Session</system:String>
   <system:String x:Key="Tariff.CreateTitle">Configure a station tariff</system:String>
   <system:String x:Key="Tariff.StationType">Station type</system:String>
   <system:String x:Key="Tariff.Code">Tariff code</system:String>

@@ -18,6 +18,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
 {
     ObservableCollection<SessionStationOption> StationChoices { get; }
     ObservableCollection<SessionStationTypeOption> StationTypeOptions { get; }
+    ObservableCollection<SessionStationOption> TransferDestinationChoices { get; }
     ObservableCollection<CustomerResponse> Customers { get; }
     ObservableCollection<CustomerResponse> AvailableCustomers { get; }
     ObservableCollection<TariffResponse> Tariffs { get; }
@@ -40,6 +41,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand EndSessionCommand { get; }
     ICommand PauseSessionCommand { get; }
     ICommand ResumeSessionCommand { get; }
+    ICommand TransferSessionCommand { get; }
     ICommand ReconcileSessionTimingCommand { get; }
     ICommand CheckoutCashCommand { get; }
     ICommand ReverseCashSaleCommand { get; }
@@ -74,6 +76,9 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string CustomerStatusSummaryText { get; }
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
+    SessionStationOption? SelectedTransferDestination { get; set; }
+    string SessionTransferReasonText { get; set; }
+    bool ConfirmSessionTransfer { get; set; }
     string ReconciledElapsedMinutesText { get; set; }
     string TimingRecoveryReasonText { get; set; }
     bool ConfirmTimingRecovery { get; set; }
