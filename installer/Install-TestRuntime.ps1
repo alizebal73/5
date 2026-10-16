@@ -67,7 +67,7 @@ function Invoke-PowerShellScript {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Required setup helper is missing: $Path"
     }
-    $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+    $ps = Join-Path $InstallRoot "Setup\PowerShell\pwsh.exe"
     & $ps -NoLogo -NoProfile -ExecutionPolicy Bypass -File $Path @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "A bundled setup helper failed. Review its visible output; credentials are not intentionally printed by this bootstrapper."
