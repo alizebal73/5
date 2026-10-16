@@ -31,6 +31,12 @@
           <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding PcStations}"
                     DisplayMemberPath="Code" SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
           <TextBlock Text="{DynamicResource Customer.SelectForSession}" FontSize="12"/>
+          <TextBox Margin="0,3,0,4" Padding="5"
+                   Text="{Binding SessionCustomerSearchText, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="{DynamicResource Customer.SessionSearch}"/>
+          <Button Content="{DynamicResource Customer.SessionSearchButton}"
+                  Command="{Binding SearchSessionCustomersCommand}" Padding="5,3"
+                  HorizontalAlignment="Left" Margin="0,0,0,5"/>
           <ComboBox Margin="0,3,0,6" Padding="5" ItemsSource="{Binding AvailableCustomers}"
                     SelectedItem="{Binding SelectedCustomer, Mode=TwoWay}">
             <ComboBox.ItemTemplate>
