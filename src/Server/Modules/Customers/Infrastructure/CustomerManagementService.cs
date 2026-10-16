@@ -3,6 +3,7 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Customers.Contracts;
+using GameNet.Server.Modules.Customers.Application;
 using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Customers;
@@ -18,7 +19,7 @@ public sealed class CustomerManagementService(
     CommandMutationPipeline mutationPipeline,
     IRequestFingerprint requestFingerprint,
     IAuditWriter audit,
-    IGameClock clock)
+    IGameClock clock) : ICustomerManagementService
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Retention = TimeSpan.FromDays(1);
