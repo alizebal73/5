@@ -84,6 +84,7 @@
   <system:String x:Key="Session.ConfirmTimingRecovery">I independently verified the duration and confirm this audited timing reconciliation.</system:String>
   <system:String x:Key="Session.TimingRecoverySubmit">Reconcile timing and issue invoice</system:String>
   <system:String x:Key="Customer.Section">Customer management</system:String>
+  <system:String x:Key="Customer.New">New customer</system:String>
   <system:String x:Key="Customer.Search">Search code, name, nickname or phone</system:String>
   <system:String x:Key="Customer.SearchButton">Search / Refresh</system:String>
   <system:String x:Key="Customer.IncludeInactive">Include inactive and blocked customers</system:String>
