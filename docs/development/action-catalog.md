@@ -1,6 +1,6 @@
 # Action Catalog — GameNet 5
 
-**Status:** Customer profile core is implemented on candidate branch `feature/customers-core-20261016`; exact-head CI and protected PR review remain pending. Current Identity/Station actions and the partial PC Session-to-cash flow remain on Integration. Slice 1 is not accepted under [Issue #98](https://github.com/alizebal73/5/issues/98); cash reversal is not approved for real-money use.
+**Status:** Customer profile core was squash-merged into `integration/runtime-operator-v1` by [PR #127](https://github.com/alizebal73/5/pull/127) at merge SHA `973acc523f394b2171c02db2b3836fccc58c9d67` after exact PR-head Foundation, Quick Validation and Runtime Payload all passed; post-merge Foundation and Quick Validation also passed. The portable Runtime Payload was built from tested PR head `c7ed41ab508823f2a90e3b3a7901447669e70b88`; Git commit records confirm its source tree and the merge SHA share tree `c06a22264da10340ce3b128bcaaa004156bb77f6`. Keep the manifest's actual tested checkout SHA and artifact checksum; manual evidence must record the tested SHA, merge SHA, shared tree SHA and package hash without claiming the payload was built from the merge commit. No rebuild is needed solely for the commit-ID difference while the source trees are identical. Manual isolated acceptance remains NOT RUN, and this portable payload is not Setup/MSI or a production release. Customer PIN/login, Wallet/debt, card/partial refunds, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Slice 1 is not accepted under [Issue #98](https://github.com/alizebal73/5/issues/98); cash reversal is not approved for real-money use.
 
 Use the live Integration branch and relevant PR/Actions evidence when verifying code. This durable catalog deliberately avoids a mutable branch SHA.
 
@@ -113,7 +113,7 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - **Contract:** `GET /api/v1/customers?query={query}&includeInactive={bool}&take={1..100}` → `CustomerResponse[]`.
 - **Permission / preconditions:** authenticated Operator with Server-side `customers.read`; query length is limited to 80 and results are capped at 100. Walk-in identities are excluded from profile management.
 - **Idempotency / Audit:** read-only; no mutation key or Audit.
-- **UI entry / states:** Customer manager search/refresh; only Active customers are offered for a new Session. Empty, denied, timeout and offline states do not create a customer.
+- **UI entry / states:** Customer manager search/refresh and a separate searchable Session customer picker (code/name/nickname/phone); only Active customers are offered for a new Session. Manager filtering does not disturb the Session selection. Empty, denied, timeout and offline states do not create a customer.
 - **Evidence:** CustomerEndpoints, CustomerManagementService, GameNetServerClient.GetCustomersAsync and customer resource/binding tests.
 
 ### `customers.create`
