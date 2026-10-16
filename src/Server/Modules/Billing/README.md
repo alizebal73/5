@@ -12,10 +12,13 @@ Own immutable invoices, payment records/allocation, pending settlement, cash che
 - Cash-only checkout with checked integer-Toman arithmetic.
 - Payment, paid Invoice/Session state, append-only ledger entry and Audit written transactionally.
 - Idempotency, rollback and PostgreSQL regression coverage for core persisted invariants.
+- Durable invoice-based checkout outcome lookup and recent completed checkout history, with automated coverage for reconciliation and simulated lost responses; manual operator acceptance remains outstanding.
 
 ## Incomplete
 
-Card payments, Wallet/debt, partial allocations, refund/reversal/correction workflows, durable display/recovery of a payment committed before its HTTP response was lost, and manual WPF/database reconciliation remain open. Cash entry must require deliberate operator input; do not treat the current flow as ready for real-money use.
+Cash tender correction and full cash-sale reversal are not implemented. Card payments, Wallet/debt, partial allocations, and manual WPF/database reconciliation remain open. The overall first Session-to-cash journey is not accepted for real-money use.
+
+The proposed requirements for cash tender correction versus full reversal are in [Cash Correction and Reversal V1](../../../../docs/domain/cash-correction-and-reversal-v1.md). Treat this as a design contract, not an implemented or usable endpoint.
 
 ## Implementation rules
 
