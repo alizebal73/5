@@ -106,35 +106,6 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - **UI entry / states:** `AgentHealthProbeCommand`; disabled for non-PC/unbound station; offline/timeout/denied/command rejection and confirmed acknowledgement followed by station re-read.
 - **Evidence:** `StationBoardViewModel`, `StationAgentHealthService`, `StationEndpoints`, `StationBoardPermissionTests`.
 
-## 3. Existing Identity Server operations not yet exposed in current Desktop
-
-The endpoints below exist in the current Server, but this initial Desktop shell has no operator-management screen or command wired to them. Do not add a button for any of these until the associated requirement/vertical slice, typed ViewModel command, UI states, tests and exact-SHA evidence are ready.
-
-| Action ID | Server contract | Permission (plus authenticated Operator) | Idempotency / Audit / reason | Desktop entry |
-|---|---|---|---|---|
-| `identity.users.list` | `GET /api/v1/identity/users` → operator summaries | `identity.users.read` | Read-only; no mutation Audit expected | Not wired in current Desktop |
-| `identity.users.create` | `POST /api/v1/identity/users` → `CreateOperatorRequest` / operator summary | `identity.users.write` | `Idempotency-Key`; reason required; mutation Audit; never audit plaintext password | Not wired in current Desktop |
-| `identity.users.assign-role` | `PUT /api/v1/identity/users/{id}/role` → operator summary | `identity.users.write` | `Idempotency-Key`; reason required; mutation Audit | Not wired in current Desktop |
-| `identity.users.set-active` | `PUT /api/v1/identity/users/{id}/active` → operator summary | `identity.users.write` | `Idempotency-Key`; reason required; mutation Audit; last-Owner/session invariants | Not wired in current Desktop |
-| `identity.users.reset-password` | `PUT /api/v1/identity/users/{id}/password` → reset result | `identity.users.password-reset` | `Idempotency-Key`; reason required; mutation Audit; redact all credentials | Not wired in current Desktop |
-| `identity.roles.list` | `GET /api/v1/identity/roles` → role summaries | `identity.users.read` | Read-only; no mutation Audit expected | Not wired in current Desktop |
-| `identity.roles.create` | `POST /api/v1/identity/roles` → role summary | `identity.roles.manage` | `Idempotency-Key`; reason required; mutation Audit | Not wired in current Desktop |
-| `identity.roles.update-permissions` | `PUT /api/v1/identity/roles/{id}/permissions` → role summary | `identity.roles.manage` | `Idempotency-Key`; reason required; before/after permissions in Audit | Not wired in current Desktop |
-
-## 4. Cross-cutting error and permission rules
-
-- Station list and health probe require `stations.read`; station mutation requires `stations.operate`. The Server checks these; UI `CanExecute` never grants authority.
-- Current station mutation typed error codes include `stations.forbidden`, `stations.invalid`, `stations.code_exists`, `stations.not_found`, `stations.agent_not_provisioned`, `stations.agent_not_applicable`, `stations.agent_not_bound`, `stations.device_already_bound`, `stations.version_conflict`, `stations.invalid_transition`, `idempotency.required`, `idempotency.in_flight`, `idempotency.key_reused` and `security.https_required`.
-- Login's current unauthenticated response normalizes invalid credentials, disabled accounts and locked accounts to avoid account-state disclosure; treat any client message as presentation, not as a second authority.
-- The current Windows shell uses inherited `LoginViewModel` DataContext for both shell and StationBoard View. The View has no direct database access, no business code-behind, and no invented success path.
-
-## 5. Verification evidence and future updates
-
-- View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
-- Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
-- For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
-- **Catalog completeness is intentionally limited** to current Identity/Station actions, Customer profile core in section 3, and the partial Slice 1 Session-to-cash actions in section 4. Customer PIN/login, Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
-
 ## 3. Customer profile core
 
 ### `customers.search-list`
@@ -169,7 +140,22 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **UI entry / states:** explicit Activate, Deactivate and Block commands; status reason is mandatory.
 - **Evidence:** CustomerManagementService, SessionService blocked-customer policy and opt-in PostgreSQL tests.
 
-## 4. Partially implemented Slice 1 PC hourly Session-to-cash
+## 4. Existing Identity Server operations not yet exposed in current Desktop
+
+The endpoints below exist in the current Server, but this initial Desktop shell has no operator-management screen or command wired to them. Do not add a button for any of these until the associated requirement/vertical slice, typed ViewModel command, UI states, tests and exact-SHA evidence are ready.
+
+| Action ID | Server contract | Permission (plus authenticated Operator) | Idempotency / Audit / reason | Desktop entry |
+|---|---|---|---|---|
+| `identity.users.list` | `GET /api/v1/identity/users` → operator summaries | `identity.users.read` | Read-only; no mutation Audit expected | Not wired in current Desktop |
+| `identity.users.create` | `POST /api/v1/identity/users` → `CreateOperatorRequest` / operator summary | `identity.users.write` | `Idempotency-Key`; reason required; mutation Audit; never audit plaintext password | Not wired in current Desktop |
+| `identity.users.assign-role` | `PUT /api/v1/identity/users/{id}/role` → operator summary | `identity.users.write` | `Idempotency-Key`; reason required; mutation Audit | Not wired in current Desktop |
+| `identity.users.set-active` | `PUT /api/v1/identity/users/{id}/active` → operator summary | `identity.users.write` | `Idempotency-Key`; reason required; mutation Audit; last-Owner/session invariants | Not wired in current Desktop |
+| `identity.users.reset-password` | `PUT /api/v1/identity/users/{id}/password` → reset result | `identity.users.password-reset` | `Idempotency-Key`; reason required; mutation Audit; redact all credentials | Not wired in current Desktop |
+| `identity.roles.list` | `GET /api/v1/identity/roles` → role summaries | `identity.users.read` | Read-only; no mutation Audit expected | Not wired in current Desktop |
+| `identity.roles.create` | `POST /api/v1/identity/roles` → role summary | `identity.roles.manage` | `Idempotency-Key`; reason required; mutation Audit | Not wired in current Desktop |
+| `identity.roles.update-permissions` | `PUT /api/v1/identity/roles/{id}/permissions` → role summary | `identity.roles.manage` | `Idempotency-Key`; reason required; before/after permissions in Audit | Not wired in current Desktop |
+
+## 5. Partially implemented Slice 1 PC hourly Session-to-cash
 
 **Acceptance boundary:** This path is present in Integration but remains partial and is **not accepted as a complete feature**; see [Issue #98](https://github.com/alizebal73/5/issues/98). It supports fixed-hourly PC tariffs, a generated Walk-in customer when no customer is selected, Active → PendingSettlement → Paid, invoice creation and cash-only checkout. Fractional Toman amounts are rounded upward to the next whole Toman. Timing/restart semantics, deliberate cash entry, recovery after a committed-but-unacknowledged checkout, correction/reversal semantics, Agent-offline policy, full manual WPF acceptance and independent database reconciliation remain open. Pause/resume, transfer, prepaid/free time, wallet/debt, card payments, refunds and PS5/foosball billing are out of scope for this slice.
 
@@ -244,3 +230,18 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **Audit:** reversal record, compensating ledger entry, invoice state and both Audit events share the same transaction. Original Payment/Ledger/Audit history is never edited or deleted.
 - **UI entry / states:** `ReverseCashSaleCommand` in the Session workflow WPF view. The operator selects a recent paid cash checkout, reviews the amount, enters a reason and explicitly confirms. If a response is lost, the command remains blocked until the durable Server outcome proves whether it committed; no optimistic success or blind second refund.
 - **Evidence / acceptance:** `BillingService.ReverseCashSaleAsync`, `CashSaleReversal`, migration `20261016100000_CashSaleReversal`, `CashSaleReversalTests`, `SessionWorkflowPostgresTests` and `SessionWorkflowViewModelTests`. PR #120 was squash-merged to `integration/runtime-operator-v1` at merge SHA `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`. Its exact PR head `ad92960382088872b1da0441241f4d71ff3603f9` passed Quick Validation, Full Foundation (PostgreSQL, backup/restore, Desktop and Agent runtime certification), and the Runtime LAN Smoke Payload artifact build. Post-merge Quick Validation passed on the merge SHA. This action remains unaccepted for operational use until manual WPF acceptance/recovery testing and independent Invoice/Payment/Reversal/Ledger/Audit reconciliation are recorded. Cash tender correction remains a separate not-yet-implemented action.
+
+## 6. Cross-cutting error and permission rules
+
+- Station list and health probe require `stations.read`; station mutation requires `stations.operate`. The Server checks these; UI `CanExecute` never grants authority.
+- Current station mutation typed error codes include `stations.forbidden`, `stations.invalid`, `stations.code_exists`, `stations.not_found`, `stations.agent_not_provisioned`, `stations.agent_not_applicable`, `stations.agent_not_bound`, `stations.device_already_bound`, `stations.version_conflict`, `stations.invalid_transition`, `idempotency.required`, `idempotency.in_flight`, `idempotency.key_reused` and `security.https_required`.
+- Login's current unauthenticated response normalizes invalid credentials, disabled accounts and locked accounts to avoid account-state disclosure; treat any client message as presentation, not as a second authority.
+- The current Windows shell uses inherited `LoginViewModel` DataContext for both shell and StationBoard View. The View has no direct database access, no business code-behind, and no invented success path.
+
+## 7. Verification evidence and future updates
+
+- View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
+- Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
+- For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
+- **Catalog completeness is intentionally limited** to current Identity/Station actions, Customer profile core in section 3, and the partial Slice 1 Session-to-cash actions in section 4. Customer PIN/login, Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
+
