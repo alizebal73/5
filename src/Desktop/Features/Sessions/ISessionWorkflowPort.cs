@@ -27,6 +27,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand RefreshCommand { get; }
     ICommand SearchCustomersCommand { get; }
     ICommand NewCustomerCommand { get; }
+    ICommand UseWalkInCustomerCommand { get; }
     ICommand CreateCustomerCommand { get; }
     ICommand UpdateCustomerCommand { get; }
     ICommand ActivateCustomerCommand { get; }
