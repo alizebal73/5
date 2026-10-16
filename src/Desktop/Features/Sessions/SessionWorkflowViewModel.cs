@@ -21,8 +21,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
-    private SessionStationOption? selectedStationChoice;
-    private IReadOnlyList<TariffResponse> allActiveTariffs = [];
     private TariffResponse? selectedTariff;
     private ActiveSessionListItem? selectedActiveSession;
     private PendingInvoiceListItem? selectedPendingInvoice;
@@ -32,7 +30,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     private string errorMessage = string.Empty;
     private string statusMessage = string.Empty;
     private bool isDefaultTariff = true;
-    private StationTypeContract tariffStationType = StationTypeContract.Pc;
     private bool isBusy;
     private int busyDepth;
 
@@ -41,13 +38,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
 
-        foreach (var stationType in new[]
-        {
-            StationTypeContract.Pc,
-            StationTypeContract.Ps5,
-            StationTypeContract.Foosball
-        })
-            StationTypeOptions.Add(new SessionStationTypeOption(stationType, StationTypeDisplayText(stationType)));
+        InitializeStationTypeOptions();
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
         CreateTariffCommand = new AsyncUiAction(CreateTariffAsync, () => !IsBusy && CanManageTariffs &&
@@ -88,8 +79,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         InitializeCustomerCommands();
     }
     public event PropertyChangedEventHandler? PropertyChanged;
-    public ObservableCollection<SessionStationOption> StationChoices { get; } = [];
-    public ObservableCollection<SessionStationTypeOption> StationTypeOptions { get; } = [];
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
     public ObservableCollection<ActiveSessionListItem> ActiveSessions { get; } = [];
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
@@ -112,31 +101,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public StationResponse? SelectedStation
     {
         get => selectedStation;
-        set
-        {
-            if (!SetField(ref selectedStation, value))
-                return;
-
-            var matchingChoice = StationChoices.FirstOrDefault(x => x.Station.Id == value?.Id);
-            if (selectedStationChoice?.Station.Id != matchingChoice?.Station.Id)
-            {
-                selectedStationChoice = matchingChoice;
-                OnPropertyChanged(nameof(SelectedStationChoice));
-            }
-
-            ApplyTariffFilter(selectedTariff?.Id);
-            RaiseCommands();
-        }
-    }
-
-    public SessionStationOption? SelectedStationChoice
-    {
-        get => selectedStationChoice;
-        set
-        {
-            if (SetField(ref selectedStationChoice, value))
-                SelectedStation = value?.Station;
-        }
+        set { if (SetField(ref selectedStation, value)) OnSelectedStationChanged(); }
     }
 
     public TariffResponse? SelectedTariff
@@ -162,17 +127,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public string TariffName { get => tariffName; set { if (SetField(ref tariffName, value)) RaiseCommands(); } }
     public string HourlyRateText { get => hourlyRateText; set { if (SetField(ref hourlyRateText, value)) RaiseCommands(); } }
     public bool IsDefaultTariff { get => isDefaultTariff; set { if (SetField(ref isDefaultTariff, value)) RaiseCommands(); } }
-    public StationTypeContract TariffStationType
-    {
-        get => tariffStationType;
-        set
-        {
-            if (!Enum.IsDefined(value))
-                throw new ArgumentOutOfRangeException(nameof(value));
-            if (SetField(ref tariffStationType, value))
-                RaiseCommands();
-        }
-    }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
 
@@ -284,64 +238,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 return;
 
             ErrorMessage = string.Empty;
-            if (CanReadStations)
-            {
-                StationResponse[] stations;
-                try
-                {
-                    stations = (await api.GetStationsAsync())
-                        .OrderBy(x => x.Type)
-                        .ThenBy(x => x.Code, StringComparer.Ordinal)
-                        .ToArray();
-                }
-                catch (Exception ex) when (!CanOperateSessions &&
-                    (ex is GameNetApiException || ex is HttpRequestException || ex is TaskCanceledException))
-                {
-                    // A station-code lookup enriches invoice rows; it must not block a cashier from loading invoices.
-                    stations = [];
-                    stationLabelsUnavailable = true;
-                }
-
-                stationLabels.Clear();
-                foreach (var station in stations)
-                    stationLabels[station.Id] = $"{station.Code} — {StationTypeDisplayText(station.Type)}";
-
-                if (CanOperateSessions)
-                {
-                    var choices = stations
-                        .Select(station => new SessionStationOption(station, StationTypeDisplayText(station.Type)))
-                        .ToArray();
-                    Replace(StationChoices, choices, SelectedStation?.Id, x => x.Station.Id, out var currentChoice);
-                    SelectedStationChoice = currentChoice;
-                    SelectedStation = currentChoice?.Station;
-                }
-                else
-                {
-                    // Station labels may be visible to a cashier without granting Session operations.
-                    StationChoices.Clear();
-                    SelectedStationChoice = null;
-                    SelectedStation = null;
-                }
-            }
-            else
-            {
-                stationLabels.Clear();
-                StationChoices.Clear();
-                SelectedStationChoice = null;
-                SelectedStation = null;
-            }
-
-            if (CanOperateSessions || CanManageTariffs)
-            {
-                allActiveTariffs = (await api.GetTariffsAsync()).ToArray();
-                ApplyTariffFilter(SelectedTariff?.Id);
-            }
-            else
-            {
-                allActiveTariffs = [];
-                Tariffs.Clear();
-                SelectedTariff = null;
-            }
+            await RefreshStationAndTariffChoicesAsync();
 
             if (CanOperateSessions)
             {
@@ -460,10 +357,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public void Reset()
     {
         stationLabels.Clear();
-        allActiveTariffs = [];
-        StationChoices.Clear();
+        ResetStationAndTariffChoices();
         Tariffs.Clear();
-        SelectedStationChoice = null;
         ActiveSessions.Clear();
         PendingInvoices.Clear();
         RecentCashCheckouts.Clear();
@@ -598,27 +493,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                !string.IsNullOrWhiteSpace(stationLabel)
             ? stationLabel
             : Text($"ایستگاه {stationId:D}", $"Station {stationId:D}");
-    }
-
-    private static string StationTypeDisplayText(StationTypeContract type) => type switch
-    {
-        StationTypeContract.Pc => Text("رایانه (PC)", "PC workstation"),
-        StationTypeContract.Ps5 => Text("کنسول PS5", "PS5 console"),
-        StationTypeContract.Foosball => Text("فوتبال‌دستی", "Foosball table"),
-        _ => Text("نوع نامشخص", "Unknown station type")
-    };
-
-    private void ApplyTariffFilter(Guid? preferredTariffId = null)
-    {
-        var compatibleTariffs = allActiveTariffs
-            .Where(tariff => SelectedStation is null || tariff.StationType == SelectedStation.Type)
-            .ToArray();
-
-        var requestedId = preferredTariffId ?? selectedTariff?.Id;
-        Replace(Tariffs, compatibleTariffs, requestedId, tariff => tariff.Id, out var currentTariff);
-        SelectedTariff = currentTariff
-            ?? Tariffs.FirstOrDefault(tariff => tariff.IsDefault)
-            ?? Tariffs.FirstOrDefault();
     }
 
     private static string FormatStartedAtDisplayText(DateTimeOffset startedAtUtc)
