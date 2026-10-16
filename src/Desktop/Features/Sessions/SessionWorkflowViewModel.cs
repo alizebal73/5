@@ -7,7 +7,6 @@ using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
 using GameNet.Shared.Contracts.V1.Billing;
-using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
@@ -45,7 +44,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
             SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
-            (SelectedCustomer is null || SelectedCustomer.Status == CustomerStatusContract.Active) &&
+            (SelectedCustomer is null || SelectedCustomer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active) &&
             SelectedStation is not null &&
             !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
             !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
@@ -392,8 +391,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public void NotifyPermissionsChanged()
     {
         OnPropertyChanged(nameof(CanManageTariffs));
-        OnPropertyChanged(nameof(CanReadCustomers));
-        OnPropertyChanged(nameof(CanWriteCustomers));
         OnPropertyChanged(nameof(CanOperateSessions));
         OnPropertyChanged(nameof(CanRecoverSessionTiming));
         OnPropertyChanged(nameof(CanCheckout));
@@ -484,9 +481,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         var stationId = SelectedStation.Id;
         var stationCode = SelectedStation.Code;
         var tariffId = SelectedTariff.Id;
-        var customerId = SelectedCustomer?.Id;
-        var customerCode = SelectedCustomer?.Code;
-        var fingerprint = $"{stationId:D}|{tariffId:D}|{(customerId?.ToString("D") ?? "walk-in")}";
+        var (customerId, customerCode, fingerprint) = BuildSessionStartContext(stationId, tariffId);
         var key = GetKey("session.start", fingerprint);
         BeginBusy();
         ErrorMessage = string.Empty;
@@ -497,9 +492,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             pendingKeys.Remove("session.start");
             await RefreshAsync();
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
-            StatusMessage = customerCode is null
-                ? Text($"Session برای {stationCode} با مشتری گذری شروع شد.", $"Session started for {stationCode} with a Walk-in customer.")
-                : Text($"Session برای {stationCode} و مشتری {customerCode} شروع شد.", $"Session started for {stationCode} for customer {customerCode}.");
+            StatusMessage = SessionStartedMessage(stationCode, customerCode);
         }
         catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
