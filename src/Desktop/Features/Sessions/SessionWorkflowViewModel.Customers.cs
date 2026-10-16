@@ -13,6 +13,7 @@ public sealed partial class SessionWorkflowViewModel
     private CustomerResponse? selectedCustomer;
     private CustomerResponse? selectedManagedCustomer;
     private string customerSearchText = string.Empty;
+    private string sessionCustomerSearchText = string.Empty;
     private string customerCodeText = string.Empty;
     private string customerNameText = string.Empty;
     private string customerNicknameText = string.Empty;
@@ -24,6 +25,7 @@ public sealed partial class SessionWorkflowViewModel
     public ObservableCollection<CustomerResponse> Customers { get; } = [];
     public ObservableCollection<CustomerResponse> AvailableCustomers { get; } = [];
     public ICommand SearchCustomersCommand { get; private set; } = null!;
+    public ICommand SearchSessionCustomersCommand { get; private set; } = null!;
     public ICommand NewCustomerCommand { get; private set; } = null!;
     public ICommand UseWalkInCustomerCommand { get; private set; } = null!;
     public ICommand CreateCustomerCommand { get; private set; } = null!;
@@ -72,6 +74,7 @@ public sealed partial class SessionWorkflowViewModel
     }
 
     public string CustomerSearchText { get => customerSearchText; set { if (SetField(ref customerSearchText, value)) RaiseCustomerCommands(); } }
+    public string SessionCustomerSearchText { get => sessionCustomerSearchText; set { if (SetField(ref sessionCustomerSearchText, value)) RaiseCustomerCommands(); } }
     public string CustomerCodeText { get => customerCodeText; set { if (SetField(ref customerCodeText, value)) RaiseCustomerCommands(); } }
     public string CustomerNameText { get => customerNameText; set { if (SetField(ref customerNameText, value)) RaiseCustomerCommands(); } }
     public string CustomerNicknameText { get => customerNicknameText; set { if (SetField(ref customerNicknameText, value)) RaiseCustomerCommands(); } }
@@ -90,6 +93,7 @@ public sealed partial class SessionWorkflowViewModel
     private void InitializeCustomerCommands()
     {
         SearchCustomersCommand = new AsyncUiAction(SearchCustomersAsync, () => !IsBusy && CanReadCustomers);
+        SearchSessionCustomersCommand = new AsyncUiAction(SearchSessionCustomersAsync, () => !IsBusy && CanReadCustomers);
         NewCustomerCommand = new AsyncUiAction(NewCustomerAsync, () => !IsBusy && CanWriteCustomers);
         UseWalkInCustomerCommand = new AsyncUiAction(UseWalkInCustomer, () => !IsBusy && SelectedCustomer is not null);
         CreateCustomerCommand = new AsyncUiAction(CreateCustomerAsync, () => !IsBusy && CanWriteCustomers &&
@@ -114,10 +118,17 @@ public sealed partial class SessionWorkflowViewModel
     {
         SelectedManagedCustomer = null;
         CustomerSearchText = string.Empty;
+        SessionCustomerSearchText = string.Empty;
         await RefreshCustomersAsync();
     }
 
     private async Task SearchCustomersAsync()
+    {
+        ErrorMessage = string.Empty;
+        await RefreshCustomersAsync();
+    }
+
+    private async Task SearchSessionCustomersAsync()
     {
         ErrorMessage = string.Empty;
         await RefreshCustomersAsync();
@@ -146,7 +157,7 @@ public sealed partial class SessionWorkflowViewModel
             // Keep the session picker independent from the customer-manager search and
             // include-inactive filter. Searching another profile must not silently clear
             // the currently selected customer for the next Session.
-            var selectableCustomers = await api.GetCustomersAsync(query: null, includeInactive: false);
+            var selectableCustomers = await api.GetCustomersAsync(SessionCustomerSearchText, includeInactive: false);
             if (generation != customerRefreshGeneration || !CanReadCustomers) return;
 
             Replace(Customers, rows, selectedManagedId, x => x.Id, out var currentManaged);
@@ -311,6 +322,7 @@ public sealed partial class SessionWorkflowViewModel
     private void RaiseCustomerCommands()
     {
         (SearchCustomersCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (SearchSessionCustomersCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (NewCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (UseWalkInCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CreateCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
