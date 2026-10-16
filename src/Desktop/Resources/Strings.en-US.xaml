@@ -90,6 +90,7 @@
   <system:String x:Key="Customer.IncludeInactive">Include inactive and blocked customers</system:String>
   <system:String x:Key="Customer.SelectForSession">Customer for this Session (blank = Walk-in)</system:String>
   <system:String x:Key="Customer.WalkInHint">If no customer is selected, the Server creates a Walk-in identity.</system:String>
+  <system:String x:Key="Customer.UseWalkIn">Use Walk-in customer</system:String>
   <system:String x:Key="Customer.Code">Customer code</system:String>
   <system:String x:Key="Customer.Name">Full name</system:String>
   <system:String x:Key="Customer.Nickname">Nickname / display name</system:String>
