@@ -238,7 +238,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 return;
 
             ErrorMessage = string.Empty;
-            await RefreshStationAndTariffChoicesAsync();
+            stationLabelsUnavailable = await RefreshStationAndTariffChoicesAsync();
 
             if (CanOperateSessions)
             {

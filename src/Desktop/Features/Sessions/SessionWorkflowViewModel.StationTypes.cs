@@ -92,8 +92,9 @@ public sealed partial class SessionWorkflowViewModel
         RaiseCommands();
     }
 
-    private async Task RefreshStationAndTariffChoicesAsync()
+    private async Task<bool> RefreshStationAndTariffChoicesAsync()
     {
+        var stationLabelsUnavailable = false;
         if (CanReadStations)
         {
             StationResponse[] stations;
@@ -152,6 +153,8 @@ public sealed partial class SessionWorkflowViewModel
             Tariffs.Clear();
             SelectedTariff = null;
         }
+
+        return stationLabelsUnavailable;
     }
 
     private void ResetStationAndTariffChoices()
