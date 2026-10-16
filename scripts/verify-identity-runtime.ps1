@@ -498,6 +498,149 @@ try {
     $stationKeyConflict = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationDifferentBody
     Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
 
+    $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
+    $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $stationDeviceId
+    }
+    Assert-Status $stationEnrollmentIssue 200 "Issue single-use enrollment token for the live Runtime Agent"
+    if ($stationEnrollmentIssue.CacheControl -notmatch "no-store") {
+        throw "Live Agent enrollment-token response must be no-store."
+    }
+    $stationEnrollmentToken = [string]$stationEnrollmentIssue.Json.token
+    $stationEnrollmentTokenId = [string]$stationEnrollmentIssue.Json.tokenId
+    try {
+        # ConvertFrom-Json may already materialize ISO timestamps as DateTime. Do not
+        # cast that value to a culture-formatted string and parse it again: the CI runner
+        # uses a Persian calendar culture, which can shift a Gregorian year by 622 years.
+        $expiryValue = $stationEnrollmentIssue.Json.expiresAtUtc
+        if ($expiryValue -is [DateTimeOffset]) {
+            $stationEnrollmentExpiresAtUtc = $expiryValue.ToUniversalTime()
+        }
+        elseif ($expiryValue -is [DateTime]) {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::new($expiryValue.ToUniversalTime())
+        }
+        else {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
+                [string]$expiryValue,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+        }
+    }
+    catch {
+        throw "Server returned an invalid expiry for the live Agent enrollment token."
+    }
+    $stationEnrollmentTokenFormatValid = $stationEnrollmentToken -match '^[A-Za-z0-9_-]{43}$'
+    $stationEnrollmentTokenIdPresent = -not [string]::IsNullOrWhiteSpace($stationEnrollmentTokenId)
+    $stationEnrollmentSecondsRemaining = ($stationEnrollmentExpiresAtUtc - [DateTimeOffset]::UtcNow).TotalSeconds
+    if (-not $stationEnrollmentTokenIdPresent -or
+        -not $stationEnrollmentTokenFormatValid -or
+        $stationEnrollmentSecondsRemaining -le 0 -or
+        $stationEnrollmentSecondsRemaining -gt 960) {
+        throw ("Server returned an invalid one-time enrollment token for the live Runtime Agent " +
+            "(tokenLength={0}; tokenFormatValid={1}; tokenIdPresent={2}; expiryUtc={3:o}; secondsRemaining={4:N1})." -f
+            $stationEnrollmentToken.Length,
+            $stationEnrollmentTokenFormatValid,
+            $stationEnrollmentTokenIdPresent,
+            $stationEnrollmentExpiresAtUtc,
+            $stationEnrollmentSecondsRemaining)
+    }
+
+    # Exercise the complete first-start enrollment path for the real Runtime Agent.
+    # This temporary DPAPI handoff does not certify the installed LocalService Windows-service boundary.
+    New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
+    @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
+
+    $enrollmentPayload = [ordered]@{
+        formatVersion = 1
+        deviceId = $stationDeviceId
+        token = $stationEnrollmentToken
+        expiresAtUtc = $stationEnrollmentExpiresAtUtc.ToString("O")
+    }
+    $clearEnrollmentBytes = [Text.Encoding]::UTF8.GetBytes(($enrollmentPayload | ConvertTo-Json -Compress))
+    $enrollmentEntropy = [Text.Encoding]::UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + $stationDeviceId)
+    try {
+        $protectedEnrollmentBytes = [Security.Cryptography.ProtectedData]::Protect(
+            $clearEnrollmentBytes,
+            $enrollmentEntropy,
+            [Security.Cryptography.DataProtectionScope]::LocalMachine)
+        [IO.File]::WriteAllBytes(
+            (Join-Path $agentIdentityRoot "enrollment-token.dpapi"),
+            $protectedEnrollmentBytes)
+    }
+    finally {
+        if ($null -ne $clearEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+            $clearEnrollmentBytes = $null
+        }
+        if ($null -ne $enrollmentEntropy) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+            $enrollmentEntropy = $null
+        }
+        if ($null -ne $protectedEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+            $protectedEnrollmentBytes = $null
+        }
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
+    $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
+    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
+    Remove-Item Env:GAMENET_AGENT_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
+    $agentEnrollmentPersisted = $false
+    $agentTokenPath = Join-Path $agentIdentityRoot "enrollment-token.dpapi"
+    $agentCredentialPath = Join-Path $agentIdentityRoot "credential.bin"
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if ($agentProcess.HasExited) {
+            throw "The Runtime Agent exited before completing one-time enrollment (exitCode=$($agentProcess.ExitCode))."
+        }
+        if (-not (Test-Path -LiteralPath $agentTokenPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $agentCredentialPath -PathType Leaf)) {
+            $agentEnrollmentPersisted = $true
+            break
+        }
+    }
+    if (-not $agentEnrollmentPersisted) {
+        throw "The Runtime Agent did not redeem the enrollment token and persist its credential within 30 seconds."
+    }
+
+    # Bind only after token redemption has created the server-side Agent credential.
+    # The Agent may authenticate/heartbeat between persistence and this request, so
+    # accept the server's current online snapshot and verify the station/device/version.
+    $bindHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $boundStation = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/agent" $bindHeaders @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-Status $boundStation 200 "Bind enrolled Agent to station"
+    if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
+        $boundStation.Json.data.version -ne 2 -or
+        $null -eq $boundStation.Json.data.agentOnline) {
+        throw "Station binding or server-derived online state was incorrect after Agent enrollment."
+    }
+
+
+    $agentOnline = $false
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        $liveStations = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+        Assert-Status $liveStations 200 "Read station state while Agent starts"
+        $liveStation = @($liveStations.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+        if ($liveStation -and $liveStation.agentOnline -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$liveStation.lastHeartbeatAtUtc)) { $agentOnline = $true; break }
+    }
+    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat after one-time enrollment." }
+    if (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "enrollment-token.dpapi") -PathType Leaf) {
+        throw "The Agent did not remove its consumed enrollment-token file after saving the credential."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "credential.bin") -PathType Leaf)) {
+        throw "The Agent did not persist its per-device DPAPI credential after enrollment."
+    }
+
     # Exercise the real authenticated HTTP Session -> Invoice -> Cash workflow against
     # this script's disposable PostgreSQL database and real Kestrel Server.
     $sessionTariffCode = "CI-SLICE1-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
@@ -641,149 +784,6 @@ try {
     Assert-Status $pendingAfterCheckout 200 "Confirm no pending invoice remains after cash checkout"
     $remainingInvoices = @($pendingAfterCheckout.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
     if ($remainingInvoices.Count -ne 0) { throw "Paid invoice remained in the pending-invoice endpoint." }
-
-    $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
-    $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
-        deviceId = $stationDeviceId
-    }
-    Assert-Status $stationEnrollmentIssue 200 "Issue single-use enrollment token for the live Runtime Agent"
-    if ($stationEnrollmentIssue.CacheControl -notmatch "no-store") {
-        throw "Live Agent enrollment-token response must be no-store."
-    }
-    $stationEnrollmentToken = [string]$stationEnrollmentIssue.Json.token
-    $stationEnrollmentTokenId = [string]$stationEnrollmentIssue.Json.tokenId
-    try {
-        # ConvertFrom-Json may already materialize ISO timestamps as DateTime. Do not
-        # cast that value to a culture-formatted string and parse it again: the CI runner
-        # uses a Persian calendar culture, which can shift a Gregorian year by 622 years.
-        $expiryValue = $stationEnrollmentIssue.Json.expiresAtUtc
-        if ($expiryValue -is [DateTimeOffset]) {
-            $stationEnrollmentExpiresAtUtc = $expiryValue.ToUniversalTime()
-        }
-        elseif ($expiryValue -is [DateTime]) {
-            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::new($expiryValue.ToUniversalTime())
-        }
-        else {
-            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
-                [string]$expiryValue,
-                [Globalization.CultureInfo]::InvariantCulture,
-                [Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
-        }
-    }
-    catch {
-        throw "Server returned an invalid expiry for the live Agent enrollment token."
-    }
-    $stationEnrollmentTokenFormatValid = $stationEnrollmentToken -match '^[A-Za-z0-9_-]{43}$'
-    $stationEnrollmentTokenIdPresent = -not [string]::IsNullOrWhiteSpace($stationEnrollmentTokenId)
-    $stationEnrollmentSecondsRemaining = ($stationEnrollmentExpiresAtUtc - [DateTimeOffset]::UtcNow).TotalSeconds
-    if (-not $stationEnrollmentTokenIdPresent -or
-        -not $stationEnrollmentTokenFormatValid -or
-        $stationEnrollmentSecondsRemaining -le 0 -or
-        $stationEnrollmentSecondsRemaining -gt 960) {
-        throw ("Server returned an invalid one-time enrollment token for the live Runtime Agent " +
-            "(tokenLength={0}; tokenFormatValid={1}; tokenIdPresent={2}; expiryUtc={3:o}; secondsRemaining={4:N1})." -f
-            $stationEnrollmentToken.Length,
-            $stationEnrollmentTokenFormatValid,
-            $stationEnrollmentTokenIdPresent,
-            $stationEnrollmentExpiresAtUtc,
-            $stationEnrollmentSecondsRemaining)
-    }
-
-    # Exercise the complete first-start enrollment path for the real Runtime Agent.
-    # This temporary DPAPI handoff does not certify the installed LocalService Windows-service boundary.
-    New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
-    @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
-
-    $enrollmentPayload = [ordered]@{
-        formatVersion = 1
-        deviceId = $stationDeviceId
-        token = $stationEnrollmentToken
-        expiresAtUtc = $stationEnrollmentExpiresAtUtc.ToString("O")
-    }
-    $clearEnrollmentBytes = [Text.Encoding]::UTF8.GetBytes(($enrollmentPayload | ConvertTo-Json -Compress))
-    $enrollmentEntropy = [Text.Encoding]::UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + $stationDeviceId)
-    try {
-        $protectedEnrollmentBytes = [Security.Cryptography.ProtectedData]::Protect(
-            $clearEnrollmentBytes,
-            $enrollmentEntropy,
-            [Security.Cryptography.DataProtectionScope]::LocalMachine)
-        [IO.File]::WriteAllBytes(
-            (Join-Path $agentIdentityRoot "enrollment-token.dpapi"),
-            $protectedEnrollmentBytes)
-    }
-    finally {
-        if ($null -ne $clearEnrollmentBytes) {
-            [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
-            $clearEnrollmentBytes = $null
-        }
-        if ($null -ne $enrollmentEntropy) {
-            [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
-            $enrollmentEntropy = $null
-        }
-        if ($null -ne $protectedEnrollmentBytes) {
-            [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
-            $protectedEnrollmentBytes = $null
-        }
-    }
-    $enrollmentPayload = $null
-    $stationEnrollmentToken = $null
-    $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
-    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
-    Remove-Item Env:GAMENET_AGENT_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
-    $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
-    $agentEnrollmentPersisted = $false
-    $agentTokenPath = Join-Path $agentIdentityRoot "enrollment-token.dpapi"
-    $agentCredentialPath = Join-Path $agentIdentityRoot "credential.bin"
-    for ($attempt = 1; $attempt -le 30; $attempt++) {
-        Start-Sleep -Seconds 1
-        if ($agentProcess.HasExited) {
-            throw "The Runtime Agent exited before completing one-time enrollment (exitCode=$($agentProcess.ExitCode))."
-        }
-        if (-not (Test-Path -LiteralPath $agentTokenPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $agentCredentialPath -PathType Leaf)) {
-            $agentEnrollmentPersisted = $true
-            break
-        }
-    }
-    if (-not $agentEnrollmentPersisted) {
-        throw "The Runtime Agent did not redeem the enrollment token and persist its credential within 30 seconds."
-    }
-
-    # Bind only after token redemption has created the server-side Agent credential.
-    # The Agent may authenticate/heartbeat between persistence and this request, so
-    # accept the server's current online snapshot and verify the station/device/version.
-    $bindHeaders = @{
-        "X-GameNet-Contract" = "v1"
-        Authorization = "Bearer $accessToken"
-        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
-    }
-    $boundStation = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/agent" $bindHeaders @{
-        deviceId = $stationDeviceId
-        expectedVersion = 1
-    }
-    Assert-Status $boundStation 200 "Bind enrolled Agent to station"
-    if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
-        $boundStation.Json.data.version -ne 2 -or
-        $null -eq $boundStation.Json.data.agentOnline) {
-        throw "Station binding or server-derived online state was incorrect after Agent enrollment."
-    }
-
-
-    $agentOnline = $false
-    for ($attempt = 1; $attempt -le 30; $attempt++) {
-        Start-Sleep -Seconds 1
-        $liveStations = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
-        Assert-Status $liveStations 200 "Read station state while Agent starts"
-        $liveStation = @($liveStations.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
-        if ($liveStation -and $liveStation.agentOnline -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$liveStation.lastHeartbeatAtUtc)) { $agentOnline = $true; break }
-    }
-    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat after one-time enrollment." }
-    if (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "enrollment-token.dpapi") -PathType Leaf) {
-        throw "The Agent did not remove its consumed enrollment-token file after saving the credential."
-    }
-    if (-not (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "credential.bin") -PathType Leaf)) {
-        throw "The Agent did not persist its per-device DPAPI credential after enrollment."
-    }
 
     $healthProbe = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
     Assert-Status $healthProbe 200 "Dispatch safe Agent health-probe command"
