@@ -58,6 +58,11 @@
   <system:String x:Key="Session.End">End and issue invoice</system:String>
   <system:String x:Key="Session.Pause">Pause billing time</system:String>
   <system:String x:Key="Session.Resume">Resume play</system:String>
+  <system:String x:Key="Session.TransferTitle">Change Session assignment</system:String>
+  <system:String x:Key="Session.TransferDestination">Available station of the same type</system:String>
+  <system:String x:Key="Session.TransferReason">Reason for transfer (5–300 characters)</system:String>
+  <system:String x:Key="Session.ConfirmTransfer">I verified the destination and confirm reassignment without repricing. This command does not lock/unlock or launch anything on a PC.</system:String>
+  <system:String x:Key="Session.TransferSubmit">Reassign Session</system:String>
   <system:String x:Key="Tariff.CreateTitle">Configure a station tariff</system:String>
   <system:String x:Key="Tariff.StationType">Station type</system:String>
   <system:String x:Key="Tariff.Code">Tariff code</system:String>

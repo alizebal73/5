@@ -33,6 +33,7 @@ public interface IGameNetServerClient
     Task<InvoicePreviewResponse> EndSessionAsync(Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<SessionResponse> PauseSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<SessionResponse> ResumeSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SessionResponse> TransferSessionAsync(Guid id, TransferSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(Guid id, ReconcileSessionTimingRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default);
     Task<CashCheckoutOutcomeResponse> GetCashCheckoutOutcomeAsync(Guid invoiceId, CancellationToken cancellationToken = default);

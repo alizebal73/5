@@ -1166,6 +1166,80 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task Transfer_workflow_filters_same_type_available_targets_and_recovers_lost_response()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var source = new StationResponse(
+                Guid.NewGuid(), "PS5-01", "Console one", StationTypeContract.Ps5,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var destination = new StationResponse(
+                Guid.NewGuid(), "PS5-02", "Console two", StationTypeContract.Ps5,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var wrongType = new StationResponse(
+                Guid.NewGuid(), "PC-01", "Computer one", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, "pc-agent", true, DateTimeOffset.UtcNow, "1.0", "Ready");
+            var unavailable = new StationResponse(
+                Guid.NewGuid(), "PS5-03", "Console three", StationTypeContract.Ps5,
+                StationStatusContract.Maintenance, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PS5-HOURLY", "PS5 Standard", StationTypeContract.Ps5,
+                120_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var session = new SessionResponse(
+                Guid.NewGuid(), source.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, Guid.NewGuid(),
+                DateTimeOffset.UtcNow.AddMinutes(-15), null, null, null, null,
+                SessionStatusContract.Active, 5);
+            var client = new FakeGameNetServerClient([source, destination, wrongType, unavailable], [tariff])
+            {
+                LoseNextTransferResponseAfterCommit = true
+            };
+            client.ActiveSessions.Add(session);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedActiveSession = viewModel.ActiveSessions.Single();
+
+            Assert.Single(viewModel.TransferDestinationChoices);
+            Assert.Equal(destination.Id, viewModel.TransferDestinationChoices[0].Id);
+            Assert.False(viewModel.TransferSessionCommand.CanExecute(null));
+
+            viewModel.SelectedTransferDestination = viewModel.TransferDestinationChoices[0];
+            viewModel.SessionTransferReasonText = "Customer requested a different console";
+            Assert.False(viewModel.TransferSessionCommand.CanExecute(null));
+            viewModel.ConfirmSessionTransfer = true;
+            Assert.True(viewModel.TransferSessionCommand.CanExecute(null));
+
+            var statusTask = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains("Session assignment moved to station PS5-02", StringComparison.Ordinal));
+            viewModel.TransferSessionCommand.Execute(null);
+            Assert.Contains("Session assignment moved to station PS5-02", await statusTask.WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Equal(session.Id, client.LastTransferredSessionId);
+            Assert.NotNull(client.LastTransferRequest);
+            Assert.Equal(destination.Id, client.LastTransferRequest!.TargetStationId);
+            Assert.Equal(session.Version, client.LastTransferRequest.ExpectedVersion);
+            Assert.Equal("Customer requested a different console", client.LastTransferRequest.Reason);
+            Assert.True(client.LastTransferRequest.Confirmed);
+            Assert.Single(client.TransferIdempotencyKeys);
+            Assert.Equal(destination.Id, Assert.Single(client.ActiveSessions).StationId);
+            Assert.Equal(session.Version + 1, client.ActiveSessions[0].Version);
+            Assert.Empty(viewModel.ErrorMessage);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
     private sealed class FakeGameNetServerClient(
         IReadOnlyList<StationResponse> stations,
         IReadOnlyList<TariffResponse> tariffs) : IGameNetServerClient
@@ -1200,6 +1274,10 @@ public sealed class SessionWorkflowViewModelTests
         public bool FailNextCashCheckoutOutcomeLookupWithNetworkError { get; set; }
         public StartSessionRequest? LastStartRequest { get; private set; }
         public string? LastStartIdempotencyKey { get; private set; }
+        public Guid? LastTransferredSessionId { get; private set; }
+        public TransferSessionRequest? LastTransferRequest { get; private set; }
+        public List<string> TransferIdempotencyKeys { get; } = [];
+        public bool LoseNextTransferResponseAfterCommit { get; set; }
         public Guid? LastEndedSessionId { get; private set; }
         public EndSessionRequest? LastEndRequest { get; private set; }
         public string? LastEndIdempotencyKey { get; private set; }
@@ -1343,6 +1421,35 @@ public sealed class SessionWorkflowViewModelTests
                 return Task.FromException<SessionResponse>(new GameNetApiException("sessions.invalid_state", 409));
             var updated = current with { Status = SessionStatusContract.Active, Version = checked(current.Version + 1) };
             ActiveSessions[index] = updated;
+            return Task.FromResult(updated);
+        }
+
+        public Task<SessionResponse> TransferSessionAsync(
+            Guid id,
+            TransferSessionRequest request,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            LastTransferredSessionId = id;
+            LastTransferRequest = request;
+            TransferIdempotencyKeys.Add(idempotencyKey);
+
+            var index = ActiveSessions.FindIndex(x => x.Id == id);
+            if (index < 0)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.not_found", 404));
+            var current = ActiveSessions[index];
+            if (current.Version != request.ExpectedVersion)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.version_conflict", 409));
+            if (!request.Confirmed || string.IsNullOrWhiteSpace(request.Reason))
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.transfer_invalid", 400));
+
+            var updated = current with { StationId = request.TargetStationId, Version = checked(current.Version + 1) };
+            ActiveSessions[index] = updated;
+            if (LoseNextTransferResponseAfterCommit)
+            {
+                LoseNextTransferResponseAfterCommit = false;
+                return Task.FromException<SessionResponse>(new HttpRequestException("Simulated lost transfer response after commit."));
+            }
             return Task.FromResult(updated);
         }
 

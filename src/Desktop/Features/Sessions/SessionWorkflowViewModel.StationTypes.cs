@@ -142,6 +142,8 @@ public sealed partial class SessionWorkflowViewModel
             SelectedStation = null;
         }
 
+        RefreshTransferDestinationChoices();
+
         if (CanOperateSessions || CanManageTariffs)
         {
             allActiveTariffs = (await api.GetTariffsAsync()).ToArray();

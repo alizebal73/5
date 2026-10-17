@@ -77,6 +77,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
             ConfirmCashTenderCorrection);
         InitializeCustomerCommands();
+        InitializeSessionTransferCommand();
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
@@ -118,6 +119,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             if (SetField(ref selectedActiveSession, value))
             {
                 OnPropertyChanged(nameof(CanRecoverSessionTiming));
+                OnSelectedActiveSessionChangedForTransfer();
                 RaiseCommands();
             }
         }
@@ -358,6 +360,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         stationLabels.Clear();
         ResetStationAndTariffChoices();
+        ResetSessionTransferState();
         Tariffs.Clear();
         ActiveSessions.Clear();
         PendingInvoices.Clear();
@@ -589,6 +592,11 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.customer_blocked" => Text("این مشتری مسدود است و نمی‌تواند Session جدیدی شروع کند.", "This customer is blocked and cannot start a new Session."),
         "sessions.tariff_station_mismatch" => Text("نوع تعرفه باید با نوع ایستگاه انتخاب‌شده یکسان باشد.", "The tariff type must match the selected station type."),
         "sessions.station_type_unsupported" => Text("نوع این ایستگاه برای محاسبهٔ زمان پشتیبانی نمی‌شود.", "This station type is not supported for timed Sessions."),
+        "sessions.transfer_invalid" => Text("تأیید انتقال و دلیل معتبر را وارد کنید.", "A valid transfer confirmation and reason are required."),
+        "sessions.transfer_type_mismatch" => Text("انتقال فقط بین ایستگاه‌های هم‌نوع مجاز است.", "Sessions can only transfer between stations of the same type."),
+        "sessions.transfer_station_unavailable" => Text("ایستگاه مقصد در وضعیت آماده نیست.", "The destination station is not available."),
+        "sessions.transfer_agent_unavailable" => Text("Agent رایانهٔ مقصد آنلاین یا معتبر نیست.", "The destination PC Agent is not online and ready."),
+        "sessions.transfer_destination_occupied" => Text("ایستگاه مقصد نشست فعال یا تسویه‌نشده دارد.", "The destination station already has an active or unsettled Session."),
         "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
         "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
         "billing.cash_insufficient" => Text("وجه دریافتی کمتر از صورتحساب است.", "Cash received is less than the invoice amount."),
@@ -630,6 +638,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         RaiseLifecycleCommands();
+        RaiseSessionTransferCommand();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();

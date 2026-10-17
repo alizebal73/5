@@ -14,10 +14,11 @@ Own authoritative Session state, Station/Customer binding, lifecycle and billabl
 - Transaction, idempotency, audit and PostgreSQL regression coverage for the supported path.
 - Timing remains Server-side monotonic elapsed time with an immutable fixed-hourly tariff snapshot; PS5/foosball must use a tariff whose type exactly matches the station, then use the existing invoice/cash path. No Agent is fabricated for non-PC stations.
 - Candidate Issue #129 / PR #130 adds accumulated monotonic billable ticks, persisted segment baselines, audited pause/resume and ending a paused Session without charging the paused interval, including across a Windows boot change. It remains subject to exact-head tests/review and final installed acceptance.
+- Issue #135 is implementing audited same-type reassignment of Active/Paused Sessions. The Server preserves the session/customer/tariff snapshots, accumulated billable ticks and active segment baseline; it does not reprice or create a bill/payment. Destination occupancy and PC Agent readiness are validated in the authoritative transaction. This operation changes the Server-side station assignment only; it does not lock/unlock a PC, move a Windows user/game process or issue Agent handoff commands. Those operating-system/control semantics remain outside this slice and cannot be implied complete by an assignment update. Tests and the WPF reassignment form are on a feature branch pending exact-head CI.
 
 ## Incomplete
 
-Extend/reduce/transfer/release/cancel, full customer multi-device limits, richer PS5/foosball pricing (controller/person/add-ons), tariff time bands/free-time/VIP packages and full recovery remain future work. Issue #133 non-PC Sessions and Issue #129 pause/resume are candidates until exact-head automation passes and the dependent code is merged. Installed-Windows/WPF/LAN evidence is intentionally postponed to the final real Setup acceptance; Session timing is not declared production-ready before that gate.
+Extend/reduce, operator release/forced termination, full customer multi-device limits, richer PS5/foosball pricing (controller/person/add-ons), tariff time bands/free-time/VIP packages and full recovery remain future work. Issue #133 non-PC Sessions, Issue #129 pause/resume and Issue #135 transfer are candidates until exact-head automation passes and the dependent code is merged. Installed-Windows/WPF/LAN evidence is intentionally postponed to the final real Setup acceptance; Session timing is not declared production-ready before that gate.
 
 ## Implementation rules
 

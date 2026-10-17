@@ -23,7 +23,7 @@ namespace GameNet.Server.Modules.Sessions.Infrastructure;
 /// Infrastructure and cross-module access goes through each module's public Contracts.
 /// All contract implementations share this scoped DbContext and the outer mutation transaction.
 /// </summary>
-public sealed class SessionService(
+public sealed partial class SessionService(
     GameNetDbContext db,
     CommandMutationPipeline mutationPipeline,
     IRequestFingerprint requestFingerprint,

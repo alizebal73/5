@@ -73,6 +73,18 @@ Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card paym
 - Candidate Desktop and PostgreSQL tests cover non-PC type filtering, tariff creation, start/end/cash and mismatched tariffs. Exact-head CI must still prove this integrated branch; physical/manual WPF checks are deferred to the final real Setup acceptance.
 - Excluded: controller/person/add-on pricing, tariff time bands, packages/free-time/VIP, customer multi-device policy, station transfer/release/cancel, real Windows PC control and Setup/update implementation.
 
+## Follow-on coherent product slice — Issue #135
+
+**Audited same-type Session transfer — candidate branch `feature/session-transfer-20261017`; not yet merged or CI-certified.**
+
+- Contract: transfer an Active or Paused Session to a different, administratively Available station of exactly the same type. PendingSettlement/Paid sessions cannot transfer.
+- Server validates `sessions.operate`, expected Session version, explicit confirmation, printable 5–300 character reason, current/destination station facts, destination occupancy and authoritative PC Agent readiness. PS5/foosball do not receive a fabricated Agent.
+- Session StationId and version move atomically through the existing mutation/idempotency transaction; immutable tariff/customer/session identity, accumulated ticks and active/paused monotonic segment are preserved. Transfer never issues an invoice/payment or changes the rate.
+- A before/after Audit record includes source/destination station codes and IDs, reason, status/type and timing evidence. The database's unique filtered occupancy index remains the final protection against competing start/transfer claims.
+- WPF presents only same-type available destinations, requires a reason and confirmation, refreshes Server state after success or ambiguous transport outcomes, and retains the idempotency key until the outcome is reconciled. This is a Server-side Session-to-station assignment change only; it does not remotely lock/unlock a PC or move Windows/game state. OS-level handoff remains blocked behind the separate ClientControl/Agent feasibility and final acceptance work.
+- Candidate tests cover Active and Paused domain invariants, same-type transfer for PC/PS5/foosball, PC destination without a valid Agent, cross-type rejection, occupied destination, idempotent replay, Audit evidence, and a simulated lost WPF response. Full exact-head Quick/Foundation/PostgreSQL/backup-restore/Desktop/Agent/Runtime gates must still pass before the slice is considered automation-green.
+- Excluded: cross-type transfer/repricing, forced termination, release/cancel, multi-device entitlement/time splitting, OS-level PC lock/unlock, real Setup and physical/manual acceptance. Final installed/manual proof remains deferred to the real Setup release gate.
+
 ## Deferred gates — not blanket blockers for safe product coding
 
 - **Issue #92 — Windows client access-control feasibility:** blocked until a supported, isolated Windows PC/VM with standard non-admin user, snapshot/revert and disposable database is available. Never use the live Manager/shop PC for lock/unlock experimentation.
