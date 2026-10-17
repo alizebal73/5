@@ -209,7 +209,7 @@ function New-RuntimeProcessInfo {
     foreach ($arg in $Arguments) { $info.ArgumentList.Add($arg) }
 
     foreach ($key in @($info.Environment.Keys)) {
-        if ($key -match '^(GAMENET_.*|GameNet.*|DOTNET_GameNet.*|ASPNETCORE_GameNet.*|Kestrel.*|DOTNET_Kestrel.*|ASPNETCORE_Kestrel.*|ASPNETCORE_URLS|DOTNET_URLS|ASPNETCORE_HTTP_PORTS|ASPNETCORE_HTTPS_PORTS|DOTNET_HTTP_PORTS|DOTNET_HTTPS_PORTS|DOTNET_STARTUP_HOOKS|ASPNETCORE_HOSTINGSTARTUPASSEMBLIES)$' -or
+        if ($key -match '^(GAMENET_.*|GameNet.*|DOTNET_GameNet.*|ASPNETCORE_GameNet.*|Kestrel.*|DOTNET_Kestrel.*|ASPNETCORE_Kestrel.*|ASPNETCORE_URLS|DOTNET_URLS|ASPNETCORE_HTTP_PORTS|ASPNETCORE_HTTPS_PORTS|DOTNET_HTTP_PORTS|DOTNET_HTTPS_PORTS|DOTNET_STARTUP_HOOKS|ASPNETCORE_HOSTINGSTARTUPASSEMBLIES|ConnectionStrings__.*|DOTNET_ConnectionStrings.*|ASPNETCORE_ConnectionStrings.*|PGPASSWORD|PGPASSFILE|PGSERVICE|PGSERVICEFILE|PGHOST|PGPORT|PGUSER|PGDATABASE|PGOPTIONS)$' -or
             $key -ieq "ASPNETCORE_ENVIRONMENT" -or
             $key -ieq "DOTNET_ENVIRONMENT") {
             [void]$info.Environment.Remove([string]$key)
@@ -342,6 +342,10 @@ $provisioningKey = $null
 $fingerprintKey = $null
 $agentToken = $null
 $accessToken = $null
+$bootstrapBody = $null
+$login = $null
+$loginPassword = $null
+$serverInfo = $null
 
 try {
     Write-Host ""
@@ -469,6 +473,8 @@ try {
     catch {
         throw "Initial Owner creation failed. Do not re-run on a different database; inspect the test Server output and the fresh database state."
     }
+    if ($null -ne $bootstrapBody) { $bootstrapBody.password = $null }
+    $bootstrapBody = $null
     $ownerPassword = $null
     $bootstrapSecret = $null
 
@@ -479,6 +485,11 @@ try {
 
     $serverInfo = New-RuntimeProcessInfo -FilePath $serverExe -ConfigurationDirectory $configDirectory -ForServer -ConnectionString $connectionString -SigningKey $signingKey -AgentProvisioningKey $provisioningKey -FingerprintKey $fingerprintKey
     $serverProcess = Start-GameNetProcess -StartInfo $serverInfo
+    $connectionString = $null
+    $signingKey = $null
+    $provisioningKey = $null
+    $fingerprintKey = $null
+    $serverInfo = $null
     Wait-GameNetServer -BaseUrl $baseUrl -Process $serverProcess
 
     $loginPasswordSecure = Read-Host "Enter the throwaway Owner password to prepare the isolated test Station/Tariff/Agent (hidden)" -AsSecureString
@@ -574,6 +585,8 @@ try {
         Start-Sleep -Seconds 2
     }
     if (-not $online) { throw "The Server did not report the test PC Agent online with a current lease. The UI will not be started." }
+    $accessToken = $null
+    $login = $null
 
     Write-Host ""
     Write-Host "Isolated test workspace is ready."
@@ -603,6 +616,10 @@ finally {
     $fingerprintKey = $null
     $agentToken = $null
     $accessToken = $null
+    $bootstrapBody = $null
+    $login = $null
+    $loginPassword = $null
+    $serverInfo = $null
 
     if ($null -ne $testRoot -and (Test-Path -LiteralPath $testRoot -PathType Container)) {
         Write-Host ("Test evidence/config files were retained for review at: {0}" -f $testRoot)
