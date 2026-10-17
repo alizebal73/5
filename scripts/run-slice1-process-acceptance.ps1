@@ -145,21 +145,15 @@ function Assert-DisposableEmptyDatabase {
         throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
     }
 
-    # Use Npgsql's public CLR key API directly. PowerShell does not reliably bind
-    # Contains() on the explicit non-generic IDictionary implementation.
+    # Read values through CLR reflection to bypass PowerShell's dictionary adapter.
+    # This exact access path passed the earlier payload-build parser gate.
     try {
-        $requiredKeys = @("Host", "Database", "Username", "Password", "Port", "SSL Mode")
-        foreach ($key in $requiredKeys) {
-            if (-not $builder.ContainsKey([string]$key)) {
-                throw "Parsed connection string is missing required key '$key'."
-            }
-        }
-        $hostName = [string]$builder["Host"]
-        $database = [string]$builder["Database"]
-        $username = [string]$builder["Username"]
-        $password = [string]$builder["Password"]
-        $port = [int]$builder["Port"]
-        $sslMode = [string]$builder["SSL Mode"]
+        $hostName = [string]$builderType.GetProperty("Host").GetValue($builder)
+        $database = [string]$builderType.GetProperty("Database").GetValue($builder)
+        $username = [string]$builderType.GetProperty("Username").GetValue($builder)
+        $password = [string]$builderType.GetProperty("Password").GetValue($builder)
+        $port = [int]$builderType.GetProperty("Port").GetValue($builder)
+        $sslMode = [string]$builderType.GetProperty("SslMode").GetValue($builder)
     }
     catch {
         throw "The bundled PostgreSQL driver parsed the connection string but its required values could not be read safely. No database command was run."
