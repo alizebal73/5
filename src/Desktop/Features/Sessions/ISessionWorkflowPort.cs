@@ -6,6 +6,7 @@ using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
@@ -23,6 +24,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ObservableCollection<ActiveSessionListItem> ActiveSessions { get; }
     ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; }
     ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; }
+    ObservableCollection<CustomerResponse> WalletCustomers { get; }
 
     ICommand RefreshCommand { get; }
     ICommand SearchCustomersCommand { get; }
@@ -41,6 +43,9 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand CheckoutCashCommand { get; }
     ICommand ReverseCashSaleCommand { get; }
     ICommand CorrectCashTenderCommand { get; }
+    ICommand SearchWalletCustomersCommand { get; }
+    ICommand LoadWalletBalanceCommand { get; }
+    ICommand WalletCashTopUpCommand { get; }
 
     bool CanManageTariffs { get; }
     bool CanReadCustomers { get; }
@@ -50,6 +55,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     bool CanCheckout { get; }
     bool CanReverseCashSale { get; }
     bool CanCorrectCashTender { get; }
+    bool CanWriteWallet { get; }
     bool CanUseWorkspace { get; }
     bool CanReadStations { get; }
     bool IsBusy { get; }
@@ -81,6 +87,14 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string CashTenderCorrectionReasonText { get; set; }
     bool ConfirmCashTenderCorrection { get; set; }
     string CashTenderCorrectionSummaryText { get; }
+    CustomerResponse? SelectedWalletCustomer { get; set; }
+    string WalletCustomerSearchText { get; set; }
+    string WalletAmountToCreditText { get; set; }
+    string WalletAmountReceivedText { get; set; }
+    bool ConfirmWalletTopUp { get; set; }
+    string WalletBalanceSummaryText { get; }
+    string WalletTopUpOutcomeText { get; }
+    WalletBalanceResponse? CurrentWalletBalance { get; set; }
 
     string TariffCode { get; set; }
     string TariffName { get; set; }
