@@ -36,6 +36,10 @@ on:
       - "scripts/provision-agent-enrollment.ps1"
       - "docs/operations/agent-service-state.md"
       - "scripts/test-runtime-endpoint.ps1"
+      - "scripts/run-slice1-process-acceptance.ps1"
+      - "docs/operations/slice1-process-acceptance.md"
+      - "docs/operations/manual-cash-sale-reversal-acceptance.md"
+      - "docs/operations/manual-session-timing-recovery-acceptance.md"
       - "scripts/modules/ServerTlsCertificate.psm1"
       - "docs/operations/runtime-endpoints.md"
 
@@ -205,6 +209,10 @@ jobs:
           Copy-Item -LiteralPath "scripts/provision-agent-enrollment.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "docs/operations/agent-service-state.md" -Destination (Join-Path $toolsOutput "agent-service-state.md")
           Copy-Item -LiteralPath "scripts/test-runtime-endpoint.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "scripts/run-slice1-process-acceptance.ps1" -Destination $toolsOutput
+          Copy-Item -LiteralPath "docs/operations/slice1-process-acceptance.md" -Destination (Join-Path $toolsOutput "slice1-process-acceptance.md")
+          Copy-Item -LiteralPath "docs/operations/manual-cash-sale-reversal-acceptance.md" -Destination (Join-Path $toolsOutput "manual-cash-sale-reversal-acceptance.md")
+          Copy-Item -LiteralPath "docs/operations/manual-session-timing-recovery-acceptance.md" -Destination (Join-Path $toolsOutput "manual-session-timing-recovery-acceptance.md")
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
           # The source runbook uses source-tree paths; rewrite them for the extracted payload layout.
           $runtimeEndpoints = Get-Content -LiteralPath "docs/operations/runtime-endpoints.md" -Raw
@@ -229,6 +237,10 @@ jobs:
             (Join-Path $toolsOutput "inspect-manager-runtime-state.ps1"),
             (Join-Path $toolsOutput "runtime-endpoints.md"),
             (Join-Path $toolsOutput "initial-admin-setup.md")
+             (Join-Path $toolsOutput "run-slice1-process-acceptance.ps1"),
+             (Join-Path $toolsOutput "slice1-process-acceptance.md"),
+             (Join-Path $toolsOutput "manual-cash-sale-reversal-acceptance.md"),
+             (Join-Path $toolsOutput "manual-session-timing-recovery-acceptance.md")
           )
           foreach ($file in $requiredFiles) {
             if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
@@ -241,8 +253,14 @@ jobs:
 
           **This is NOT Setup and is NOT a production release.** It is a portable, self-contained Windows x64 payload built from one exact candidate checkout. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
 
-          ## Included
+          ## Choose the test path
 
+          For early Issue #98 PC Session to invoice to cash functional acceptance, use Tools/slice1-process-acceptance.md and Tools/run-slice1-process-acceptance.ps1 only. This path runs Server, Agent and WPF Desktop as Development processes on loopback with a verified empty local test database. It does not register services or change machine settings.
+
+          The separate Runtime LAN smoke sequence below is for later isolated-machine service/TLS/LAN feasibility work. Do not use that service-based sequence as the early #98 process acceptance path, and never use this payload on live GameNet PCs.
+
+
+          ## Included
           - `Server\GameNet.Server.exe`
           - `Agent\GameNet.Agent.exe`
           - `Desktop\GameNet.Manager.Desktop.exe`
@@ -252,6 +270,9 @@ jobs:
           - `Tools\bootstrap-admin.ps1` and `Tools\finalize-server-setup.ps1` for first-Owner setup and post-bootstrap cleanup
           - `Tools\inspect-manager-runtime-state.ps1` as a read-only preflight
           - `Tools\initial-admin-setup.md`, `Tools\configure-agent-runtime-state.ps1`, `Tools\provision-agent-enrollment.ps1`, and the Agent Windows Service state/DACL runbook
+          - Tools/run-slice1-process-acceptance.ps1 and Tools/slice1-process-acceptance.md — the loopback-only process launcher and early Issue #98 procedure.
+          - Tools/manual-cash-sale-reversal-acceptance.md — the required WPF flow and read-only SQL reconciliation checklist.
+          - Tools/manual-session-timing-recovery-acceptance.md — the separate VM-only timing-continuity and fail-closed acceptance procedure.
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
           ## Safety boundary
