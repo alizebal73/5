@@ -467,7 +467,7 @@ try {
         (Join-Path $programDataRoot "Secrets\server-secrets.v1.dpapi")
     )
     if (@($markers | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
-        throw "GameNet Manager Server state already exists under ProgramData. This isolated process test refuses to run here."
+        throw "GameNet 5 Manager Server state already exists under ProgramData. This first-time process acceptance refuses to overlap the new app's existing runtime state; a separate legacy GameNet program is not what this guard targets."
     }
 
     $secureConnection = Read-Host "Paste the connection string for a NEW empty local PostgreSQL test database (input is hidden)" -AsSecureString
