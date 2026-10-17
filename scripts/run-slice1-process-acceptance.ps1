@@ -247,7 +247,9 @@ SELECT
         }
     }
     finally {
-        $info.Environment.Remove("PGPASSWORD")
+        # Dictionary.Remove returns a Boolean. Suppress it so the function emits
+        # only the intended database-info object to its caller.
+        [void]$info.Environment.Remove("PGPASSWORD")
         $process.Dispose()
         $builder.Clear()
         $password = $null
@@ -450,7 +452,17 @@ try {
     try { $connectionString = Convert-SecureStringToPlainText $secureConnection }
     finally { $secureConnection.Dispose() }
 
-    $databaseInfo = Assert-DisposableEmptyDatabase -ConnectionString $connectionString
+    $databaseInfoItems = @(Assert-DisposableEmptyDatabase -ConnectionString $connectionString)
+    if ($databaseInfoItems.Count -ne 1 -or
+        $databaseInfoItems[0] -isnot [System.Management.Automation.PSCustomObject]) {
+        throw "PostgreSQL preflight returned unexpected pipeline output. No GameNet process or migration was started."
+    }
+    $databaseInfo = $databaseInfoItems[0]
+    foreach ($requiredInfoProperty in @("Database", "Host", "Port", "Username")) {
+        if ($null -eq $databaseInfo.PSObject.Properties[$requiredInfoProperty]) {
+            throw "PostgreSQL preflight omitted required result property '$requiredInfoProperty'. No GameNet process or migration was started."
+        }
+    }
     Write-Host ("Verified empty loopback database: {0} on {1}:{2}, role {3}" -f $databaseInfo.Database, $databaseInfo.Host, $databaseInfo.Port, $databaseInfo.Username)
     Write-Host "Database preflight: zero non-system relations; role has no elevated PostgreSQL privileges."
     $confirmation = Read-Host "Type exactly USE EMPTY TEST DATABASE to confirm migration of this verified disposable database"
