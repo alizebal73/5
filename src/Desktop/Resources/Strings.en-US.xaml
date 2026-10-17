@@ -103,4 +103,13 @@
   <system:String x:Key="Customer.Activate">Activate</system:String>
   <system:String x:Key="Customer.Deactivate">Deactivate</system:String>
   <system:String x:Key="Customer.Block">Block</system:String>
+  <system:String x:Key="Wallet.CashTopUpTitle">Customer Wallet cash top-up</system:String>
+  <system:String x:Key="Wallet.SectionHint">Purchased value is credited only by the amount entered below. Extra cash is change, not extra Wallet credit.</system:String>
+  <system:String x:Key="Wallet.CustomerSearch">Search an active registered customer</system:String>
+  <system:String x:Key="Wallet.SearchButton">Search customers</system:String>
+  <system:String x:Key="Wallet.RefreshBalance">Load / refresh balance</system:String>
+  <system:String x:Key="Wallet.AmountToCredit">Amount to credit (whole Toman)</system:String>
+  <system:String x:Key="Wallet.AmountReceived">Actual cash received (whole Toman)</system:String>
+  <system:String x:Key="Wallet.ConfirmTopUp">I checked the customer, credit amount, actual cash received and change, and confirm this Wallet top-up.</system:String>
+  <system:String x:Key="Wallet.TopUpButton">Record cash and credit Wallet</system:String>
 </ResourceDictionary>

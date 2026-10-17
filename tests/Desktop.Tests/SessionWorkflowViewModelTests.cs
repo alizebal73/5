@@ -18,11 +18,12 @@ using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 using Xunit;
 
 namespace GameNet.Desktop.Tests;
 
-public sealed class SessionWorkflowViewModelTests
+public sealed partial class SessionWorkflowViewModelTests
 {
     [Fact]
     public async Task Start_success_message_keeps_the_station_that_was_submitted_when_selection_changes_in_flight()
@@ -1020,6 +1021,12 @@ public sealed class SessionWorkflowViewModelTests
         public List<string> CheckoutIdempotencyKeys { get; } = [];
         public List<string> CashSaleReversalIdempotencyKeys { get; } = [];
         public List<string> CashTenderCorrectionIdempotencyKeys { get; } = [];
+        public Dictionary<Guid, WalletBalanceResponse> WalletBalances { get; } = [];
+        public Dictionary<string, WalletCashTopUpResponse> WalletTopUpResponses { get; } = new(StringComparer.Ordinal);
+        public WalletCashTopUpRequest? LastWalletTopUpRequest { get; private set; }
+        public string? LastWalletTopUpIdempotencyKey { get; private set; }
+        public int WalletTopUpWriteCount { get; private set; }
+        public Guid? LastWalletTopUpCustomerId { get; private set; }
         public Guid? LastCashTenderCorrectionInvoiceId { get; private set; }
         public CashTenderCorrectionRequest? LastCashTenderCorrectionRequest { get; private set; }
         public int CashTenderCorrectionWriteCount { get; private set; }
@@ -1077,6 +1084,41 @@ public sealed class SessionWorkflowViewModelTests
         public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<WalletBalanceResponse> GetWalletBalanceAsync(Guid customerId, CancellationToken cancellationToken = default)
+        {
+            var customer = Customers.Single(x => x.Id == customerId);
+            if (!WalletBalances.TryGetValue(customerId, out var balance))
+            {
+                balance = new WalletBalanceResponse(customer.Id, customer.Code, customer.DisplayName, 0, 0, null, false);
+                WalletBalances[customerId] = balance;
+            }
+            return Task.FromResult(balance);
+        }
+
+        public Task<WalletCashTopUpResponse> TopUpWalletCashAsync(
+            Guid customerId, WalletCashTopUpRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            if (WalletTopUpResponses.TryGetValue(idempotencyKey, out var replay))
+                return Task.FromResult(replay);
+            var customer = Customers.Single(x => x.Id == customerId);
+            var oldBalance = WalletBalances.TryGetValue(customerId, out var current) ? current.PurchasedBalanceToman : 0L;
+            var oldVersion = WalletBalances.TryGetValue(customerId, out current) ? current.Version : 0;
+            var newBalance = checked(oldBalance + request.AmountToCreditToman);
+            var result = new WalletCashTopUpResponse(
+                Guid.NewGuid(), Guid.NewGuid(), customerId, customer.Code, customer.DisplayName,
+                request.AmountToCreditToman, request.AmountReceivedToman,
+                checked(request.AmountReceivedToman - request.AmountToCreditToman),
+                newBalance, checked(oldVersion + 1), DateTimeOffset.UtcNow);
+            WalletTopUpResponses[idempotencyKey] = result;
+            WalletBalances[customerId] = new WalletBalanceResponse(
+                customer.Id, customer.Code, customer.DisplayName, newBalance, result.WalletVersion, result.ReceivedAtUtc, true);
+            LastWalletTopUpRequest = request;
+            LastWalletTopUpIdempotencyKey = idempotencyKey;
+            LastWalletTopUpCustomerId = customerId;
+            WalletTopUpWriteCount++;
+            return Task.FromResult(result);
+        }
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TariffResponse>>(tariffs

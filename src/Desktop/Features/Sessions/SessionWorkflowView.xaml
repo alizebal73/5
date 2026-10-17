@@ -104,6 +104,44 @@
               </WrapPanel>
             </StackPanel>
           </Expander>
+          <Expander Header="{DynamicResource Wallet.CashTopUpTitle}" Margin="0,10,0,0"
+                    Visibility="{Binding CanWriteWallet, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel Margin="0,5,0,0">
+              <TextBlock Text="{DynamicResource Wallet.SectionHint}" FontSize="11" Foreground="#667085"
+                         TextWrapping="Wrap" Margin="0,0,0,6"/>
+              <TextBlock Text="{DynamicResource Wallet.CustomerSearch}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,3,0,5"
+                       Text="{Binding WalletCustomerSearchText, UpdateSourceTrigger=PropertyChanged}"/>
+              <Button Content="{DynamicResource Wallet.SearchButton}" Command="{Binding SearchWalletCustomersCommand}"
+                      Padding="6,4" Margin="0,0,0,5" HorizontalAlignment="Left"/>
+              <ListBox Height="110" ItemsSource="{Binding WalletCustomers}"
+                       SelectedItem="{Binding SelectedWalletCustomer, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Margin="0,1">
+                      <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                      <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#667085"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <Button Content="{DynamicResource Wallet.RefreshBalance}" Command="{Binding LoadWalletBalanceCommand}"
+                      Padding="6,4" Margin="0,6,0,4" HorizontalAlignment="Left"/>
+              <TextBlock Text="{Binding WalletBalanceSummaryText}" FontSize="12" FontWeight="SemiBold"
+                         TextWrapping="Wrap" Margin="0,0,0,7"/>
+              <TextBlock Text="{DynamicResource Wallet.AmountToCredit}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,3,0,6"
+                       Text="{Binding WalletAmountToCreditText, UpdateSourceTrigger=PropertyChanged}"/>
+              <TextBlock Text="{DynamicResource Wallet.AmountReceived}" FontSize="12"/>
+              <TextBox Padding="5" Margin="0,3,0,6"
+                       Text="{Binding WalletAmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+              <CheckBox Content="{DynamicResource Wallet.ConfirmTopUp}" IsChecked="{Binding ConfirmWalletTopUp, Mode=TwoWay}"
+                        Margin="0,0,0,7"/>
+              <Button Content="{DynamicResource Wallet.TopUpButton}" Command="{Binding WalletCashTopUpCommand}" Padding="7,5"/>
+              <TextBlock Text="{Binding WalletTopUpOutcomeText}" FontSize="11" Foreground="#344054"
+                         TextWrapping="Wrap" Margin="0,7,0,0"/>
+            </StackPanel>
+          </Expander>
         </StackPanel>
 
         <StackPanel Grid.Column="1" Margin="8,0">

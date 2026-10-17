@@ -46,9 +46,19 @@ The Integration branch has a partial WPF/API/Server/PostgreSQL path for fixed-ho
 
     **Runtime artifact provenance:** the portable payload was built from tested PR head `c7ed41ab508823f2a90e3b3a7901447669e70b88`; inner package SHA-256: `32bb09e60a7f7bad4e2b2aa94688eb3a3af491a0d829e71cce888102ec2aba3b`; [download artifact from run 38938522496](https://github.com/alizebal73/5/actions/runs/38938522496). GitHub's Git commit records confirm both that tested head and Integration merge SHA `973acc523f394b2171c02db2b3836fccc58c9d67` have the identical source tree `c06a22264da10340ce3b128bcaaa004156bb77f6`. The artifact manifest must still report its actual tested checkout SHA (`c7ed...`); acceptance evidence should record the tested SHA, merge SHA, common tree SHA and package checksum without claiming the artifact was built from the merge commit. No rebuild is required solely because the commit IDs differ while the source trees match. This remains a portable payload, not Setup/MSI or a production release. Manual acceptance is still NOT RUN.
 
-    **Manual acceptance remains NOT RUN:** no interactive WPF acceptance, disposable-VM runtime/session test, or read-only database/financial reconciliation has been recorded. Never use live shop PCs/database or real money for this slice. Customer PIN/login, multi-device policy, Wallet/debt/gifts, VIP and statement/history projections remain future work; Slice 1 cash-sale acceptance under [Issue #98](https://github.com/alizebal73/5/issues/98) remains a separate open gate.
+    **Manual acceptance remains NOT RUN:** no interactive WPF acceptance, disposable-VM runtime/session test, or read-only database/financial reconciliation has been recorded. Never use live shop PCs/database or real money for this slice. Customer PIN/login, multi-device policy, Wallet spend/debt/gifts/free-time, VIP and statement/history projections remain future work; Slice 1 cash-sale acceptance under [Issue #98](https://github.com/alizebal73/5/issues/98) remains a separate open gate.
 
-Keep this slice narrow. Wallet/debt, free credit/time, discounts, VIP, card payments, PS5 and foosball billing are not implied complete by Slice 1.
+Keep Issue #98 separate: its PC Session-to-cash manual/financial acceptance remains open. The Issue #137 Wallet cash top-up candidate is an additional narrow product slice, not evidence that the full Wallet/debt/free-credit requirements or final release acceptance are complete.
+
+## Next product capability — Issue #137: customer Wallet cash top-up
+
+**Candidate branch:** feature/wallet-cash-topup-20261017. This vertical slice is based on the current Integration snapshot and remains unmerged until the exact-head checks pass.
+
+- Operator chooses an active registered Customer, loads the Server balance, enters an integer-Toman amount to credit and the actual cash received, and explicitly confirms the operation.
+- Billing persists a distinct actual-cash CashReceipt; Wallet persists one immutable CashTopUp ledger row and a reconciled purchased-balance projection. All are part of the shared idempotent, auditable transaction.
+- Additional cash is change only. For example, 105,000 Toman credited and 110,000 received means a 105,000 Toman balance increase and 5,000 change; no gift, free-time or debt is implied.
+- Tests must cover positive/overflow validation, blocked/inactive/Walk-in rejection, permission-denial, same-key replay / changed-payload conflict, concurrent distinct top-ups, receipt/ledger/balance/audit equality, append-only protections, Desktop binding and exact tested SHA.
+- Not included: customer PIN/login, Wallet balance debit on play, multi-device limits, free money/time, debt, card/terminal, refunds and Setup. Physical/manual acceptance remains deferred to the final real Setup gate; never use the live shop PC or production database.
 
 ## Deferred gates — not blanket blockers for safe product coding
 

@@ -226,7 +226,8 @@ public sealed class DesktopBindingAndPasswordContractTests
         var memberName = bindingPath.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
 
         if (string.Equals(memberName, "Customers", StringComparison.Ordinal) ||
-            string.Equals(memberName, "AvailableCustomers", StringComparison.Ordinal))
+            string.Equals(memberName, "AvailableCustomers", StringComparison.Ordinal) ||
+            string.Equals(memberName, "WalletCustomers", StringComparison.Ordinal))
             return typeof(CustomerResponse);
         if (string.Equals(memberName, "Tariffs", StringComparison.Ordinal))
             return typeof(TariffResponse);

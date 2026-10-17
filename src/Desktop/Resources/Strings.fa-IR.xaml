@@ -103,4 +103,13 @@
   <system:String x:Key="Customer.Activate">فعال‌سازی</system:String>
   <system:String x:Key="Customer.Deactivate">غیرفعال‌سازی</system:String>
   <system:String x:Key="Customer.Block">مسدودسازی</system:String>
+  <system:String x:Key="Wallet.CashTopUpTitle">شارژ نقدی کیف پول مشتری</system:String>
+  <system:String x:Key="Wallet.SectionHint">فقط مبلغ شارژ واردشده به اعتبار خریداری‌شده اضافه می‌شود؛ وجه اضافه، پول خرد است و اعتبار کیف پول نیست.</system:String>
+  <system:String x:Key="Wallet.CustomerSearch">جست‌وجوی مشتری ثبت‌شده و فعال</system:String>
+  <system:String x:Key="Wallet.SearchButton">جست‌وجوی مشتریان</system:String>
+  <system:String x:Key="Wallet.RefreshBalance">دریافت / تازه‌سازی موجودی</system:String>
+  <system:String x:Key="Wallet.AmountToCredit">مبلغ اعتبار (تومان صحیح)</system:String>
+  <system:String x:Key="Wallet.AmountReceived">وجه نقد واقعی دریافتی (تومان صحیح)</system:String>
+  <system:String x:Key="Wallet.ConfirmTopUp">مشتری، مبلغ اعتبار، وجه دریافتی و پول خرد را بررسی کرده‌ام و شارژ را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Wallet.TopUpButton">ثبت وجه نقد و شارژ کیف پول</system:String>
 </ResourceDictionary>

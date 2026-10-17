@@ -11,8 +11,19 @@ public sealed class WalletCustomerAccess(GameNetDbContext db) : IWalletCustomerA
     public async Task<WalletCustomerFacts?> FindForWalletAsync(Guid customerId, CancellationToken cancellationToken)
     {
         var customer = await db.Customers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == customerId, cancellationToken);
-        return customer is null ? null : new WalletCustomerFacts(
-            customer.Id, customer.Code, customer.DisplayName,
-            (CustomerKindContract)customer.Kind, (CustomerStatusContract)customer.Status);
+        if (customer is null)
+            return null;
+
+        var kind = customer.Kind == CustomerKind.Registered
+            ? CustomerKindContract.Registered
+            : CustomerKindContract.WalkIn;
+        var status = customer.Status switch
+        {
+            CustomerStatus.Active => CustomerStatusContract.Active,
+            CustomerStatus.Inactive => CustomerStatusContract.Inactive,
+            CustomerStatus.Blocked => CustomerStatusContract.Blocked,
+            _ => throw new InvalidOperationException("Unsupported Customer status.")
+        };
+        return new WalletCustomerFacts(customer.Id, customer.Code, customer.DisplayName, kind, status);
     }
 }

@@ -399,10 +399,12 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanCheckout));
         OnPropertyChanged(nameof(CanReverseCashSale));
         OnPropertyChanged(nameof(CanCorrectCashTender));
+        OnPropertyChanged(nameof(CanWriteWallet));
         OnPropertyChanged(nameof(CanReadStations));
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
         EnforceCustomerPermissions();
+        EnforceWalletPermissions();
     }
 
     public void Reset()
@@ -685,6 +687,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReconcileSessionTimingCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         RaiseCustomerCommands();
+        RaiseWalletCommands();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? name = null)

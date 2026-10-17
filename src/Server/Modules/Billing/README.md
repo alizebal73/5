@@ -4,7 +4,7 @@
 
 ## Ownership
 
-Own immutable invoices, payment records/allocation, pending settlement, cash checkout and audited correction/reversal workflows. Actual received cash/card payments are distinct from internal Wallet transfers. Wallet owns stored value and debt balances; Billing must not silently treat them as cash received.
+Own immutable invoices, payment records/allocation, pending settlement, cash checkout, invoice-related correction/reversal, and actual cash receipts for non-invoice sales. Wallet top-up uses the Billing-owned CashReceipt record; it is deliberately not a Session invoice Payment or a Wallet balance. This candidate only accepts cash; card/terminal, split payment and broader cash-receipt purposes remain unimplemented.
 
 ## Implemented in the current slice
 
@@ -16,7 +16,7 @@ Own immutable invoices, payment records/allocation, pending settlement, cash che
 
 ## Incomplete
 
-The current integrated implementation provides full cash-sale reversal through the Server and operator WPF workflow under the bounded V1 contract. It has dedicated permission, mandatory reason and confirmation, idempotency, a forward-only migration, an append-only reversal record and a compensating typed ledger entry. PR #120 was squash-merged to Integration at `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`; its exact PR-head automated gates passed, and post-merge Quick Validation passed. The feature remains unaccepted for operational use until manual WPF/recovery acceptance and independent financial reconciliation are complete. Cash tender correction is specified but not implemented. Card payments, Wallet/debt, partial allocations and the overall first Session-to-cash acceptance remain open.
+The current integrated implementation provides full cash-sale reversal through the Server and operator WPF workflow under the bounded V1 contract. The Wallet cash top-up candidate tracked by [Issue #137](https://github.com/alizebal73/5/issues/137) adds a distinct Billing-owned actual-cash receipt that links to one Wallet ledger movement; it does not create a Session invoice or imply that Wallet features are fully accepted. It has dedicated permission, mandatory reason and confirmation, idempotency, a forward-only migration, an append-only reversal record and a compensating typed ledger entry. PR #120 was squash-merged to Integration at `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`; its exact PR-head automated gates passed, and post-merge Quick Validation passed. The feature remains unaccepted for operational use until manual WPF/recovery acceptance and independent financial reconciliation are complete. Cash tender correction is specified but not implemented. Card payments, Wallet/debt, partial allocations and the overall first Session-to-cash acceptance remain open.
 
 The requirements are in [Cash Correction and Reversal V1](../../../../docs/domain/cash-correction-and-reversal-v1.md). This implementation is a separate narrow slice; tender correction remains a later task.
 
