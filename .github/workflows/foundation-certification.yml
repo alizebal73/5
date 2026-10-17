@@ -268,6 +268,51 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "GAMENET_DATABASE_CONNECTION=$connection"
           $env:GAMENET_DATABASE_CONNECTION = $connection
 
+          # Execute the exact read-only database preflight SQL from the Slice 1
+          # launcher against a newly created, disposable database as a low-privilege
+          # login. This validates SQL/catalog access, not just PowerShell syntax.
+          $preflightSource = Get-Content -LiteralPath ".\scripts\run-slice1-process-acceptance.ps1" -Raw
+          $preflightSqlMatch = [regex]::Match($preflightSource, '(?s)\$query\s*=\s*@"\r?\n(?<sql>.*?)\r?\n"@')
+          if (-not $preflightSqlMatch.Success) {
+            throw "Could not extract the Slice 1 read-only database preflight SQL for certification."
+          }
+          $preflightSql = $preflightSqlMatch.Groups["sql"].Value
+          $preflightRole = "gamenet_preflight_" + [Guid]::NewGuid().ToString("N")
+          $preflightPassword = [Guid]::NewGuid().ToString("N")
+          $preflightRoleCreated = $false
+          $previousPsqlPassword = $env:PGPASSWORD
+          try {
+            $createPreflightRoleSql = "CREATE ROLE $preflightRole LOGIN PASSWORD '$preflightPassword';"
+            & $psql --host=127.0.0.1 --port=5432 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 --command=$createPreflightRoleSql
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not create the disposable low-privilege role for Slice 1 preflight SQL certification."
+            }
+            $preflightRoleCreated = $true
+
+            $env:PGPASSWORD = $preflightPassword
+            Write-Output "::add-mask::$preflightPassword"
+            $preflightOutput = @(& $psql --host=127.0.0.1 --port=5432 --username=$preflightRole --dbname=gamenet_foundation_probe --tuples-only --no-align --no-password --command=$preflightSql 2>&1)
+            $preflightExitCode = $LASTEXITCODE
+            $preflightResult = ($preflightOutput -join [Environment]::NewLine).Trim()
+            if ($preflightExitCode -ne 0) {
+              throw "Slice 1 database preflight SQL failed against a fresh database using a non-elevated role. Output: $preflightResult"
+            }
+            if ($preflightResult -ne "0|0|OK") {
+              throw "Slice 1 database preflight SQL returned an unexpected fresh-database result. Expected 0|0|OK; observed '$preflightResult'."
+            }
+            Write-Host "SLICE1_DATABASE_PREFLIGHT_SQL_CERTIFICATION_PASSED=true"
+          }
+          finally {
+            $env:PGPASSWORD = $previousPsqlPassword
+            if ($preflightRoleCreated) {
+              & $psql --host=127.0.0.1 --port=5432 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 --command="DROP ROLE IF EXISTS $preflightRole;" 2>&1 | Out-Null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Could not remove the disposable preflight role; the hosted CI database is ephemeral."
+              }
+            }
+            $preflightPassword = $null
+          }
+
           & $dotnet tool restore
           if ($LASTEXITCODE -ne 0) { throw "Could not restore the local dotnet-ef tool." }
           & $dotnet ef database update --configuration Release --project src/Server/GameNet.Server.csproj --startup-project src/Server/GameNet.Server.csproj --context GameNet.Server.Persistence.GameNetDbContext
