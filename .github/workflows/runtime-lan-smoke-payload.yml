@@ -159,6 +159,32 @@ jobs:
             "--output", $desktopOutput
           )
 
+          # Execute the same provider-specific parse used by the process acceptance
+          # launcher against a harmless placeholder. This catches connection-string
+          # key/property regressions before publishing an artifact, without connecting
+          # to PostgreSQL or logging any credential value.
+          $npgsqlAssemblyPath = Join-Path $serverOutput "Npgsql.dll"
+          if (-not (Test-Path -LiteralPath $npgsqlAssemblyPath -PathType Leaf)) {
+            throw "Published Server payload is missing Npgsql.dll."
+          }
+          $npgsqlAssembly = [System.Reflection.Assembly]::LoadFrom($npgsqlAssemblyPath)
+          $builderType = $npgsqlAssembly.GetType("Npgsql.NpgsqlConnectionStringBuilder", $true)
+          $connectionBuilder = [System.Activator]::CreateInstance($builderType)
+          $connectionBuilder.ConnectionString = "Host=127.0.0.1;Port=5432;Database=gamenet_slice1_test_20261018;Username=gamenet_slice1_app_20261018;Password=Parser-Check-Only;SSL Mode=Disable"
+          $parsedPort = [int]$connectionBuilder.Port
+          if ([string]$connectionBuilder.Host -ne "127.0.0.1" -or
+              $parsedPort -ne 5432 -or
+              [string]$connectionBuilder.Database -ne "gamenet_slice1_test_20261018" -or
+              [string]$connectionBuilder.Username -ne "gamenet_slice1_app_20261018" -or
+              [string]$connectionBuilder.Password -ne "Parser-Check-Only" -or
+              [string]$connectionBuilder.SslMode -ne "Disable") {
+            throw "Npgsql connection-string parser self-test failed. Do not publish the runtime payload."
+          }
+          Write-Host "Npgsql connection-string parser self-test passed (secret value not logged)."
+          $connectionBuilder = $null
+          $builderType = $null
+          $npgsqlAssembly = $null
+
           # EF design-time construction requires a connection string. Never inherit a
           # Runner Machine connection (which could target real data) into a bundle.
           # This intentionally unusable placeholder is local to bundle generation only.
