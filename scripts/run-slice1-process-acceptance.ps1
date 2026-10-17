@@ -60,6 +60,7 @@ foreach ($entry in $manifestEntries) {
 
 $requiredManifestPaths = @(
     "Server/GameNet.Server.exe",
+    "Server/Npgsql.dll",
     "Agent/GameNet.Agent.exe",
     "Desktop/GameNet.Manager.Desktop.exe",
     "Tools/inspect-manager-runtime-state.ps1",
@@ -101,21 +102,6 @@ function Convert-SecureStringToPlainText {
     }
 }
 
-function Get-ConnectionValue {
-    param(
-        [Parameter(Mandatory)][System.Data.Common.DbConnectionStringBuilder]$Builder,
-        [Parameter(Mandatory)][string[]]$Names
-    )
-    foreach ($key in @($Builder.Keys)) {
-        foreach ($name in $Names) {
-            if ([string]$key -ieq $name) {
-                return [string]$Builder[$key]
-            }
-        }
-    }
-    return $null
-}
-
 function Find-Psql {
     $command = Get-Command "psql.exe" -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -138,18 +124,31 @@ function Find-Psql {
 function Assert-DisposableEmptyDatabase {
     param([Parameter(Mandatory)][string]$ConnectionString)
 
-    $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-    try { $builder.ConnectionString = $ConnectionString }
-    catch { throw "The supplied PostgreSQL connection string could not be parsed. No database command was run." }
+    $npgsqlAssemblyPath = Join-Path (Split-Path -Parent $serverExe) "Npgsql.dll"
+    if (-not (Test-Path -LiteralPath $npgsqlAssemblyPath -PathType Leaf)) {
+        throw "The published PostgreSQL driver is missing from the Server payload. No database command was run."
+    }
 
-    $hostName = Get-ConnectionValue -Builder $builder -Names @("Host", "Server", "Data Source", "Address")
-    $database = Get-ConnectionValue -Builder $builder -Names @("Database", "Initial Catalog")
-    $username = Get-ConnectionValue -Builder $builder -Names @("Username", "User ID", "User")
-    $password = Get-ConnectionValue -Builder $builder -Names @("Password", "Pwd")
-    $portText = Get-ConnectionValue -Builder $builder -Names @("Port")
-    $port = 5432
-    if (-not [string]::IsNullOrWhiteSpace($portText) -and
-        (-not [int]::TryParse($portText, [ref]$port) -or $port -lt 1 -or $port -gt 65535)) {
+    try {
+        $npgsqlAssembly = [System.Reflection.Assembly]::LoadFrom($npgsqlAssemblyPath)
+        $builderType = $npgsqlAssembly.GetType("Npgsql.NpgsqlConnectionStringBuilder", $true)
+        $builder = [System.Activator]::CreateInstance($builderType)
+        $builder.ConnectionString = $ConnectionString
+    }
+    catch {
+        throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
+    }
+
+    # Parse using the same PostgreSQL driver shipped with the Server, avoiding
+    # generic DbConnectionStringBuilder key-enumeration differences in PowerShell.
+    $hostName = [string]$builder.Host
+    $database = [string]$builder.Database
+    $username = [string]$builder.Username
+    $password = [string]$builder.Password
+    $port = [int]$builder.Port
+    $sslMode = [string]$builder.SslMode
+
+    if ($port -lt 1 -or $port -gt 65535) {
         throw "PostgreSQL port is invalid. No database command was run."
     }
 
@@ -203,11 +202,11 @@ SELECT
         $info.ArgumentList.Add($arg)
     }
     $info.Environment["PGPASSWORD"] = $password
-    if ($builder.ContainsKey("SSL Mode")) {
-        $sslMode = [string]$builder["SSL Mode"]
-        $map = @{ Disable = "disable"; Allow = "allow"; Prefer = "prefer"; Require = "require"; VerifyCA = "verify-ca"; VerifyFull = "verify-full" }
-        if ($map.ContainsKey($sslMode)) { $info.Environment["PGSSLMODE"] = $map[$sslMode] }
+    $sslMap = @{ Disable = "disable"; Allow = "allow"; Prefer = "prefer"; Require = "require"; VerifyCA = "verify-ca"; VerifyFull = "verify-full" }
+    if (-not $sslMap.ContainsKey($sslMode)) {
+        throw "Unsupported PostgreSQL SSL mode for the psql isolation preflight. No migration was started."
     }
+    $info.Environment["PGSSLMODE"] = $sslMap[$sslMode]
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $info
