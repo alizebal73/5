@@ -238,10 +238,10 @@ function Start-GameNetProcess {
         return $process
     }
     finally {
-        # Process.Start has copied the environment block. Remove secret values from
+        # Process.Start has copied the environment block. Clear secret values from
         # the parent-side ProcessStartInfo so they do not linger in script objects.
         foreach ($key in @($StartInfo.Environment.Keys)) {
-            if ($key -match '^(GAMENET_.*|GameNet__.*)
+            if ($key -match '^(GAMENET_.*|GameNet.*)
 
 function Stop-GameNetProcess {
     param([System.Diagnostics.Process]$Process, [switch]$CloseWindowFirst)
@@ -997,10 +997,10 @@ function Start-GameNetProcess {
         return $process
     }
     finally {
-        # Process.Start has copied the environment block. Remove secret values from
+        # Process.Start has copied the environment block. Clear secret values from
         # the parent-side ProcessStartInfo so they do not linger in script objects.
         foreach ($key in @($StartInfo.Environment.Keys)) {
-            if ($key -match '^(GAMENET_.*|GameNet__.*)
+            if ($key -match '^(GAMENET_.*|GameNet.*)
 
 function Stop-GameNetProcess {
     param([System.Diagnostics.Process]$Process, [switch]$CloseWindowFirst)
