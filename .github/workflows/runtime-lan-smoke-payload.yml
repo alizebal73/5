@@ -174,19 +174,13 @@ jobs:
             throw "Published Npgsql builder has no connection-string constructor."
           }
           $connectionBuilder = $connectionStringConstructor.Invoke([object[]]@("Host=127.0.0.1;Port=5432;Database=gamenet_slice1_test_20261018;Username=gamenet_slice1_app_20261018;Password=Parser-Check-Only;SSL Mode=Disable"))
-          # Exercise the same public CLR key API used by the packaged launcher.
-          $requiredConnectionKeys = @("Host", "Database", "Username", "Password", "Port", "SSL Mode")
-          foreach ($key in $requiredConnectionKeys) {
-            if (-not $connectionBuilder.ContainsKey([string]$key)) {
-              throw "Npgsql parser self-test omitted required parsed key '$key'."
-            }
-          }
-          $parsedHost = [string]$connectionBuilder["Host"]
-          $parsedPort = [int]$connectionBuilder["Port"]
-          $parsedDatabase = [string]$connectionBuilder["Database"]
-          $parsedUsername = [string]$connectionBuilder["Username"]
-          $parsedPassword = [string]$connectionBuilder["Password"]
-          $parsedSslMode = [string]$connectionBuilder["SSL Mode"]
+          # Read the parsed CLR properties using the same reflection path as the launcher.
+          $parsedHost = [string]$builderType.GetProperty("Host").GetValue($connectionBuilder)
+          $parsedPort = [int]$builderType.GetProperty("Port").GetValue($connectionBuilder)
+          $parsedDatabase = [string]$builderType.GetProperty("Database").GetValue($connectionBuilder)
+          $parsedUsername = [string]$builderType.GetProperty("Username").GetValue($connectionBuilder)
+          $parsedPassword = [string]$builderType.GetProperty("Password").GetValue($connectionBuilder)
+          $parsedSslMode = [string]$builderType.GetProperty("SslMode").GetValue($connectionBuilder)
           if ($parsedHost -ne "127.0.0.1" -or
               $parsedPort -ne 5432 -or
               $parsedDatabase -ne "gamenet_slice1_test_20261018" -or
