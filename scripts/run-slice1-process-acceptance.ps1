@@ -548,6 +548,7 @@ try {
     $agentInfo = New-RuntimeProcessInfo -FilePath $agentExe -ConfigurationDirectory $configDirectory -EnrollmentToken $agentToken
     $agentProcess = Start-GameNetProcess -StartInfo $agentInfo
     $agentToken = $null
+    $enrollment = $null
 
     $stationId = [string]$station.data.id
     $stationVersion = [int]$station.data.version
