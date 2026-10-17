@@ -588,6 +588,15 @@ try {
     $accessToken = $null
     $login = $null
 
+    # Open the actual WPF application against the isolated loopback Server.
+    $desktopInfo = New-RuntimeProcessInfo -FilePath $desktopExe -ConfigurationDirectory $configDirectory
+    $desktopProcess = Start-GameNetProcess -StartInfo $desktopInfo
+    $desktopInfo = $null
+    Start-Sleep -Seconds 3
+    if ($desktopProcess.HasExited) {
+        throw "The WPF Desktop process exited during startup. Review its console/error output before proceeding with acceptance."
+    }
+
     Write-Host ""
     Write-Host "Isolated test workspace is ready."
     Write-Host ("Source checkout SHA: {0}" -f $manifest.source.testedCheckoutSha)
