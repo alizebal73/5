@@ -8,7 +8,18 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 
 ## Canonical delivery roadmap — agreed 2026-10-12
 
-This numbered list is the owner-facing, high-level order of delivery. It groups the detailed Stage 1–19 instructions below; it does not replace their detailed acceptance criteria. A phase closes only with requirement-linked evidence on the exact candidate SHA. CI, security, architecture and regression checks continue throughout; physical-machine acceptance is reserved for final release acceptance.
+This numbered list is the owner-facing, high-level order of delivery. It groups the detailed Stage 1–19 instructions below; it does not replace their detailed acceptance criteria. A phase closes only with requirement-linked evidence on the exact candidate SHA. CI, security, architecture and regression checks continue throughout. Every usable vertical slice must also receive isolated manual acceptance as soon as its complete UI/runtime path is runnable, before dependent or adjacent product scope expands. Final release still has separate Setup, installed-Service, LAN, rollback and pilot gates.
+
+### How the owner's 21-topic route maps to this canonical plan
+The 21 topics discussed in planning are a coverage checklist, not a second competing roadmap. This document remains the canonical delivery order; `docs/operations/active-execution-control.md` is the single current queue; `docs/planning/requirements-traceability.md` is the requirement/status source; the capability matrix is only its summary. Map the topics into the existing plan rather than maintaining a duplicate numbered plan: current stabilization/Slice 1/PC feasibility/class refactor map to canonical steps 0–4 and Issues #98/#92/#138; session/customer/tariff/financial/operations capabilities map to steps 5–9 and detailed implementation Stages 5–14; release, migration/training, isolated certification, pilot, rollout and maintenance map to step 10 and detailed Stages 15–19 plus Issues #16/#34. A numbered stage or a green CI run is not itself acceptance.
+
+### Mandatory dependency rules
+- A station type's base tariff and billable-session contract must be delivered before or with its first usable Session flow; do not build PS5/foosball timers ahead of a Server-authoritative price path.
+- Customer PIN/login and wallet display are not UI-only work: the owning Server contracts/data and permission rules must exist first. Free Money and Free Time are separate Wallet concepts/ledgers; Debt is distinct from a pending invoice/payment state.
+- Basic structured redacted logging, correlation, health/readiness and status evidence are cross-cutting from each slice. Detailed operator diagnostics, backup verification, restore orchestration and crisis runbooks are expanded in detailed Stage 13.
+- Settings and approval workflows must precede configuration-driven or separately approved operations; the exact permission/approval rules are implemented with the owning mutation.
+- The first `main` promotion may be proposed only after the first core journey is accepted; it still requires explicit owner authorization, a separate reviewed PR and exact-SHA checks. It is not an automatic result of reaching a phase number.
+- Record durable architecture/security decisions in ADRs, requirements in the existing traceability matrix, and only the current active queue in Active Execution Control. Do not create a parallel decision-log or duplicate progress roadmap.
 
 ### 0. Lock the version-one product scope
 - Maintain one canonical requirements inventory with stable IDs, priorities, ownership, dependencies, user-visible outcomes, error/recovery behavior and measurable acceptance criteria.
@@ -37,14 +48,16 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 ### 4. Deliver the first complete PC business journey (CURRENT PRODUCT DELIVERY — Slice 1 partial; Issue #98 open)
 - Build one real end-to-end path across WPF, Server and PostgreSQL: operator authorization -> PC/station -> find/create customer -> resolve and snapshot tariff -> start/end Session -> bill preview/checkout -> payment -> durable ledger and audit.
 - Deliver this in narrow sub-slices. The first accepted milestone is fixed-hourly PC walk-in Session -> invoice -> cash only, under [Issue #98](https://github.com/alizebal73/5/issues/98). The implementation is partial; timing/restart behavior, deliberate cash entry, lost-response recovery, correction semantics and manual database reconciliation remain acceptance work. Wallet/debt/free time/discounts/card/PS5/foosball are not implied complete by this first milestone.
+- **Slice 1 money/time contract (owner decision, 2026-10-17):** for a normal PC Session with provable same-boot monotonic continuity, derive billable duration from Server-persisted monotonic ticks/frequency without rounding duration to whole minutes. Apply the immutable fixed hourly tariff pro rata at full precision, then round only the final fractional-Toman charge upward to the next whole Toman (ceiling); do not apply a separate minimum charge. UTC timestamps are event/audit facts, not duration inputs. If boot continuity cannot be proven, do not estimate or fall back to UTC subtraction: fail closed and use only the separately authorized/audited timing-recovery path; its verified whole-minute input is a recovery rule, not normal duration rounding. Any future minimum-charge, minute-rounding or alternative tariff rule requires an explicit owner decision before implementation.
 - Keep domain ownership separate: Customers owns profile/PIN; Sessions owns lifecycle/time; Tariffs resolves price; Billing owns invoice/payment allocation; Wallet owns purchased value, free money, free time and debt ledgers.
 - Add the actual API, migrations, validation, permission checks, failure handling, idempotency and relevant concurrency tests as part of the same slice. No UI success state may be fabricated before the Server confirms the result.
-- Exit: an automated end-to-end journey proves the authoritative persisted state and financial invariants; exact-SHA PostgreSQL/runtime gates pass; operator UI is usable for this journey.
+- Exit: the complete operator journey succeeds in an isolated Windows/WPF environment; an independent hand calculation reconciles persisted Session, Invoice, Payment, Ledger and Audit; relevant error/permission/retry paths are exercised; exact-head PostgreSQL/runtime gates pass; tested source SHA, matching payload checksum and manual evidence are attached to Issue #98. CI alone does not accept this slice.
 
 ### 5. Complete session rules and timed station types
+- **Entry gate:** do not begin or merge this stage until Stage 4 / Issue #98 has passed its Slice 1 acceptance gate. While #98 is open, only fix demonstrated Slice 1 blockers and complete its acceptance evidence; do not start #92 or adjacent capability work. Preserve existing unaccepted work parked, not deleted. After #98 acceptance, run the separately scoped #92 disposable-VM feasibility gate, then proceed to the behavior-preserving #138 refactor before reassessing parked capabilities.
 - Add pause/resume, extension/reduction, transfer/release/recovery, concurrent-session protection, customer multi-device limits and stale-command fencing.
-- Implement PS5 and foosball as timed/non-Agent stations with correct pricing, operator visibility and timer rules.
-- Add tariff variations and discounts/promotions with Server-side permissions, caps, reasons and audit; then implement VIP plans/entitlements and daily-usage limits.
+- Implement PS5 and foosball as timed/non-Agent stations. Their first usable Session slice must include a Server-owned base tariff/pricing contract, operator visibility and timer rules; the detailed tariff/billing implementation below is a dependency, not a justification for a mock or UI-only rate.
+- Add tariff variations/time bands/packages and discounts/promotions with Server-side permissions, caps, reasons and audit; then implement VIP plans/entitlements and daily-usage limits. These expanded rules remain outside Issue #98 Slice 1.
 - Exit: concurrency/reconnect/recovery tests demonstrate no duplicated Session, double charge, wrong ownership or invalid tariff snapshot.
 
 ### 6. Add Games and, only after its security gate, GameAccounts
@@ -61,7 +74,8 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 
 ### 8. Finish daily operations and control surfaces
 - Implement Shifts/Cash as a write-owning module for opening, expected-vs-counted reconciliation, closing/handover and audited corrections.
-- Implement Reports as read-only projections of source ledgers/state; complete Server-backed settings, approval workflows, backup/restore orchestration and operator diagnostics.
+- Implement Reports as read-only projections of source ledgers/state; complete Server-backed settings and approval workflows before dependent configuration/privileged operations, plus backup/restore orchestration and operator diagnostics.
+- Basic structured redacted logs, correlation IDs, health/readiness, and Agent/station status are required in every slice; this step completes the richer operator-facing diagnostics and recovery controls rather than postponing baseline observability.
 - Ensure backup restore is actually tested in an isolated database and that sensitive operations enforce authorization on Server, not only in WPF.
 - Exit: shift totals reconcile with actual payments/refunds; reports do not mutate source state; privileged changes are audited/approved; recovery evidence is retained.
 
@@ -73,8 +87,10 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 ### 10. Build, install, update, certify and pilot the release
 - Produce a real Setup.exe/MSI and versioned manifest; declare PostgreSQL provisioning/schema rules, component versions, hashes/signatures, SBOM, protected secrets, service identities, ProgramData paths and install location.
 - Build the separate updater with integrity verification, staged switch, compatibility checks, health confirmation and a documented rollback rule. Test clean install, repair, upgrade, uninstall and failure recovery on isolated machines.
+- Rehearse any initial customer/configuration data import against a disposable copy, reconcile source/target row counts and financial totals, obtain owner sign-off, and document rollback before importing anything; never blindly copy legacy database files or assume schema compatibility.
+- Deliver the one-page operator guide, owner troubleshooting/recovery guide, paper/offline fallback, and named support/escalation responsibilities before pilot.
 - After product scope and Setup are complete, run the final Windows Service/TLS/DPAPI/ACL/restart and two-PC LAN acceptance with a disposable database; review the read-only manager-runtime preflight before any machine changes.
-- Run the controlled 2–3-PC pilot first; expand toward the planned ~15 stations only after pilot findings are resolved and recorded.
+- Run the controlled 2–3-PC parallel pilot first, reconcile sessions/payments/voids each day and explain every difference; expand toward the planned ~15 stations only after pilot findings are resolved and recorded.
 - Exit: all release-critical requirements are accepted on the exact candidate, install/update/restore evidence is complete, no unresolved critical defects remain, and pilot sign-off is recorded.
 
 ### When code first enters `main`, and how it stays current
@@ -87,6 +103,8 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 ### Rules that apply to every phase
 - One primary active phase at a time; parallel work is allowed only when dependencies and file ownership do not conflict.
 - Each slice uses Definition of Ready, requirement IDs and Definition of Done. Keep a change/evidence ledger with PR, exact SHA, checks, conclusion and unresolved risks.
+- Complete one coherent capability before opening the next. Add focused tests with changed behavior, then run the full relevant unit/integration/contract/security/regression and PostgreSQL/runtime set on the integrated exact candidate.
+- Perform isolated manual acceptance as soon as each usable end-to-end slice can run; never defer all product feedback until final release. Do not start adjacent scope while the current slice's acceptance gate is incomplete.
 - Run automated unit/integration/contract/security/regression checks throughout development; run PostgreSQL/runtime certification for source-sensitive changes as required by the gate.
 - Do not reopen a closed phase without a specific defect or changed requirement. If later changes affect its invariant, reopen only the affected checks.
 - Do not merge old Draft branches wholesale. Compare each needed change with live Integration and port only unique, reviewed behavior.
@@ -162,6 +180,8 @@ Before the first business vertical slice is merged:
 Installer, updater and rollback are intentionally not part of Gate A. They are release-boundary work and must be complete before production release, not before business development.
 
 ### Gate B — First usable core
+
+Gate B is a later, broader operational milestone, not permission to enlarge Slice 1. First complete and accept the bounded Issue #98 PC walk-in-to-cash journey before adding its adjacent capabilities.
 
 The first real operational milestone must support:
 
@@ -242,7 +262,7 @@ The catalogue below records the original Foundation scope, not a live implementa
 - Desktop API client, typed errors, fa-IR/en-US resources and native smoke harness;
 - backup/restore proof and exact-SHA evidence.
 
-**Scope boundary:** this closes hosted Foundation certification and automated code verification only. Installed Windows Service identity/ACLs, DPAPI/TLS access after restart, physical two-PC LAN/reconnect, interactive WPF acceptance, Setup/updater/repair/uninstall/rollback and commercial pilot remain separate gates, all deferred until the planned product scope is complete and the Setup.exe/MSI candidate has been built. Automated tests still run throughout development. These final gates do not reopen Stage 1 unless a later change invalidates its tested code.
+**Scope boundary:** this closes hosted Foundation certification and automated code verification only. Installed Windows Service identity/ACLs, DPAPI/TLS access after restart, physical two-PC LAN/reconnect, production Setup/updater/repair/uninstall/rollback and commercial pilot remain separate final gates, normally deferred until the product scope and a real Setup.exe/MSI candidate are ready. **Do not defer slice-level WPF/runtime acceptance**: Issue #98 and every later usable vertical slice must receive isolated functional acceptance before adjacent scope expands. For #98 only, a local process-based/loopback test may use the Manager PC after a reviewed read-only preflight and with a dedicated disposable database/role and separate user-local paths; it must not alter legacy GameNet services/data, register Windows services, change firewall/certificates/registry/system time, reboot Windows or disrupt the LAN. This narrow exception does not satisfy Issue #92's disposable-VM OS lock/unlock test or Issue #34's separate-machine installed-Service/TLS/DPAPI/two-PC LAN gate. Never use real customer/financial data. Automated tests still run throughout development. These final gates do not reopen Stage 1 unless a later change invalidates its tested code.
 
 ## Stage 2 — Canonical module inventory and skeleton
 
@@ -404,19 +424,17 @@ Acceptance:
 
 Implement:
 
-- PC tariffs;
-- PS5 tariffs;
-- foosball tariffs;
-- time-based pricing;
-- configurable promotions;
-- rounding rules;
-- billing preview;
-- settlement;
-- wallet top-up/debit/payment;
-- debt;
-- debt payment;
-- non-cash debt where explicitly permitted;
-- immutable correction/adjustment records.
+- a Server-owned base tariff for every supported station type before the first usable Session flow for that type;
+- PC, PS5 and foosball tariffs;
+- time-band/day/group/package pricing where approved;
+- configurable promotions/discounts with role caps, reason and Audit;
+- an explicit whole-Toman rounding/minimum-charge/time-precision policy;
+- bill preview and settlement;
+- approved payment methods (cash, manually recorded card terminal, Wallet, and combined allocation only after the allocation rules are accepted);
+- wallet top-up/debit/payment and debt payment;
+- separate Free Money and Free Time grants/consumption with independent units, expiry/restrictions where approved, actor/reason/reference and ledger evidence;
+- Debt separate from PendingPayment and active Session; debt limits and credit policy only after owner decision;
+- immutable correction/adjustment/refund/reversal records linked to their original operation; never delete the original financial facts.
 
 Example promotion:
 
@@ -426,10 +444,12 @@ Never calculate money in the UI as an authority.
 
 Acceptance:
 
-- every balance mutation has a ledger entry;
-- duplicate payment request is idempotent;
-- concurrent wallet updates preserve the ledger invariant;
-- completed sessions cannot be silently repriced.
+- every balance/value mutation has a ledger entry and balances reconcile to immutable entries;
+- Free Money, Free Time, purchased Wallet balance, Debt and PendingPayment remain separate concepts;
+- duplicate/retried payment and refund/reversal requests are idempotent;
+- concurrent Wallet updates preserve the ledger invariant and enforce the approved no-negative-balance/debt-limit policy;
+- a reversal creates compensating facts without deleting the original Payment/ledger records; inventory-linked refunds also restore the correct stock source;
+- completed Sessions cannot be silently repriced; independent integer-Toman reconciliation matches the Server outcome.
 
 ## Stage 8 — Multi-device and transfer rules
 
@@ -526,6 +546,8 @@ Implement settings by ownership:
 Protected changes use approval where configured.
 
 ## Stage 13 — Backup, recovery and diagnostics
+
+Basic health/readiness distinction, structured logs without secrets, correlation, and Agent/station status are required by the cross-cutting rules on every earlier slice. This stage adds the richer operator-visible diagnostic, backup/recovery and crisis-response tooling; it does not postpone basic observability until late in development.
 
 Implement operator-visible tooling for:
 
@@ -774,12 +796,19 @@ Before calling a version production-ready:
 - failed update
 - rollback
 
+### Data migration, training and operational readiness
+- rehearsed dry-run import of approved customers/opening balances/settings only; source/target row counts, balance totals and exceptions reconciled;
+- explicit owner sign-off and a tested rollback/backout plan before any import;
+- one-page operator guide, owner troubleshooting/recovery notes, paper/offline fallback and named support/escalation ownership;
+- one full-shift simulation with planned and injected errors before live pilot.
+
 ### Hardware pilot
-- actual shop PCs
-- real LAN
-- 15-PC scale test
-- real operator workflows
-- real money/session/stock tests
+- actual shop PCs;
+- real LAN;
+- 2–3 PC / one-operator parallel pilot, daily financial reconciliation and no unexplained differences before expansion;
+- controlled progression toward 15-PC scale test;
+- real operator workflows;
+- no real customer/financial data until pilot authorization and accounting controls are verified.
 
 ## Stage 19 — Defect discipline
 
