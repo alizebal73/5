@@ -192,6 +192,13 @@ SELECT
     $info.UseShellExecute = $false
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
+    # Remove inherited libpq settings before the explicitly loopback-only preflight.
+    # PGHOSTADDR can override the host passed through -h, so scrub every PG* variable.
+    foreach ($key in @($info.Environment.Keys)) {
+        if ([string]$key -like 'PG*') {
+            [void]$info.Environment.Remove([string]$key)
+        }
+    }
     foreach ($arg in @("-X", "-w", "-A", "-t", "-h", $hostName, "-p", [string]$port, "-U", $username, "-d", $database, "-c", $query)) {
         $info.ArgumentList.Add($arg)
     }
@@ -257,7 +264,7 @@ function New-RuntimeProcessInfo {
     foreach ($arg in $Arguments) { $info.ArgumentList.Add($arg) }
 
     foreach ($key in @($info.Environment.Keys)) {
-        if ($key -match '^(GAMENET_.*|GameNet.*|DOTNET_GameNet.*|ASPNETCORE_GameNet.*|Kestrel.*|DOTNET_Kestrel.*|ASPNETCORE_Kestrel.*|ASPNETCORE_URLS|DOTNET_URLS|ASPNETCORE_HTTP_PORTS|ASPNETCORE_HTTPS_PORTS|DOTNET_HTTP_PORTS|DOTNET_HTTPS_PORTS|DOTNET_STARTUP_HOOKS|ASPNETCORE_HOSTINGSTARTUPASSEMBLIES|ConnectionStrings__.*|DOTNET_ConnectionStrings.*|ASPNETCORE_ConnectionStrings.*|PGPASSWORD|PGPASSFILE|PGSERVICE|PGSERVICEFILE|PGHOST|PGPORT|PGUSER|PGDATABASE|PGOPTIONS)$' -or
+        if ($key -match '^(GAMENET_.*|GameNet.*|DOTNET_GameNet.*|ASPNETCORE_GameNet.*|Kestrel.*|DOTNET_Kestrel.*|ASPNETCORE_Kestrel.*|ASPNETCORE_URLS|DOTNET_URLS|ASPNETCORE_HTTP_PORTS|ASPNETCORE_HTTPS_PORTS|DOTNET_HTTP_PORTS|DOTNET_HTTPS_PORTS|DOTNET_STARTUP_HOOKS|ASPNETCORE_HOSTINGSTARTUPASSEMBLIES|ConnectionStrings__.*|DOTNET_ConnectionStrings.*|ASPNETCORE_ConnectionStrings.*|PG[A-Z0-9_]*)$' -or
             $key -ieq "ASPNETCORE_ENVIRONMENT" -or
             $key -ieq "DOTNET_ENVIRONMENT") {
             [void]$info.Environment.Remove([string]$key)
