@@ -436,6 +436,8 @@ $testRoot = $null
 $connectionString = $null
 $ownerPassword = $null
 $ownerPasswordConfirm = $null
+$secureOwnerPassword = $null
+$secureOwnerPasswordAgain = $null
 $bootstrapSecret = $null
 $signingKey = $null
 $provisioningKey = $null
@@ -529,6 +531,17 @@ try {
             }
             Setup = [ordered]@{ BootstrapSecret = $bootstrapSecret }
         }
+        # Keep functional-acceptance console output readable. Warnings and errors
+        # remain visible; per-query SQL and routine HTTP diagnostics otherwise
+        # obscure the interactive Read-Host prompts.
+        Logging = [ordered]@{
+            LogLevel = [ordered]@{
+                Default = "Warning"
+                "Microsoft.Hosting.Lifetime" = "Information"
+                "Microsoft.EntityFrameworkCore.Database.Command" = "Warning"
+                "Microsoft.AspNetCore.Hosting.Diagnostics" = "Warning"
+            }
+        }
     }
     Write-JsonFile -Path (Join-Path $configDirectory "server.json") -Value $serverSettings
 
@@ -567,8 +580,8 @@ try {
         $ownerPasswordConfirm = Convert-SecureStringToPlainText $secureOwnerPasswordAgain
     }
     finally {
-        $secureOwnerPassword.Dispose()
         $secureOwnerPasswordAgain.Dispose()
+        $secureOwnerPasswordAgain = $null
     }
     if ($ownerPassword.Length -lt 10 -or $ownerPassword.Length -gt 256 -or
         -not [string]::Equals($ownerPassword, $ownerPasswordConfirm, [StringComparison]::Ordinal)) {
@@ -602,16 +615,24 @@ try {
     $serverInfo = $null
     Wait-GameNetServer -BaseUrl $baseUrl -Process $serverProcess
 
-    $loginPasswordSecure = Read-Host "Enter the throwaway Owner password to prepare the isolated test Station/Tariff/Agent (hidden)" -AsSecureString
-    try { $loginPassword = Convert-SecureStringToPlainText $loginPasswordSecure }
-    finally { $loginPasswordSecure.Dispose() }
+    # Reuse the same SecureString accepted and confirmed for bootstrap instead
+    # of prompting the operator to type it a third time between noisy process logs.
+    # If this login fails, the exact same password was used for both API calls.
+    Write-Host "Owner bootstrap completed; verifying sign-in with the same captured test password..."
     try {
+        $loginPassword = Convert-SecureStringToPlainText $secureOwnerPassword
         $login = Invoke-GameNetApi -Method POST -BaseUrl $baseUrl -Path "/api/v1/auth/login" -Body @{ username = $ownerUsername; password = $loginPassword }
     }
     catch {
-        throw "Owner sign-in failed after bootstrap. Inspect the local Server output; no business database was targeted."
+        throw "Owner sign-in failed after bootstrap using the exact password accepted for bootstrap. Preserve the disposable database and test evidence; this indicates a bootstrap/login integration defect."
     }
-    finally { $loginPassword = $null }
+    finally {
+        $loginPassword = $null
+        if ($null -ne $secureOwnerPassword) {
+            $secureOwnerPassword.Dispose()
+            $secureOwnerPassword = $null
+        }
+    }
     $accessToken = [string]$login.data.accessToken
     if ([string]::IsNullOrWhiteSpace($accessToken)) { throw "Server did not issue a local Owner access token." }
 
@@ -732,6 +753,14 @@ finally {
     $connectionString = $null
     $ownerPassword = $null
     $ownerPasswordConfirm = $null
+    if ($null -ne $secureOwnerPassword) {
+        $secureOwnerPassword.Dispose()
+        $secureOwnerPassword = $null
+    }
+    if ($null -ne $secureOwnerPasswordAgain) {
+        $secureOwnerPasswordAgain.Dispose()
+        $secureOwnerPasswordAgain = $null
+    }
     $bootstrapSecret = $null
     $signingKey = $null
     $provisioningKey = $null
