@@ -8,7 +8,7 @@ The plan is intentionally sequential. A later stage cannot silently compensate f
 
 ## Canonical delivery roadmap — agreed 2026-10-12
 
-This numbered list is the owner-facing, high-level order of delivery. It groups the detailed Stage 1–19 instructions below; it does not replace their detailed acceptance criteria. A phase closes only with requirement-linked evidence on the exact candidate SHA. CI, security, architecture and regression checks continue throughout; physical-machine acceptance is reserved for final release acceptance.
+This numbered list is the owner-facing, high-level order of delivery. It groups the detailed Stage 1–19 instructions below; it does not replace their detailed acceptance criteria. A phase closes only with requirement-linked evidence on the exact candidate SHA. CI, security, architecture and regression checks continue throughout. Every usable vertical slice must also receive isolated manual acceptance as soon as its complete UI/runtime path is runnable, before dependent or adjacent product scope expands. Final release still has separate Setup, installed-Service, LAN, rollback and pilot gates.
 
 ### 0. Lock the version-one product scope
 - Maintain one canonical requirements inventory with stable IDs, priorities, ownership, dependencies, user-visible outcomes, error/recovery behavior and measurable acceptance criteria.
@@ -39,9 +39,10 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 - Deliver this in narrow sub-slices. The first accepted milestone is fixed-hourly PC walk-in Session -> invoice -> cash only, under [Issue #98](https://github.com/alizebal73/5/issues/98). The implementation is partial; timing/restart behavior, deliberate cash entry, lost-response recovery, correction semantics and manual database reconciliation remain acceptance work. Wallet/debt/free time/discounts/card/PS5/foosball are not implied complete by this first milestone.
 - Keep domain ownership separate: Customers owns profile/PIN; Sessions owns lifecycle/time; Tariffs resolves price; Billing owns invoice/payment allocation; Wallet owns purchased value, free money, free time and debt ledgers.
 - Add the actual API, migrations, validation, permission checks, failure handling, idempotency and relevant concurrency tests as part of the same slice. No UI success state may be fabricated before the Server confirms the result.
-- Exit: an automated end-to-end journey proves the authoritative persisted state and financial invariants; exact-SHA PostgreSQL/runtime gates pass; operator UI is usable for this journey.
+- Exit: the complete operator journey succeeds in an isolated Windows/WPF environment; an independent hand calculation reconciles persisted Session, Invoice, Payment, Ledger and Audit; relevant error/permission/retry paths are exercised; exact-head PostgreSQL/runtime gates pass; tested source SHA, matching payload checksum and manual evidence are attached to Issue #98. CI alone does not accept this slice.
 
 ### 5. Complete session rules and timed station types
+- **Entry gate:** do not begin or merge this stage until Stage 4 / Issue #98 has passed its Slice 1 acceptance gate. While #98 is open, only fix demonstrated Slice 1 blockers, complete its acceptance evidence, and carry out bounded independent safety feasibility work explicitly allowed by the roadmap. Existing unaccepted work stays preserved but parked.
 - Add pause/resume, extension/reduction, transfer/release/recovery, concurrent-session protection, customer multi-device limits and stale-command fencing.
 - Implement PS5 and foosball as timed/non-Agent stations with correct pricing, operator visibility and timer rules.
 - Add tariff variations and discounts/promotions with Server-side permissions, caps, reasons and audit; then implement VIP plans/entitlements and daily-usage limits.
@@ -87,6 +88,8 @@ This numbered list is the owner-facing, high-level order of delivery. It groups 
 ### Rules that apply to every phase
 - One primary active phase at a time; parallel work is allowed only when dependencies and file ownership do not conflict.
 - Each slice uses Definition of Ready, requirement IDs and Definition of Done. Keep a change/evidence ledger with PR, exact SHA, checks, conclusion and unresolved risks.
+- Complete one coherent capability before opening the next. Add focused tests with changed behavior, then run the full relevant unit/integration/contract/security/regression and PostgreSQL/runtime set on the integrated exact candidate.
+- Perform isolated manual acceptance as soon as each usable end-to-end slice can run; never defer all product feedback until final release. Do not start adjacent scope while the current slice's acceptance gate is incomplete.
 - Run automated unit/integration/contract/security/regression checks throughout development; run PostgreSQL/runtime certification for source-sensitive changes as required by the gate.
 - Do not reopen a closed phase without a specific defect or changed requirement. If later changes affect its invariant, reopen only the affected checks.
 - Do not merge old Draft branches wholesale. Compare each needed change with live Integration and port only unique, reviewed behavior.
@@ -162,6 +165,8 @@ Before the first business vertical slice is merged:
 Installer, updater and rollback are intentionally not part of Gate A. They are release-boundary work and must be complete before production release, not before business development.
 
 ### Gate B — First usable core
+
+Gate B is a later, broader operational milestone, not permission to enlarge Slice 1. First complete and accept the bounded Issue #98 PC walk-in-to-cash journey before adding its adjacent capabilities.
 
 The first real operational milestone must support:
 
