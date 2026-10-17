@@ -532,8 +532,10 @@ try {
         type = 1
     }
 
+    # Agent enrollment routes return the issue response directly (unlike the
+    # standard ApiEnvelope responses used by Station/Tariff and Owner APIs).
     $enrollment = Invoke-GameNetApi -Method POST -BaseUrl $baseUrl -Path "/api/v1/agent/enrollment-tokens" -Token $accessToken -Body @{ deviceId = $deviceId }
-    $agentToken = [string]$enrollment.data.token
+    $agentToken = [string]$enrollment.token
     if ($agentToken -notmatch '^[A-Za-z0-9_-]{43}$') {
         throw "Server did not issue a valid one-time Agent enrollment token."
     }
