@@ -355,8 +355,8 @@ public sealed partial class SessionWorkflowPostgresTests
                     serviceTwo.TransferAsync(commandTwo, CancellationToken.None));
             }
 
-            Assert.Single(results.Where(result => result.IsSuccess));
-            var failed = Assert.Single(results.Where(result => !result.IsSuccess));
+            Assert.Single(results, result => result.IsSuccess);
+            var failed = Assert.Single(results, result => !result.IsSuccess);
             Assert.Equal("sessions.transfer_destination_occupied", failed.Error.Code);
 
             await using (var verify = CreateContext(connectionString))
