@@ -145,13 +145,27 @@ function Assert-DisposableEmptyDatabase {
         throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
     }
 
-    # Read CLR properties explicitly to avoid PowerShell's dictionary adapter.
-    $hostName = [string]$builderType.GetProperty("Host").GetValue($builder)
-    $database = [string]$builderType.GetProperty("Database").GetValue($builder)
-    $username = [string]$builderType.GetProperty("Username").GetValue($builder)
-    $password = [string]$builderType.GetProperty("Password").GetValue($builder)
-    $port = [int]$builderType.GetProperty("Port").GetValue($builder)
-    $sslMode = [string]$builderType.GetProperty("SslMode").GetValue($builder)
+    # NpgsqlConnectionStringBuilder implements IDictionary. Read through the
+    # explicit non-generic interface so PowerShell's ETS/property adapter cannot
+    # confuse its dictionary keys with CLR properties (as happened with Database).
+    try {
+        $builderDictionary = [System.Collections.IDictionary]$builder
+        $requiredKeys = @("Host", "Database", "Username", "Password", "Port", "SSL Mode")
+        foreach ($key in $requiredKeys) {
+            if (-not $builderDictionary.Contains($key)) {
+                throw "Parsed connection string is missing required key '$key'."
+            }
+        }
+        $hostName = [string]$builderDictionary["Host"]
+        $database = [string]$builderDictionary["Database"]
+        $username = [string]$builderDictionary["Username"]
+        $password = [string]$builderDictionary["Password"]
+        $port = [int]$builderDictionary["Port"]
+        $sslMode = [string]$builderDictionary["SSL Mode"]
+    }
+    catch {
+        throw "The bundled PostgreSQL driver parsed the connection string but its required values could not be read safely. No database command was run."
+    }
 
     if ($port -lt 1 -or $port -gt 65535) {
         throw "PostgreSQL port is invalid. No database command was run."
