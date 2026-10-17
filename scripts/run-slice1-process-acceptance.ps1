@@ -187,7 +187,37 @@ SELECT
      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
       AND n.nspname NOT LIKE 'pg_toast%'
+      AND n.nspname NOT LIKE 'pg_temp_%'
+      AND n.nspname NOT LIKE 'pg_toast_temp_%'
       AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')),
+  (
+    (SELECT count(*)
+       FROM pg_catalog.pg_namespace n
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'public')
+        AND n.nspname NOT LIKE 'pg_toast%'
+        AND n.nspname NOT LIKE 'pg_temp_%'
+        AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_type t JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_operator o JOIN pg_catalog.pg_namespace n ON n.oid = o.oprnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_opclass o JOIN pg_catalog.pg_namespace n ON n.oid = o.opcnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_opfamily o JOIN pg_catalog.pg_namespace n ON n.oid = o.opfnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_conversion o JOIN pg_catalog.pg_namespace n ON n.oid = o.connamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_collation o JOIN pg_catalog.pg_namespace n ON n.oid = o.collnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_config o JOIN pg_catalog.pg_namespace n ON n.oid = o.cfgnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_dict o JOIN pg_catalog.pg_namespace n ON n.oid = o.dictnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_parser o JOIN pg_catalog.pg_namespace n ON n.oid = o.prsnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_template o JOIN pg_catalog.pg_namespace n ON n.oid = o.tmplnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_foreign_data_wrapper)
+    + (SELECT count(*) FROM pg_catalog.pg_foreign_server)
+    + (SELECT count(*) FROM pg_catalog.pg_default_acl)
+    + (SELECT count(*) FROM pg_catalog.pg_largeobject_metadata)
+    + (SELECT count(*) FROM pg_catalog.pg_publication)
+    + (SELECT count(*) FROM pg_catalog.pg_subscription)
+    + (SELECT count(*) FROM pg_catalog.pg_event_trigger)
+    + (SELECT count(*) FROM pg_catalog.pg_language WHERE lanname NOT IN ('internal', 'c', 'sql', 'plpgsql'))
+  ),
   (SELECT CASE
       WHEN rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls
         THEN 'ELEVATED'
@@ -234,8 +264,8 @@ SELECT
         if ($process.ExitCode -ne 0) {
             throw "PostgreSQL isolation preflight failed (exit $($process.ExitCode)). Verify the local test role/database and retry. Details: $($stderr.Trim())"
         }
-        if ($stdout -notmatch '^\s*0\|OK\s*$') {
-            throw "Refusing to migrate: database is not empty or the PostgreSQL role has elevated privileges. Expected empty-object-count|OK; observed '$stdout'."
+        if ($stdout -notmatch '^\s*0\|0\|OK\s*$') {
+            throw "Refusing to migrate: the database has application relations/objects or the PostgreSQL role has elevated privileges. Expected relation-count|other-object-count|OK = 0|0|OK; observed '$stdout'."
         }
     }
     finally {
@@ -456,7 +486,7 @@ try {
         }
     }
     Write-Host ("Verified empty loopback database: {0} on {1}:{2}, role {3}" -f $databaseInfo.Database, $databaseInfo.Host, $databaseInfo.Port, $databaseInfo.Username)
-    Write-Host "Database preflight: zero non-system relations; role has no elevated PostgreSQL privileges."
+    Write-Host "Database preflight: zero non-system relations and zero additional non-system database objects; role has no elevated PostgreSQL privileges."
     $confirmation = Read-Host "Type exactly USE EMPTY TEST DATABASE to confirm migration of this verified disposable database"
     if ($confirmation -cne "USE EMPTY TEST DATABASE") {
         throw "Confirmation did not match; no GameNet process or migration was started."
