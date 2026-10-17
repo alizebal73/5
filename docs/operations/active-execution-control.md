@@ -1,6 +1,41 @@
 # Active Execution Control — GameNet 5
 
-**Snapshot:** 2026-10-16. This is the single current execution queue, not an immutable branch pointer. Before any merge, read the live branch SHA, PR head/base and exact required checks from GitHub. Keep event-level details in the relevant Issue, PR and Actions run; do not copy them into additional status documents.
+## Owner-directed recovery queue — 2026-10-17 (takes precedence over older notes below)
+
+**Current decision: stop expanding scope and finish acceptance of Issue #98 first.** The Server/Foundation work is valuable and must be preserved; do not respond to these problems with a wholesale rollback, a rewrite, a mass branch deletion, or changes to `main`.
+
+### P0 — finish and prove Slice 1
+- Keep the single active product objective at [Issue #98](https://github.com/alizebal73/5/issues/98): operator-authorized PC station → customer selection / minimal walk-in → fixed tariff snapshot → start/end Session → invoice preview → cash payment → persisted Payment/Ledger/Audit.
+- Freeze adjacent scope until this path is accepted: no new Wallet/debt/top-up, inventory, discount/VIP, GameAccounts, PS5/foosball, pause/resume, transfer/release, Setup/Updater, or broad UI polish. Preserve already-written code and existing contracts; “freeze” means no expansion or merging, not delete/rollback.
+- Do not defer this slice's manual WPF/runtime acceptance to final release. As soon as a matching runnable payload is available, use an isolated disposable Windows environment and test the entire operator journey, error/permission/retry states, restart/lost-response behavior that Slice 1 claims to support, and independent read-only reconciliation of Session/Invoice/Payment/Ledger/Audit against a hand calculation. Capture tested SHA, package SHA-256, screenshots, IDs and SQL output. Mark anything not run as NOT RUN. Never use the live shop database or Manager PC.
+- Close/accept #98 only when its criteria and evidence are reviewed. The production Setup, installed Windows Service, two-PC LAN, rollback and pilot checks remain later, separate release gates.
+
+### Parked candidates — preserve, do not merge
+- On 2026-10-17, PRs [#130](https://github.com/alizebal73/5/pull/130), [#134](https://github.com/alizebal73/5/pull/134), and [#136](https://github.com/alizebal73/5/pull/136) were converted to Draft. Their pause/resume, PS5/foosball, and transfer behavior is outside the explicit Issue #98 Slice 1 scope. Keep the branches and history; do not merge, close, delete, add features to, or extend this stack while Slice 1 is unaccepted.
+- PR #136 failed Quick Validation at exact head `ab31156778bfe6c7c3b4cadf3bb4d5a3220c2188` (run [38969268729](https://github.com/alizebal73/5/actions/runs/38969268729)): xUnit2031 rejected two `Assert.Single(collection.Where(...))` patterns. They were changed to the predicate overload in branch commit `e9990f075add65de6b4d469b50cd58edf195877f`; this fix is **pending exact-head rerun**, not yet verified green. A green Runtime Payload does not override a failed build/test gate.
+- After #98 is accepted, re-check each parked change against current Integration and its user value. Port only unique, needed, reviewed behavior onto one fresh branch from live Integration; do not merge the old stack wholesale.
+
+### Architecture / code-shape debt — fix deliberately, not by splitting files only
+- The current `scripts/check-source-size.ps1` limits each file to 700 lines, so partial types can evade the guard. `BillingService`, `SessionService` and `SessionWorkflowViewModel` have partial-class size/responsibility debt; the UI also validates cash-tender facts that the Server projects authoritatively.
+- Keep Server as the sole business/data authority. WPF sends typed intent and displays Server-confirmed facts; it must not independently calculate or authoritatively validate price, time, payment, ledger, balance or occupancy. Retain narrow defensive checks for malformed/contradictory responses where needed.
+- Do not attempt a risky cross-cutting refactor before Slice 1 has a usable acceptance baseline. After #98 passes, handle the Server use-case boundaries, projection-versus-UI duplication, and a class-aware source guard as one explicitly scoped refactor with existing behavior tests. Do not treat `partial` or a filename split as class decomposition.
+
+### Working method (mandatory)
+- Maintain the owner's 70% product / 30% hardening-and-documentation balance. Work on one coherent user-visible capability at a time; add focused tests as behavior is written, then run the complete relevant verification set after the capability is integrated. Do not start a new capability because a prior PR merely has green CI.
+- Each new product slice starts from live `integration/runtime-operator-v1`, uses one non-stacked PR, and states scope/non-goals, exact base/head SHA, required checks, manual steps and acceptance evidence. No routine merge directly to `main`; preserve its protected starter state until an explicitly authorized promotion.
+- No mass cleanup until an inventory proves a branch is merged or uniquely unnecessary and not referenced by an open PR, ADR/security decision, active issue or recovery path. Preserve evidence and work; cleanup is not a substitute for restoring scope control.
+- Reports must distinguish code present, build/test green on exact SHA, manual acceptance performed, and release accepted. Never infer one from another.
+
+### Immediate queue
+1. Freeze new feature work; preserve Integration and Foundation.
+2. Produce a matching Slice 1 runtime payload and complete isolated Windows/WPF plus independent persisted-row reconciliation; record exact evidence in #98.
+3. Fix only blockers found in that journey, then re-run exact-SHA Quick Validation and the required PostgreSQL/Foundation/runtime gates.
+4. After #98 acceptance, resolve the documented class/logic-boundary debt and revisit parked PRs in priority order.
+5. Continue the rest of the Master Build Plan sequentially, with an acceptance gate at every usable vertical slice.
+
+---
+
+**Snapshot:** 2026-10-17. This is the single current execution queue, not an immutable branch pointer. Before any merge, read the live branch SHA, PR head/base and exact required checks from GitHub. Keep event-level details in the relevant Issue, PR and Actions run; do not copy them into additional status documents.
 
 ## Canonical refs
 
