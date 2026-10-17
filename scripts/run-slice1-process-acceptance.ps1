@@ -145,9 +145,8 @@ function Assert-DisposableEmptyDatabase {
         throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
     }
 
-    # NpgsqlConnectionStringBuilder implements IDictionary. Read through the
-    # explicit non-generic interface so PowerShell's ETS/property adapter cannot
-    # confuse its dictionary keys with CLR properties (as happened with Database).
+    # NpgsqlConnectionStringBuilder implements IDictionary. Read through its
+    # explicit non-generic interface for predictable key-based access in PowerShell.
     try {
         $builderDictionary = [System.Collections.IDictionary]$builder
         $requiredKeys = @("Host", "Database", "Username", "Password", "Port", "SSL Mode")
