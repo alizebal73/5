@@ -39,6 +39,7 @@ on:
       - "scripts/run-slice1-process-acceptance.ps1"
       - "docs/operations/slice1-process-acceptance.md"
       - "docs/operations/manual-cash-sale-reversal-acceptance.md"
+      - "docs/operations/manual-session-timing-recovery-acceptance.md"
       - "scripts/modules/ServerTlsCertificate.psm1"
       - "docs/operations/runtime-endpoints.md"
 
@@ -211,6 +212,7 @@ jobs:
           Copy-Item -LiteralPath "scripts/run-slice1-process-acceptance.ps1" -Destination $toolsOutput
           Copy-Item -LiteralPath "docs/operations/slice1-process-acceptance.md" -Destination (Join-Path $toolsOutput "slice1-process-acceptance.md")
           Copy-Item -LiteralPath "docs/operations/manual-cash-sale-reversal-acceptance.md" -Destination (Join-Path $toolsOutput "manual-cash-sale-reversal-acceptance.md")
+          Copy-Item -LiteralPath "docs/operations/manual-session-timing-recovery-acceptance.md" -Destination (Join-Path $toolsOutput "manual-session-timing-recovery-acceptance.md")
           Copy-Item -LiteralPath "scripts/modules/ServerTlsCertificate.psm1" -Destination $modulesOutput
           # The source runbook uses source-tree paths; rewrite them for the extracted payload layout.
           $runtimeEndpoints = Get-Content -LiteralPath "docs/operations/runtime-endpoints.md" -Raw
@@ -238,6 +240,7 @@ jobs:
              (Join-Path $toolsOutput "run-slice1-process-acceptance.ps1"),
              (Join-Path $toolsOutput "slice1-process-acceptance.md"),
              (Join-Path $toolsOutput "manual-cash-sale-reversal-acceptance.md")
+             (Join-Path $toolsOutput "manual-session-timing-recovery-acceptance.md")
           )
           foreach ($file in $requiredFiles) {
             if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
@@ -269,6 +272,7 @@ jobs:
           - `Tools\initial-admin-setup.md`, `Tools\configure-agent-runtime-state.ps1`, `Tools\provision-agent-enrollment.ps1`, and the Agent Windows Service state/DACL runbook
           - Tools/run-slice1-process-acceptance.ps1 and Tools/slice1-process-acceptance.md — the loopback-only process launcher and early Issue #98 procedure.
           - Tools/manual-cash-sale-reversal-acceptance.md — the required WPF flow and read-only SQL reconciliation checklist.
+          - Tools/manual-session-timing-recovery-acceptance.md — the separate VM-only timing-continuity and fail-closed acceptance procedure.
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
           ## Safety boundary
