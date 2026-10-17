@@ -36,6 +36,9 @@ on:
       - "scripts/provision-agent-enrollment.ps1"
       - "docs/operations/agent-service-state.md"
       - "scripts/test-runtime-endpoint.ps1"
+      - "scripts/run-slice1-process-acceptance.ps1"
+      - "docs/operations/slice1-process-acceptance.md"
+      - "docs/operations/manual-cash-sale-reversal-acceptance.md"
       - "scripts/modules/ServerTlsCertificate.psm1"
       - "docs/operations/runtime-endpoints.md"
 
@@ -247,7 +250,6 @@ jobs:
 
           **This is NOT Setup and is NOT a production release.** It is a portable, self-contained Windows x64 payload built from one exact candidate checkout. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
 
-          ## Included
           ## Choose the test path
 
           For early Issue #98 PC Session to invoice to cash functional acceptance, use Tools/slice1-process-acceptance.md and Tools/run-slice1-process-acceptance.ps1 only. This path runs Server, Agent and WPF Desktop as Development processes on loopback with a verified empty local test database. It does not register services or change machine settings.
@@ -255,6 +257,7 @@ jobs:
           The separate Runtime LAN smoke sequence below is for later isolated-machine service/TLS/LAN feasibility work. Do not use that service-based sequence as the early #98 process acceptance path, and never use this payload on live GameNet PCs.
 
 
+          ## Included
           - `Server\GameNet.Server.exe`
           - `Agent\GameNet.Agent.exe`
           - `Desktop\GameNet.Manager.Desktop.exe`
@@ -264,6 +267,8 @@ jobs:
           - `Tools\bootstrap-admin.ps1` and `Tools\finalize-server-setup.ps1` for first-Owner setup and post-bootstrap cleanup
           - `Tools\inspect-manager-runtime-state.ps1` as a read-only preflight
           - `Tools\initial-admin-setup.md`, `Tools\configure-agent-runtime-state.ps1`, `Tools\provision-agent-enrollment.ps1`, and the Agent Windows Service state/DACL runbook
+          - Tools/run-slice1-process-acceptance.ps1 and Tools/slice1-process-acceptance.md — the loopback-only process launcher and early Issue #98 procedure.
+          - Tools/manual-cash-sale-reversal-acceptance.md — the required WPF flow and read-only SQL reconciliation checklist.
           - `manifest.json` with source identity and SHA-256 hashes for packaged files
 
           ## Safety boundary
