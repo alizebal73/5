@@ -145,22 +145,21 @@ function Assert-DisposableEmptyDatabase {
         throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
     }
 
-    # NpgsqlConnectionStringBuilder implements IDictionary. Read through its
-    # explicit non-generic interface for predictable key-based access in PowerShell.
+    # Use Npgsql's public CLR key API directly. PowerShell does not reliably bind
+    # Contains() on the explicit non-generic IDictionary implementation.
     try {
-        $builderDictionary = [System.Collections.IDictionary]$builder
         $requiredKeys = @("Host", "Database", "Username", "Password", "Port", "SSL Mode")
         foreach ($key in $requiredKeys) {
-            if (-not $builderDictionary.Contains($key)) {
+            if (-not $builder.ContainsKey([string]$key)) {
                 throw "Parsed connection string is missing required key '$key'."
             }
         }
-        $hostName = [string]$builderDictionary["Host"]
-        $database = [string]$builderDictionary["Database"]
-        $username = [string]$builderDictionary["Username"]
-        $password = [string]$builderDictionary["Password"]
-        $port = [int]$builderDictionary["Port"]
-        $sslMode = [string]$builderDictionary["SSL Mode"]
+        $hostName = [string]$builder["Host"]
+        $database = [string]$builder["Database"]
+        $username = [string]$builder["Username"]
+        $password = [string]$builder["Password"]
+        $port = [int]$builder["Port"]
+        $sslMode = [string]$builder["SSL Mode"]
     }
     catch {
         throw "The bundled PostgreSQL driver parsed the connection string but its required values could not be read safely. No database command was run."
