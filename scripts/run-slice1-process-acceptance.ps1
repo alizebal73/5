@@ -29,8 +29,24 @@ if ($manifest.artifactType -ne "temporary-runtime-lan-smoke-payload" -or
     throw "Manifest identity/type is invalid. Refusing to start any process."
 }
 
-foreach ($entry in @($manifest.files)) {
-    $relative = ([string]$entry.path).Replace("/", [System.IO.Path]::DirectorySeparatorChar)
+$manifestEntries = @($manifest.files)
+if ($manifestEntries.Count -eq 0) {
+    throw "Manifest contains no file hashes. Refusing to start any process."
+}
+
+$manifestPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($entry in $manifestEntries) {
+    $manifestRelative = ([string]$entry.path).Replace("\", "/")
+    if ([string]::IsNullOrWhiteSpace($manifestRelative) -or
+        $manifestRelative -match '(^/|^[A-Za-z]:|(^|/)\.\.?(/|$)|//|:)' -or
+        [string]$entry.sha256 -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "Manifest contains an invalid relative path or SHA-256 value. Refusing to start any process."
+    }
+    if (-not $manifestPaths.Add($manifestRelative)) {
+        throw "Manifest contains a duplicate file path. Refusing to start any process."
+    }
+
+    $relative = $manifestRelative.Replace("/", [System.IO.Path]::DirectorySeparatorChar)
     $file = [System.IO.Path]::GetFullPath((Join-Path $bundleRoot $relative))
     if (-not $file.StartsWith($bundleRoot + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
         -not (Test-Path -LiteralPath $file -PathType Leaf)) {
@@ -38,8 +54,40 @@ foreach ($entry in @($manifest.files)) {
     }
     $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne ([string]$entry.sha256).ToLowerInvariant()) {
-        throw "Payload file hash mismatch at '$relative'. Refusing to start any process."
+        throw "Payload file hash mismatch at '$manifestRelative'. Refusing to start any process."
     }
+}
+
+$requiredManifestPaths = @(
+    "Server/GameNet.Server.exe",
+    "Agent/GameNet.Agent.exe",
+    "Desktop/GameNet.Manager.Desktop.exe",
+    "Tools/inspect-manager-runtime-state.ps1",
+    "Tools/run-slice1-process-acceptance.ps1",
+    "Tools/slice1-process-acceptance.md",
+    "Tools/manual-cash-sale-reversal-acceptance.md",
+    "Tools/manual-session-timing-recovery-acceptance.md"
+)
+foreach ($requiredPath in $requiredManifestPaths) {
+    if (-not $manifestPaths.Contains($requiredPath)) {
+        throw "Required runtime/test file is not covered by manifest SHA-256: '$requiredPath'. Refusing to start any process."
+    }
+}
+
+$actualPackagedFiles = Get-ChildItem -LiteralPath $bundleRoot -Recurse -File
+foreach ($actualFile in $actualPackagedFiles) {
+    if ([string]::Equals($actualFile.FullName, $manifestPath, [StringComparison]::OrdinalIgnoreCase)) {
+        continue
+    }
+    $actualRelative = [System.IO.Path]::GetRelativePath($bundleRoot, $actualFile.FullName).Replace("\", "/")
+    if (-not $manifestPaths.Contains($actualRelative)) {
+        throw "Unmanifested file found in the runtime/test bundle: '$actualRelative'. Refusing to start any process."
+    }
+}
+
+$shaConfirmation = (Read-Host "Type the exact tested checkout SHA from manifest.json to confirm this candidate").Trim()
+if (-not [string]::Equals($shaConfirmation, [string]$manifest.source.testedCheckoutSha, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Source SHA confirmation did not match manifest.json. No GameNet process or database migration was started."
 }
 
 function Convert-SecureStringToPlainText {
