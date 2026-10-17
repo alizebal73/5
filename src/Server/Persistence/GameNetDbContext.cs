@@ -8,6 +8,7 @@ using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Modules.Tariffs.Domain;
 using GameNet.Server.Modules.Sessions.Domain;
 using GameNet.Server.Modules.Billing.Domain;
+using GameNet.Server.Modules.Wallet.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GameNet.Server.Persistence;
@@ -35,6 +36,9 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
     public DbSet<BillingLedgerEntry> BillingLedgerEntries => Set<BillingLedgerEntry>();
     public DbSet<CashSaleReversal> CashSaleReversals => Set<CashSaleReversal>();
     public DbSet<CashTenderCorrection> CashTenderCorrections => Set<CashTenderCorrection>();
+    public DbSet<CashReceipt> CashReceipts => Set<CashReceipt>();
+    public DbSet<WalletAccount> WalletAccounts => Set<WalletAccount>();
+    public DbSet<WalletLedgerEntry> WalletLedgerEntries => Set<WalletLedgerEntry>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -78,6 +82,9 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
         modelBuilder.ApplyConfiguration(new BillingLedgerEntryConfiguration());
         modelBuilder.ApplyConfiguration(new CashSaleReversalConfiguration());
         modelBuilder.ApplyConfiguration(new CashTenderCorrectionConfiguration());
+        modelBuilder.ApplyConfiguration(new CashReceiptConfiguration());
+        modelBuilder.ApplyConfiguration(new WalletAccountConfiguration());
+        modelBuilder.ApplyConfiguration(new WalletLedgerEntryConfiguration());
     }
 
     private void RejectAuditMutation()
@@ -105,5 +112,13 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
         {
             throw new InvalidOperationException("CASH_TENDER_CORRECTION_IS_APPEND_ONLY");
         }
+
+        if (ChangeTracker.Entries<WalletLedgerEntry>()
+            .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("WALLET_LEDGER_IS_APPEND_ONLY");
+
+        if (ChangeTracker.Entries<CashReceipt>()
+            .Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("CASH_RECEIPTS_ARE_APPEND_ONLY");
     }
 }

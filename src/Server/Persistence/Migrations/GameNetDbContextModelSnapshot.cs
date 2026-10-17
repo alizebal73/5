@@ -808,7 +808,11 @@ namespace GameNet.Server.Persistence.Migrations
                     b.ToTable("stations", (string)null);
                 });
 
-#pragma warning restore 612, 618
+            modelBuilder.ApplyConfiguration(new CashReceiptConfiguration());
+            modelBuilder.ApplyConfiguration(new WalletAccountConfiguration());
+            modelBuilder.ApplyConfiguration(new WalletLedgerEntryConfiguration());
+
+            #pragma warning restore 612, 618
         }
 
     }
