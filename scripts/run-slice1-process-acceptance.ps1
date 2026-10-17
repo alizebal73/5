@@ -293,10 +293,13 @@ function Wait-GameNetServer {
             throw "The local GameNet Server exited during startup. Review its console error; no external endpoint is used."
         }
         try {
-            $null = Invoke-RestMethod -Method Get -Uri "$BaseUrl/health" -TimeoutSec 2
-            return
+            $health = Invoke-RestMethod -Method Get -Uri "$BaseUrl/health" -TimeoutSec 2
+            if ([string]::Equals([string]$health.data.readiness, "Ready", [StringComparison]::Ordinal)) {
+                return
+            }
         }
-        catch { Start-Sleep -Milliseconds 750 }
+        catch { }
+        Start-Sleep -Milliseconds 750
     }
     throw "The local GameNet Server did not become ready on its assigned loopback endpoint."
 }
