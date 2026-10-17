@@ -1,21 +1,28 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
 $limit = 700
-foreach ($root in @("src/Server","src/Shared","src/Client","src/Desktop")) {
-  if (-not (Test-Path $root)) { continue }
-  Get-ChildItem $root -Recurse -File -Include *.cs,*.xaml |
-    Where-Object { $_.FullName -notmatch "[\\/](bin|obj|Migrations)[\\/]" } |
-    ForEach-Object {
-      $count = @((Get-Content -LiteralPath $_.FullName)).Count
-      if ($count -gt $limit) { throw "Source-size guard failed: $($_.FullName) has $count lines." }
-    }
+$sourceRoots = @("src/Server", "src/Shared", "src/Client", "src/Desktop")
+$sourceFiles = @(
+  foreach ($root in $sourceRoots) {
+    if (-not (Test-Path $root)) { continue }
+    Get-ChildItem $root -Recurse -File -Include *.cs,*.xaml |
+      Where-Object { $_.FullName -notmatch "[\\/](bin|obj|Migrations)[\\/]" }
+  }
+)
+
+foreach ($file in $sourceFiles) {
+  $count = @((Get-Content -LiteralPath $file.FullName)).Count
+  if ($count -gt $limit) {
+    throw "Source-size guard failed: $($file.FullName) has $count lines (limit $limit)."
+  }
 }
 
 # Temporary aggregate budgets for known partial-class debt.
-# Count the complete source files that declare each named type so moving code
-# into another partial file cannot bypass the budget. These are conservative
-# file-aggregate ceilings, not a substitute for syntax-aware class/method
-# counting; the latter is tracked in Issue #138 after Slice 1 acceptance.
+# Count every source file that declares the named type so moving code into
+# another partial file cannot bypass the budget. These conservative file
+# aggregates are not a substitute for syntax-aware class/method counting;
+# complete that follow-up under Issue #138 after Slice 1 acceptance.
 $aggregateBudgets = @(
   [pscustomobject]@{
     Namespace = "GameNet.Desktop.Features.Sessions"
