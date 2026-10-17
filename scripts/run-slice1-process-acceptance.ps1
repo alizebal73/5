@@ -132,21 +132,26 @@ function Assert-DisposableEmptyDatabase {
     try {
         $npgsqlAssembly = [System.Reflection.Assembly]::LoadFrom($npgsqlAssemblyPath)
         $builderType = $npgsqlAssembly.GetType("Npgsql.NpgsqlConnectionStringBuilder", $true)
-        $builder = [System.Activator]::CreateInstance($builderType)
-        $builder.ConnectionString = $ConnectionString
+        $connectionStringConstructor = $builderType.GetConstructor([System.Type[]]@([string]))
+        if ($null -eq $connectionStringConstructor) {
+            throw "The bundled PostgreSQL driver does not expose its connection-string constructor."
+        }
+        # Invoke the real .NET constructor. PowerShell's dictionary adapter can
+        # otherwise route ".ConnectionString =" to the IDictionary indexer as a
+        # literal "ConnectionString" key instead of calling the CLR property setter.
+        $builder = $connectionStringConstructor.Invoke([object[]]@($ConnectionString))
     }
     catch {
         throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
     }
 
-    # Parse using the same PostgreSQL driver shipped with the Server, avoiding
-    # generic DbConnectionStringBuilder key-enumeration differences in PowerShell.
-    $hostName = [string]$builder.Host
-    $database = [string]$builder.Database
-    $username = [string]$builder.Username
-    $password = [string]$builder.Password
-    $port = [int]$builder.Port
-    $sslMode = [string]$builder.SslMode
+    # Read CLR properties explicitly to avoid PowerShell's dictionary adapter.
+    $hostName = [string]$builderType.GetProperty("Host").GetValue($builder)
+    $database = [string]$builderType.GetProperty("Database").GetValue($builder)
+    $username = [string]$builderType.GetProperty("Username").GetValue($builder)
+    $password = [string]$builderType.GetProperty("Password").GetValue($builder)
+    $port = [int]$builderType.GetProperty("Port").GetValue($builder)
+    $sslMode = [string]$builderType.GetProperty("SslMode").GetValue($builder)
 
     if ($port -lt 1 -or $port -gt 65535) {
         throw "PostgreSQL port is invalid. No database command was run."
