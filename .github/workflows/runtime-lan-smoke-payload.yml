@@ -174,12 +174,20 @@ jobs:
             throw "Published Npgsql builder has no connection-string constructor."
           }
           $connectionBuilder = $connectionStringConstructor.Invoke([object[]]@("Host=127.0.0.1;Port=5432;Database=gamenet_slice1_test_20261018;Username=gamenet_slice1_app_20261018;Password=Parser-Check-Only;SSL Mode=Disable"))
-          $parsedHost = [string]$builderType.GetProperty("Host").GetValue($connectionBuilder)
-          $parsedPort = [int]$builderType.GetProperty("Port").GetValue($connectionBuilder)
-          $parsedDatabase = [string]$builderType.GetProperty("Database").GetValue($connectionBuilder)
-          $parsedUsername = [string]$builderType.GetProperty("Username").GetValue($connectionBuilder)
-          $parsedPassword = [string]$builderType.GetProperty("Password").GetValue($connectionBuilder)
-          $parsedSslMode = [string]$builderType.GetProperty("SslMode").GetValue($connectionBuilder)
+          # Exercise the same explicit IDictionary read path used by the packaged launcher.
+          $connectionBuilderDictionary = [System.Collections.IDictionary]$connectionBuilder
+          $requiredConnectionKeys = @("Host", "Database", "Username", "Password", "Port", "SSL Mode")
+          foreach ($key in $requiredConnectionKeys) {
+            if (-not $connectionBuilderDictionary.Contains($key)) {
+              throw "Npgsql parser self-test omitted required parsed key '$key'."
+            }
+          }
+          $parsedHost = [string]$connectionBuilderDictionary["Host"]
+          $parsedPort = [int]$connectionBuilderDictionary["Port"]
+          $parsedDatabase = [string]$connectionBuilderDictionary["Database"]
+          $parsedUsername = [string]$connectionBuilderDictionary["Username"]
+          $parsedPassword = [string]$connectionBuilderDictionary["Password"]
+          $parsedSslMode = [string]$connectionBuilderDictionary["SSL Mode"]
           if ($parsedHost -ne "127.0.0.1" -or
               $parsedPort -ne 5432 -or
               $parsedDatabase -ne "gamenet_slice1_test_20261018" -or
