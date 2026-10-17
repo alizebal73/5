@@ -239,7 +239,7 @@ jobs:
             (Join-Path $toolsOutput "initial-admin-setup.md")
              (Join-Path $toolsOutput "run-slice1-process-acceptance.ps1"),
              (Join-Path $toolsOutput "slice1-process-acceptance.md"),
-             (Join-Path $toolsOutput "manual-cash-sale-reversal-acceptance.md")
+             (Join-Path $toolsOutput "manual-cash-sale-reversal-acceptance.md"),
              (Join-Path $toolsOutput "manual-session-timing-recovery-acceptance.md")
           )
           foreach ($file in $requiredFiles) {
