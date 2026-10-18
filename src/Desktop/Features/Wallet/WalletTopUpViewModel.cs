@@ -227,8 +227,14 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         }
         catch (GameNetApiException ex)
         {
-            if (ex.Code is "idempotency.in_flight" or "idempotency.key_reused")
+            // A server-side 5xx or malformed success body can happen after the transaction
+            // committed. Keep the key in those ambiguous cases; business 4xx rejections
+            // are known non-committing outcomes and may be corrected safely.
+            if (ex.StatusCode >= 500 || ex.Code == "server.response_invalid" ||
+                ex.Code is "idempotency.in_flight" or "idempotency.key_reused" or "idempotency.unavailable")
+            {
                 ErrorMessage = PendingReconciliationText;
+            }
             else
             {
                 ClearPendingRequest();
