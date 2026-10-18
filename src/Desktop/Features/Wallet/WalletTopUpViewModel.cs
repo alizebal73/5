@@ -16,7 +16,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
-    private readonly AsyncCommand topUpCommand;
+    private readonly TopUpAction topUpCommand;
     private CustomerResponse? selectedCustomer;
     private string amountToCreditText = string.Empty;
     private string cashReceivedText = string.Empty;
@@ -32,7 +32,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     {
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
-        topUpCommand = new AsyncCommand(this);
+        topUpCommand = new TopUpAction(this);
         BalanceText = Text("برای مشاهدهٔ موجودی، مشتری ثبت‌شده را انتخاب کنید.", "Select a registered customer to view its Wallet balance.");
     }
 
@@ -262,7 +262,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     private static string Text(string persian, string english) =>
         CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? persian : english;
 
-    private sealed class AsyncCommand(WalletTopUpViewModel owner) : ICommand
+    private sealed class TopUpAction(WalletTopUpViewModel owner) : ICommand
     {
         public event EventHandler? CanExecuteChanged;
         public bool CanExecute(object? parameter) => owner.CanSubmit;
