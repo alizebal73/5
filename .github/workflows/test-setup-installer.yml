@@ -152,14 +152,14 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path $probeOutput | Out-Null
           @"
-[Setup]
-AppName=GameNet Inno Compiler Version Probe
-AppVersion=1.0
-DefaultDirName={tmp}\GameNetInnoCompilerVersionProbe
-OutputDir=$probeOutput
-OutputBaseFilename=InnoCompilerProbe
-Uninstallable=no
-"@ | Set-Content -LiteralPath $probeScript -Encoding utf8NoBOM
+          [Setup]
+          AppName=GameNet Inno Compiler Version Probe
+          AppVersion=1.0
+          DefaultDirName={tmp}\GameNetInnoCompilerVersionProbe
+          OutputDir=$probeOutput
+          OutputBaseFilename=InnoCompilerProbe
+          Uninstallable=no
+          "@ | Set-Content -LiteralPath $probeScript -Encoding utf8NoBOM
           $probeOutputText = @(& $iscc $probeScript 2>&1)
           $probeExitCode = $LASTEXITCODE
           $probeText = $probeOutputText -join [Environment]::NewLine
