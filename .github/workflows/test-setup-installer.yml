@@ -164,8 +164,16 @@ jobs:
           $beforeServices = @(Get-CimInstance Win32_Service | Where-Object { $_.Name -in @("GameNet 5 Server", "GameNet 5 Agent") } | ForEach-Object Name)
 
           $installerLog = Join-Path $env:RUNNER_TEMP "gamenet5-test-setup-install.log"
-          & $setup /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$smokeRoot" "/LOG=$installerLog"
-          $installerExitCode = $LASTEXITCODE
+          $installArguments = @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/DIR=`"$smokeRoot`"",
+            "/LOG=`"$installerLog`""
+          )
+          $installProcess = Start-Process -FilePath $setup -ArgumentList $installArguments -Wait -PassThru
+          $installerExitCode = $installProcess.ExitCode
+          $installProcess.Dispose()
           if ($installerExitCode -ne 0) {
             Write-Host "TEST_SETUP_INSTALLER_EXIT_CODE=$installerExitCode"
             if (Test-Path -LiteralPath $installerLog) {
