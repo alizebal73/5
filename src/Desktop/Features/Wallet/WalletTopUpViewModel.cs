@@ -12,7 +12,7 @@ using GameNet.Shared.Contracts.V1.Wallet;
 namespace GameNet.Desktop.Features.Wallet;
 
 /// <summary>Owns the Wallet cash top-up screen independently of Session workflow UI.</summary>
-public sealed class WalletTopUpViewModel : INotifyPropertyChanged
+public sealed class WalletTopUpViewModel : IWalletTopUpPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
