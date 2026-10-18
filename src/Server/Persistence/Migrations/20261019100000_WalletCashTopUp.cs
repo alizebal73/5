@@ -6,9 +6,9 @@ namespace GameNet.Server.Persistence.Migrations;
 
 public partial class WalletCashTopUp : Migration
 {
-    protected override void Up(MigrationBuilder m)
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        m.CreateTable(
+        migrationBuilder.CreateTable(
             name: "cash_receipts",
             columns: table => new
             {
@@ -34,7 +34,7 @@ public partial class WalletCashTopUp : Migration
                 table.ForeignKey("fk_cash_receipts_customers_customer_id", x => x.customer_id, "customers", "id", onDelete: ReferentialAction.Restrict);
             });
 
-        m.CreateTable(
+        migrationBuilder.CreateTable(
             name: "wallet_accounts",
             columns: table => new
             {
@@ -51,7 +51,7 @@ public partial class WalletCashTopUp : Migration
                 table.ForeignKey("fk_wallet_accounts_customers_customer_id", x => x.customer_id, "customers", "id", onDelete: ReferentialAction.Restrict);
             });
 
-        m.CreateTable(
+        migrationBuilder.CreateTable(
             name: "wallet_ledger_entries",
             columns: table => new
             {
@@ -74,16 +74,16 @@ public partial class WalletCashTopUp : Migration
                 table.ForeignKey("fk_wallet_ledger_cash_receipts_cash_receipt_id", x => x.cash_receipt_id, "cash_receipts", "id", onDelete: ReferentialAction.Restrict);
             });
 
-        m.CreateIndex(name: "ux_cash_receipts_operator_idempotency", table: "cash_receipts",
+        migrationBuilder.CreateIndex(name: "ux_cash_receipts_operator_idempotency", table: "cash_receipts",
             columns: new[] { "received_by_operator_id", "idempotency_key" }, unique: true);
-        m.CreateIndex(name: "ix_cash_receipts_customer_received_at", table: "cash_receipts",
+        migrationBuilder.CreateIndex(name: "ix_cash_receipts_customer_received_at", table: "cash_receipts",
             columns: new[] { "customer_id", "received_at_utc" });
-        m.CreateIndex(name: "ix_wallet_ledger_customer_occurred_at", table: "wallet_ledger_entries",
+        migrationBuilder.CreateIndex(name: "ix_wallet_ledger_customer_occurred_at", table: "wallet_ledger_entries",
             columns: new[] { "customer_id", "occurred_at_utc" });
-        m.CreateIndex(name: "ux_wallet_ledger_cash_receipt", table: "wallet_ledger_entries",
+        migrationBuilder.CreateIndex(name: "ux_wallet_ledger_cash_receipt", table: "wallet_ledger_entries",
             column: "cash_receipt_id", unique: true);
 
-        m.Sql("""
+        migrationBuilder.Sql("""
             CREATE OR REPLACE FUNCTION reject_wallet_financial_record_mutation()
             RETURNS trigger
             LANGUAGE plpgsql
@@ -103,9 +103,9 @@ public partial class WalletCashTopUp : Migration
             """);
     }
 
-    protected override void Down(MigrationBuilder m)
+    protected override void Down(MigrationBuilder migrationBuilder)
     {
-        m.Sql("""
+        migrationBuilder.Sql("""
             DO $$
             BEGIN
                 IF EXISTS (SELECT 1 FROM wallet_ledger_entries)
@@ -118,8 +118,8 @@ public partial class WalletCashTopUp : Migration
             DROP TRIGGER IF EXISTS cash_receipts_append_only ON cash_receipts;
             DROP FUNCTION IF EXISTS reject_wallet_financial_record_mutation();
             """);
-        m.DropTable(name: "wallet_ledger_entries");
-        m.DropTable(name: "wallet_accounts");
-        m.DropTable(name: "cash_receipts");
+        migrationBuilder.DropTable(name: "wallet_ledger_entries");
+        migrationBuilder.DropTable(name: "wallet_accounts");
+        migrationBuilder.DropTable(name: "cash_receipts");
     }
 }
