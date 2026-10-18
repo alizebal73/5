@@ -286,13 +286,15 @@ jobs:
           $readme = @'
           # GameNet 5 — temporary Runtime LAN Smoke payload
 
-          **This is NOT Setup and is NOT a production release.** It is a portable, self-contained Windows x64 payload built from one exact candidate checkout. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
+          **Internal engineering payload only — NOT the owner-facing test installer and NOT a production release.** This is a portable, self-contained Windows x64 payload built from one exact candidate checkout. Do not hand this artifact to the owner as the manual test procedure. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
 
           ## Choose the test path
 
-          For early Issue #98 PC Session to invoice to cash functional acceptance, use Tools/slice1-process-acceptance.md and Tools/run-slice1-process-acceptance.ps1 only. This path runs Server, Agent and WPF Desktop as Development processes on loopback with a verified empty local test database. It does not register services or change machine settings.
+          **Owner-run Issue #98 acceptance is BLOCKED until a dedicated test-only Windows Setup.exe/GUI Launcher is built and verified for the exact candidate SHA.** The owner must launch that installed GUI from a Desktop shortcut; do not ask the owner to open PowerShell, paste connection strings, unpack payloads, or run this script directly. The installer/launcher must handle configuration, disposable-database preflight, process start/stop, progress/errors, and evidence collection while keeping all GameNet business data isolated.
 
-          The separate Runtime LAN smoke sequence below is for service/TLS/LAN feasibility; it changes Windows service/certificate/endpoint state and is distinct from the loopback #98 functional path. The loopback process-based acceptance can run on this PC after its preflight passes, using a new disposable local database and conflict-free test ports. The new GameNet 5 app is separate from older GameNet software; the older app's presence alone is not a blocker.
+          Developers may use Tools/slice1-process-acceptance.md and Tools/run-slice1-process-acceptance.ps1 as internal engineering automation in a controlled test environment. That path runs Server, Agent and WPF Desktop as Development processes on loopback with a verified empty local test database. It is not a substitute for the owner-facing installer.
+
+          The separate Runtime LAN smoke sequence below is internal reference for later isolated-machine service/TLS/LAN feasibility work. It is not the early #98 owner acceptance path, and this payload must never be used against live GameNet business data.
 
 
           ## Included
@@ -318,8 +320,22 @@ jobs:
 
           ## Intended bounded smoke sequence
 
-          1. Download the GitHub Actions artifact archive and extract that outer archive to a temporary folder. It contains the inner `GameNet5-RuntimeLanSmoke-*.zip` and adjacent `SHA256SUMS.txt`; verify the inner ZIP against that checksum file **before** extracting the inner payload. The archive digest shown by GitHub is for the outer artifact; the checksum file is for the inner runtime payload.
-          2. Extract the package into a temporary folder on the PC or PCs chosen for this test. The loopback process-based path needs only one PC. Keep the package's recorded `manifest.json` with the test notes.
+          1. Download the GitHub Actions artifact archive and extract it once to a temporary folder. It contains a payload folder and SHA256SUMS.txt. The checksum file lists a SHA-256 digest for every file under payload/; verify all listed paths before launching anything. The digest shown by GitHub is for the outer artifact archive.
+
+          Run this PowerShell verification from the extracted artifact root:
+          ```powershell
+          $ErrorActionPreference = 'Stop'
+          foreach ($line in Get-Content -LiteralPath .\SHA256SUMS.txt) {
+            if ($line -notmatch '^(?<hash>[0-9a-fA-F]{64})  (?<path>.+)$') { throw 'Invalid SHA256SUMS.txt entry.' }
+            $expected = $Matches.hash.ToLowerInvariant()
+            $relativePath = $Matches.path.Replace('/', '\')
+            $actual = (Get-FileHash -LiteralPath $relativePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { throw "SHA-256 mismatch: $relativePath" }
+          }
+          Write-Host 'All payload SHA-256 hashes passed.'
+          ```
+
+          2. After verification succeeds, enter the payload folder. All paths in the remaining steps are relative to that folder; keep manifest.json with the test notes.
           3. On the chosen test PC, run `Tools\inspect-manager-runtime-state.ps1` first and review the read-only report. If state or a service for this new GameNet 5 application already exists, stop before the first-time process acceptance; the launcher enforces the same guard. A separately installed older GameNet app is not itself a conflict. Do not use this payload to repair or overwrite another app's state. The loopback workflow does not install/register Windows services.
           4. This step applies only to the separate service/TLS/LAN path, not to #98 loopback process acceptance. Confirm that a reviewed test-only Server service registration exists on the selected test host and is stopped, with the intended dedicated identity/SID. If it does not exist, stop and obtain a reviewed service-registration procedure; this payload is not a service installer. Proceed only when service and certificate changes/restarts are acceptable for that host.
           5. Provision a disposable PostgreSQL database for this candidate. Apply schema changes only by explicitly running `Tools\GameNet.Migrations.exe --connection "<DISPOSABLE_TEST_DATABASE_CONNECTION>"`. Never run this against an existing or business database; use only throwaway credentials because process inspection may expose a command-line connection argument.
@@ -390,22 +406,33 @@ jobs:
             [System.Text.UTF8Encoding]::new($false)
           )
 
-          $shortSha = $checkoutSha.Substring(0, 12)
-          $packageName = "GameNet5-RuntimeLanSmoke-$shortSha.zip"
-          $packagePath = Join-Path $distRoot $packageName
-          Compress-Archive -Path (Join-Path $payloadRoot "*") -DestinationPath $packagePath -CompressionLevel Optimal
-          $packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $publishedPayloadRoot = Join-Path $distRoot "payload"
+          Move-Item -LiteralPath $payloadRoot -Destination $publishedPayloadRoot
+
+          $checksumLines = @(
+            Get-ChildItem -LiteralPath $publishedPayloadRoot -Recurse -File |
+              Sort-Object FullName |
+              ForEach-Object {
+                $relativePath = [System.IO.Path]::GetRelativePath($distRoot, $_.FullName).Replace([string][char]92, "/")
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash  $relativePath"
+              }
+          )
+          if ($checksumLines.Count -eq 0) {
+            throw "No payload files were produced; refusing an empty checksum manifest."
+          }
           $sumPath = Join-Path $distRoot "SHA256SUMS.txt"
           [System.IO.File]::WriteAllText(
             $sumPath,
-            "$packageHash  $packageName" + [Environment]::NewLine,
+            ($checksumLines -join [Environment]::NewLine) + [Environment]::NewLine,
             [System.Text.UTF8Encoding]::new($false)
           )
 
           Write-Host "RUNTIME_LAN_PAYLOAD_READY=true"
           Write-Host "TESTED_CHECKOUT_SHA=$checkoutSha"
-          Write-Host "PACKAGE_NAME=$packageName"
-          Write-Host "PACKAGE_SHA256=$packageHash"
+          Write-Host "PAYLOAD_ROOT=payload"
+          Write-Host "PAYLOAD_SHA256_FILE=SHA256SUMS.txt"
+          Write-Host "PAYLOAD_FILE_COUNT=$($checksumLines.Count)"
           Write-Host "PACKAGE_IS_SETUP=false"
           Write-Host "PACKAGE_INCLUDES_SECRETS=false"
 
@@ -414,7 +441,7 @@ jobs:
         with:
           name: runtime-lan-smoke-payload-${{ github.run_id }}
           path: |
-            artifacts/runtime-lan-smoke/*.zip
+            artifacts/runtime-lan-smoke/payload/**
             artifacts/runtime-lan-smoke/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
