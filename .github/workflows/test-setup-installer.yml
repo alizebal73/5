@@ -163,8 +163,16 @@ jobs:
           $shortcut = Join-Path $desktop "GameNet 5 Test Launcher.lnk"
           $beforeServices = @(Get-CimInstance Win32_Service | Where-Object { $_.Name -in @("GameNet 5 Server", "GameNet 5 Agent") } | ForEach-Object Name)
 
-          & $setup /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$smokeRoot"
-          if ($LASTEXITCODE -ne 0) { throw "Silent test Setup smoke installation failed." }
+          $installerLog = Join-Path $env:RUNNER_TEMP "gamenet5-test-setup-install.log"
+          & $setup /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/DIR=$smokeRoot" "/LOG=$installerLog"
+          $installerExitCode = $LASTEXITCODE
+          if ($installerExitCode -ne 0) {
+            Write-Host "TEST_SETUP_INSTALLER_EXIT_CODE=$installerExitCode"
+            if (Test-Path -LiteralPath $installerLog) {
+              Get-Content -LiteralPath $installerLog -Tail 120 | ForEach-Object { Write-Host $_ }
+            }
+            throw "Silent test Setup smoke installation failed (exit code $installerExitCode)."
+          }
 
           foreach ($relative in @(
             "Launcher\GameNet5.TestLauncher.exe",
