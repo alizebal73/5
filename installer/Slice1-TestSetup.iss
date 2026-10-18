@@ -30,7 +30,6 @@ VersionInfoDescription=Temporary loopback functional test launcher; not for prod
 CloseApplications=yes
 RestartApplications=no
 UninstallDisplayName=GameNet 5 Slice 1 Test Launcher
-PrivilegesRequiredOverridesAllowed=dialog
 
 [Dirs]
 Name: "{app}"
