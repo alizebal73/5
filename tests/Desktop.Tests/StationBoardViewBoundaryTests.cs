@@ -132,6 +132,9 @@ public sealed class StationBoardViewBoundaryTests
             (string?)trigger.Attribute("Binding") == "{Binding CanCheckout}" &&
             (string?)trigger.Attribute("Value") == "False" &&
             trigger.Elements().Any(setter => setter.Name.LocalName == "Setter" &&
+                (string?)setter.Attribute("Property") == "Visibility" &&
+                (string?)setter.Attribute("Value") == "Visible") &&
+            trigger.Elements().Any(setter => setter.Name.LocalName == "Setter" &&
                 (string?)setter.Attribute("Property") == "Text" &&
                 (string?)setter.Attribute("Value") == "{DynamicResource Billing.CheckoutPermissionRequired}"));
 
