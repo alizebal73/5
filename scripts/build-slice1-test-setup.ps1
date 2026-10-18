@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [string]$OutputDirectory = "artifacts/test-setup/out"
+    [string]$OutputDirectory = "artifacts/test-setup/out",
+    [string]$InnoSetupCompilerPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -157,17 +158,22 @@ try {
     $manifestPath = Join-Path $payloadRoot "manifest.json"
     Write-Utf8File -Path $manifestPath -Text (ConvertTo-Json -InputObject $payloadManifest -Depth 8)
 
-    $isccCandidates = [System.Collections.Generic.List[string]]::new()
-    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
-    if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
-        $isccCandidates.Add((Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"))
+    if ([string]::IsNullOrWhiteSpace($InnoSetupCompilerPath)) {
+        $isccCandidates = [System.Collections.Generic.List[string]]::new()
+        $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+        if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
+            $isccCandidates.Add((Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"))
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+            $isccCandidates.Add((Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"))
+        }
+        $iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     }
-    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
-        $isccCandidates.Add((Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"))
+    else {
+        $iscc = [System.IO.Path]::GetFullPath($InnoSetupCompilerPath)
     }
-    $iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($iscc)) {
-        throw "Pinned Inno Setup 6.4.3 compiler is missing. The workflow must install it before invoking this builder."
+    if ([string]::IsNullOrWhiteSpace($iscc) -or -not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+        throw "Pinned Inno Setup 6.4.3 compiler was not found at the supplied path or default compiler locations."
     }
     $compilerFile = Get-Item -LiteralPath $iscc
     $compilerVersionText = "$($compilerFile.VersionInfo.ProductVersion) $($compilerFile.VersionInfo.FileVersion)"
