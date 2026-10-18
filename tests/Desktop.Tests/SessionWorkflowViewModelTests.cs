@@ -1083,6 +1083,7 @@ public sealed class SessionWorkflowViewModelTests
         public bool LoseNextCashSaleReversalResponseAfterCommit { get; set; }
         public Exception? NextStartException { get; set; }
         public Exception? NextEndException { get; set; }
+        public Exception? NextGetTariffsException { get; set; }
         public bool FailNextCashCheckoutWithNetworkError { get; set; }
         public bool FailNextCashCheckoutWithTimeout { get; set; }
         public bool FailNextCashCheckoutOutcomeLookupWithNetworkError { get; set; }
@@ -1131,10 +1132,18 @@ public sealed class SessionWorkflowViewModelTests
         public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<TariffResponse>>(tariffs
+        public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default)
+        {
+            if (NextGetTariffsException is { } error)
+            {
+                NextGetTariffsException = null;
+                return Task.FromException<IReadOnlyList<TariffResponse>>(error);
+            }
+
+            return Task.FromResult<IReadOnlyList<TariffResponse>>(tariffs
                 .Where(tariff => stationType is null || tariff.StationType == stationType)
                 .ToArray());
+        }
 
         public Task<TariffResponse> CreateTariffAsync(CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
