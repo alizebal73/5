@@ -104,6 +104,52 @@ public sealed class StationBoardViewBoundaryTests
     }
 
 
+    [Fact]
+    public void Pending_invoice_panel_explains_empty_list_and_missing_billing_permission()
+    {
+        var root = FindRepositoryRoot();
+        var sessionPath = Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml");
+        var session = XDocument.Load(sessionPath);
+
+        var emptyState = Assert.Single(session.Descendants(), element =>
+            element.Name.LocalName == "TextBlock" &&
+            (string?)element.Attribute("IsHitTestVisible") == "False" &&
+            element.Descendants().Any(child => child.Name.LocalName == "Style"));
+
+        var style = Assert.Single(emptyState.Descendants(), element =>
+            element.Name.LocalName == "Style");
+        var triggers = style.Elements().Where(element => element.Name.LocalName == "Style.Triggers")
+            .SelectMany(element => element.Elements()).ToArray();
+
+        Assert.Contains(triggers, trigger =>
+            trigger.Name.LocalName == "DataTrigger" &&
+            (string?)trigger.Attribute("Binding") == "{Binding PendingInvoices.Count}" &&
+            trigger.Elements().Any(setter => setter.Name.LocalName == "Setter" &&
+                (string?)setter.Attribute("Property") == "Visibility" &&
+                (string?)setter.Attribute("Value") == "Visible"));
+        Assert.Contains(triggers, trigger =>
+            trigger.Name.LocalName == "DataTrigger" &&
+            (string?)trigger.Attribute("Binding") == "{Binding CanCheckout}" &&
+            (string?)trigger.Attribute("Value") == "False" &&
+            trigger.Elements().Any(setter => setter.Name.LocalName == "Setter" &&
+                (string?)setter.Attribute("Property") == "Text" &&
+                (string?)setter.Attribute("Value") == "{DynamicResource Billing.CheckoutPermissionRequired}"));
+
+        var faPath = Path.Combine(root, "src", "Desktop", "Resources", "Strings.fa-IR.xaml");
+        var enPath = Path.Combine(root, "src", "Desktop", "Resources", "Strings.en-US.xaml");
+        foreach (var resourcePath in new[] { faPath, enPath })
+        {
+            var resources = XDocument.Load(resourcePath);
+            var keys = resources.Descendants()
+                .Select(element => (string?)element.Attribute(XNamespace.Xml + "Key"))
+                .Where(key => key is not null)
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.Contains("Billing.NoPendingInvoices", keys);
+            Assert.Contains("Billing.CheckoutPermissionRequired", keys);
+        }
+    }
+
     private static string FindRepositoryRoot()
     {
         foreach (var start in new[]
