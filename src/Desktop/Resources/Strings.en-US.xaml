@@ -105,4 +105,8 @@
   <system:String x:Key="Customer.Activate">Activate</system:String>
   <system:String x:Key="Customer.Deactivate">Deactivate</system:String>
   <system:String x:Key="Customer.Block">Block</system:String>
+  <system:String x:Key="Wallet.TopUpTitle">Wallet top-up</system:String>
+  <system:String x:Key="Wallet.CreditAmount">Amount to add to Wallet (Toman)</system:String>
+  <system:String x:Key="Wallet.CashReceived">Physical cash received (Toman)</system:String>
+  <system:String x:Key="Wallet.TopUp">Record cash top-up</system:String>
 </ResourceDictionary>
