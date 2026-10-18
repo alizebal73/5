@@ -843,6 +843,13 @@ try {
                         $desktopProcess = $null
                     }
                     try {
+                        if ($null -eq $serverProcess -or $serverProcess.HasExited) {
+                            throw [InvalidOperationException]::new("The isolated Server process is no longer running.")
+                        }
+                        $health = Invoke-RestMethod -Method Get -Uri "$baseUrl/health" -TimeoutSec 2
+                        if (-not [string]::Equals([string]$health.data.readiness, "Ready", [StringComparison]::Ordinal)) {
+                            throw [InvalidOperationException]::new("The isolated Server is not Ready.")
+                        }
                         $desktopInfo = New-RuntimeProcessInfo -FilePath $desktopExe -ConfigurationDirectory $configDirectory
                         $desktopProcess = Start-GameNetProcess -StartInfo $desktopInfo
                         $desktopInfo = $null
@@ -858,7 +865,7 @@ try {
                         }
                     }
                     catch {
-                        Write-Host "DESKTOP_REOPEN_FAILED=Could not start Desktop ($($_.Exception.GetType().Name))."
+                        Write-Host "DESKTOP_REOPEN_FAILED=The isolated Server is unavailable or Desktop could not start ($($_.Exception.GetType().Name))."
                     }
                 }
             }
