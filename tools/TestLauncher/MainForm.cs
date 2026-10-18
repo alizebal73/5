@@ -422,7 +422,7 @@ internal sealed class MainForm : Form
         return path;
     }
 
-    private static async Task ExecutePsqlAsync(string psql, int port, string username, string password, string sql, string operation)
+    private async Task ExecutePsqlAsync(string psql, int port, string username, string password, string sql, string operation)
     {
         var start = new ProcessStartInfo(psql)
         {
