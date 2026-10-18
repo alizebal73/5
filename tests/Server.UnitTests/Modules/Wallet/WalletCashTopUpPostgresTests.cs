@@ -6,6 +6,7 @@ using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Billing.Infrastructure;
 using GameNet.Server.Modules.Customers.Domain;
+using GameNet.Server.Modules.Customers.Infrastructure;
 using GameNet.Server.Modules.Wallet.Application;
 using GameNet.Server.Modules.Wallet.Infrastructure;
 using GameNet.Server.Persistence;
@@ -49,7 +50,7 @@ public sealed class WalletCashTopUpPostgresTests
                 var pipeline = new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock));
                 var fingerprint = new TestFingerprint();
                 var billing = new BillingService(db, pipeline, fingerprint, null!, null!, new EfAuditWriter(db), clock);
-                var wallet = new WalletService(db, pipeline, fingerprint, billing, new EfAuditWriter(db), clock);
+                var wallet = new WalletService(db, new CustomerWalletEligibilityService(db), pipeline, fingerprint, billing, new EfAuditWriter(db), clock);
                 var command = new CashTopUpWalletCommand(customerId, 105_000, 110_000, 1, "wallet-top-up-" + token, actor);
                 var credited = await wallet.CashTopUpAsync(command, CancellationToken.None);
 
