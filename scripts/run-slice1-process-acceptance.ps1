@@ -844,6 +844,7 @@ finally {
     $connectionString = $null
     $ownerPassword = $null
     $ownerPasswordConfirm = $null
+    $guiSettings = $null
     if ($null -ne $secureOwnerPassword) {
         $secureOwnerPassword.Dispose()
         $secureOwnerPassword = $null
