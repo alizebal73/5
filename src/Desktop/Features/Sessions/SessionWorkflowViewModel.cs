@@ -500,41 +500,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         finally { EndBusy(); }
     }
 
-    private async Task EndSessionAsync()
-    {
-        if (SelectedActiveSession is null)
-            return;
-
-        var session = SelectedActiveSession.Session;
-        var fingerprint = $"{session.Id:D}|{session.Version}";
-        var key = GetKey("session.end", fingerprint);
-        BeginBusy();
-        ErrorMessage = string.Empty;
-        try
-        {
-            var invoice = await api.EndSessionAsync(session.Id, new EndSessionRequest(session.Version), key);
-            pendingKeys.Remove("session.end");
-            await RefreshAsync();
-            SelectedPendingInvoice = PendingInvoices.FirstOrDefault(x => x.Invoice.InvoiceId == invoice.InvoiceId);
-            StatusMessage = Text($"صورتحساب صادر شد: {FormatToman(invoice.AmountToman)} تومان.",
-                $"Invoice issued: {FormatToman(invoice.AmountToman)} Toman.");
-        }
-        catch (GameNetApiException ex)
-        {
-            if (string.Equals(ex.Code, "sessions.timing_recovery_required", StringComparison.Ordinal))
-            {
-                timingRecoveryRequiredSessionId = session.Id;
-                OnPropertyChanged(nameof(CanRecoverSessionTiming));
-                RaiseCommands();
-            }
-            ErrorMessage = ErrorText(ex.Code);
-        }
-        catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
-        }
-        catch { ErrorMessage = Text("پایان Session انجام نشد.", "Ending the Session failed."); }
-        finally { EndBusy(); }
-    }
-
     private string GetStationLabel(Guid stationId)
     {
         return stationLabels.TryGetValue(stationId, out var stationCode) &&

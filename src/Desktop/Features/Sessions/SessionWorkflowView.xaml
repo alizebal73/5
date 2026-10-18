@@ -5,233 +5,320 @@
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
   </UserControl.Resources>
-  <Border Padding="12" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="8">
+
+  <Border Padding="14" Background="White" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="10">
     <StackPanel>
-      <DockPanel Margin="0,0,0,8">
-        <Button DockPanel.Dock="Right" Padding="10,5" Content="{DynamicResource Session.Refresh}"
-                Command="{Binding RefreshCommand}"/>
+      <DockPanel Margin="0,0,0,10" LastChildFill="True">
+        <Button DockPanel.Dock="Right" Padding="12,7" Margin="8,0,0,0"
+                Content="{DynamicResource Session.Refresh}" Command="{Binding RefreshCommand}"/>
         <StackPanel>
-          <TextBlock Text="{DynamicResource Session.WorkflowTitle}" FontSize="17" FontWeight="SemiBold" Foreground="#182230"/>
-          <TextBlock Text="{DynamicResource Session.WorkflowSubtitle}" FontSize="11" Foreground="#667085" TextWrapping="Wrap"/>
+          <TextBlock Text="{DynamicResource Session.WorkflowTitle}" FontSize="18"
+                     FontWeight="SemiBold" Foreground="#182230"/>
+          <TextBlock Text="{DynamicResource Session.WorkflowSubtitle}" FontSize="11"
+                     Foreground="#667085" TextWrapping="Wrap" Margin="0,3,0,0"/>
         </StackPanel>
       </DockPanel>
-      <TextBlock Text="{DynamicResource Session.ControlWarning}" Foreground="#854D0E" Background="#FEF3C7"
-                 Padding="8" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+      <TextBlock Text="{DynamicResource Session.ControlWarning}" Foreground="#854D0E"
+                 Background="#FEF3C7" Padding="9" Margin="0,0,0,8" TextWrapping="Wrap"/>
       <TextBlock Text="{Binding ErrorMessage}" Foreground="#B42318" TextWrapping="Wrap" Margin="0,0,0,4"/>
-      <TextBlock Text="{Binding StatusMessage}" Foreground="#475467" TextWrapping="Wrap" Margin="0,0,0,8"/>
+      <TextBlock Text="{Binding StatusMessage}" Foreground="#475467" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+      <!-- Keep the three cashier-critical areas visible together: start, active sessions, pending payment. -->
       <Grid>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="1*"/>
-          <ColumnDefinition Width="1*"/>
-          <ColumnDefinition Width="1.15*"/>
+          <ColumnDefinition Width="1.08*"/>
+          <ColumnDefinition Width="0.96*"/>
+          <ColumnDefinition Width="1.16*"/>
         </Grid.ColumnDefinitions>
-        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-          <TextBlock Text="{DynamicResource Session.StartTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-          <TextBlock Text="{DynamicResource Session.PcStation}" FontSize="12"/>
-          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding PcStations}"
-                    DisplayMemberPath="Code" SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
-          <TextBlock Text="{DynamicResource Customer.SelectForSession}" FontSize="12"/>
-          <TextBox Margin="0,3,0,4" Padding="5"
-                   Text="{Binding SessionCustomerSearchText, UpdateSourceTrigger=PropertyChanged}"
-                   ToolTip="{DynamicResource Customer.SessionSearch}"/>
-          <Button Content="{DynamicResource Customer.SessionSearchButton}"
-                  Command="{Binding SearchSessionCustomersCommand}" Padding="5,3"
-                  HorizontalAlignment="Left" Margin="0,0,0,5"/>
-          <ComboBox Margin="0,3,0,6" Padding="5" ItemsSource="{Binding AvailableCustomers}"
-                    SelectedItem="{Binding SelectedCustomer, Mode=TwoWay}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate>
-                <StackPanel>
-                  <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#667085"/>
-                </StackPanel>
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <Button Content="{DynamicResource Customer.UseWalkIn}" Command="{Binding UseWalkInCustomerCommand}"
-                  Padding="5,3" Margin="0,0,0,8" HorizontalAlignment="Left"/>
-          <TextBlock Text="{DynamicResource Customer.WalkInHint}" FontSize="10" Foreground="#667085"
-                     TextWrapping="Wrap" Margin="0,0,0,8"/>
-          <TextBlock Text="{DynamicResource Session.Tariff}" FontSize="12"/>
-          <ComboBox Margin="0,3,0,8" Padding="5" ItemsSource="{Binding Tariffs}"
-                    SelectedItem="{Binding SelectedTariff, Mode=TwoWay}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate>
-                <StackPanel>
-                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding HourlyRateToman, StringFormat={}{0:N0} Toman}" FontSize="11" Foreground="#667085"/>
-                </StackPanel>
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <Button Padding="8,6" Content="{DynamicResource Session.Start}" Command="{Binding StartSessionCommand}"/>
-          <Expander Header="{DynamicResource Customer.Section}" Margin="0,12,0,0" IsExpanded="False">
-            <StackPanel Margin="0,5,0,0">
-              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerSearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource Customer.Search}"/>
-              <CheckBox Content="{DynamicResource Customer.IncludeInactive}" IsChecked="{Binding CustomerIncludeInactive}" Margin="0,0,0,5"/>
-              <Button Content="{DynamicResource Customer.SearchButton}" Command="{Binding SearchCustomersCommand}" Padding="6,4" Margin="0,0,0,5"/>
-              <Button Content="{DynamicResource Customer.New}" Command="{Binding NewCustomerCommand}" Padding="6,4" Margin="0,0,0,5"/>
-              <ListBox Height="115" ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedManagedCustomer, Mode=TwoWay}">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Margin="0,1">
-                      <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
-                      <TextBlock Text="{Binding DisplayName}" FontSize="11"/>
-                    </StackPanel>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-              <TextBlock Text="{DynamicResource Customer.Code}" FontSize="12" Margin="0,6,0,0"/>
-              <TextBox Padding="5" Margin="0,2,0,5" IsEnabled="{Binding IsNewCustomer}"
-                       Text="{Binding CustomerCodeText, UpdateSourceTrigger=PropertyChanged}"/>
-              <TextBlock Text="{DynamicResource Customer.Name}" FontSize="12"/>
-              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerNameText, UpdateSourceTrigger=PropertyChanged}"/>
-              <TextBlock Text="{DynamicResource Customer.Nickname}" FontSize="12"/>
-              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerNicknameText, UpdateSourceTrigger=PropertyChanged}"/>
-              <TextBlock Text="{DynamicResource Customer.Phone}" FontSize="12"/>
-              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerPhoneText, UpdateSourceTrigger=PropertyChanged}"/>
-              <WrapPanel Margin="0,0,0,6">
-                <Button Content="{DynamicResource Customer.Create}" Command="{Binding CreateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
-                <Button Content="{DynamicResource Customer.Update}" Command="{Binding UpdateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
-              </WrapPanel>
-              <TextBlock Text="{Binding CustomerStatusSummaryText}" FontSize="11" Margin="0,0,0,5"/>
-              <TextBlock Text="{DynamicResource Customer.StatusReason}" FontSize="12"/>
-              <TextBox Padding="5" Margin="0,2,0,5" Text="{Binding CustomerStatusReasonText, UpdateSourceTrigger=PropertyChanged}"/>
-              <WrapPanel>
-                <Button Content="{DynamicResource Customer.Activate}" Command="{Binding ActivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
-                <Button Content="{DynamicResource Customer.Deactivate}" Command="{Binding DeactivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
-                <Button Content="{DynamicResource Customer.Block}" Command="{Binding BlockCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
-              </WrapPanel>
-            </StackPanel>
-          </Expander>
-        </StackPanel>
 
-        <StackPanel Grid.Column="1" Margin="8,0">
-          <TextBlock Text="{DynamicResource Tariff.CreateTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-          <StackPanel Visibility="{Binding CanManageTariffs, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock Text="{DynamicResource Tariff.Code}" FontSize="12"/>
-            <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding TariffCode, UpdateSourceTrigger=PropertyChanged}"/>
-            <TextBlock Text="{DynamicResource Tariff.Name}" FontSize="12"/>
-            <TextBox Margin="0,3,0,7" Padding="5" Text="{Binding TariffName, UpdateSourceTrigger=PropertyChanged}"/>
-            <TextBlock Text="{DynamicResource Tariff.HourlyRate}" FontSize="12"/>
-            <TextBox Margin="0,3,0,5" Padding="5" Text="{Binding HourlyRateText, UpdateSourceTrigger=PropertyChanged}"/>
-            <CheckBox Content="{DynamicResource Tariff.IsDefault}" IsChecked="{Binding IsDefaultTariff}" Margin="0,2,0,8"/>
-            <Button Padding="8,6" Content="{DynamicResource Tariff.Create}" Command="{Binding CreateTariffCommand}"/>
+        <!-- New session -->
+        <Border Grid.Column="0" Margin="0,0,5,0" Padding="12"
+                Background="#F8FAFC" BorderBrush="#E4E7EC" BorderThickness="1" CornerRadius="8">
+          <StackPanel>
+            <TextBlock Text="{DynamicResource Session.StartTitle}" FontSize="14"
+                       FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <TextBlock Text="{DynamicResource Session.PcStation}" FontSize="12"/>
+            <ComboBox Margin="0,3,0,7" Padding="5" MinWidth="0"
+                      ItemsSource="{Binding PcStations}"
+                      DisplayMemberPath="Code"
+                      SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
+
+            <TextBlock Text="{DynamicResource Customer.SelectForSession}" FontSize="12"/>
+            <TextBox Margin="0,3,0,4" Padding="5"
+                     Text="{Binding SessionCustomerSearchText, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="{DynamicResource Customer.SessionSearch}"/>
+            <Button Content="{DynamicResource Customer.SessionSearchButton}"
+                    Command="{Binding SearchSessionCustomersCommand}" Padding="7,4"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,5"/>
+            <ComboBox Margin="0,2,0,5" Padding="5" MinWidth="0"
+                      ItemsSource="{Binding AvailableCustomers}"
+                      SelectedItem="{Binding SelectedCustomer, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#667085"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Content="{DynamicResource Customer.UseWalkIn}"
+                    Command="{Binding UseWalkInCustomerCommand}" Padding="7,4"
+                    Margin="0,0,0,4" HorizontalAlignment="Stretch"/>
+            <TextBlock Text="{DynamicResource Customer.WalkInHint}" FontSize="10"
+                       Foreground="#667085" TextWrapping="Wrap" Margin="0,0,0,7"/>
+
+            <TextBlock Text="{DynamicResource Session.Tariff}" FontSize="12"/>
+            <ComboBox Margin="0,3,0,8" Padding="5" MinWidth="0"
+                      ItemsSource="{Binding Tariffs}"
+                      SelectedItem="{Binding SelectedTariff, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding HourlyRateToman, StringFormat={}{0:N0} Toman}"
+                               FontSize="11" Foreground="#667085"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Padding="9,7" Content="{DynamicResource Session.Start}"
+                    Command="{Binding StartSessionCommand}"/>
+
+            <Expander Header="{DynamicResource Customer.Section}" Margin="0,10,0,0" IsExpanded="False">
+              <StackPanel Margin="0,7,0,0">
+                <TextBox Padding="5" Margin="0,2,0,5"
+                         Text="{Binding CustomerSearchText, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="{DynamicResource Customer.Search}"/>
+                <CheckBox Content="{DynamicResource Customer.IncludeInactive}"
+                          IsChecked="{Binding CustomerIncludeInactive}" Margin="0,0,0,5"/>
+                <Button Content="{DynamicResource Customer.SearchButton}"
+                        Command="{Binding SearchCustomersCommand}" Padding="6,4" Margin="0,0,0,5"/>
+                <Button Content="{DynamicResource Customer.New}"
+                        Command="{Binding NewCustomerCommand}" Padding="6,4" Margin="0,0,0,5"/>
+                <ListBox Height="110" ItemsSource="{Binding Customers}"
+                         SelectedItem="{Binding SelectedManagedCustomer, Mode=TwoWay}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Margin="0,1">
+                        <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding DisplayName}" FontSize="11"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Text="{DynamicResource Customer.Code}" FontSize="12" Margin="0,6,0,0"/>
+                <TextBox Padding="5" Margin="0,2,0,5" IsEnabled="{Binding IsNewCustomer}"
+                         Text="{Binding CustomerCodeText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="{DynamicResource Customer.Name}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,2,0,5"
+                         Text="{Binding CustomerNameText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="{DynamicResource Customer.Nickname}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,2,0,5"
+                         Text="{Binding CustomerNicknameText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="{DynamicResource Customer.Phone}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,2,0,5"
+                         Text="{Binding CustomerPhoneText, UpdateSourceTrigger=PropertyChanged}"/>
+                <WrapPanel Margin="0,0,0,6">
+                  <Button Content="{DynamicResource Customer.Create}" Command="{Binding CreateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                  <Button Content="{DynamicResource Customer.Update}" Command="{Binding UpdateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                </WrapPanel>
+                <TextBlock Text="{Binding CustomerStatusSummaryText}" FontSize="11" Margin="0,0,0,5"/>
+                <TextBlock Text="{DynamicResource Customer.StatusReason}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,2,0,5"
+                         Text="{Binding CustomerStatusReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+                <WrapPanel>
+                  <Button Content="{DynamicResource Customer.Activate}" Command="{Binding ActivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                  <Button Content="{DynamicResource Customer.Deactivate}" Command="{Binding DeactivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                  <Button Content="{DynamicResource Customer.Block}" Command="{Binding BlockCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
+                </WrapPanel>
+              </StackPanel>
+            </Expander>
+
+            <Expander Header="{DynamicResource Tariff.CreateTitle}" Margin="0,6,0,0" IsExpanded="False">
+              <StackPanel Margin="0,7,0,0">
+                <StackPanel Visibility="{Binding CanManageTariffs, Converter={StaticResource BooleanToVisibilityConverter}}">
+                  <TextBlock Text="{DynamicResource Tariff.Code}" FontSize="12"/>
+                  <TextBox Margin="0,3,0,7" Padding="5"
+                           Text="{Binding TariffCode, UpdateSourceTrigger=PropertyChanged}"/>
+                  <TextBlock Text="{DynamicResource Tariff.Name}" FontSize="12"/>
+                  <TextBox Margin="0,3,0,7" Padding="5"
+                           Text="{Binding TariffName, UpdateSourceTrigger=PropertyChanged}"/>
+                  <TextBlock Text="{DynamicResource Tariff.HourlyRate}" FontSize="12"/>
+                  <TextBox Margin="0,3,0,5" Padding="5"
+                           Text="{Binding HourlyRateText, UpdateSourceTrigger=PropertyChanged}"/>
+                  <CheckBox Content="{DynamicResource Tariff.IsDefault}"
+                            IsChecked="{Binding IsDefaultTariff}" Margin="0,2,0,8"/>
+                  <Button Padding="8,6" Content="{DynamicResource Tariff.Create}"
+                          Command="{Binding CreateTariffCommand}"/>
+                </StackPanel>
+                <TextBlock Text="{DynamicResource Tariff.ManagePermissionRequired}"
+                           TextWrapping="Wrap" Foreground="#667085" FontSize="11" Margin="0,7,0,0">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Visible"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding CanManageTariffs}" Value="True">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </StackPanel>
+            </Expander>
           </StackPanel>
-          <TextBlock Text="{DynamicResource Tariff.ManagePermissionRequired}" TextWrapping="Wrap" Foreground="#667085" FontSize="11">
-            <TextBlock.Style>
-              <Style TargetType="TextBlock">
-                <Setter Property="Visibility" Value="Visible"/>
-                <Style.Triggers>
-                  <DataTrigger Binding="{Binding CanManageTariffs}" Value="True">
-                    <Setter Property="Visibility" Value="Collapsed"/>
-                  </DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </TextBlock.Style>
-          </TextBlock>
-        </StackPanel>
+        </Border>
 
-        <StackPanel Grid.Column="2" Margin="8,0,0,0">
-          <TextBlock Text="{DynamicResource Session.ActiveTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
-          <ListBox Height="116" ItemsSource="{Binding ActiveSessions}"
-                   SelectedItem="{Binding SelectedActiveSession, Mode=TwoWay}">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <StackPanel Margin="0,1">
-                  <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding TariffNameSnapshot}" FontSize="11" Foreground="#475467"/>
-                  <TextBlock Text="{Binding StartedAtDisplayText}" FontSize="10" Foreground="#667085"/>
-                </StackPanel>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <Button Margin="0,5,0,10" Padding="8,5" Content="{DynamicResource Session.End}"
-                  Command="{Binding EndSessionCommand}"/>
-          <StackPanel Margin="0,0,0,10"
+        <!-- Active sessions and infrequent timing repair -->
+        <Border Grid.Column="1" Margin="5,0" Padding="12"
+                Background="#F8FAFC" BorderBrush="#E4E7EC" BorderThickness="1" CornerRadius="8">
+          <StackPanel>
+            <TextBlock Text="{DynamicResource Session.ActiveTitle}" FontSize="14"
+                       FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <ListBox Height="152" MinHeight="120" ItemsSource="{Binding ActiveSessions}"
+                     SelectedItem="{Binding SelectedActiveSession, Mode=TwoWay}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,2">
+                    <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding TariffNameSnapshot}" FontSize="11" Foreground="#475467"/>
+                    <TextBlock Text="{Binding StartedAtDisplayText}" FontSize="10" Foreground="#667085"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <Button Margin="0,7,0,0" Padding="9,7" Content="{DynamicResource Session.End}"
+                    Command="{Binding EndSessionCommand}"/>
+
+            <Expander Header="{DynamicResource Session.TimingRecoveryTitle}" Margin="0,10,0,0"
+                      IsExpanded="False"
                       Visibility="{Binding CanRecoverSessionTiming, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock Text="{DynamicResource Session.TimingRecoveryTitle}" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <TextBlock Text="{DynamicResource Session.TimingRecoveryInstructions}" FontSize="10" Foreground="#854D0E"
-                       TextWrapping="Wrap" Margin="0,0,0,6"/>
-            <TextBlock Text="{DynamicResource Session.TimingRecoveryMinutes}" FontSize="12"/>
-            <TextBox Padding="5" Margin="0,3,0,6"
-                     Text="{Binding ReconciledElapsedMinutesText, UpdateSourceTrigger=PropertyChanged}"/>
-            <TextBlock Text="{DynamicResource Session.TimingRecoveryReason}" FontSize="12"/>
-            <TextBox Padding="5" Margin="0,3,0,6"
-                     Text="{Binding TimingRecoveryReasonText, UpdateSourceTrigger=PropertyChanged}"/>
-            <CheckBox Content="{DynamicResource Session.ConfirmTimingRecovery}"
-                      IsChecked="{Binding ConfirmTimingRecovery, Mode=TwoWay}" Margin="0,0,0,8"/>
-            <Button Padding="8,6" Content="{DynamicResource Session.TimingRecoverySubmit}"
-                    Command="{Binding ReconcileSessionTimingCommand}"/>
+              <StackPanel Margin="0,7,0,0">
+                <TextBlock Text="{DynamicResource Session.TimingRecoveryInstructions}" FontSize="10"
+                           Foreground="#854D0E" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <TextBlock Text="{DynamicResource Session.TimingRecoveryMinutes}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,3,0,6"
+                         Text="{Binding ReconciledElapsedMinutesText, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="{DynamicResource Session.TimingRecoveryReason}" FontSize="12"/>
+                <TextBox Padding="5" Margin="0,3,0,6"
+                         Text="{Binding TimingRecoveryReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+                <CheckBox Content="{DynamicResource Session.ConfirmTimingRecovery}"
+                          IsChecked="{Binding ConfirmTimingRecovery, Mode=TwoWay}" Margin="0,0,0,8"/>
+                <Button Padding="8,6" Content="{DynamicResource Session.TimingRecoverySubmit}"
+                        Command="{Binding ReconcileSessionTimingCommand}"/>
+              </StackPanel>
+            </Expander>
           </StackPanel>
-          <TextBlock Text="{DynamicResource Billing.PendingTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
-          <ListBox Height="132" ItemsSource="{Binding PendingInvoices}"
-                   SelectedItem="{Binding SelectedPendingInvoice, Mode=TwoWay}">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <StackPanel Margin="0,1">
-                  <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
-                  <TextBlock Text="{Binding TariffNameSnapshot}" FontSize="11" Foreground="#475467"/>
-                  <TextBlock Text="{Binding DurationDisplayText}" FontSize="10" Foreground="#667085"/>
-                  <TextBlock Text="{Binding AmountDisplayText}" FontSize="11" FontWeight="SemiBold"/>
-                </StackPanel>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock Text="{Binding CashCheckoutSummaryText}" FontSize="11" Foreground="#344054"
-                     TextWrapping="Wrap" Margin="0,7,0,4"/>
-          <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12"/>
-          <TextBox Padding="5" Margin="0,3,0,6" Text="{Binding AmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
-          <CheckBox Content="{DynamicResource Billing.ConfirmCashCheckout}"
-                    IsChecked="{Binding ConfirmCashCheckout, Mode=TwoWay}" Margin="0,0,0,8"/>
-          <Button Padding="8,6" Content="{DynamicResource Billing.Checkout}" Command="{Binding CheckoutCashCommand}"/>
-          <Expander Header="{DynamicResource Billing.RecentCashCheckouts}" Margin="0,8,0,0">
-            <StackPanel>
-              <ListBox Height="150" ItemsSource="{Binding RecentCashCheckouts}"
-                       SelectedItem="{Binding SelectedRecentCashCheckout, Mode=TwoWay}">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Margin="0,2">
-                      <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
-                      <TextBlock Text="{Binding InvoiceIdentityText}" FontSize="10" Foreground="#667085"/>
-                      <TextBlock Text="{Binding AmountDisplayText}" FontSize="11" FontWeight="SemiBold"/>
-                      <TextBlock Text="{Binding CashDetailsDisplayText}" FontSize="10" Foreground="#475467"/>
-                      <TextBlock Text="{Binding PaidAtDisplayText}" FontSize="10" Foreground="#667085"/>
-                    </StackPanel>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
+        </Border>
+
+        <!-- Pending invoices are a first-class cashier panel, not buried below recovery tools. -->
+        <Border Grid.Column="2" Margin="5,0,0,0" Padding="12"
+                Background="#F8FAFC" BorderBrush="#E4E7EC" BorderThickness="1" CornerRadius="8">
+          <StackPanel>
+            <DockPanel Margin="0,0,0,7" LastChildFill="True">
+              <TextBlock DockPanel.Dock="Right" Text="{Binding PendingInvoices.Count}"
+                         FontSize="12" FontWeight="SemiBold" Foreground="#475467"
+                         VerticalAlignment="Center" Margin="8,0,0,0"/>
+              <TextBlock Text="{DynamicResource Billing.PendingTitle}" FontSize="14"
+                         FontWeight="SemiBold" TextWrapping="Wrap"/>
+            </DockPanel>
+            <Grid Height="168" MinHeight="130">
+              <ListBox ItemsSource="{Binding PendingInvoices}"
+                     SelectedItem="{Binding SelectedPendingInvoice, Mode=TwoWay}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,3">
+                    <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding TariffNameSnapshot}" FontSize="11" Foreground="#475467"/>
+                    <TextBlock Text="{Binding DurationDisplayText}" FontSize="10" Foreground="#667085"/>
+                    <TextBlock Text="{Binding AmountDisplayText}" FontSize="12"
+                               FontWeight="SemiBold" Foreground="#182230"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
               </ListBox>
-              <StackPanel Margin="0,8,0,0"
-                          Visibility="{Binding CanReverseCashSale, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <TextBlock Text="{Binding CashSaleReversalSummaryText}" FontSize="11" Foreground="#344054"
-                           TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock Text="{DynamicResource Billing.CashReversalReason}" FontSize="12"/>
-                <TextBox Padding="5" Margin="0,3,0,6"
-                         Text="{Binding CashSaleReversalReasonText, UpdateSourceTrigger=PropertyChanged}"/>
-                <CheckBox Content="{DynamicResource Billing.ConfirmCashSaleReversal}"
-                          IsChecked="{Binding ConfirmCashSaleReversal, Mode=TwoWay}" Margin="0,0,0,8"/>
-                <Button Padding="8,6" Content="{DynamicResource Billing.ReverseCashSale}"
-                        Command="{Binding ReverseCashSaleCommand}"/>
+              <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Margin="12,6" TextAlignment="Center" TextWrapping="Wrap"
+                         Foreground="#667085" FontSize="11" IsHitTestVisible="False">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Setter Property="Text" Value="{DynamicResource Billing.NoPendingInvoices}"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding PendingInvoices.Count}" Value="0">
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding CanCheckout}" Value="False">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Setter Property="Text" Value="{DynamicResource Billing.CheckoutPermissionRequired}"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+            </Grid>
+            <TextBlock Text="{Binding CashCheckoutSummaryText}" FontSize="11"
+                       Foreground="#344054" TextWrapping="Wrap" Margin="0,7,0,5"/>
+            <TextBlock Text="{DynamicResource Billing.CashReceived}" FontSize="12"/>
+            <TextBox Padding="6" Margin="0,3,0,6"
+                     Text="{Binding AmountReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+            <CheckBox Content="{DynamicResource Billing.ConfirmCashCheckout}"
+                      IsChecked="{Binding ConfirmCashCheckout, Mode=TwoWay}" Margin="0,0,0,8"/>
+            <Button Padding="9,7" Content="{DynamicResource Billing.Checkout}"
+                    Command="{Binding CheckoutCashCommand}"/>
+
+            <Expander Header="{DynamicResource Billing.RecentCashCheckouts}" Margin="0,10,0,0"
+                      IsExpanded="False">
+              <StackPanel Margin="0,7,0,0">
+                <ListBox Height="150" ItemsSource="{Binding RecentCashCheckouts}"
+                         SelectedItem="{Binding SelectedRecentCashCheckout, Mode=TwoWay}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Margin="0,2">
+                        <TextBlock Text="{Binding StationLabel}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding InvoiceIdentityText}" FontSize="10" Foreground="#667085"/>
+                        <TextBlock Text="{Binding AmountDisplayText}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding CashDetailsDisplayText}" FontSize="10" Foreground="#475467"/>
+                        <TextBlock Text="{Binding PaidAtDisplayText}" FontSize="10" Foreground="#667085"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Margin="0,8,0,0"
+                            Visibility="{Binding CanReverseCashSale, Converter={StaticResource BooleanToVisibilityConverter}}">
+                  <TextBlock Text="{Binding CashSaleReversalSummaryText}" FontSize="11"
+                             Foreground="#344054" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                  <TextBlock Text="{DynamicResource Billing.CashReversalReason}" FontSize="12"/>
+                  <TextBox Padding="5" Margin="0,3,0,6"
+                           Text="{Binding CashSaleReversalReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+                  <CheckBox Content="{DynamicResource Billing.ConfirmCashSaleReversal}"
+                            IsChecked="{Binding ConfirmCashSaleReversal, Mode=TwoWay}" Margin="0,0,0,8"/>
+                  <Button Padding="8,6" Content="{DynamicResource Billing.ReverseCashSale}"
+                          Command="{Binding ReverseCashSaleCommand}"/>
+                </StackPanel>
+                <StackPanel Margin="0,10,0,0"
+                            Visibility="{Binding CanCorrectCashTender, Converter={StaticResource BooleanToVisibilityConverter}}">
+                  <TextBlock Text="{DynamicResource Billing.CashTenderCorrectionTitle}"
+                             FontWeight="SemiBold" Margin="0,0,0,5"/>
+                  <TextBlock Text="{Binding CashTenderCorrectionSummaryText}" FontSize="11"
+                             Foreground="#344054" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                  <TextBlock Text="{DynamicResource Billing.CashTenderCorrectedReceived}" FontSize="12"/>
+                  <TextBox Padding="5" Margin="0,3,0,6"
+                           Text="{Binding CorrectedCashReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
+                  <TextBlock Text="{DynamicResource Billing.CashTenderCorrectionReason}" FontSize="12"/>
+                  <TextBox Padding="5" Margin="0,3,0,6"
+                           Text="{Binding CashTenderCorrectionReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+                  <CheckBox Content="{DynamicResource Billing.ConfirmCashTenderCorrection}"
+                            IsChecked="{Binding ConfirmCashTenderCorrection, Mode=TwoWay}" Margin="0,0,0,8"/>
+                  <Button Padding="8,6" Content="{DynamicResource Billing.CorrectCashTender}"
+                          Command="{Binding CorrectCashTenderCommand}"/>
+                </StackPanel>
               </StackPanel>
-              <StackPanel Margin="0,10,0,0"
-                          Visibility="{Binding CanCorrectCashTender, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <TextBlock Text="{DynamicResource Billing.CashTenderCorrectionTitle}" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                <TextBlock Text="{Binding CashTenderCorrectionSummaryText}" FontSize="11" Foreground="#344054"
-                           TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <TextBlock Text="{DynamicResource Billing.CashTenderCorrectedReceived}" FontSize="12"/>
-                <TextBox Padding="5" Margin="0,3,0,6"
-                         Text="{Binding CorrectedCashReceivedText, UpdateSourceTrigger=PropertyChanged}"/>
-                <TextBlock Text="{DynamicResource Billing.CashTenderCorrectionReason}" FontSize="12"/>
-                <TextBox Padding="5" Margin="0,3,0,6"
-                         Text="{Binding CashTenderCorrectionReasonText, UpdateSourceTrigger=PropertyChanged}"/>
-                <CheckBox Content="{DynamicResource Billing.ConfirmCashTenderCorrection}"
-                          IsChecked="{Binding ConfirmCashTenderCorrection, Mode=TwoWay}" Margin="0,0,0,8"/>
-                <Button Padding="8,6" Content="{DynamicResource Billing.CorrectCashTender}"
-                        Command="{Binding CorrectCashTenderCommand}"/>
-              </StackPanel>
-            </StackPanel>
-          </Expander>
-        </StackPanel>
+            </Expander>
+          </StackPanel>
+        </Border>
       </Grid>
     </StackPanel>
   </Border>

@@ -64,6 +64,8 @@
   <system:String x:Key="Tariff.Create">Create tariff</system:String>
   <system:String x:Key="Tariff.ManagePermissionRequired">The Settings Write permission is required to create tariffs.</system:String>
   <system:String x:Key="Billing.PendingTitle">Invoices awaiting payment</system:String>
+  <system:String x:Key="Billing.NoPendingInvoices">No invoices are waiting for payment.</system:String>
+  <system:String x:Key="Billing.CheckoutPermissionRequired">Billing permission is required to view and record payments.</system:String>
   <system:String x:Key="Billing.CashReceived">Cash received (Toman)</system:String>
   <system:String x:Key="Billing.ConfirmCashCheckout">I reviewed the amount due, cash received and change, and confirm recording this payment.</system:String>
   <system:String x:Key="Billing.Checkout">Record cash payment</system:String>

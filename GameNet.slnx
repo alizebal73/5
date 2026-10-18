@@ -8,4 +8,5 @@
   <Project Path="tests/ContractTests/GameNet.ContractTests.csproj" />
   <Project Path="tests/Desktop.Tests/GameNet.Desktop.Tests.csproj" />
   <Project Path="tests/Agent.Tests/GameNet.Agent.Tests.csproj" />
+  <Project Path="tools/TestLauncher/GameNet5.TestLauncher.csproj" />
 </Solution>
