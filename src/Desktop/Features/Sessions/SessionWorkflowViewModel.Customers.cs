@@ -5,7 +5,6 @@ using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
 using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Security;
-using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
@@ -22,10 +21,6 @@ public sealed partial class SessionWorkflowViewModel
     private string customerStatusReasonText = string.Empty;
     private bool customerIncludeInactive = true;
     private int customerRefreshGeneration;
-    private int walletBalanceRefreshGeneration;
-    private string walletTopUpAmountText = string.Empty;
-    private string walletCashReceivedText = string.Empty;
-    private string walletBalanceText = string.Empty;
 
     public ObservableCollection<CustomerResponse> Customers { get; } = [];
     public ObservableCollection<CustomerResponse> AvailableCustomers { get; } = [];
@@ -38,12 +33,10 @@ public sealed partial class SessionWorkflowViewModel
     public ICommand ActivateCustomerCommand { get; private set; } = null!;
     public ICommand DeactivateCustomerCommand { get; private set; } = null!;
     public ICommand BlockCustomerCommand { get; private set; } = null!;
-    public ICommand WalletTopUpCommand { get; private set; } = null!;
 
     public bool CanReadCustomers => hasPermission(Permissions.CustomersRead);
     public bool IsNewCustomer => SelectedManagedCustomer is null;
     public bool CanWriteCustomers => hasPermission(Permissions.CustomersWrite);
-    public bool CanTopUpWallet => hasPermission(Permissions.WalletWrite);
 
     public CustomerResponse? SelectedCustomer
     {
@@ -76,7 +69,7 @@ public sealed partial class SessionWorkflowViewModel
             }
             OnPropertyChanged(nameof(CustomerStatusSummaryText));
             OnPropertyChanged(nameof(IsNewCustomer));
-            StartWalletBalanceRefresh(value);
+            WalletTopUp.SelectedCustomer = value;
             RaiseCustomerCommands();
         }
     }
@@ -89,22 +82,6 @@ public sealed partial class SessionWorkflowViewModel
     public string CustomerPhoneText { get => customerPhoneText; set { if (SetField(ref customerPhoneText, value)) RaiseCustomerCommands(); } }
     public string CustomerStatusReasonText { get => customerStatusReasonText; set { if (SetField(ref customerStatusReasonText, value)) RaiseCustomerCommands(); } }
     public bool CustomerIncludeInactive { get => customerIncludeInactive; set { if (SetField(ref customerIncludeInactive, value)) RaiseCustomerCommands(); } }
-    public string WalletTopUpAmountText { get => walletTopUpAmountText; set { if (SetField(ref walletTopUpAmountText, value)) { OnPropertyChanged(nameof(WalletTopUpSummaryText)); RaiseCustomerCommands(); } } }
-    public string WalletCashReceivedText { get => walletCashReceivedText; set { if (SetField(ref walletCashReceivedText, value)) { OnPropertyChanged(nameof(WalletTopUpSummaryText)); RaiseCustomerCommands(); } } }
-    public string WalletBalanceText { get => walletBalanceText; private set => SetField(ref walletBalanceText, value); }
-    public string WalletTopUpSummaryText
-    {
-        get
-        {
-            if (!TryParseToman(WalletTopUpAmountText, out var credit) || credit <= 0 ||
-                !TryParseToman(WalletCashReceivedText, out var received) || received < credit)
-                return string.Empty;
-            var change = received - credit;
-            return Text($"شارژ {FormatToman(credit)}، وجه دریافتی {FormatToman(received)}، باقی‌پول {FormatToman(change)}",
-                $"Credit {FormatToman(credit)}, cash received {FormatToman(received)}, change {FormatToman(change)}");
-        }
-    }
-
     public string CustomerStatusSummaryText => SelectedManagedCustomer?.Status switch
     {
         CustomerStatusContract.Active => Text("وضعیت مشتری: فعال", "Customer status: Active"),
@@ -129,10 +106,6 @@ public sealed partial class SessionWorkflowViewModel
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Inactive } && IsValidCustomerReason(CustomerStatusReasonText));
         BlockCustomerCommand = new AsyncUiAction(() => SetCustomerStatusAsync(CustomerStatusContract.Blocked),
             () => !IsBusy && CanWriteCustomers && SelectedManagedCustomer is { Status: not CustomerStatusContract.Blocked } && IsValidCustomerReason(CustomerStatusReasonText));
-        WalletTopUpCommand = new AsyncUiAction(TopUpWalletAsync, () => !IsBusy && CanTopUpWallet &&
-            SelectedManagedCustomer is { Kind: CustomerKindContract.Registered, Status: CustomerStatusContract.Active } &&
-            TryParseToman(WalletTopUpAmountText, out var credit) && credit > 0 &&
-            TryParseToman(WalletCashReceivedText, out var received) && received >= credit);
     }
 
     private Task UseWalkInCustomer()
@@ -212,109 +185,6 @@ public sealed partial class SessionWorkflowViewModel
         }
     }
 
-    private void StartWalletBalanceRefresh(CustomerResponse? customer)
-    {
-        var generation = ++walletBalanceRefreshGeneration;
-        if (!CanTopUpWallet || customer is not { Kind: CustomerKindContract.Registered })
-        {
-            WalletBalanceText = Text("برای دیدن موجودی، مشتری ثبت‌شده را انتخاب کنید.", "Select a registered customer to view Wallet balance.");
-            return;
-        }
-        WalletBalanceText = Text("در حال دریافت موجودی کیف پول…", "Loading Wallet balance…");
-        _ = LoadWalletBalanceAsync(customer.Id, generation);
-    }
-
-    private async Task LoadWalletBalanceAsync(Guid customerId, int generation)
-    {
-        try
-        {
-            var balance = await api.GetWalletBalanceAsync(customerId);
-            if (generation != walletBalanceRefreshGeneration || SelectedManagedCustomer?.Id != customerId) return;
-            WalletBalanceText = Text($"موجودی کیف پول: {FormatToman(balance.BalanceToman)}", $"Wallet balance: {FormatToman(balance.BalanceToman)}");
-        }
-        catch (GameNetApiException ex)
-        {
-            if (generation == walletBalanceRefreshGeneration)
-                WalletBalanceText = WalletErrorText(ex.Code);
-        }
-        catch (HttpRequestException)
-        {
-            if (generation == walletBalanceRefreshGeneration)
-                WalletBalanceText = Text("موجودی دریافت نشد؛ اتصال به سرور را بررسی کنید.", "Could not load Wallet balance. Check the Server connection.");
-        }
-        catch (TaskCanceledException)
-        {
-            if (generation == walletBalanceRefreshGeneration)
-                WalletBalanceText = Text("دریافت موجودی زمان‌بر شد؛ دوباره تازه‌سازی کنید.", "Wallet balance request timed out. Refresh before retrying.");
-        }
-        catch
-        {
-            if (generation == walletBalanceRefreshGeneration)
-                WalletBalanceText = Text("موجودی کیف پول در دسترس نیست.", "Wallet balance is unavailable.");
-        }
-    }
-
-    private async Task TopUpWalletAsync()
-    {
-        if (SelectedManagedCustomer is not { Kind: CustomerKindContract.Registered, Status: CustomerStatusContract.Active } target ||
-            !TryParseToman(WalletTopUpAmountText, out var credit) || credit <= 0 ||
-            !TryParseToman(WalletCashReceivedText, out var received) || received < credit)
-            return;
-
-        ErrorMessage = string.Empty;
-        var fingerprint = $"{target.Id:D}|{target.Version}|{credit}|{received}";
-        var key = GetKey("wallet.cash-top-up", fingerprint);
-        BeginBusy();
-        try
-        {
-            var result = await api.CashTopUpWalletAsync(
-                target.Id, new WalletCashTopUpRequest(credit, received, target.Version), key);
-            pendingKeys.Remove("wallet.cash-top-up");
-            WalletTopUpAmountText = string.Empty;
-            WalletCashReceivedText = string.Empty;
-            StatusMessage = Text(
-                $"کیف پول مشتری {target.Code} به مبلغ {FormatToman(result.AmountCreditedToman)} شارژ شد؛ باقی‌پول {FormatToman(result.ChangeGivenToman)}.",
-                $"Customer {target.Code} Wallet credited by {FormatToman(result.AmountCreditedToman)}; change {FormatToman(result.ChangeGivenToman)}.");
-            await LoadWalletBalanceAsync(target.Id, ++walletBalanceRefreshGeneration);
-        }
-        catch (GameNetApiException ex)
-        {
-            ErrorMessage = WalletErrorText(ex.Code);
-        }
-        catch (HttpRequestException)
-        {
-            await LoadWalletBalanceAsync(target.Id, ++walletBalanceRefreshGeneration);
-            ErrorMessage = Text(
-                "پاسخ شارژ دریافت نشد. مبلغ‌ها را تغییر نده؛ ابتدا موجودی را بررسی کن. تلاش دوباره با همان مبلغ، همان درخواست را امن تطبیق می‌دهد.",
-                "The top-up response was lost. Do not change the amounts; check the balance first. Retrying with the same amounts safely reconciles the same request.");
-        }
-        catch (TaskCanceledException)
-        {
-            await LoadWalletBalanceAsync(target.Id, ++walletBalanceRefreshGeneration);
-            ErrorMessage = Text(
-                "پاسخ شارژ زمان‌بر شد. مبلغ‌ها را تغییر نده؛ موجودی را بررسی کن و فقط همان درخواست را تطبیق بده.",
-                "The top-up response timed out. Do not change the amounts; check balance and reconcile the same request.");
-        }
-        catch
-        {
-            ErrorMessage = Text("شارژ کیف پول انجام نشد؛ وضعیت سرور را تازه‌سازی کنید.", "Wallet top-up failed. Refresh and reconcile Server state.");
-        }
-        finally { EndBusy(); }
-    }
-
-    private string WalletErrorText(string code) => code switch
-    {
-        "wallet.forbidden" => Text("مجوز شارژ کیف پول را ندارید.", "You do not have permission to top up Wallets."),
-        "wallet.customer_not_found" => Text("مشتری ثبت‌شده پیدا نشد.", "Registered customer was not found."),
-        "wallet.customer_inactive" => Text("فقط مشتری فعال و غیرمسدود قابل شارژ است.", "Only active, unblocked customers can be topped up."),
-        "wallet.customer_version_conflict" => Text("اطلاعات مشتری تغییر کرده؛ فهرست را تازه‌سازی و دوباره بررسی کن.", "Customer data changed. Refresh and review before retrying."),
-        "wallet.invalid" => Text("مبلغ شارژ یا وجه دریافتی معتبر نیست.", "Credit or cash-received amount is invalid."),
-        "wallet.balance_overflow" => Text("موجودی از محدودهٔ مجاز سیستم بیشتر می‌شود.", "Wallet balance would exceed the supported range."),
-        "idempotency.in_flight" => Text("درخواست شارژ هنوز در حال پردازش است؛ وضعیت را تازه‌سازی کنید.", "Top-up request is still processing; refresh before retrying."),
-        "idempotency.key_reused" => Text("درخواست با کلید قبلی و مبلغ متفاوت ارسال شده است؛ وضعیت را بررسی کنید.", "The idempotency key was reused with different amounts; reconcile the result."),
-        _ => Text("شارژ کیف پول انجام نشد؛ وضعیت سرور را بررسی کنید.", "Wallet top-up failed. Check Server state.")
-    };
-
     private async Task CreateCustomerAsync()
     {
         ErrorMessage = string.Empty;
@@ -384,9 +254,6 @@ public sealed partial class SessionWorkflowViewModel
             var updated = await api.SetCustomerStatusAsync(target.Id,
                 new SetCustomerStatusRequest(status, target.Version, reason), key);
             pendingKeys.Remove("customer.status");
-        pendingKeys.Remove("wallet.cash-top-up");
-        WalletTopUpAmountText = string.Empty;
-        WalletCashReceivedText = string.Empty;
             await RefreshCustomersAsync();
             SelectedManagedCustomer = Customers.FirstOrDefault(x => x.Id == updated.Id);
             CustomerStatusReasonText = string.Empty;
@@ -422,7 +289,6 @@ public sealed partial class SessionWorkflowViewModel
         OnPropertyChanged(nameof(CustomerStatusSummaryText));
         OnPropertyChanged(nameof(CanReadCustomers));
         OnPropertyChanged(nameof(CanWriteCustomers));
-        OnPropertyChanged(nameof(CanTopUpWallet));
         RaiseCustomerCommands();
     }
 
@@ -442,7 +308,6 @@ public sealed partial class SessionWorkflowViewModel
     {
         OnPropertyChanged(nameof(CanReadCustomers));
         OnPropertyChanged(nameof(CanWriteCustomers));
-        OnPropertyChanged(nameof(CanTopUpWallet));
         if (!CanReadCustomers)
         {
             customerRefreshGeneration++;
@@ -465,7 +330,6 @@ public sealed partial class SessionWorkflowViewModel
         (ActivateCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (DeactivateCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (BlockCustomerCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
-        (WalletTopUpCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
     }
 
     private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

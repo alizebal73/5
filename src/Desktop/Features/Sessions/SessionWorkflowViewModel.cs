@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Wallet;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
@@ -71,10 +72,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             correctedReceived != (selected.Outcome.EffectiveAmountReceivedToman ?? selected.Outcome.AmountReceivedToman) &&
             IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
             ConfirmCashTenderCorrection);
+        WalletTopUp = new WalletTopUpViewModel(api, hasPermission);
         InitializeCustomerCommands();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public IWalletTopUpPort WalletTopUp { get; }
 
     public ObservableCollection<StationResponse> PcStations { get; } = [];
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
@@ -93,7 +97,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public bool CanCheckout => hasPermission(Permissions.BillingWrite);
     public bool CanReverseCashSale => hasPermission(Permissions.BillingCashReverse);
     public bool CanCorrectCashTender => hasPermission(Permissions.BillingCashTenderCorrect);
-    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender || CanReadCustomers || CanWriteCustomers || CanTopUpWallet;
+    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender || CanReadCustomers || CanWriteCustomers;
     public bool CanReadStations => hasPermission(Permissions.StationsRead);
 
     public StationResponse? SelectedStation
@@ -401,6 +405,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
         EnforceCustomerPermissions();
+        WalletTopUp.NotifyPermissionsChanged();
     }
 
     public void Reset()
@@ -430,6 +435,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         ConfirmTimingRecovery = false;
         timingRecoveryRequiredSessionId = null;
         ResetCustomerState();
+        WalletTopUp.Reset();
         OnPropertyChanged(nameof(CanRecoverSessionTiming));
         RaiseCommands();
         ErrorMessage = string.Empty;

@@ -3,7 +3,7 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Billing.Contracts;
-using GameNet.Server.Modules.Customers.Domain;
+using GameNet.Server.Modules.Customers.Contracts;
 using GameNet.Server.Modules.Wallet.Application;
 using GameNet.Server.Modules.Wallet.Domain;
 using GameNet.Server.Persistence;
@@ -16,6 +16,7 @@ namespace GameNet.Server.Modules.Wallet.Infrastructure;
 
 public sealed class WalletService(
     GameNetDbContext db,
+    ICustomerWalletEligibility customerEligibility,
     CommandMutationPipeline mutationPipeline,
     IRequestFingerprint requestFingerprint,
     ICashReceiptWriter cashReceiptWriter,
@@ -33,9 +34,8 @@ public sealed class WalletService(
         if (customerId == Guid.Empty)
             return Fail<WalletBalanceResponse>("wallet.customer_not_found", "Customer was not found.");
 
-        var customerExists = await db.Customers.AsNoTracking()
-            .AnyAsync(x => x.Id == customerId && x.Kind == CustomerKind.Registered, cancellationToken);
-        if (!customerExists)
+        var registeredCustomer = await customerEligibility.GetRegisteredCustomerAsync(customerId, cancellationToken);
+        if (!registeredCustomer.IsSuccess)
             return Fail<WalletBalanceResponse>("wallet.customer_not_found", "Registered customer was not found.");
 
         var account = await db.WalletAccounts.AsNoTracking()
@@ -68,16 +68,22 @@ public sealed class WalletService(
             requestFingerprint.Compute(payload), 200, Lease, Retention,
             async token =>
             {
-                // Lock the customer so two top-ups or a simultaneous status update cannot race.
-                var customer = await db.Customers
-                    .FromSqlInterpolated($"SELECT * FROM customers WHERE id = {command.CustomerId} FOR UPDATE")
-                    .SingleOrDefaultAsync(token);
-                if (customer is null || customer.Kind != CustomerKind.Registered)
-                    return Fail<WalletCashTopUpResponse>("wallet.customer_not_found", "Registered customer was not found.");
-                if (!customer.IsActive || customer.IsBlocked)
-                    return Fail<WalletCashTopUpResponse>("wallet.customer_inactive", "Only active, unblocked customers can receive purchased credit.");
-                if (customer.Version != command.ExpectedCustomerVersion)
-                    return Fail<WalletCashTopUpResponse>("wallet.customer_version_conflict", "Customer data changed; refresh and review before retrying.");
+                // Customer module owns registration/status/version rules and locks the row
+                // inside this mutation pipeline's transaction before financial writes.
+                var customerResult = await customerEligibility.LockActiveRegisteredCustomerForWalletTopUpAsync(
+                    command.CustomerId, command.ExpectedCustomerVersion, token);
+                if (!customerResult.IsSuccess)
+                {
+                    var error = customerResult.Error;
+                    return error.Code switch
+                    {
+                        "customers.not_found" => Fail<WalletCashTopUpResponse>("wallet.customer_not_found", error.Message),
+                        "customers.inactive" => Fail<WalletCashTopUpResponse>("wallet.customer_inactive", error.Message),
+                        "customers.version_conflict" => Fail<WalletCashTopUpResponse>("wallet.customer_version_conflict", error.Message),
+                        _ => Fail<WalletCashTopUpResponse>("wallet.invalid", error.Message)
+                    };
+                }
+                var customer = customerResult.Value;
 
                 var now = clock.UtcNow;
                 var account = await db.WalletAccounts.SingleOrDefaultAsync(x => x.CustomerId == command.CustomerId, token);
@@ -100,7 +106,7 @@ public sealed class WalletService(
 
                 var receiptId = Guid.NewGuid();
                 var receiptResult = await cashReceiptWriter.RecordWalletTopUpAsync(new RecordWalletTopUpCashReceiptCommand(
-                    receiptId, customer.Id, command.AmountToCreditToman, command.AmountReceivedToman,
+                    receiptId, customer.CustomerId, command.AmountToCreditToman, command.AmountReceivedToman,
                     command.Actor.OperatorId, now, command.IdempotencyKey.Trim(),
                     command.Actor.CorrelationId, command.Actor.Source), token);
                 if (!receiptResult.IsSuccess)
@@ -108,17 +114,17 @@ public sealed class WalletService(
 
                 var ledgerId = Guid.NewGuid();
                 await db.WalletLedgerEntries.AddAsync(WalletLedgerEntry.RecordCashTopUp(
-                    ledgerId, customer.Id, receiptId, command.AmountToCreditToman,
+                    ledgerId, customer.CustomerId, receiptId, command.AmountToCreditToman,
                     balanceAfter, command.Actor.OperatorId, now), token);
 
                 var response = new WalletCashTopUpResponse(
-                    customer.Id, receiptId, ledgerId, command.AmountToCreditToman,
+                    customer.CustomerId, receiptId, ledgerId, command.AmountToCreditToman,
                     command.AmountReceivedToman, receiptResult.Value.ChangeGivenToman,
                     balanceAfter, account.Version, receiptResult.Value.ReceivedAtUtc);
 
                 audit.Append(new AuditRecord(
                     now, "Operator", command.Actor.OperatorId.ToString("D"),
-                    "wallet.cash_top_up", "Customer", customer.Id.ToString("D"), null,
+                    "wallet.cash_top_up", "Customer", customer.CustomerId.ToString("D"), null,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     AfterJson: JsonSerializer.Serialize(new
                     {

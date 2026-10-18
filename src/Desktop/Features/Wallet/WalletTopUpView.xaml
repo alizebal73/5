@@ -1,0 +1,25 @@
+<UserControl x:Class="GameNet.Desktop.Features.Wallet.WalletTopUpView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinWidth="0" MinHeight="0">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+  </UserControl.Resources>
+  <Expander Header="{DynamicResource Wallet.TopUpTitle}"
+            Visibility="{Binding CanTopUpWallet, Converter={StaticResource BooleanToVisibilityConverter}}"
+            IsExpanded="False" Margin="0,8,0,0">
+    <StackPanel Margin="0,6,0,0">
+      <TextBlock Text="{Binding BalanceText}" FontWeight="SemiBold" Margin="0,0,0,7" TextWrapping="Wrap"/>
+      <TextBlock Text="{DynamicResource Wallet.CreditAmount}" FontSize="12"/>
+      <TextBox Padding="5" Margin="0,2,0,5"
+               Text="{Binding AmountToCreditText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditInput}"/>
+      <TextBlock Text="{DynamicResource Wallet.CashReceived}" FontSize="12"/>
+      <TextBox Padding="5" Margin="0,2,0,5"
+               Text="{Binding CashReceivedText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditInput}"/>
+      <TextBlock Text="{Binding SummaryText}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
+      <Button Content="{DynamicResource Wallet.TopUp}" Command="{Binding TopUpCommand}" Padding="7,5" IsEnabled="{Binding CanTopUpWallet}"/>
+      <TextBlock Text="{Binding ErrorMessage}" Foreground="#B42318" TextWrapping="Wrap" Margin="0,6,0,0"/>
+      <TextBlock Text="{Binding StatusMessage}" Foreground="#067647" TextWrapping="Wrap" Margin="0,6,0,0"/>
+    </StackPanel>
+  </Expander>
+</UserControl>

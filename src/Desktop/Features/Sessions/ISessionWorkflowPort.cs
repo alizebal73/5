@@ -6,6 +6,7 @@ using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Desktop.Features.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
@@ -23,6 +24,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ObservableCollection<ActiveSessionListItem> ActiveSessions { get; }
     ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; }
     ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; }
+    IWalletTopUpPort WalletTopUp { get; }
 
     ICommand RefreshCommand { get; }
     ICommand SearchCustomersCommand { get; }
@@ -34,7 +36,6 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand ActivateCustomerCommand { get; }
     ICommand DeactivateCustomerCommand { get; }
     ICommand BlockCustomerCommand { get; }
-    ICommand WalletTopUpCommand { get; }
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
     ICommand EndSessionCommand { get; }
@@ -46,7 +47,6 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     bool CanManageTariffs { get; }
     bool CanReadCustomers { get; }
     bool CanWriteCustomers { get; }
-    bool CanTopUpWallet { get; }
     bool CanOperateSessions { get; }
     bool CanRecoverSessionTiming { get; }
     bool CanCheckout { get; }
@@ -69,10 +69,6 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string CustomerStatusReasonText { get; set; }
     bool CustomerIncludeInactive { get; set; }
     string CustomerStatusSummaryText { get; }
-    string WalletBalanceText { get; }
-    string WalletTopUpAmountText { get; set; }
-    string WalletCashReceivedText { get; set; }
-    string WalletTopUpSummaryText { get; }
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
     string ReconciledElapsedMinutesText { get; set; }

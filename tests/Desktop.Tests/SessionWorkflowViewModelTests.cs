@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Sessions;
+using GameNet.Desktop.Features.Wallet;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Customers;
@@ -25,6 +26,71 @@ namespace GameNet.Desktop.Tests;
 
 public sealed class SessionWorkflowViewModelTests
 {
+    [Fact]
+    public async Task Wallet_top_up_reuses_idempotency_key_after_lost_response_and_blocks_new_amounts()
+    {
+        var oldUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var customer = new CustomerResponse(
+                Guid.NewGuid(), "C-WALLET-01", "Wallet Test", null, null,
+                CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>())
+            {
+                LoseNextWalletTopUpResponseAfterCommit = true
+            };
+            var viewModel = new WalletTopUpViewModel(client, permission => permission == Permissions.WalletWrite)
+            {
+                SelectedCustomer = customer,
+                AmountToCreditText = "100",
+                CashReceivedText = "100"
+            };
+
+            var unresolved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if ((args.PropertyName == nameof(viewModel.ErrorMessage) || args.PropertyName == nameof(viewModel.IsBusy)) &&
+                    viewModel.ErrorMessage.Contains("A previous top-up outcome is unresolved", StringComparison.Ordinal) &&
+                    !viewModel.IsBusy)
+                    unresolved.TrySetResult(true);
+            };
+
+            Assert.True(viewModel.TopUpCommand.CanExecute(null));
+            viewModel.TopUpCommand.Execute(null);
+            await unresolved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.False(viewModel.CanEditInput);
+            Assert.True(viewModel.TopUpCommand.CanExecute(null), "The exact same request must remain replayable.");
+            var originalKey = Assert.Single(client.WalletTopUpIdempotencyKeys);
+            viewModel.AmountToCreditText = "200";
+            viewModel.CashReceivedText = "250";
+            Assert.Equal("100", viewModel.AmountToCreditText);
+            Assert.Equal("100", viewModel.CashReceivedText);
+
+            var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if ((args.PropertyName == nameof(viewModel.StatusMessage) || args.PropertyName == nameof(viewModel.IsBusy)) &&
+                    viewModel.StatusMessage.Contains("Wallet credited by", StringComparison.Ordinal) &&
+                    !viewModel.IsBusy)
+                    completed.TrySetResult(true);
+            };
+
+            viewModel.TopUpCommand.Execute(null);
+            await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(2, client.WalletTopUpCallCount);
+            Assert.Equal(originalKey, client.WalletTopUpIdempotencyKeys[1]);
+            Assert.Equal(100, client.WalletBalanceToman);
+            Assert.True(viewModel.CanEditInput);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = oldUiCulture;
+        }
+    }
+
     [Fact]
     public async Task Start_success_message_keeps_the_station_that_was_submitted_when_selection_changes_in_flight()
     {
@@ -1113,10 +1179,40 @@ public sealed class SessionWorkflowViewModelTests
 
         public List<CustomerResponse> Customers { get; } = [];
 
+        public long WalletBalanceToman { get; private set; }
+        public int WalletBalanceVersion { get; private set; }
+        public int WalletTopUpCallCount { get; private set; }
+        public bool LoseNextWalletTopUpResponseAfterCommit { get; set; }
+        public List<string> WalletTopUpIdempotencyKeys { get; } = [];
+        private readonly Dictionary<string, WalletCashTopUpResponse> walletTopUpResponses = new(StringComparer.Ordinal);
+
         public Task<WalletBalanceResponse> GetWalletBalanceAsync(Guid customerId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WalletBalanceResponse(customerId, 0, 0, null));
-        public Task<WalletCashTopUpResponse> CashTopUpWalletAsync(Guid customerId, WalletCashTopUpRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            Task.FromResult(new WalletBalanceResponse(customerId, WalletBalanceToman, WalletBalanceVersion, null));
+
+        public Task<WalletCashTopUpResponse> CashTopUpWalletAsync(
+            Guid customerId, WalletCashTopUpRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            WalletTopUpCallCount++;
+            WalletTopUpIdempotencyKeys.Add(idempotencyKey);
+            if (walletTopUpResponses.TryGetValue(idempotencyKey, out var replay))
+                return Task.FromResult(replay);
+
+            WalletBalanceToman = checked(WalletBalanceToman + request.AmountToCreditToman);
+            WalletBalanceVersion++;
+            var response = new WalletCashTopUpResponse(
+                customerId, Guid.NewGuid(), Guid.NewGuid(), request.AmountToCreditToman,
+                request.AmountReceivedToman, request.AmountReceivedToman - request.AmountToCreditToman,
+                WalletBalanceToman, WalletBalanceVersion, DateTimeOffset.UtcNow);
+            walletTopUpResponses[idempotencyKey] = response;
+
+            if (LoseNextWalletTopUpResponseAfterCommit)
+            {
+                LoseNextWalletTopUpResponseAfterCommit = false;
+                throw new HttpRequestException("Simulated lost response after the server committed the top-up.");
+            }
+
+            return Task.FromResult(response);
+        }
 
         public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default)
         {
