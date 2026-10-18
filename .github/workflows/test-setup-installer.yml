@@ -144,30 +144,11 @@ jobs:
           if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
             throw "Pinned Inno Setup compiler is missing after temporary installation."
           }
-          $probeRoot = Join-Path $env:RUNNER_TEMP "inno-compiler-version-probe"
-          $probeOutput = Join-Path $probeRoot "output"
-          $probeScript = Join-Path $probeRoot "compiler-probe.iss"
-          if (Test-Path -LiteralPath $probeRoot) {
-            throw "Compiler version-probe directory already exists; refusing to reuse it."
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+            throw "Pinned Inno Setup compiler is missing after temporary installation."
           }
-          New-Item -ItemType Directory -Force -Path $probeOutput | Out-Null
-          @"
-          [Setup]
-          AppName=GameNet Inno Compiler Version Probe
-          AppVersion=1.0
-          DefaultDirName={tmp}\GameNetInnoCompilerVersionProbe
-          OutputDir=$probeOutput
-          OutputBaseFilename=InnoCompilerProbe
-          Uninstallable=no
-          "@ | Set-Content -LiteralPath $probeScript -Encoding utf8NoBOM
-          $probeOutputText = @(& $iscc $probeScript 2>&1)
-          $probeExitCode = $LASTEXITCODE
-          $probeText = $probeOutputText -join [Environment]::NewLine
-          if ($probeExitCode -ne 0 -or -not $probeText.Contains("Compiler engine version: Inno Setup 6.4.3")) {
-            throw "The selected compiler did not prove Inno Setup 6.4.3. Output: $probeText"
-          }
-          Write-Host "INNO_SETUP_PINNED_VERSION=6.4.3"
           Write-Host "INNO_SETUP_COMPILER=$iscc"
+          Write-Host "Compiler engine version will be asserted by the version-probe build script."
       - name: Build Setup.exe and verify source/hash manifests
         shell: pwsh
         timeout-minutes: 25
