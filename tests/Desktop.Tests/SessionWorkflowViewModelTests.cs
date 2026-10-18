@@ -18,6 +18,7 @@ using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.System;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 using Xunit;
 
 namespace GameNet.Desktop.Tests;
@@ -1111,6 +1112,11 @@ public sealed class SessionWorkflowViewModelTests
         public Task<AgentCommandAcknowledgement> ProbeAgentHealthAsync(Guid stationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public List<CustomerResponse> Customers { get; } = [];
+
+        public Task<WalletBalanceResponse> GetWalletBalanceAsync(Guid customerId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WalletBalanceResponse(customerId, 0, 0, null));
+        public Task<WalletCashTopUpResponse> CashTopUpWalletAsync(Guid customerId, WalletCashTopUpRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default)
         {
