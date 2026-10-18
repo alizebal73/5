@@ -163,8 +163,11 @@ jobs:
           $probeOutputText = @(& $iscc $probeScript 2>&1)
           $probeExitCode = $LASTEXITCODE
           $probeText = $probeOutputText -join [Environment]::NewLine
-          if ($probeExitCode -ne 0 -or
-              $probeText -notmatch '(?m)^Compiler engine version: Inno Setup 6\.4\.3\s*
+          if ($probeExitCode -ne 0 -or -not $probeText.Contains("Compiler engine version: Inno Setup 6.4.3")) {
+            throw "The selected compiler did not prove Inno Setup 6.4.3. Output: $probeText"
+          }
+          Write-Host "INNO_SETUP_PINNED_VERSION=6.4.3"
+          Write-Host "INNO_SETUP_COMPILER=$iscc"
       - name: Build Setup.exe and verify source/hash manifests
         shell: pwsh
         timeout-minutes: 25
