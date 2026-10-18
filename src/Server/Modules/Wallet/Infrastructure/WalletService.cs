@@ -114,17 +114,17 @@ public sealed class WalletService(
 
                 var ledgerId = Guid.NewGuid();
                 await db.WalletLedgerEntries.AddAsync(WalletLedgerEntry.RecordCashTopUp(
-                    ledgerId, customer.Id, receiptId, command.AmountToCreditToman,
+                    ledgerId, customer.CustomerId, receiptId, command.AmountToCreditToman,
                     balanceAfter, command.Actor.OperatorId, now), token);
 
                 var response = new WalletCashTopUpResponse(
-                    customer.Id, receiptId, ledgerId, command.AmountToCreditToman,
+                    customer.CustomerId, receiptId, ledgerId, command.AmountToCreditToman,
                     command.AmountReceivedToman, receiptResult.Value.ChangeGivenToman,
                     balanceAfter, account.Version, receiptResult.Value.ReceivedAtUtc);
 
                 audit.Append(new AuditRecord(
                     now, "Operator", command.Actor.OperatorId.ToString("D"),
-                    "wallet.cash_top_up", "Customer", customer.Id.ToString("D"), null,
+                    "wallet.cash_top_up", "Customer", customer.CustomerId.ToString("D"), null,
                     command.Actor.CorrelationId, command.Actor.Source, "Succeeded", command.IdempotencyKey,
                     AfterJson: JsonSerializer.Serialize(new
                     {
