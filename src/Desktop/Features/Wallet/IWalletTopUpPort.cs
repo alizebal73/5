@@ -9,6 +9,7 @@ public interface IWalletTopUpPort : INotifyPropertyChanged
     ICommand TopUpCommand { get; }
     bool CanTopUpWallet { get; }
     bool IsBusy { get; }
+    bool CanEditInput { get; }
     string ErrorMessage { get; }
     string StatusMessage { get; }
     string BalanceText { get; }
