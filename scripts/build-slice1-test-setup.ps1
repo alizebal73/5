@@ -150,11 +150,15 @@ try {
     $manifestPath = Join-Path $payloadRoot "manifest.json"
     Write-Utf8File -Path $manifestPath -Text (ConvertTo-Json -InputObject $payloadManifest -Depth 8)
 
-    $isccCandidates = @(
-        (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "Inno Setup 6\ISCC.exe"),
-        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
-    )
-    $iscc = $isccCandidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+    $isccCandidates = [System.Collections.Generic.List[string]]::new()
+    $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
+        $isccCandidates.Add((Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $isccCandidates.Add((Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"))
+    }
+    $iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     if ([string]::IsNullOrWhiteSpace($iscc)) {
         throw "Pinned Inno Setup 6.4.3 compiler is missing. The workflow must install it before invoking this builder."
     }
@@ -205,9 +209,11 @@ try {
         }
     }
     Write-Utf8File -Path (Join-Path $outputRoot "setup-manifest.json") -Text (ConvertTo-Json -InputObject $setupManifest -Depth 8)
+    $setupManifestHash = (Get-FileHash -LiteralPath (Join-Path $outputRoot "setup-manifest.json") -Algorithm SHA256).Hash.ToLowerInvariant()
     $sumLines = @(
         "$setupHash  GameNet5-TestSetup.exe"
         "$manifestHash  manifest.json"
+        "$setupManifestHash  setup-manifest.json"
     )
     Write-Utf8File -Path (Join-Path $outputRoot "SHA256SUMS.txt") -Text (($sumLines -join [Environment]::NewLine) + [Environment]::NewLine)
 
