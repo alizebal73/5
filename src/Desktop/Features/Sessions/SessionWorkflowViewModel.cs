@@ -11,6 +11,7 @@ using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
@@ -92,7 +93,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public bool CanCheckout => hasPermission(Permissions.BillingWrite);
     public bool CanReverseCashSale => hasPermission(Permissions.BillingCashReverse);
     public bool CanCorrectCashTender => hasPermission(Permissions.BillingCashTenderCorrect);
-    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender || CanReadCustomers || CanWriteCustomers;
+    public bool CanUseWorkspace => CanManageTariffs || CanOperateSessions || CanCheckout || CanReverseCashSale || CanCorrectCashTender || CanReadCustomers || CanWriteCustomers || CanTopUpWallet;
     public bool CanReadStations => hasPermission(Permissions.StationsRead);
 
     public StationResponse? SelectedStation
