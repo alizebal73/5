@@ -99,9 +99,8 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
         BalanceText = Text("برای مشاهدهٔ موجودی، مشتری ثبت‌شده را انتخاب کنید.", "Select a registered customer to view its Wallet balance.");
-        pendingFingerprint = null;
-        pendingIdempotencyKey = null;
-        IsBusy = false;
+        // Preserve unresolved idempotency state and busy state across logout/reset.
+        // If an in-flight cash request commits after the view resets, a retry must reuse its key.
     }
 
     private void RefreshBalance()
@@ -176,30 +175,36 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
                 target.Id, new WalletCashTopUpRequest(credit, received, target.Version), key);
             pendingFingerprint = null;
             pendingIdempotencyKey = null;
-            AmountToCreditText = string.Empty;
-            CashReceivedText = string.Empty;
-            StatusMessage = Text(
-                $"کیف پول مشتری {target.Code} به مبلغ {FormatToman(result.AmountCreditedToman)} شارژ شد؛ باقی‌پول {FormatToman(result.ChangeGivenToman)}.",
-                $"Customer {target.Code} Wallet credited by {FormatToman(result.AmountCreditedToman)}; change {FormatToman(result.ChangeGivenToman)}.");
-            await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
+            if (SelectedCustomer?.Id == target.Id)
+            {
+                AmountToCreditText = string.Empty;
+                CashReceivedText = string.Empty;
+                StatusMessage = Text(
+                    $"کیف پول مشتری {target.Code} به مبلغ {FormatToman(result.AmountCreditedToman)} شارژ شد؛ باقی‌پول {FormatToman(result.ChangeGivenToman)}.",
+                    $"Customer {target.Code} Wallet credited by {FormatToman(result.AmountCreditedToman)}; change {FormatToman(result.ChangeGivenToman)}.");
+                await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
+            }
         }
         catch (GameNetApiException ex)
         {
-            ErrorMessage = ErrorText(ex.Code);
+            if (SelectedCustomer?.Id == target.Id)
+                ErrorMessage = ErrorText(ex.Code);
         }
         catch (HttpRequestException)
         {
             await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
-            ErrorMessage = Text(
-                "پاسخ شارژ دریافت نشد. مبلغ‌ها را تغییر نده؛ ابتدا موجودی را بررسی کن. تکرار همان درخواست، با همان کلید، نتیجه را امن تطبیق می‌دهد.",
-                "The top-up response was lost. Do not change the amounts; check the balance first. Retrying the same request reuses its idempotency key.");
+            if (SelectedCustomer?.Id == target.Id)
+                ErrorMessage = Text(
+                    "پاسخ شارژ دریافت نشد. مبلغ‌ها را تغییر نده؛ ابتدا موجودی را بررسی کن. تکرار همان درخواست، با همان کلید، نتیجه را امن تطبیق می‌دهد.",
+                    "The top-up response was lost. Do not change the amounts; check the balance first. Retrying the same request reuses its idempotency key.");
         }
         catch (TaskCanceledException)
         {
             await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
-            ErrorMessage = Text(
-                "پاسخ شارژ زمان‌بر شد. مبلغ‌ها را تغییر نده؛ موجودی را بررسی کن و فقط همان درخواست را تطبیق بده.",
-                "The top-up response timed out. Do not change the amounts; check the balance and reconcile the same request.");
+            if (SelectedCustomer?.Id == target.Id)
+                ErrorMessage = Text(
+                    "پاسخ شارژ زمان‌بر شد. مبلغ‌ها را تغییر نده؛ موجودی را بررسی کن و فقط همان درخواست را تطبیق بده.",
+                    "The top-up response timed out. Do not change the amounts; check the balance and reconcile the same request.");
         }
         catch
         {
