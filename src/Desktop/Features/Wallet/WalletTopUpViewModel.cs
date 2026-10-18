@@ -311,7 +311,8 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         var digits = new StringBuilder(text.Length);
         foreach (var c in text.Trim())
         {
-            if (c is '۰' or '٠') digits.Append('0');
+            if (c is >= '0' and <= '9') digits.Append(c);
+            else if (c is '۰' or '٠') digits.Append('0');
             else if (c is '۱' or '١') digits.Append('1');
             else if (c is '۲' or '٢') digits.Append('2');
             else if (c is '۳' or '٣') digits.Append('3');
