@@ -11,6 +11,7 @@ using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Api;
 
@@ -77,6 +78,18 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         var customers = await ReadPayloadAsync<CustomerResponse[]>(response, cancellationToken);
         return customers ?? Array.Empty<CustomerResponse>();
     }
+
+    public async Task<WalletBalanceResponse> GetWalletBalanceAsync(Guid customerId, CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Get, $"/api/v1/wallet/customers/{customerId:D}/balance", authenticated: true);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        return await ReadPayloadAsync<WalletBalanceResponse>(response, cancellationToken);
+    }
+
+    public Task<WalletCashTopUpResponse> CashTopUpWalletAsync(
+        Guid customerId, WalletCashTopUpRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<WalletCashTopUpRequest, WalletCashTopUpResponse>(
+            HttpMethod.Post, $"/api/v1/wallet/customers/{customerId:D}/cash-top-up", body, idempotencyKey, cancellationToken);
 
     public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendMutationAsync<CreateCustomerRequest, CustomerResponse>(HttpMethod.Post, "/api/v1/customers", body, idempotencyKey, cancellationToken);
