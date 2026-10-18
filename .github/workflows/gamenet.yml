@@ -1,0 +1,132 @@
+name: gamenet-quick-validation
+
+on:
+  workflow_dispatch:
+  # Fast lane for normal development commits; skip Markdown-only pushes.
+  push:
+    branches:
+      - "feature/operator-identity-v1"
+      - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
+      - "docs/engineering-readiness-audit-v1"
+      - "security/**"
+    paths-ignore:
+      - "**/*.md"
+  # Run the fast lane on protected main and the active review targets; never rely on a push-only green check for a PR.
+  # Foundation-targeted PRs are handled by the full certification workflow.
+  pull_request:
+    branches:
+      - main
+      - "integration/runtime-operator-v1"
+      - "integration/runtime-*"
+      - "feature/operator-identity-v1"
+      - "feature/**"
+      - "feat/**"
+      - "fix/**"
+      - "refactor/**"
+      - "topic/**"
+      - "stage2/**"
+      - "security/**"
+
+concurrency:
+  group: gamenet-quick-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # On Integration PRs, the existing required status must not pass unless the
+  # reusable full PostgreSQL/runtime certification has succeeded first.
+  integration-foundation:
+    name: integration-foundation-certification
+    if: ${{ github.event_name == 'pull_request' && startsWith(github.base_ref, 'integration/runtime-') }}
+    uses: ./.github/workflows/foundation-certification.yml
+
+  quick-validation:
+    name: quick-validation
+    needs: integration-foundation
+    if: always()
+    timeout-minutes: 20
+    runs-on: windows-2025
+    steps:
+      - name: Enforce PostgreSQL/runtime certification before the required status can pass
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          startsWith(github.base_ref, 'integration/runtime-') &&
+          needs.integration-foundation.result != 'success'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          throw "Integration PostgreSQL/runtime certification did not succeed. Refusing a green required quick-validation status."
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
+      - name: Install repository-pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: PowerShell parser gate
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($file in Get-ChildItem .\scripts -Recurse -File | Where-Object { $_.Extension -in @(".ps1", ".psm1") }) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              $errors | Format-List ErrorId, Message, Extent
+              throw "PowerShell syntax error in $($file.FullName)."
+            }
+          }
+
+      - name: Canonical build and tests
+        timeout-minutes: 15
+        shell: pwsh
+        run: .\scripts\verify.ps1
+
+  deployment-payload:
+    name: deployment-payload
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-deployment-payload]')
+    needs: quick-validation
+    timeout-minutes: 35
+    runs-on: windows-2025
+    steps:
+      - name: Checkout exact verified commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: CI runner policy guard
+        shell: pwsh
+        run: .\scripts\check-ci-runner-policy.ps1
+
+      - name: Install repository-pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Publish versioned self-contained payloads
+        shell: pwsh
+        run: |
+          $version = "0.1.0-preview.${{ github.run_number }}.${{ github.run_attempt }}"
+          .\scripts\publish-deployment-payloads.ps1 -Version $version
+
+      - name: Upload payload archives and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamenet-deployment-payload-${{ github.sha }}
+          path: |
+            artifacts/deployment/**/*.zip
+            artifacts/deployment/**/release-manifest.json
+            artifacts/deployment/**/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7

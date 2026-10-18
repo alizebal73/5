@@ -1,0 +1,108 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:system="clr-namespace:System;assembly=mscorlib">
+  <system:String x:Key="App.Title">مدیریت گیم‌نت ۵</system:String>
+  <system:String x:Key="App.Welcome">مدیریت مرکزی گیم‌نت</system:String>
+  <system:String x:Key="Identity.LoginTitle">ورود اپراتور</system:String>
+  <system:String x:Key="Identity.Username">نام کاربری</system:String>
+  <system:String x:Key="Identity.Password">گذرواژه</system:String>
+  <system:String x:Key="Identity.LoginButton">ورود به سامانه</system:String>
+  <system:String x:Key="Identity.LoginHint">ورود با حساب اپراتوری ساخته‌شده توسط مدیر سامانه انجام می‌شود.</system:String>
+  <system:String x:Key="Identity.SignedIn">کاربر واردشده</system:String>
+  <system:String x:Key="Identity.LogoutButton">خروج</system:String>
+  <system:String x:Key="Identity.ChangePasswordTitle">تغییر گذرواژه</system:String>
+  <system:String x:Key="Identity.CurrentPassword">گذرواژه فعلی</system:String>
+  <system:String x:Key="Identity.NewPassword">گذرواژه جدید</system:String>
+  <system:String x:Key="Identity.ConfirmNewPassword">تکرار گذرواژه جدید</system:String>
+  <system:String x:Key="Identity.ChangePasswordButton">تغییر گذرواژه</system:String>
+  <system:String x:Key="Identity.LoginSucceeded">ورود با موفقیت انجام شد</system:String>
+  <system:String x:Key="Identity.UsernameRequired">نام کاربری و گذرواژه را وارد کنید.</system:String>
+  <system:String x:Key="Identity.InvalidCredentials">نام کاربری یا گذرواژه نادرست است.</system:String>
+  <system:String x:Key="Identity.AccountLocked">حساب موقتاً قفل شده است. کمی بعد دوباره تلاش کنید.</system:String>
+  <system:String x:Key="Identity.AccountDisabled">این حساب غیرفعال است.</system:String>
+  <system:String x:Key="Identity.ConnectionError">ارتباط با سرور برقرار نشد. اتصال شبکه را بررسی کنید.</system:String>
+  <system:String x:Key="Identity.UnexpectedError">ورود انجام نشد. وضعیت سرور را بررسی کنید.</system:String>
+  <system:String x:Key="Station.Title">ایستگاه‌ها</system:String>
+  <system:String x:Key="Station.Subtitle">وضعیت آنلاین Agent از lease و heartbeat سرور محاسبه می‌شود.</system:String>
+  <system:String x:Key="Station.Refresh">تازه‌سازی</system:String>
+  <system:String x:Key="Station.CreateSection">افزودن ایستگاه</system:String>
+  <system:String x:Key="Station.Code">کد</system:String><system:String x:Key="Station.Name">نام</system:String><system:String x:Key="Station.Type">نوع</system:String>
+  <system:String x:Key="Station.Create">ساخت ایستگاه</system:String><system:String x:Key="Station.List">فهرست ایستگاه‌ها</system:String>
+  <system:String x:Key="Station.Empty">هنوز ایستگاهی ثبت نشده است.</system:String><system:String x:Key="Station.SelectHint">برای مدیریت، یک ایستگاه را انتخاب کنید.</system:String>
+  <system:String x:Key="Station.Selected">ایستگاه انتخاب‌شده</system:String><system:String x:Key="Station.Rename">تغییر نام</system:String>
+  <system:String x:Key="Station.RenameButton">ذخیره نام</system:String><system:String x:Key="Station.DeviceId">شناسه دستگاه Agent</system:String>
+  <system:String x:Key="Station.BindAgent">اتصال Agent</system:String><system:String x:Key="Station.Maintenance">تعمیرات</system:String>
+  <system:String x:Key="Station.Available">آماده</system:String>
+  <system:String x:Key="Station.Search">جست‌وجو در کد، نام، دستگاه یا وضعیت ایستگاه</system:String>
+  <system:String x:Key="Station.FilterType">فیلتر بر اساس نوع ایستگاه</system:String>
+  <system:String x:Key="Station.FilterStatus">فیلتر بر اساس وضعیت اداری</system:String>
+  <system:String x:Key="Station.FilterAll">همه</system:String>
+  <system:String x:Key="Station.NoResults">ایستگاهی با این فیلترها پیدا نشد.</system:String>
+  <system:String x:Key="Station.Disabled">غیرفعال</system:String>
+  <system:String x:Key="Station.RecoveryRequired">نیازمند بازیابی</system:String>
+  <system:String x:Key="Station.AgentVersion">نسخه Agent</system:String><system:String x:Key="Station.AgentState">وضعیت گزارش‌شده</system:String>
+  <system:String x:Key="Station.HealthProbe">بررسی سلامت Agent</system:String>
+  <system:String x:Key="Station.StatusAdmin">وضعیت اداری</system:String>
+  <system:String x:Key="Station.ReadPermissionRequired">برای مشاهدهٔ ایستگاه‌ها، مجوز «مشاهده ایستگاه‌ها» لازم است.</system:String>
+
+  <system:String x:Key="Session.WorkflowTitle">چرخهٔ Session و صندوق</system:String>
+  <system:String x:Key="Session.WorkflowSubtitle">مسیر آزمایشی PC: شروع، پایان، صورتحساب و دریافت وجه نقد؛ وضعیت سرور مرجع نهایی است.</system:String>
+  <system:String x:Key="Session.Refresh">تازه‌سازی وضعیت</system:String>
+  <system:String x:Key="Session.ControlWarning">هشدار: قفل و بازکردن واقعی PC هنوز در Issue #92 در حال امکان‌سنجی است. این پنل فعلاً برای آزمون گردش Session و حسابداری است، نه کنترل عملیاتی PC.</system:String>
+  <system:String x:Key="Session.StartTitle">شروع Session</system:String>
+  <system:String x:Key="Session.PcStation">ایستگاه PC</system:String>
+  <system:String x:Key="Session.Tariff">تعرفهٔ ساعتی</system:String>
+  <system:String x:Key="Session.Start">شروع Session</system:String>
+  <system:String x:Key="Session.CustomerWalkIn">در این برش، مشتری گذری ساخته می‌شود؛ اطلاعات شخصی دریافت نمی‌کنیم.</system:String>
+  <system:String x:Key="Session.ActiveTitle">Sessionهای فعال</system:String>
+  <system:String x:Key="Session.End">پایان و صدور صورتحساب</system:String>
+  <system:String x:Key="Tariff.CreateTitle">تعریف تعرفهٔ PC</system:String>
+  <system:String x:Key="Tariff.Code">کد تعرفه</system:String>
+  <system:String x:Key="Tariff.Name">نام تعرفه</system:String>
+  <system:String x:Key="Tariff.HourlyRate">نرخ ساعتی (تومان، عدد صحیح)</system:String>
+  <system:String x:Key="Tariff.IsDefault">تعرفهٔ پیش‌فرض PC باشد</system:String>
+  <system:String x:Key="Tariff.Create">ثبت تعرفه</system:String>
+  <system:String x:Key="Tariff.ManagePermissionRequired">برای ساخت تعرفه، مجوز تغییر تنظیمات لازم است.</system:String>
+  <system:String x:Key="Billing.PendingTitle">صورتحساب‌های در انتظار پرداخت</system:String>
+  <system:String x:Key="Billing.NoPendingInvoices">فعلاً صورتحسابی در انتظار پرداخت نیست.</system:String>
+  <system:String x:Key="Billing.CheckoutPermissionRequired">برای مشاهده و ثبت پرداخت، مجوز مالی لازم است.</system:String>
+  <system:String x:Key="Billing.CashReceived">وجه نقد دریافتی (تومان)</system:String>
+  <system:String x:Key="Billing.ConfirmCashCheckout">مبلغ صورتحساب، وجه دریافتی و باقی‌مانده را بررسی کرده‌ام و ثبت پرداخت را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Billing.Checkout">ثبت پرداخت نقدی</system:String>
+  <system:String x:Key="Billing.RecentCashCheckouts">آخرین پرداخت‌های ثبت‌شده (برای تطبیق پس از قطع ارتباط)</system:String>
+  <system:String x:Key="Billing.CashReversalReason">علت برگشت کامل فروش نقدی (الزامی)</system:String>
+  <system:String x:Key="Billing.ConfirmCashSaleReversal">صورتحساب و پرداخت را بررسی کرده‌ام و بازگرداندن مبلغ صورتحساب، نه کل وجه دریافتی، را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Billing.ReverseCashSale">برگشت کامل فروش نقدی</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionTitle">اصلاح سوابق وجه نقد دریافتی</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectedReceived">وجه نقد اصلاح‌شده (تومان)</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionReason">علت اصلاح (الزامی)</system:String>
+  <system:String x:Key="Billing.ConfirmCashTenderCorrection">موجودی واقعی وجه نقد را بررسی کرده‌ام و فقط اصلاح سابقهٔ وجه دریافتی و باقی‌مانده را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Billing.CorrectCashTender">ثبت اصلاح سوابق وجه نقد</system:String>
+
+  <system:String x:Key="Session.TimingRecoveryTitle">بازیابی زمان Session</system:String>
+  <system:String x:Key="Session.TimingRecoveryInstructions">فقط وقتی استفاده کنید که سرور نتواند پیوستگی زمان یکنواخت را اثبات کند؛ برای نمونه پس از راه‌اندازی مجدد ویندوز. مدت کل بازی را که مستقل بررسی کرده‌اید، به دقیقهٔ صحیح وارد کنید (۱ تا ۴۳٬۲۰۰). سرور زمان را از اختلاف ساعت UTC حدس نمی‌زند و از تعرفهٔ ثابت زمان شروع استفاده می‌کند.</system:String>
+  <system:String x:Key="Session.TimingRecoveryMinutes">مدت کل بازیِ تأییدشده (دقیقهٔ صحیح)</system:String>
+  <system:String x:Key="Session.TimingRecoveryReason">مدرک تطبیق / علت بازیابی (الزامی)</system:String>
+  <system:String x:Key="Session.ConfirmTimingRecovery">مدت بازی را مستقل بررسی کرده‌ام و این بازیابی ثبت‌شونده در سوابق را تأیید می‌کنم.</system:String>
+  <system:String x:Key="Session.TimingRecoverySubmit">تطبیق زمان و صدور صورتحساب</system:String>
+  <system:String x:Key="Customer.Section">مدیریت مشتریان</system:String>
+  <system:String x:Key="Customer.New">مشتری جدید</system:String>
+  <system:String x:Key="Customer.Search">جست‌وجو در کد، نام، لقب یا شماره</system:String>
+  <system:String x:Key="Customer.SearchButton">جست‌وجو / تازه‌سازی</system:String>
+  <system:String x:Key="Customer.IncludeInactive">نمایش مشتریان غیرفعال و مسدود</system:String>
+  <system:String x:Key="Customer.SelectForSession">مشتری برای Session (خالی = مشتری گذری)</system:String>
+  <system:String x:Key="Customer.SessionSearch">جست‌وجوی مشتری برای Session با کد، نام، لقب یا موبایل</system:String>
+  <system:String x:Key="Customer.SessionSearchButton">جست‌وجوی مشتری Session</system:String>
+  <system:String x:Key="Customer.WalkInHint">اگر مشتری انتخاب نشود، Server هویت مشتری گذری می‌سازد.</system:String>
+  <system:String x:Key="Customer.UseWalkIn">استفاده از مشتری گذری</system:String>
+  <system:String x:Key="Customer.Code">کد مشتری</system:String>
+  <system:String x:Key="Customer.Name">نام و نام خانوادگی</system:String>
+  <system:String x:Key="Customer.Nickname">لقب / نام نمایشی</system:String>
+  <system:String x:Key="Customer.Phone">شمارهٔ تماس (اختیاری)</system:String>
+  <system:String x:Key="Customer.Create">ثبت مشتری</system:String>
+  <system:String x:Key="Customer.Update">ذخیرهٔ تغییرات</system:String>
+  <system:String x:Key="Customer.StatusReason">علت تغییر وضعیت (الزامی)</system:String>
+  <system:String x:Key="Customer.Activate">فعال‌سازی</system:String>
+  <system:String x:Key="Customer.Deactivate">غیرفعال‌سازی</system:String>
+  <system:String x:Key="Customer.Block">مسدودسازی</system:String>
+</ResourceDictionary>

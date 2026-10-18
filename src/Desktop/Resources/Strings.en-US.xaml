@@ -1,0 +1,108 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:system="clr-namespace:System;assembly=mscorlib">
+  <system:String x:Key="App.Title">GameNet Manager 5</system:String>
+  <system:String x:Key="App.Welcome">Central GameNet management</system:String>
+  <system:String x:Key="Identity.LoginTitle">Operator sign in</system:String>
+  <system:String x:Key="Identity.Username">Username</system:String>
+  <system:String x:Key="Identity.Password">Password</system:String>
+  <system:String x:Key="Identity.LoginButton">Sign in</system:String>
+  <system:String x:Key="Identity.LoginHint">Sign in with an operator account created by the system owner.</system:String>
+  <system:String x:Key="Identity.SignedIn">Signed in as</system:String>
+  <system:String x:Key="Identity.LogoutButton">Sign out</system:String>
+  <system:String x:Key="Identity.ChangePasswordTitle">Change password</system:String>
+  <system:String x:Key="Identity.CurrentPassword">Current password</system:String>
+  <system:String x:Key="Identity.NewPassword">New password</system:String>
+  <system:String x:Key="Identity.ConfirmNewPassword">Confirm new password</system:String>
+  <system:String x:Key="Identity.ChangePasswordButton">Change password</system:String>
+  <system:String x:Key="Identity.LoginSucceeded">You are signed in</system:String>
+  <system:String x:Key="Identity.UsernameRequired">Enter your username and password.</system:String>
+  <system:String x:Key="Identity.InvalidCredentials">Username or password is incorrect.</system:String>
+  <system:String x:Key="Identity.AccountLocked">This account is temporarily locked. Try again later.</system:String>
+  <system:String x:Key="Identity.AccountDisabled">This account is disabled.</system:String>
+  <system:String x:Key="Identity.ConnectionError">Could not connect to the Server. Check your network.</system:String>
+  <system:String x:Key="Identity.UnexpectedError">Sign in failed. Check the Server status.</system:String>
+  <system:String x:Key="Station.Title">Stations</system:String>
+  <system:String x:Key="Station.Subtitle">Agent online state comes from the Server lease and heartbeat.</system:String>
+  <system:String x:Key="Station.Refresh">Refresh</system:String>
+  <system:String x:Key="Station.CreateSection">Add station</system:String>
+  <system:String x:Key="Station.Code">Code</system:String><system:String x:Key="Station.Name">Name</system:String><system:String x:Key="Station.Type">Type</system:String>
+  <system:String x:Key="Station.Create">Create station</system:String><system:String x:Key="Station.List">Stations</system:String>
+  <system:String x:Key="Station.Empty">No stations have been registered yet.</system:String><system:String x:Key="Station.SelectHint">Select a station to manage it.</system:String>
+  <system:String x:Key="Station.Selected">Selected station</system:String><system:String x:Key="Station.Rename">Rename</system:String>
+  <system:String x:Key="Station.RenameButton">Save name</system:String><system:String x:Key="Station.DeviceId">Agent device ID</system:String>
+  <system:String x:Key="Station.BindAgent">Bind Agent</system:String><system:String x:Key="Station.Maintenance">Maintenance</system:String>
+  <system:String x:Key="Station.Available">Available</system:String>
+  <system:String x:Key="Station.Search">Search code, name, device or status</system:String>
+  <system:String x:Key="Station.FilterType">Filter by station type</system:String>
+  <system:String x:Key="Station.FilterStatus">Filter by administrative status</system:String>
+  <system:String x:Key="Station.FilterAll">All</system:String>
+  <system:String x:Key="Station.NoResults">No stations match these filters.</system:String>
+  <system:String x:Key="Station.Disabled">Disabled</system:String>
+  <system:String x:Key="Station.RecoveryRequired">Recovery required</system:String><system:String x:Key="Station.AgentVersion">Agent version</system:String>
+  <system:String x:Key="Station.AgentState">Reported state</system:String>
+  <system:String x:Key="Station.HealthProbe">Check Agent health</system:String>
+  <system:String x:Key="Station.StatusAdmin">Administrative status</system:String>
+  <system:String x:Key="Station.ReadPermissionRequired">You need the Stations Read permission to view this workspace.</system:String>
+
+  <system:String x:Key="Session.WorkflowTitle">Session and cash checkout</system:String>
+  <system:String x:Key="Session.WorkflowSubtitle">PC test flow: start, end, invoice and cash payment. Server state is authoritative.</system:String>
+  <system:String x:Key="Session.Refresh">Refresh status</system:String>
+  <system:String x:Key="Session.ControlWarning">Warning: actual PC lock/unlock is still being evaluated in Issue #92. This panel currently tests Session/accounting flow, not operational PC control.</system:String>
+  <system:String x:Key="Session.StartTitle">Start a Session</system:String>
+  <system:String x:Key="Session.PcStation">PC station</system:String>
+  <system:String x:Key="Session.Tariff">Hourly tariff</system:String>
+  <system:String x:Key="Session.Start">Start Session</system:String>
+  <system:String x:Key="Session.CustomerWalkIn">This slice creates a Walk-in customer and does not collect personal details.</system:String>
+  <system:String x:Key="Session.ActiveTitle">Active Sessions</system:String>
+  <system:String x:Key="Session.End">End and issue invoice</system:String>
+  <system:String x:Key="Tariff.CreateTitle">Configure a PC tariff</system:String>
+  <system:String x:Key="Tariff.Code">Tariff code</system:String>
+  <system:String x:Key="Tariff.Name">Tariff name</system:String>
+  <system:String x:Key="Tariff.HourlyRate">Hourly rate (whole Toman)</system:String>
+  <system:String x:Key="Tariff.IsDefault">Make default for PC</system:String>
+  <system:String x:Key="Tariff.Create">Create tariff</system:String>
+  <system:String x:Key="Tariff.ManagePermissionRequired">The Settings Write permission is required to create tariffs.</system:String>
+  <system:String x:Key="Billing.PendingTitle">Invoices awaiting payment</system:String>
+  <system:String x:Key="Billing.NoPendingInvoices">No invoices are waiting for payment.</system:String>
+  <system:String x:Key="Billing.CheckoutPermissionRequired">Billing permission is required to view and record payments.</system:String>
+  <system:String x:Key="Billing.CashReceived">Cash received (Toman)</system:String>
+  <system:String x:Key="Billing.ConfirmCashCheckout">I reviewed the amount due, cash received and change, and confirm recording this payment.</system:String>
+  <system:String x:Key="Billing.Checkout">Record cash payment</system:String>
+  <system:String x:Key="Billing.RecentCashCheckouts">Recent recorded cash payments (for reconnect/restart reconciliation)</system:String>
+  <system:String x:Key="Billing.CashReversalReason">Reason for full cash-sale reversal (required)</system:String>
+  <system:String x:Key="Billing.ConfirmCashSaleReversal">I checked the invoice/payment and confirm returning the invoice amount, not the gross cash tender.</system:String>
+  <system:String x:Key="Billing.ReverseCashSale">Reverse full cash sale</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionTitle">Correct recorded cash received</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectedReceived">Correct cash received (Toman)</system:String>
+  <system:String x:Key="Billing.CashTenderCorrectionReason">Reason for correction (required)</system:String>
+  <system:String x:Key="Billing.ConfirmCashTenderCorrection">I verified the physical cash count and confirm correcting only the recorded cash received/change facts.</system:String>
+  <system:String x:Key="Billing.CorrectCashTender">Correct recorded cash details</system:String>
+
+  <system:String x:Key="Session.TimingRecoveryTitle">Recover Session timing</system:String>
+  <system:String x:Key="Session.TimingRecoveryInstructions">Use only when the Server cannot prove monotonic timing continuity (for example, after a Windows reboot). Enter the independently verified total play duration in whole minutes (1–43,200). The Server never estimates time from UTC; the original tariff snapshot is used.</system:String>
+  <system:String x:Key="Session.TimingRecoveryMinutes">Verified total play duration (whole minutes)</system:String>
+  <system:String x:Key="Session.TimingRecoveryReason">Reconciliation evidence / reason (required)</system:String>
+  <system:String x:Key="Session.ConfirmTimingRecovery">I independently verified the duration and confirm this audited timing reconciliation.</system:String>
+  <system:String x:Key="Session.TimingRecoverySubmit">Reconcile timing and issue invoice</system:String>
+  <system:String x:Key="Customer.Section">Customer management</system:String>
+  <system:String x:Key="Customer.New">New customer</system:String>
+  <system:String x:Key="Customer.Search">Search code, name, nickname or phone</system:String>
+  <system:String x:Key="Customer.SearchButton">Search / Refresh</system:String>
+  <system:String x:Key="Customer.IncludeInactive">Include inactive and blocked customers</system:String>
+  <system:String x:Key="Customer.SelectForSession">Customer for this Session (blank = Walk-in)</system:String>
+  <system:String x:Key="Customer.SessionSearch">Find a Session customer by code, name, nickname or phone</system:String>
+  <system:String x:Key="Customer.SessionSearchButton">Search Session customers</system:String>
+  <system:String x:Key="Customer.WalkInHint">If no customer is selected, the Server creates a Walk-in identity.</system:String>
+  <system:String x:Key="Customer.UseWalkIn">Use Walk-in customer</system:String>
+  <system:String x:Key="Customer.Code">Customer code</system:String>
+  <system:String x:Key="Customer.Name">Full name</system:String>
+  <system:String x:Key="Customer.Nickname">Nickname / display name</system:String>
+  <system:String x:Key="Customer.Phone">Phone number (optional)</system:String>
+  <system:String x:Key="Customer.Create">Create customer</system:String>
+  <system:String x:Key="Customer.Update">Save changes</system:String>
+  <system:String x:Key="Customer.StatusReason">Reason for status change (required)</system:String>
+  <system:String x:Key="Customer.Activate">Activate</system:String>
+  <system:String x:Key="Customer.Deactivate">Deactivate</system:String>
+  <system:String x:Key="Customer.Block">Block</system:String>
+</ResourceDictionary>

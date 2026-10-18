@@ -1,0 +1,66 @@
+using GameNet.Shared.Contracts.V1.Sessions;
+
+namespace GameNet.Shared.Contracts.V1.Billing;
+
+/// <summary>
+/// Durable read model for reconciling a cash checkout after an HTTP failure or Desktop restart.
+/// Status comes from the invoice; paid outcomes include the durable Payment and Ledger identities.
+/// </summary>
+public sealed record CashCheckoutOutcomeResponse(
+    Guid InvoiceId,
+    Guid SessionId,
+    Guid StationId,
+    string TariffCodeSnapshot,
+    string TariffNameSnapshot,
+    long TariffHourlyRateTomanSnapshot,
+    long ElapsedTicks,
+    long AmountToman,
+    InvoiceStatusContract Status,
+    Guid? PaymentId,
+    Guid? LedgerEntryId,
+    long? AmountReceivedToman,
+    long? ChangeGivenToman,
+    DateTimeOffset IssuedAtUtc,
+    DateTimeOffset? PaidAtUtc,
+    Guid? ReversalId = null,
+    DateTimeOffset? ReversedAtUtc = null,
+    string? ReversalReason = null,
+    Guid? ReversalLedgerEntryId = null,
+    long? EffectiveAmountReceivedToman = null,
+    long? EffectiveChangeGivenToman = null,
+    Guid? CashTenderCorrectionId = null,
+    int? CashTenderCorrectionVersion = null,
+    string? CashTenderCorrectionReason = null,
+    DateTimeOffset? CashTenderCorrectedAtUtc = null);
+
+public sealed record CashSaleReversalRequest(
+    Guid PaymentId,
+    long ConfirmedAmountToman,
+    string Reason);
+
+public sealed record CashSaleReversalResponse(
+    Guid ReversalId,
+    Guid InvoiceId,
+    Guid PaymentId,
+    Guid LedgerEntryId,
+    long AmountToman,
+    DateTimeOffset ReversedAtUtc);
+
+public sealed record CashTenderCorrectionRequest(
+    Guid PaymentId,
+    int ExpectedVersion,
+    long CorrectedAmountReceivedToman,
+    string Reason,
+    bool Confirmed);
+
+public sealed record CashTenderCorrectionResponse(
+    Guid CorrectionId,
+    Guid InvoiceId,
+    Guid PaymentId,
+    int Version,
+    long PreviousAmountReceivedToman,
+    long PreviousChangeGivenToman,
+    long CorrectedAmountReceivedToman,
+    long CorrectedChangeGivenToman,
+    string Reason,
+    DateTimeOffset CorrectedAtUtc);

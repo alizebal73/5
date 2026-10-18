@@ -1,0 +1,101 @@
+using System.Net.Http.Json;
+using System.Text.Json;
+using GameNet.Agent.Identity;
+using GameNet.Shared.Contracts.V1.Security;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+namespace GameNet.Agent.Transport;
+
+public interface IAgentEnrollmentBootstrapper
+{
+    Task<string?> EnrollIfConfiguredAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Redeems a short-lived operator-issued token during first start. Production reads
+/// the token only from a DPAPI LocalMachine file protected by a restrictive DACL;
+/// process environment tokens are allowed only for Development/certification.
+/// </summary>
+public sealed class AgentEnrollmentBootstrapper(
+    IHttpClientFactory httpClientFactory,
+    IAgentCredentialStore credentialStore,
+    IAgentEnrollmentTokenStore enrollmentTokenStore,
+    IHostEnvironment hostEnvironment,
+    IOptions<AgentTransportOptions> options) : IAgentEnrollmentBootstrapper
+{
+    public async Task<string?> EnrollIfConfiguredAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+            throw new ArgumentException("Agent DeviceId is required.", nameof(deviceId));
+
+        var protectedToken = await enrollmentTokenStore.TryLoadAsync(deviceId, cancellationToken);
+        var enrollmentToken = protectedToken?.Token;
+        if (enrollmentToken is null)
+        {
+            // Machine/service environment blocks are not a safe secret handoff for a
+            // LocalService Windows service. Keep this seam only for Development/CI.
+            if (hostEnvironment.IsProduction())
+                throw new InvalidOperationException(
+                    "Production Agent first start requires a DPAPI-protected enrollment token file; environment-variable enrollment is disabled.");
+
+            var variableName = options.Value.EnrollmentTokenEnvironmentVariableName;
+            enrollmentToken = Environment.GetEnvironmentVariable(variableName);
+            if (string.IsNullOrWhiteSpace(enrollmentToken))
+                return null;
+        }
+        if (!IsEnrollmentToken(enrollmentToken))
+            throw new InvalidOperationException(
+                "Agent enrollment token has an invalid format; replace it with a newly issued token.");
+
+        var endpoint = $"{options.Value.ServerBaseUrl.TrimEnd('/')}/api/v1/agent/enrollment/redeem";
+        var client = httpClientFactory.CreateClient("GameNetAgentCredentialClient");
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = JsonContent.Create(new AgentEnrollmentRedeemRequest(deviceId, enrollmentToken))
+        };
+        request.Headers.TryAddWithoutValidation("X-GameNet-Contract", "v1");
+
+        using var response = await client.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Agent enrollment failed with HTTP {(int)response.StatusCode}. Check that the enrollment token is valid, unexpired, and issued for this DeviceId.");
+
+        var issued = await response.Content.ReadFromJsonAsync<AgentCredentialSecretResponse>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web),
+            cancellationToken);
+        if (issued is null ||
+            !string.Equals(issued.DeviceId, deviceId, StringComparison.Ordinal) ||
+            !IsCredentialSecret(issued.Secret))
+        {
+            throw new InvalidOperationException(
+                "Server returned an invalid Agent enrollment response; the enrollment token has been retained for safe recovery.");
+        }
+
+        // Persist the credential first, but retain a protected one-time token file
+        // until the normal Agent access-token request succeeds. If persistence or
+        // authentication fails, the operator retains an explicit recovery marker; the
+        // token itself remains non-redeemable after the Server commits its redemption.
+        await credentialStore.SaveAsync(issued.Secret, cancellationToken);
+        Environment.SetEnvironmentVariable(
+            options.Value.EnrollmentTokenEnvironmentVariableName,
+            null,
+            EnvironmentVariableTarget.Process);
+        return issued.Secret;
+    }
+
+    private static bool IsEnrollmentToken(string token) =>
+        token.Length == 43 &&
+        token.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+
+    private static bool IsCredentialSecret(string? secret) =>
+        !string.IsNullOrWhiteSpace(secret) &&
+        secret.Length == 43 &&
+        secret.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+}

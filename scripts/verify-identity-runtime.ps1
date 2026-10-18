@@ -1,0 +1,1366 @@
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+if ($null -ne $dotnetCommand -and -not [string]::IsNullOrWhiteSpace($dotnetCommand.Source)) {
+    $dotnetPath = $dotnetCommand.Source
+}
+else {
+    $dotnetPath = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+}
+if (-not (Test-Path -LiteralPath $dotnetPath -PathType Leaf)) {
+    throw "The required dotnet SDK executable was not found on PATH or under Program Files."
+}
+
+if ([string]::IsNullOrWhiteSpace($env:GAMENET_DATABASE_CONNECTION)) {
+    throw "Identity runtime verification requires the isolated clean PostgreSQL connection from verify-postgresql.ps1."
+}
+
+$envNames = @(
+    "GAMENET_DATABASE_CONNECTION",
+    "GameNet__DatabaseConnectionString",
+    "ASPNETCORE_URLS",
+    "ASPNETCORE_ENVIRONMENT",
+    "DOTNET_ENVIRONMENT",
+    "GameNet__Authentication__Enabled",
+    "GameNet__Authentication__Issuer",
+    "GameNet__Authentication__Audience",
+    "GameNet__Authentication__SigningKey",
+    "GameNet__Idempotency__FingerprintKey",
+    "GameNet__Agent__ProvisioningKey",
+    "GameNet__AgentIdentity__RootPath",
+    "GameNet__AgentTransport__ServerBaseUrl",
+    "GAMENET_AGENT_BOOTSTRAP_SECRET",
+    "GAMENET_BOOTSTRAP_SECRET",
+    "GameNet__Setup__BootstrapSecret",
+    "GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS",
+    "GAMENET_PROTECTED_SETTINGS_FILE"
+)
+$oldEnvironment = @{}
+foreach ($name in $envNames) {
+    $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+}
+
+function Get-EphemeralPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
+function Invoke-IdentityRequest(
+    [string]$Method,
+    [string]$Path,
+    [hashtable]$Headers,
+    [AllowNull()][object]$Body = $null
+) {
+    $request = @{
+        Method = $Method
+        Uri = "$serverUrl$Path"
+        Headers = $Headers
+        TimeoutSec = 10
+        SkipHttpErrorCheck = $true
+    }
+    if ($null -ne $Body) {
+        $request.ContentType = "application/json"
+        $request.Body = $Body | ConvertTo-Json -Depth 10 -Compress
+    }
+
+    $response = Invoke-WebRequest @request
+    $json = $null
+    if (-not [string]::IsNullOrWhiteSpace($response.Content)) {
+        try { $json = $response.Content | ConvertFrom-Json -Depth 20 }
+        catch { $json = $null }
+    }
+
+    return [pscustomobject]@{
+        StatusCode = [int]$response.StatusCode
+        CacheControl = [string]$response.Headers['Cache-Control']
+        Json = $json
+    }
+}
+
+function Read-DiagnosticText([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "" }
+
+    $lastError = ""
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        try {
+            return [System.IO.File]::ReadAllText($Path)
+        }
+        catch {
+            $lastError = $_.Exception.Message
+            Start-Sleep -Milliseconds 250
+        }
+    }
+
+    return "DIAGNOSTIC_READ_FAILED after retries: $lastError"
+}
+
+function Assert-Status($Response, [int]$Expected, [string]$Operation) {
+    if ($Response.StatusCode -ne $Expected) {
+        $errorCode = $Response.Json.error.code
+        throw "$Operation expected HTTP $Expected but received $($Response.StatusCode) (code=$errorCode)."
+    }
+}
+
+function Assert-ErrorCode($Response, [int]$ExpectedStatus, [string]$ExpectedCode, [string]$Operation) {
+    Assert-Status $Response $ExpectedStatus $Operation
+    if (-not [string]::Equals([string]$Response.Json.error.code, $ExpectedCode, [StringComparison]::Ordinal)) {
+        throw "$Operation returned an unexpected contract error code."
+    }
+}
+
+$serverUrl = "http://127.0.0.1:$(Get-EphemeralPort)"
+$root = Join-Path ([IO.Path]::GetTempPath()) ("gamenet5-identity-runtime-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $root | Out-Null
+$agentIdentityRoot = Join-Path $root "agent-identity"
+$agentLog = Join-Path $root "agent.log"
+$agentErrorLog = Join-Path $root "agent.err"
+$agentProcess = $null
+$serverLog = Join-Path $root "server.log"
+$serverErrorLog = Join-Path $root "server.err"
+$protectedSettingsPath = Join-Path $root "server-secrets.bin"
+$diagnosticRoot = Join-Path (Get-Location) "artifacts/foundation"
+$runToken = [Guid]::NewGuid().ToString("N")
+$server = $null
+$failureMessage = $null
+$testSucceeded = $false
+$bootstrapSecret = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$signingKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$provisioningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$fingerprintKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$username = "ci-owner-" + [Guid]::NewGuid().ToString("N").Substring(0, 16)
+$password = "CI-owner-" + [Guid]::NewGuid().ToString("N")
+$wrongPassword = "wrong-" + [Guid]::NewGuid().ToString("N")
+$basicOperatorPassword = $null
+$basicToken = $null
+$managerPassword = $null
+$managerToken = $null
+$accessToken = $null
+$stationEnrollmentToken = $null
+$stationEnrollmentTokenId = $null
+$stationEnrollmentExpiresAtUtc = $null
+$enrollmentPayload = $null
+$clearEnrollmentBytes = $null
+$enrollmentEntropy = $null
+$protectedEnrollmentBytes = $null
+
+try {
+    # This runs only while verify-postgresql.ps1 points this process to a brand-new,
+    # migrated PostgreSQL database. Never fall back to the machine-level database.
+    $env:GameNet__DatabaseConnectionString = $env:GAMENET_DATABASE_CONNECTION
+    $env:ASPNETCORE_URLS = $serverUrl
+    # This integration smoke uses the explicit Development-only secret seam. Production's
+    # rejection of environment-based secrets is covered by ServerSecretBootstrapTests.
+    $env:ASPNETCORE_ENVIRONMENT = "Development"
+    $env:DOTNET_ENVIRONMENT = "Development"
+    $env:GAMENET_ALLOW_UNPROTECTED_TEST_SECRETS = "true"
+    $env:GAMENET_PROTECTED_SETTINGS_FILE = $protectedSettingsPath
+    $env:GameNet__Authentication__Enabled = "true"
+    $env:GameNet__Authentication__Issuer = "GameNet5.Identity.RuntimeCertification"
+    $env:GameNet__Authentication__Audience = "GameNet5.Identity.RuntimeCertification.Client"
+    $env:GameNet__Authentication__SigningKey = $signingKey
+    $env:GameNet__Idempotency__FingerprintKey = $fingerprintKey
+    $env:GameNet__Agent__ProvisioningKey = $provisioningKey
+    Remove-Item Env:GAMENET_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    Remove-Item Env:GameNet__Setup__BootstrapSecret -ErrorAction SilentlyContinue
+
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' ("*$currentSid`:(OI)(CI)(F)") | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not restrict the isolated Identity test directory ACL." }
+
+    try {
+        Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop
+    } catch {
+        Add-Type -AssemblyName System.Security -ErrorAction Stop
+    }
+    $setupSettings = [ordered]@{
+        "GameNet:Authentication:Enabled" = "true"
+        "GameNet:Authentication:Issuer" = "GameNet5.Identity.RuntimeCertification"
+        "GameNet:Authentication:Audience" = "GameNet5.Identity.RuntimeCertification.Client"
+        "GameNet:Setup:BootstrapSecret" = $bootstrapSecret
+        "GameNet:ServerTls:CertificateThumbprint" = ("A" * 40)
+    }
+    $clearSetupBytes = [Text.Encoding]::UTF8.GetBytes(($setupSettings | ConvertTo-Json -Compress))
+    $protectedSetupBytes = [Security.Cryptography.ProtectedData]::Protect(
+        $clearSetupBytes, $null, [Security.Cryptography.DataProtectionScope]::LocalMachine)
+    try {
+        [IO.File]::WriteAllBytes($protectedSettingsPath, $protectedSetupBytes)
+    }
+    finally {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearSetupBytes)
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedSetupBytes)
+    }
+
+    $startArguments = @{
+        FilePath = $dotnetPath
+        ArgumentList = @("run", "--project", "src/Server/GameNet.Server.csproj", "--configuration", "Release", "--no-build", "--no-restore")
+        WorkingDirectory = (Get-Location)
+        RedirectStandardOutput = $serverLog
+        RedirectStandardError = $serverErrorLog
+        PassThru = $true
+    }
+    $server = Start-Process @startArguments
+
+    $ready = $false
+    $deadlineUtc = [DateTime]::UtcNow.AddSeconds(45)
+    while ([DateTime]::UtcNow -lt $deadlineUtc) {
+        $server.Refresh()
+        if ($server.HasExited) {
+            throw "Identity smoke Server exited before readiness with exit code $($server.ExitCode)."
+        }
+
+        try {
+            $health = Invoke-RestMethod -Uri "$serverUrl/health" -TimeoutSec 2
+            if ($health.data.readiness -eq "Ready") {
+                $ready = $true
+                break
+            }
+        }
+        catch { }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $ready) { throw "Identity smoke Server did not become ready within 45 seconds." }
+
+    $contractHeaders = @{ "X-GameNet-Contract" = "v1" }
+    $status = Invoke-IdentityRequest "GET" "/api/v1/bootstrap/status" $contractHeaders
+    Assert-Status $status 200 "Bootstrap status before setup"
+    if (-not $status.Json.data.required) { throw "The clean database did not report that initial bootstrap is required." }
+
+    $ownerBody = @{ username = $username; displayName = "CI Identity Owner"; password = $password }
+    $missingSecret = Invoke-IdentityRequest "POST" "/api/v1/bootstrap/admin" $contractHeaders $ownerBody
+    Assert-ErrorCode $missingSecret 401 "bootstrap.secret_invalid" "Bootstrap without setup secret"
+
+    $badSecretHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        "X-GameNet-Bootstrap-Secret" = ("wrong-" + $bootstrapSecret)
+    }
+    $wrongSecret = Invoke-IdentityRequest "POST" "/api/v1/bootstrap/admin" $badSecretHeaders $ownerBody
+    Assert-ErrorCode $wrongSecret 401 "bootstrap.secret_invalid" "Bootstrap with incorrect setup secret"
+
+    $setupHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        "X-GameNet-Bootstrap-Secret" = $bootstrapSecret
+    }
+    $bootstrap = Invoke-IdentityRequest "POST" "/api/v1/bootstrap/admin" $setupHeaders $ownerBody
+    Assert-Status $bootstrap 201 "First-owner bootstrap"
+    if ($bootstrap.Json.data.username -ne $username) { throw "The bootstrap response did not return the created owner identity." }
+
+    $statusAfterSetup = Invoke-IdentityRequest "GET" "/api/v1/bootstrap/status" $contractHeaders
+    Assert-Status $statusAfterSetup 200 "Bootstrap status after setup"
+    if ($statusAfterSetup.Json.data.required) { throw "Bootstrap still reports required after creating the first owner." }
+
+    $secondBootstrap = Invoke-IdentityRequest "POST" "/api/v1/bootstrap/admin" $setupHeaders $ownerBody
+    Assert-ErrorCode $secondBootstrap 409 "bootstrap.not_required" "Repeated first-owner bootstrap"
+
+    $loginBody = @{ username = $username; password = $wrongPassword }
+    $invalidLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders $loginBody
+    Assert-ErrorCode $invalidLogin 401 "auth.invalid_credentials" "Login with incorrect password"
+
+    $oversizedUsernameLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = ("u" * 65)
+        password = $password
+    }
+    Assert-ErrorCode $oversizedUsernameLogin 401 "auth.invalid_credentials" "Reject overlong operator username"
+
+    $oversizedPasswordLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $username
+        password = ("x" * 257)
+    }
+    Assert-ErrorCode $oversizedPasswordLogin 401 "auth.invalid_credentials" "Reject overlong operator password"
+
+    $loginBody.password = $password
+    $login = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders $loginBody
+    Assert-Status $login 200 "Valid operator login"
+    $accessToken = [string]$login.Json.data.accessToken
+    if ([string]::IsNullOrWhiteSpace($accessToken)) { throw "Successful login did not issue an access token." }
+    if (-not ($login.Json.data.permissions -contains "identity.users.read")) {
+        throw "The initial owner did not receive the expected Identity permission."
+    }
+
+    $operatorHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken" }
+    $current = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $operatorHeaders
+    Assert-Status $current 200 "Authenticated current-operator request"
+    if ($current.Json.data.username -ne $username) { throw "The current-operator endpoint returned the wrong identity." }
+
+    # Enrollment tokens are issued only through operator permission and redeemed exactly once.
+    $enrollmentDeviceId = "ci-enrollment-" + [Guid]::NewGuid().ToString("N")
+    $enrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $enrollmentDeviceId }
+    Assert-Status $enrollmentIssue 200 "Authorized operator issues an Agent enrollment token"
+    $enrollmentToken = [string]$enrollmentIssue.Json.token
+    $enrollmentTokenId = [string]$enrollmentIssue.Json.tokenId
+    if ([string]::IsNullOrWhiteSpace($enrollmentTokenId) -or $enrollmentToken.Length -ne 43) {
+        throw "Enrollment issue did not return a valid one-time token."
+    }
+    if ($enrollmentIssue.CacheControl -notmatch "no-store") { throw "Enrollment token response must be no-store." }
+
+    $enrollmentRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentRedeem 200 "Agent redeems its enrollment token"
+    $enrolledSecret = [string]$enrollmentRedeem.Json.secret
+    if ([string]::IsNullOrWhiteSpace($enrolledSecret) -or $enrollmentRedeem.Json.deviceId -ne $enrollmentDeviceId) {
+        throw "Enrollment redemption did not return the expected DeviceId and fresh credential."
+    }
+    if ($enrollmentRedeem.CacheControl -notmatch "no-store") { throw "Enrollment credential response must be no-store." }
+
+    $enrollmentReplay = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $enrollmentDeviceId; token = $enrollmentToken }
+    Assert-Status $enrollmentReplay 401 "Reject replay of a redeemed enrollment token"
+
+    $enrolledAgentLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $enrollmentDeviceId; secret = $enrolledSecret }
+    Assert-Status $enrolledAgentLogin 200 "Authenticate Agent with the credential created by enrollment"
+    if ([string]::IsNullOrWhiteSpace([string]$enrolledAgentLogin.Json.accessToken)) { throw "The enrolled Agent credential could not obtain an access token." }
+
+    # Recovery must never restore or replace a credential that has authenticated, even after revocation.
+    $unknownRecoveryDeviceId = "ci-enrollment-no-history-" + [Guid]::NewGuid().ToString("N")
+    $unknownRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $unknownRecoveryDeviceId
+        reason = "CI verifies recovery cannot issue tokens for a DeviceId with no enrollment history."
+    }
+    Assert-ErrorCode $unknownRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery for DeviceId with no enrollment history"
+
+    $usedCredentialRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI must reject recovery after an Agent credential has authenticated."
+    }
+    Assert-ErrorCode $usedCredentialRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery of an already-used Agent credential"
+
+    $credentialRevocationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        "X-GameNet-Agent-Provisioning-Key" = $provisioningKey
+    }
+    $revokeUsedCredential = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/revoke" $credentialRevocationHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI checks that normal revocation is not bypassed by enrollment recovery."
+    }
+    Assert-Status $revokeUsedCredential 200 "Revoke previously authenticated Agent credential"
+    if ($revokeUsedCredential.Json.revoked -ne $true) {
+        throw "The previously authenticated Agent credential was not revoked for the recovery-boundary test."
+    }
+    $revokedCredentialRecovery = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $enrollmentDeviceId
+        reason = "CI must not use enrollment recovery to undo ordinary credential revocation."
+    }
+    Assert-ErrorCode $revokedCredentialRecovery 409 "agent.enrollment_recovery_not_safe" "Reject recovery after ordinary Agent credential revocation"
+
+    # Simulate server redemption succeeding while local credential persistence fails.
+    $recoveryDeviceId = "ci-enrollment-recovery-" + [Guid]::NewGuid().ToString("N")
+    $recoveryInitialIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $recoveryDeviceId
+    }
+    Assert-Status $recoveryInitialIssue 200 "Issue original token for enrollment-recovery test"
+    $recoveryInitialToken = [string]$recoveryInitialIssue.Json.token
+    $recoveryInitialRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        token = $recoveryInitialToken
+    }
+    Assert-Status $recoveryInitialRedeem 200 "Redeem original token before simulating local credential-persistence failure"
+    $lostCredentialSecret = [string]$recoveryInitialRedeem.Json.secret
+
+    $recoveryIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $recoveryDeviceId
+        reason = "CI simulated local DPAPI credential persistence failure after server redemption."
+    }
+    Assert-Status $recoveryIssue 200 "Recover never-authenticated enrollment credential"
+    if ([string]$recoveryIssue.CacheControl -notmatch "no-store") {
+        throw "Enrollment-recovery token response must be no-store."
+    }
+    $recoveryToken = [string]$recoveryIssue.Json.token
+    if ($recoveryToken -notmatch '^[A-Za-z0-9_-]{43}$' -or
+        [string]::IsNullOrWhiteSpace([string]$recoveryIssue.Json.tokenId)) {
+        throw "Enrollment recovery did not return a valid replacement token."
+    }
+    $lostSecretLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        secret = $lostCredentialSecret
+    }
+    Assert-Status $lostSecretLogin 401 "Reject the lost credential after explicit enrollment recovery"
+    $oldEnrollmentReplay = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        token = $recoveryInitialToken
+    }
+    Assert-Status $oldEnrollmentReplay 401 "Reject the original redeemed token after enrollment recovery"
+    $recoveryRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        token = $recoveryToken
+    }
+    Assert-Status $recoveryRedeem 200 "Redeem the recovery-issued token"
+    $recoveredLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{
+        deviceId = $recoveryDeviceId
+        secret = [string]$recoveryRedeem.Json.secret
+    }
+    Assert-Status $recoveredLogin 200 "Authenticate the recovered Agent credential"
+
+    # A pending token can be refreshed only when no credential for this DeviceId has authenticated.
+    $pendingRecoveryDeviceId = "ci-enrollment-pending-recovery-" + [Guid]::NewGuid().ToString("N")
+    $pendingOriginalIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+    }
+    Assert-Status $pendingOriginalIssue 200 "Issue original unredeemed token for recovery test"
+    $pendingReplacementIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/recover" $operatorHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        reason = "CI verifies refresh of a pending or expired token before any credential has authenticated."
+    }
+    Assert-Status $pendingReplacementIssue 200 "Replace unredeemed enrollment token with an explicit recovery request"
+    if ([string]$pendingReplacementIssue.CacheControl -notmatch "no-store") {
+        throw "Pending-token recovery response must be no-store."
+    }
+    $rejectedOldPendingToken = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        token = [string]$pendingOriginalIssue.Json.token
+    }
+    Assert-Status $rejectedOldPendingToken 401 "Reject previous pending enrollment token after recovery"
+    $acceptedReplacementToken = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{
+        deviceId = $pendingRecoveryDeviceId
+        token = [string]$pendingReplacementIssue.Json.token
+    }
+    Assert-Status $acceptedReplacementToken 200 "Accept replacement token created through bounded pending-token recovery"
+
+    $revokedDeviceId = "ci-enrollment-revoked-" + [Guid]::NewGuid().ToString("N")
+    $revocableIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $revokedDeviceId }
+    Assert-Status $revocableIssue 200 "Issue token for revocation test"
+    $revocation = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens/$($revocableIssue.Json.tokenId)/revoke" $operatorHeaders @{ reason = "CI enrollment revocation test" }
+    Assert-Status $revocation 200 "Authorized operator revokes unused enrollment token"
+    if ($revocation.Json.revoked -ne $true) { throw "Enrollment token revocation was not confirmed." }
+    $revokedRedeem = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $revokedDeviceId; token = [string]$revocableIssue.Json.token }
+    Assert-Status $revokedRedeem 401 "Reject redemption of revoked enrollment token"
+
+    # A competing request cannot redeem the same token twice; the follow-up request must be rejected.
+    $raceDeviceId = "ci-enrollment-race-" + [Guid]::NewGuid().ToString("N")
+    $raceIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $raceDeviceId }
+    Assert-Status $raceIssue 200 "Issue token for single-use verification"
+    $raceRedeem1 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem1 200 "First enrollment redemption wins"
+    $raceRedeem2 = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment/redeem" $contractHeaders @{ deviceId = $raceDeviceId; token = [string]$raceIssue.Json.token }
+    Assert-Status $raceRedeem2 401 "Second enrollment redemption is rejected"
+    
+    # Two independent requests race to redeem one token; the database transaction must allow only one winner.
+    $parallelDeviceId = "ci-enrollment-parallel-" + [Guid]::NewGuid().ToString("N")
+    $parallelIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{ deviceId = $parallelDeviceId }
+    Assert-Status $parallelIssue 200 "Issue token for concurrent redemption"
+    $parallelUri = "$serverUrl/api/v1/agent/enrollment/redeem"
+    $parallelBody = @{ deviceId = $parallelDeviceId; token = [string]$parallelIssue.Json.token } | ConvertTo-Json -Compress
+    $parallelScript = {
+        param($uri, $body)
+        try {
+            $response = Invoke-WebRequest -Method Post -Uri $uri -Headers @{ "X-GameNet-Contract" = "v1" } -ContentType "application/json" -Body $body -TimeoutSec 20 -SkipHttpErrorCheck
+            $json = $response.Content | ConvertFrom-Json -Depth 10
+            [pscustomobject]@{ StatusCode = [int]$response.StatusCode; Secret = [string]$json.secret }
+        }
+        catch {
+            [pscustomobject]@{ StatusCode = -1; Secret = "" }
+        }
+    }
+    $parallelJobs = @(
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+        Start-Job -ScriptBlock $parallelScript -ArgumentList $parallelUri, $parallelBody
+    )
+    try {
+        $parallelResults = @(Receive-Job -Job $parallelJobs -Wait)
+    }
+    finally {
+        Remove-Job -Job $parallelJobs -Force -ErrorAction SilentlyContinue
+    }
+    $parallelWinners = @($parallelResults | Where-Object { $_.StatusCode -eq 200 -and -not [string]::IsNullOrWhiteSpace($_.Secret) })
+    $parallelLosers = @($parallelResults | Where-Object { $_.StatusCode -eq 401 })
+    if ($parallelResults.Count -ne 2 -or $parallelWinners.Count -ne 1 -or $parallelLosers.Count -ne 1) {
+        throw "Concurrent enrollment redemption did not produce exactly one credential and one rejected request."
+    }
+    $parallelLogin = Invoke-IdentityRequest "POST" "/api/v1/agent/auth/token" $contractHeaders @{ deviceId = $parallelDeviceId; secret = [string]$parallelWinners[0].Secret }
+    Assert-Status $parallelLogin 200 "Authenticate Agent using the one credential created by concurrent redemption"
+
+    # Station mutations must be idempotent and Station online state must not be inferred from credential existence.
+    $stationCode = "CI-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+    $stationCreateKey = "ci-station-create-" + [Guid]::NewGuid().ToString("N")
+    $stationCreateHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = $stationCreateKey
+    }
+    $stationCreateBody = @{ code = $stationCode; name = "CI Station"; type = 1 }
+    $stationCreate = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationCreateBody
+    Assert-Status $stationCreate 201 "Create station"
+    $stationId = [string]$stationCreate.Json.data.id
+    if ([string]::IsNullOrWhiteSpace($stationId) -or $stationCreate.Json.data.code -ne $stationCode) {
+        throw "Station create did not return the expected station identity."
+    }
+
+    $stationReplay = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationCreateBody
+    Assert-Status $stationReplay 201 "Replay identical station create"
+    if ([string]$stationReplay.Json.data.id -ne $stationId) {
+        throw "Idempotency replay returned a different station."
+    }
+
+    $stationDifferentBody = @{ code = $stationCode; name = "Different Station"; type = 1 }
+    $stationKeyConflict = Invoke-IdentityRequest "POST" "/api/v1/stations" $stationCreateHeaders $stationDifferentBody
+    Assert-ErrorCode $stationKeyConflict 409 "idempotency.key_reused" "Reuse station idempotency key with different payload"
+
+    # Create the tariff and prove the HTTP admission gate fails closed before any Agent is enrolled/bound.
+    $sessionTariffCode = "CI-SLICE1-" + [Guid]::NewGuid().ToString("N").Substring(0, 12)
+    $sessionTariffHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-tariff-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $sessionTariffBody = @{
+        code = $sessionTariffCode
+        name = "CI Session Cash Tariff"
+        stationType = 1
+        hourlyRateToman = [long]60000
+        isDefault = $false
+    }
+    $sessionTariff = Invoke-IdentityRequest "POST" "/api/v1/tariffs" $sessionTariffHeaders $sessionTariffBody
+    Assert-Status $sessionTariff 201 "Create disposable PC tariff for Session cash workflow"
+    $sessionTariffId = [string]$sessionTariff.Json.data.id
+    if ([string]::IsNullOrWhiteSpace($sessionTariffId) -or
+        $sessionTariff.Json.data.hourlyRateToman -ne 60000 -or
+        $sessionTariff.Json.data.stationType -ne 1 -or
+        -not $sessionTariff.Json.data.isActive) {
+        throw "Disposable Session tariff did not return its expected authoritative identity and rate."
+    }
+
+
+    $unboundSessionStartHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-start-unbound-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $unboundSessionStart = Invoke-IdentityRequest "POST" "/api/v1/sessions" $unboundSessionStartHeaders @{
+        stationId = $stationId
+        tariffId = $sessionTariffId
+        customerId = $null
+    }
+    Assert-ErrorCode $unboundSessionStart 409 "sessions.agent_unavailable" "Reject PC Session start while Agent is unbound"
+    $activeAfterRejectedStart = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeAfterRejectedStart 200 "Check that rejected unbound Session start created no active Session"
+    if (@($activeAfterRejectedStart.Json.data).Count -ne 0) {
+        throw "Rejected Session start while the Agent was unbound left an active Session."
+    }
+
+    $stationDeviceId = "ci-station-agent-" + [Guid]::NewGuid().ToString("N")
+    $stationEnrollmentIssue = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $operatorHeaders @{
+        deviceId = $stationDeviceId
+    }
+    Assert-Status $stationEnrollmentIssue 200 "Issue single-use enrollment token for the live Runtime Agent"
+    if ($stationEnrollmentIssue.CacheControl -notmatch "no-store") {
+        throw "Live Agent enrollment-token response must be no-store."
+    }
+    $stationEnrollmentToken = [string]$stationEnrollmentIssue.Json.token
+    $stationEnrollmentTokenId = [string]$stationEnrollmentIssue.Json.tokenId
+    try {
+        # ConvertFrom-Json may already materialize ISO timestamps as DateTime. Do not
+        # cast that value to a culture-formatted string and parse it again: the CI runner
+        # uses a Persian calendar culture, which can shift a Gregorian year by 622 years.
+        $expiryValue = $stationEnrollmentIssue.Json.expiresAtUtc
+        if ($expiryValue -is [DateTimeOffset]) {
+            $stationEnrollmentExpiresAtUtc = $expiryValue.ToUniversalTime()
+        }
+        elseif ($expiryValue -is [DateTime]) {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::new($expiryValue.ToUniversalTime())
+        }
+        else {
+            $stationEnrollmentExpiresAtUtc = [DateTimeOffset]::Parse(
+                [string]$expiryValue,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::AssumeUniversal).ToUniversalTime()
+        }
+    }
+    catch {
+        throw "Server returned an invalid expiry for the live Agent enrollment token."
+    }
+    $stationEnrollmentTokenFormatValid = $stationEnrollmentToken -match '^[A-Za-z0-9_-]{43}$'
+    $stationEnrollmentTokenIdPresent = -not [string]::IsNullOrWhiteSpace($stationEnrollmentTokenId)
+    $stationEnrollmentSecondsRemaining = ($stationEnrollmentExpiresAtUtc - [DateTimeOffset]::UtcNow).TotalSeconds
+    if (-not $stationEnrollmentTokenIdPresent -or
+        -not $stationEnrollmentTokenFormatValid -or
+        $stationEnrollmentSecondsRemaining -le 0 -or
+        $stationEnrollmentSecondsRemaining -gt 960) {
+        throw ("Server returned an invalid one-time enrollment token for the live Runtime Agent " +
+            "(tokenLength={0}; tokenFormatValid={1}; tokenIdPresent={2}; expiryUtc={3:o}; secondsRemaining={4:N1})." -f
+            $stationEnrollmentToken.Length,
+            $stationEnrollmentTokenFormatValid,
+            $stationEnrollmentTokenIdPresent,
+            $stationEnrollmentExpiresAtUtc,
+            $stationEnrollmentSecondsRemaining)
+    }
+
+    # Exercise the complete first-start enrollment path for the real Runtime Agent.
+    # This temporary DPAPI handoff does not certify the installed LocalService Windows-service boundary.
+    New-Item -ItemType Directory -Force -Path $agentIdentityRoot | Out-Null
+    @{ DeviceId = $stationDeviceId } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $agentIdentityRoot "identity.json") -Encoding utf8
+
+    $enrollmentPayload = [ordered]@{
+        formatVersion = 1
+        deviceId = $stationDeviceId
+        token = $stationEnrollmentToken
+        expiresAtUtc = $stationEnrollmentExpiresAtUtc.ToString("O")
+    }
+    $clearEnrollmentBytes = [Text.Encoding]::UTF8.GetBytes(($enrollmentPayload | ConvertTo-Json -Compress))
+    $enrollmentEntropy = [Text.Encoding]::UTF8.GetBytes("GameNet.AgentEnrollmentToken.v1|" + $stationDeviceId)
+    try {
+        $protectedEnrollmentBytes = [Security.Cryptography.ProtectedData]::Protect(
+            $clearEnrollmentBytes,
+            $enrollmentEntropy,
+            [Security.Cryptography.DataProtectionScope]::LocalMachine)
+        [IO.File]::WriteAllBytes(
+            (Join-Path $agentIdentityRoot "enrollment-token.dpapi"),
+            $protectedEnrollmentBytes)
+    }
+    finally {
+        if ($null -ne $clearEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+            $clearEnrollmentBytes = $null
+        }
+        if ($null -ne $enrollmentEntropy) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+            $enrollmentEntropy = $null
+        }
+        if ($null -ne $protectedEnrollmentBytes) {
+            [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+            $protectedEnrollmentBytes = $null
+        }
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
+    $env:GameNet__AgentIdentity__RootPath = $agentIdentityRoot
+    $env:GameNet__AgentTransport__ServerBaseUrl = $serverUrl
+    Remove-Item Env:GAMENET_AGENT_BOOTSTRAP_SECRET -ErrorAction SilentlyContinue
+    $agentProcess = Start-Process -FilePath $dotnetPath -ArgumentList @("run","--project","src/Client/GameNet.Agent.csproj","--configuration","Release","--no-build","--no-restore") -WorkingDirectory (Get-Location) -RedirectStandardOutput $agentLog -RedirectStandardError $agentErrorLog -PassThru
+    $agentEnrollmentPersisted = $false
+    $agentTokenPath = Join-Path $agentIdentityRoot "enrollment-token.dpapi"
+    $agentCredentialPath = Join-Path $agentIdentityRoot "credential.bin"
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if ($agentProcess.HasExited) {
+            throw "The Runtime Agent exited before completing one-time enrollment (exitCode=$($agentProcess.ExitCode))."
+        }
+        if (-not (Test-Path -LiteralPath $agentTokenPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $agentCredentialPath -PathType Leaf)) {
+            $agentEnrollmentPersisted = $true
+            break
+        }
+    }
+    if (-not $agentEnrollmentPersisted) {
+        throw "The Runtime Agent did not redeem the enrollment token and persist its credential within 30 seconds."
+    }
+
+    # Bind only after token redemption has created the server-side Agent credential.
+    # The Agent may authenticate/heartbeat between persistence and this request, so
+    # accept the server's current online snapshot and verify the station/device/version.
+    $bindHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $boundStation = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/agent" $bindHeaders @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-Status $boundStation 200 "Bind enrolled Agent to station"
+    if ($boundStation.Json.data.agentDeviceId -ne $stationDeviceId -or
+        $boundStation.Json.data.version -ne 2 -or
+        $null -eq $boundStation.Json.data.agentOnline) {
+        throw "Station binding or server-derived online state was incorrect after Agent enrollment."
+    }
+
+
+    $agentOnline = $false
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        $liveStations = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+        Assert-Status $liveStations 200 "Read station state while Agent starts"
+        $liveStation = @($liveStations.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+        if ($liveStation -and $liveStation.agentOnline -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$liveStation.lastHeartbeatAtUtc)) { $agentOnline = $true; break }
+    }
+    if (-not $agentOnline) { throw "The real Agent did not become online with a server-observed heartbeat after one-time enrollment." }
+    if (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "enrollment-token.dpapi") -PathType Leaf) {
+        throw "The Agent did not remove its consumed enrollment-token file after saving the credential."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $agentIdentityRoot "credential.bin") -PathType Leaf)) {
+        throw "The Agent did not persist its per-device DPAPI credential after enrollment."
+    }
+
+    # Exercise the real authenticated HTTP Session -> Invoice -> Cash workflow against
+    # this script's disposable PostgreSQL database and real Kestrel Server.
+    $sessionStartHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-start-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $sessionStartBody = @{ stationId = $stationId; tariffId = $sessionTariffId; customerId = $null }
+    $sessionStart = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders $sessionStartBody
+    Assert-Status $sessionStart 201 "Start disposable PC walk-in Session over HTTP"
+    $sessionId = [string]$sessionStart.Json.data.id
+    $walkInCustomerId = [string]$sessionStart.Json.data.customerId
+    if ([string]::IsNullOrWhiteSpace($sessionId) -or
+        [string]::IsNullOrWhiteSpace($walkInCustomerId) -or
+        $sessionStart.Json.data.status -ne 1 -or
+        $sessionStart.Json.data.tariffHourlyRateTomanSnapshot -ne 60000) {
+        throw "Session start did not return the expected active walk-in Session and tariff snapshot."
+    }
+
+    $sessionStartReplay = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders $sessionStartBody
+    Assert-Status $sessionStartReplay 201 "Replay identical Session start over HTTP"
+    if ([string]$sessionStartReplay.Json.data.id -ne $sessionId -or
+        [string]$sessionStartReplay.Json.data.customerId -ne $walkInCustomerId) {
+        throw "Session start idempotency replay returned a different Session or Walk-in Customer."
+    }
+    $sessionStartConflict = Invoke-IdentityRequest "POST" "/api/v1/sessions" $sessionStartHeaders @{
+        stationId = $stationId; tariffId = [Guid]::NewGuid().ToString(); customerId = $null
+    }
+    Assert-ErrorCode $sessionStartConflict 409 "idempotency.key_reused" "Reject changed Session start intent using the same idempotency key"
+
+    $activeSessions = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeSessions 200 "List active Session over HTTP"
+    $activeMatch = @($activeSessions.Json.data | Where-Object { [string]$_.id -eq $sessionId }) | Select-Object -First 1
+    if (-not $activeMatch) { throw "Started Session was not returned by the authoritative active-Session endpoint." }
+
+    Start-Sleep -Milliseconds 1200
+    $sessionEndHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-end-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $sessionEndBody = @{ expectedVersion = [int]$sessionStart.Json.data.version }
+    $sessionEnd = Invoke-IdentityRequest "POST" ("/api/v1/sessions/" + $sessionId + "/end") $sessionEndHeaders $sessionEndBody
+    Assert-Status $sessionEnd 200 "End Session and preview invoice over HTTP"
+    $invoiceId = [string]$sessionEnd.Json.data.invoiceId
+    $invoiceAmount = [long]$sessionEnd.Json.data.amountToman
+    $elapsedTicks = [long]$sessionEnd.Json.data.elapsedTicks
+    if ([string]::IsNullOrWhiteSpace($invoiceId) -or
+        $sessionEnd.Json.data.status -ne 1 -or
+        $sessionEnd.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        $elapsedTicks -le 0 -or $invoiceAmount -le 0) {
+        throw "End Session did not return a positive, pending invoice with the original tariff snapshot."
+    }
+    $expectedInvoiceAmount = [long][Math]::Ceiling(
+        ([decimal]60000 * [decimal]$elapsedTicks) / [decimal]([TimeSpan]::TicksPerHour))
+    if ($invoiceAmount -ne $expectedInvoiceAmount) {
+        throw "Invoice amount does not reconcile to the Server-reported elapsed ticks and 60,000 Toman/hour snapshot."
+    }
+
+    $sessionEndReplay = Invoke-IdentityRequest "POST" ("/api/v1/sessions/" + $sessionId + "/end") $sessionEndHeaders $sessionEndBody
+    Assert-Status $sessionEndReplay 200 "Replay Session end and invoice creation over HTTP"
+    if ([string]$sessionEndReplay.Json.data.invoiceId -ne $invoiceId -or
+        [long]$sessionEndReplay.Json.data.amountToman -ne $invoiceAmount) {
+        throw "Session end idempotency replay returned a different invoice or amount."
+    }
+
+    $pendingInvoices = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
+    Assert-Status $pendingInvoices 200 "List pending invoices over HTTP"
+    $pendingMatch = @($pendingInvoices.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId }) | Select-Object -First 1
+    if (-not $pendingMatch) { throw "New invoice was not returned by the authoritative pending-invoice endpoint." }
+
+    $underpayHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-underpay-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $underpayBody = @{ amountReceivedToman = [long]($invoiceAmount - 1); expectedSessionVersion = [int]$sessionEnd.Json.data.sessionVersion }
+    $underpay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $underpayHeaders $underpayBody
+    Assert-ErrorCode $underpay 400 "billing.cash_insufficient" "Reject insufficient cash without settling the invoice"
+
+    $pendingAfterUnderpay = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
+    Assert-Status $pendingAfterUnderpay 200 "Confirm pending invoices after rejected cash checkout"
+    $stillPending = @($pendingAfterUnderpay.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
+    if ($stillPending.Count -eq 0) {
+        throw "An insufficient-cash attempt removed or settled the pending invoice."
+    }
+
+    $checkoutHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-session-cash-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $amountReceived = [long]($invoiceAmount + 500)
+    $checkoutBody = @{ amountReceivedToman = $amountReceived; expectedSessionVersion = [int]$sessionEnd.Json.data.sessionVersion }
+    $checkout = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $checkoutHeaders $checkoutBody
+    Assert-Status $checkout 200 "Settle invoice with cash over HTTP"
+    if ([string]::IsNullOrWhiteSpace([string]$checkout.Json.data.paymentId) -or
+        [string]::IsNullOrWhiteSpace([string]$checkout.Json.data.ledgerEntryId) -or
+        [long]$checkout.Json.data.invoiceAmountToman -ne $invoiceAmount -or
+        [long]$checkout.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$checkout.Json.data.changeGivenToman -ne 500) {
+        throw "Cash checkout did not reconcile invoice, received cash, and change."
+    }
+
+    $checkoutReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash") $checkoutHeaders $checkoutBody
+    Assert-Status $checkoutReplay 200 "Replay successful cash checkout over HTTP"
+    if ([string]$checkoutReplay.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [string]$checkoutReplay.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId) {
+        throw "Cash checkout replay created or returned a different Payment or ledger entry."
+    }
+
+
+    # Continue the same end-to-end business journey through tender correction and full reversal.
+    # These calls use the same disposable PostgreSQL database and real HTTP Server as checkout.
+    $outcomeBeforeCorrection = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeBeforeCorrection 200 "Read durable cash checkout outcome before correcting tender facts"
+    if ([string]$outcomeBeforeCorrection.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [long]$outcomeBeforeCorrection.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$outcomeBeforeCorrection.Json.data.changeGivenToman -ne 500 -or
+        $null -ne $outcomeBeforeCorrection.Json.data.cashTenderCorrectionId -or
+        $null -ne $outcomeBeforeCorrection.Json.data.reversalId) {
+        throw "Initial cash checkout outcome did not preserve the original Payment/tender facts before correction."
+    }
+
+    $correctedAmountReceivedToman = [long]($invoiceAmount + 750)
+    $correctionReason = "CI end-to-end correction of deliberately mis-recorded cash received/change."
+    $unconfirmedCorrectionHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-correction-unconfirmed-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $unconfirmedCorrection = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $unconfirmedCorrectionHeaders @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 0
+        correctedAmountReceivedToman = $correctedAmountReceivedToman
+        reason = $correctionReason
+        confirmed = $false
+    }
+    Assert-ErrorCode $unconfirmedCorrection 400 "billing.tender_correction_invalid" "Reject cash tender correction without explicit confirmation"
+
+    $outcomeAfterUnconfirmedCorrection = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeAfterUnconfirmedCorrection 200 "Verify unconfirmed tender correction left the sale unchanged"
+    if ($null -ne $outcomeAfterUnconfirmedCorrection.Json.data.cashTenderCorrectionId -or
+        [long]$outcomeAfterUnconfirmedCorrection.Json.data.effectiveAmountReceivedToman -ne $amountReceived -or
+        [long]$outcomeAfterUnconfirmedCorrection.Json.data.effectiveChangeGivenToman -ne 500) {
+        throw "Unconfirmed tender correction mutated the durable cash checkout outcome."
+    }
+
+    $correctionHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-correction-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $correctionBody = @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 0
+        correctedAmountReceivedToman = $correctedAmountReceivedToman
+        reason = $correctionReason
+        confirmed = $true
+    }
+    $correction = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $correctionHeaders $correctionBody
+    Assert-Status $correction 200 "Correct recorded cash received/change facts over HTTP"
+    $correctedChangeGivenToman = [long]($correctedAmountReceivedToman - $invoiceAmount)
+    if ([string]::IsNullOrWhiteSpace([string]$correction.Json.data.correctionId) -or
+        [string]$correction.Json.data.invoiceId -ne $invoiceId -or
+        [string]$correction.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [int]$correction.Json.data.version -ne 1 -or
+        [long]$correction.Json.data.previousAmountReceivedToman -ne $amountReceived -or
+        [long]$correction.Json.data.previousChangeGivenToman -ne 500 -or
+        [long]$correction.Json.data.correctedAmountReceivedToman -ne $correctedAmountReceivedToman -or
+        [long]$correction.Json.data.correctedChangeGivenToman -ne $correctedChangeGivenToman) {
+        throw "Cash tender correction did not return the expected versioned, reconciled correction facts."
+    }
+
+    $correctionReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $correctionHeaders $correctionBody
+    Assert-Status $correctionReplay 200 "Replay identical cash tender correction over HTTP"
+    if ([string]$correctionReplay.Json.data.correctionId -ne [string]$correction.Json.data.correctionId -or
+        [int]$correctionReplay.Json.data.version -ne 1) {
+        throw "Cash tender correction replay produced a duplicate or different correction."
+    }
+
+    $correctionKeyConflict = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") $correctionHeaders @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 0
+        correctedAmountReceivedToman = [long]($correctedAmountReceivedToman + 1)
+        reason = $correctionReason
+        confirmed = $true
+    }
+    Assert-ErrorCode $correctionKeyConflict 409 "idempotency.key_reused" "Reject changed tender correction payload under a reused idempotency key"
+
+    $outcomeAfterCorrection = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeAfterCorrection 200 "Read durable corrected tender facts over HTTP"
+    if ([string]$outcomeAfterCorrection.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [string]$outcomeAfterCorrection.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId -or
+        [long]$outcomeAfterCorrection.Json.data.amountToman -ne $invoiceAmount -or
+        [long]$outcomeAfterCorrection.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        [long]$outcomeAfterCorrection.Json.data.elapsedTicks -ne $elapsedTicks -or
+        [long]$outcomeAfterCorrection.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$outcomeAfterCorrection.Json.data.changeGivenToman -ne 500 -or
+        [long]$outcomeAfterCorrection.Json.data.effectiveAmountReceivedToman -ne $correctedAmountReceivedToman -or
+        [long]$outcomeAfterCorrection.Json.data.effectiveChangeGivenToman -ne $correctedChangeGivenToman -or
+        [string]$outcomeAfterCorrection.Json.data.cashTenderCorrectionId -ne [string]$correction.Json.data.correctionId -or
+        [int]$outcomeAfterCorrection.Json.data.cashTenderCorrectionVersion -ne 1) {
+        throw "Durable checkout projection did not preserve original Payment/ledger/tender facts and expose the corrected effective facts."
+    }
+
+    $reversalReason = "CI end-to-end full reversal after correcting recorded cash tender facts."
+    $wrongReversalHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-reversal-wrong-amount-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $wrongReversal = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-reversal") $wrongReversalHeaders @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        confirmedAmountToman = [long]($invoiceAmount + 1)
+        reason = $reversalReason
+    }
+    Assert-ErrorCode $wrongReversal 409 "billing.reversal_confirmation_mismatch" "Reject reversal without exact invoice/payment amount confirmation"
+
+    $outcomeAfterRejectedReversal = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $outcomeAfterRejectedReversal 200 "Verify rejected reversal left the paid sale intact"
+    if ([int]$outcomeAfterRejectedReversal.Json.data.status -ne 2 -or
+        $null -ne $outcomeAfterRejectedReversal.Json.data.reversalId) {
+        throw "Rejected cash reversal changed the paid invoice state."
+    }
+
+    $reversalHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-cash-reversal-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $reversalBody = @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        confirmedAmountToman = $invoiceAmount
+        reason = $reversalReason
+    }
+    $reversal = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-reversal") $reversalHeaders $reversalBody
+    Assert-Status $reversal 200 "Reverse the full cash sale over HTTP"
+    if ([string]::IsNullOrWhiteSpace([string]$reversal.Json.data.reversalId) -or
+        [string]$reversal.Json.data.invoiceId -ne $invoiceId -or
+        [string]$reversal.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [string]$reversal.Json.data.ledgerEntryId -eq [string]$checkout.Json.data.ledgerEntryId -or
+        [long]$reversal.Json.data.amountToman -ne $invoiceAmount) {
+        throw "Cash sale reversal did not create a distinct, exact compensating ledger outcome."
+    }
+
+    $reversalReplay = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-reversal") $reversalHeaders $reversalBody
+    Assert-Status $reversalReplay 200 "Replay identical cash sale reversal over HTTP"
+    if ([string]$reversalReplay.Json.data.reversalId -ne [string]$reversal.Json.data.reversalId -or
+        [string]$reversalReplay.Json.data.ledgerEntryId -ne [string]$reversal.Json.data.ledgerEntryId) {
+        throw "Cash sale reversal replay created a duplicate reversal or compensating ledger entry."
+    }
+
+    $correctionAfterReversal = Invoke-IdentityRequest "POST" ("/api/v1/billing/invoices/" + $invoiceId + "/cash-tender-correction") @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-correction-after-reversal-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        paymentId = [string]$checkout.Json.data.paymentId
+        expectedVersion = 1
+        correctedAmountReceivedToman = [long]($correctedAmountReceivedToman + 100)
+        reason = "CI verifies tender correction is forbidden after reversal."
+        confirmed = $true
+    }
+    Assert-ErrorCode $correctionAfterReversal 409 "billing.tender_correction_reversal_forbidden" "Reject tender correction after a cash sale was reversed"
+
+    $finalCashOutcome = Invoke-IdentityRequest "GET" ("/api/v1/billing/invoices/" + $invoiceId + "/outcome") $operatorHeaders
+    Assert-Status $finalCashOutcome 200 "Reconcile final reversed cash checkout outcome"
+    if ([int]$finalCashOutcome.Json.data.status -ne 3 -or
+        [string]$finalCashOutcome.Json.data.paymentId -ne [string]$checkout.Json.data.paymentId -or
+        [long]$finalCashOutcome.Json.data.amountToman -ne $invoiceAmount -or
+        [long]$finalCashOutcome.Json.data.tariffHourlyRateTomanSnapshot -ne 60000 -or
+        [long]$finalCashOutcome.Json.data.elapsedTicks -ne $elapsedTicks -or
+        [string]$finalCashOutcome.Json.data.cashTenderCorrectionReason -ne $correctionReason -or
+        [string]$finalCashOutcome.Json.data.reversalReason -ne $reversalReason -or
+        [string]$finalCashOutcome.Json.data.ledgerEntryId -ne [string]$checkout.Json.data.ledgerEntryId -or
+        [string]$finalCashOutcome.Json.data.reversalId -ne [string]$reversal.Json.data.reversalId -or
+        [string]$finalCashOutcome.Json.data.reversalLedgerEntryId -ne [string]$reversal.Json.data.ledgerEntryId -or
+        [string]$finalCashOutcome.Json.data.cashTenderCorrectionId -ne [string]$correction.Json.data.correctionId -or
+        [long]$finalCashOutcome.Json.data.amountReceivedToman -ne $amountReceived -or
+        [long]$finalCashOutcome.Json.data.changeGivenToman -ne 500 -or
+        [long]$finalCashOutcome.Json.data.effectiveAmountReceivedToman -ne $correctedAmountReceivedToman -or
+        [long]$finalCashOutcome.Json.data.effectiveChangeGivenToman -ne $correctedChangeGivenToman) {
+        throw "Final cash outcome did not reconcile original sale, correction history, and compensating reversal."
+    }
+
+    $activeAfterCheckout = Invoke-IdentityRequest "GET" ("/api/v1/sessions/active?stationId=" + [Uri]::EscapeDataString($stationId)) $operatorHeaders
+    Assert-Status $activeAfterCheckout 200 "Confirm no active Session remains after cash checkout"
+    $remainingSessions = @($activeAfterCheckout.Json.data | Where-Object { [string]$_.id -eq $sessionId })
+    if ($remainingSessions.Count -ne 0) { throw "Paid Session remained in the active-Session endpoint." }
+
+    $pendingAfterCheckout = Invoke-IdentityRequest "GET" "/api/v1/billing/pending" $operatorHeaders
+    Assert-Status $pendingAfterCheckout 200 "Confirm no pending invoice remains after cash checkout"
+    $remainingInvoices = @($pendingAfterCheckout.Json.data | Where-Object { [string]$_.invoiceId -eq $invoiceId })
+    if ($remainingInvoices.Count -ne 0) { throw "Paid invoice remained in the pending-invoice endpoint." }
+
+    $healthProbe = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
+    Assert-Status $healthProbe 200 "Dispatch safe Agent health-probe command"
+    if ($healthProbe.Json.data.status -ne 1 -or [string]$healthProbe.Json.data.commandId -eq [Guid]::Empty.ToString() -or
+        [string]$healthProbe.Json.data.stationId -ne $stationId -or $healthProbe.Json.data.deviceId -ne $stationDeviceId -or
+        [string]::IsNullOrWhiteSpace([string]$healthProbe.Json.data.agentVersion) -or $healthProbe.Json.data.stationState -ne "Ready") {
+        throw "The Agent health-probe command did not return a valid success acknowledgement."
+    }
+
+    # Verify the station-to-Agent uniqueness invariant while the credential is still
+    # active. The revocation test below deliberately removes that credential, so after
+    # revocation a later bind attempt should correctly be rejected as not provisioned.
+    $secondStationCode = "CI2-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $secondStationHeaders = @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-create-" + [Guid]::NewGuid().ToString("N"))
+    }
+    $secondStation = Invoke-IdentityRequest "POST" "/api/v1/stations" $secondStationHeaders @{
+        code = $secondStationCode
+        name = "Second CI Station"
+        type = 1
+    }
+    Assert-Status $secondStation 201 "Create second station"
+    $duplicateBinding = Invoke-IdentityRequest "PUT" "/api/v1/stations/$($secondStation.Json.data.id)/agent" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-bind-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        deviceId = $stationDeviceId
+        expectedVersion = 1
+    }
+    Assert-ErrorCode $duplicateBinding 409 "stations.device_already_bound" "Prevent Agent binding to two stations"
+
+    # Revocation of a live Agent must fence its lease immediately, not wait for the
+    # next heartbeat timeout. This guards the boundary where Server could otherwise
+    # continue routing commands to a still-open SignalR connection.
+    $revokeConnectedAgent = Invoke-IdentityRequest "POST" "/api/v1/agent/credentials/revoke" $credentialRevocationHeaders @{
+        deviceId = $stationDeviceId
+        reason = "CI verifies immediate command-lease fencing after active Agent credential revocation."
+    }
+    Assert-Status $revokeConnectedAgent 200 "Revoke a connected Agent credential"
+    if ($revokeConnectedAgent.Json.revoked -ne $true) {
+        throw "The connected Agent credential was not revoked."
+    }
+
+    $stationAfterCredentialRevocation = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+    Assert-Status $stationAfterCredentialRevocation 200 "Read station after connected Agent credential revocation"
+    $revokedStation = @($stationAfterCredentialRevocation.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+    if (-not $revokedStation -or $revokedStation.agentOnline -eq $true) {
+        throw "Server still considered a revoked Agent's connection lease authoritative."
+    }
+
+    $probeAfterCredentialRevocation = Invoke-IdentityRequest "POST" "/api/v1/stations/$stationId/agent/health-probe" $operatorHeaders
+    Assert-ErrorCode $probeAfterCredentialRevocation 409 "stations.agent_unavailable" "Prevent new Agent commands after credential revocation"
+
+    # The command test has completed. Stop the disposable Agent and prove the Server no longer reports it online.
+    Stop-Process -Id $agentProcess.Id -Force -ErrorAction Stop
+    $agentProcess.Dispose()
+    $agentProcess = $null
+    $agentOffline = $false
+    for ($attempt = 1; $attempt -le 15; $attempt++) {
+        Start-Sleep -Seconds 1
+        $afterAgentStop = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+        Assert-Status $afterAgentStop 200 "Read station state after Agent disconnect"
+        $stoppedStation = @($afterAgentStop.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+        if ($stoppedStation -and $stoppedStation.agentOnline -eq $false) { $agentOffline = $true; break }
+    }
+    if (-not $agentOffline) { throw "Server did not transition the PC to offline after the Agent connection closed." }
+
+
+    # Operator/role management security boundary tests.
+    $roles = Invoke-IdentityRequest "GET" "/api/v1/identity/roles" $operatorHeaders
+    Assert-Status $roles 200 "List operator roles"
+    $ownerRole = @($roles.Json.data | Where-Object { $_.code -eq "owner" }) | Select-Object -First 1
+    if (-not $ownerRole -or -not ($ownerRole.permissions -contains "identity.roles.manage")) { throw "Owner role is missing current permission catalog." }
+
+    $basicRole = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-role-" + [Guid]::NewGuid().ToString("N"))
+    } @{ code = "readonly-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "CI Readonly"; permissions = @("stations.read"); reason = "CI creates least-privilege role" }
+    Assert-Status $basicRole 201 "Create least-privilege role"
+    $basicRoleId = [string]$basicRole.Json.data.id
+    $basicUsername = "ci-basic-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $basicOperatorPassword = "CI-basic-" + [Guid]::NewGuid().ToString("N")
+    $basicUserKey = "ci-user-" + [Guid]::NewGuid().ToString("N")
+    $basicUserHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"; "Idempotency-Key" = $basicUserKey }
+    $basicUserBody = @{ username = $basicUsername; displayName = "CI Basic"; password = $basicOperatorPassword; roleId = $basicRoleId; reason = "CI creates a limited operator account" }
+    $basicUser = Invoke-IdentityRequest "POST" "/api/v1/identity/users" $basicUserHeaders $basicUserBody
+    Assert-Status $basicUser 201 "Create limited operator"
+    $basicUserId = [string]$basicUser.Json.data.id
+    $basicReplay = Invoke-IdentityRequest "POST" "/api/v1/identity/users" $basicUserHeaders $basicUserBody
+    Assert-Status $basicReplay 201 "Replay operator creation with same idempotency key"
+    if ([string]$basicReplay.Json.data.id -ne $basicUserId) { throw "Operator idempotency replay returned a different user." }
+
+    $basicLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{ username = $basicUsername; password = $basicOperatorPassword }
+    Assert-Status $basicLogin 200 "Login limited operator"
+    $basicToken = [string]$basicLogin.Json.data.accessToken
+    if ($basicLogin.Json.data.permissions -contains "identity.roles.manage" -or $basicLogin.Json.data.permissions -contains "identity.users.write") {
+        throw "Limited operator received privileges not granted by its role."
+    }
+    $basicHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken" }
+    $missingPermission = Invoke-IdentityRequest "GET" "/api/v1/identity/users" $basicHeaders
+    Assert-Status $missingPermission 403 "Deny identity user listing without permission"
+
+    $basicPermissionUpdate = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$basicRoleId/permissions" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-role-perm-" + [Guid]::NewGuid().ToString("N"))
+    } @{ permissions = @("stations.read", "identity.users.read"); reason = "CI verifies owner role-permission update" }
+    Assert-Status $basicPermissionUpdate 200 "Owner updates role permissions"
+    $basicNowCanRead = Invoke-IdentityRequest "GET" "/api/v1/identity/users" $basicHeaders
+    Assert-Status $basicNowCanRead 200 "Refresh role permissions from authoritative Server state"
+
+    # Self-service password change: verify credential ownership, no-op rejection,
+    # idempotent retry, current-session continuity, and the new credential.
+    $newBasicPassword = "CI-basic-updated-" + [Guid]::NewGuid().ToString("N")
+    $badCurrentPassword = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken"
+        "Idempotency-Key" = ("ci-bad-current-" + [Guid]::NewGuid().ToString("N"))
+    } @{ currentPassword = ("incorrect-" + [Guid]::NewGuid().ToString("N")); newPassword = $newBasicPassword }
+    Assert-ErrorCode $badCurrentPassword 403 "identity.current_password_invalid" "Reject password change with incorrect current password"
+
+    $unchangedPassword = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken"
+        "Idempotency-Key" = ("ci-unchanged-password-" + [Guid]::NewGuid().ToString("N"))
+    } @{ currentPassword = $basicOperatorPassword; newPassword = $basicOperatorPassword }
+    Assert-ErrorCode $unchangedPassword 409 "identity.password_unchanged" "Reject unchanged operator password"
+
+    $selfPasswordChangeKey = "ci-self-password-" + [Guid]::NewGuid().ToString("N")
+    $selfPasswordBody = @{ currentPassword = $basicOperatorPassword; newPassword = $newBasicPassword }
+    $selfPasswordHeaders = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicToken"; "Idempotency-Key" = $selfPasswordChangeKey
+    }
+    $selfPasswordChange = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" $selfPasswordHeaders $selfPasswordBody
+    Assert-Status $selfPasswordChange 200 "Change own operator password"
+    if ($selfPasswordChange.Json.data.otherSessionsRevoked -ne $true) {
+        throw "Self-service password change did not report revocation of other sessions."
+    }
+    $selfPasswordReplay = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" $selfPasswordHeaders $selfPasswordBody
+    Assert-Status $selfPasswordReplay 200 "Replay identical own-password change"
+    $selfPasswordDifferentPayload = Invoke-IdentityRequest "PUT" "/api/v1/identity/me/password" $selfPasswordHeaders @{
+        currentPassword = $basicOperatorPassword; newPassword = ("different-" + [Guid]::NewGuid().ToString("N"))
+    }
+    Assert-ErrorCode $selfPasswordDifferentPayload 409 "idempotency.key_reused" "Reject reuse of a password idempotency key with different content"
+
+    $currentSessionAfterPasswordChange = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $basicHeaders
+    Assert-Status $currentSessionAfterPasswordChange 200 "Keep the current session active after self-service password change"
+    $oldPasswordLoginAfterChange = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $basicOperatorPassword
+    }
+    Assert-ErrorCode $oldPasswordLoginAfterChange 401 "auth.invalid_credentials" "Reject old operator password after self-service change"
+    $newPasswordLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $newBasicPassword
+    }
+    Assert-Status $newPasswordLogin 200 "Login with changed operator password"
+    $basicTokenPostChange = [string]$newPasswordLogin.Json.data.accessToken
+    $basicHeadersPostChange = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicTokenPostChange"
+    }
+
+    $basicLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $basicHeaders
+    Assert-Status $basicLogout 200 "Logout limited operator"
+
+    $managerRole = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-mgr-role-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        code = "manager-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+        name = "CI Restricted Manager"
+        permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "stations.read")
+        reason = "CI creates constrained role manager"
+    }
+    Assert-Status $managerRole 201 "Create constrained role manager"
+    $managerUsername = "ci-manager-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
+    $managerPassword = "CI-manager-" + [Guid]::NewGuid().ToString("N")
+    $managerUser = Invoke-IdentityRequest "POST" "/api/v1/identity/users" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-mgr-user-" + [Guid]::NewGuid().ToString("N"))
+    } @{ username = $managerUsername; displayName = "CI Manager"; password = $managerPassword; roleId = [string]$managerRole.Json.data.id; reason = "CI creates constrained role manager account" }
+    Assert-Status $managerUser 201 "Create constrained role manager account"
+    $managerTokenResponse = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{ username = $managerUsername; password = $managerPassword }
+    Assert-Status $managerTokenResponse 200 "Login constrained role manager"
+    $managerToken = [string]$managerTokenResponse.Json.data.accessToken
+    $managerHeaders = @{ "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken" }
+
+    $managerEnrollmentDenied = Invoke-IdentityRequest "POST" "/api/v1/agent/enrollment-tokens" $managerHeaders @{
+        deviceId = "ci-enrollment-denied-" + [Guid]::NewGuid().ToString("N")
+    }
+    Assert-Status $managerEnrollmentDenied 403 "Deny enrollment token issue without agents.enrollment.manage"
+
+
+    $managerEscalates = Invoke-IdentityRequest "POST" "/api/v1/identity/roles" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-escalate-" + [Guid]::NewGuid().ToString("N"))
+    } @{ code = "blocked-" + [Guid]::NewGuid().ToString("N").Substring(0, 8); name = "No escalation"; permissions = @("settings.write"); reason = "CI verifies role permission escalation is denied" }
+    Assert-ErrorCode $managerEscalates 403 "identity.permission_escalation" "Deny privilege escalation when creating role"
+
+    $managerEditsOwner = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$($bootstrap.Json.data.userId)/active" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-disable-owner-" + [Guid]::NewGuid().ToString("N"))
+    } @{ isActive = $false; reason = "CI verifies non-owner cannot disable Owner" }
+    Assert-ErrorCode $managerEditsOwner 403 "identity.owner_protected" "Deny non-owner from disabling Owner"
+
+
+    # Password reset is a separate privilege and Owner accounts remain protected.
+    $managerResetDenied = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-manager-reset-denied-" + [Guid]::NewGuid().ToString("N"))
+    } @{ newPassword = ("Denied-" + [Guid]::NewGuid().ToString("N")); reason = "CI permission boundary" }
+    Assert-Status $managerResetDenied 403 "Deny password reset without its dedicated permission"
+
+    $grantPasswordReset = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($managerRole.Json.data.id)/permissions" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-grant-password-reset-" + [Guid]::NewGuid().ToString("N"))
+    } @{ permissions = @("identity.roles.manage", "identity.users.read", "identity.users.write", "identity.users.password-reset", "stations.read"); reason = "CI grants the password reset permission" }
+    Assert-Status $grantPasswordReset 200 "Grant dedicated password-reset permission"
+
+    $managerResetOwner = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$($bootstrap.Json.data.userId)/password" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $managerToken"
+        "Idempotency-Key" = ("ci-manager-reset-owner-" + [Guid]::NewGuid().ToString("N"))
+    } @{ newPassword = ("Blocked-Owner-" + [Guid]::NewGuid().ToString("N")); reason = "CI Owner protection test" }
+    Assert-ErrorCode $managerResetOwner 403 "identity.owner_protected" "Prevent a non-Owner from resetting an Owner password"
+
+    $systemRoleEdit = Invoke-IdentityRequest "PUT" "/api/v1/identity/roles/$($ownerRole.id)/permissions" @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-system-role-" + [Guid]::NewGuid().ToString("N"))
+    } @{ permissions = @("stations.read"); reason = "CI verifies the system Owner role cannot be edited" }
+    Assert-ErrorCode $systemRoleEdit 409 "identity.system_role_immutable" "Protect system Owner role"
+
+    $managerLogout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $managerHeaders
+    Assert-Status $managerLogout 200 "Logout constrained role manager"
+
+
+    # Owner administrative reset: reasoned/audited operation, complete session revocation,
+    # and safe idempotent replay without repeating revocation side effects.
+    $adminResetPassword = "CI-reset-" + [Guid]::NewGuid().ToString("N")
+    $adminResetKey = "ci-admin-reset-" + [Guid]::NewGuid().ToString("N")
+    $adminResetBody = @{ newPassword = $adminResetPassword; reason = "CI verified operator recovery" }
+    $adminResetHeaders = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $accessToken"; "Idempotency-Key" = $adminResetKey
+    }
+    $adminPasswordReset = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" $adminResetHeaders $adminResetBody
+    Assert-Status $adminPasswordReset 200 "Owner resets another operator password"
+    if ($adminPasswordReset.Json.data.operatorId -ne $basicUserId -or
+        $adminPasswordReset.Json.data.sessionsRevoked -ne $true) {
+        throw "Administrative reset response did not identify the target or confirm session revocation."
+    }
+
+    $revokedBasicSession = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $basicHeadersPostChange
+    Assert-Status $revokedBasicSession 401 "Administrative reset revokes target's pre-existing sessions"
+    $previousPasswordAfterReset = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $newBasicPassword
+    }
+    Assert-ErrorCode $previousPasswordAfterReset 401 "auth.invalid_credentials" "Reject pre-reset password after administrative reset"
+    $resetPasswordLogin = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $basicUsername; password = $adminResetPassword
+    }
+    Assert-Status $resetPasswordLogin 200 "Login with administratively reset password"
+    $basicTokenAfterReset = [string]$resetPasswordLogin.Json.data.accessToken
+    $basicHeadersAfterReset = @{
+        "X-GameNet-Contract" = "v1"; Authorization = "Bearer $basicTokenAfterReset"
+    }
+
+    $adminResetReplay = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" $adminResetHeaders $adminResetBody
+    Assert-Status $adminResetReplay 200 "Replay identical administrative password reset"
+    $adminResetDifferentPayload = Invoke-IdentityRequest "PUT" "/api/v1/identity/users/$basicUserId/password" $adminResetHeaders @{
+        newPassword = ("different-reset-" + [Guid]::NewGuid().ToString("N")); reason = "CI verified operator recovery"
+    }
+    Assert-ErrorCode $adminResetDifferentPayload 409 "idempotency.key_reused" "Reject reset idempotency key reuse with a different password"
+    $resetSessionAfterReplay = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $basicHeadersAfterReset
+    Assert-Status $resetSessionAfterReplay 200 "Idempotent reset replay preserves a newer session"
+
+$stationList = Invoke-IdentityRequest "GET" "/api/v1/stations" $operatorHeaders
+    Assert-Status $stationList 200 "List stations"
+    $listedStation = @($stationList.Json.data | Where-Object { $_.id -eq $stationId }) | Select-Object -First 1
+    if (-not $listedStation -or $listedStation.agentOnline -ne $false) {
+        throw "Station list did not reflect the authoritative offline state after the test Agent disconnected."
+    }
+
+    $staleRename = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-stale-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        name = "Stale rename"
+        expectedVersion = 1
+    }
+    Assert-ErrorCode $staleRename 409 "stations.version_conflict" "Reject stale station version"
+
+    $maintenance = Invoke-IdentityRequest "PUT" "/api/v1/stations/$stationId/status" @{
+        "X-GameNet-Contract" = "v1"
+        Authorization = "Bearer $accessToken"
+        "Idempotency-Key" = ("ci-station-status-" + [Guid]::NewGuid().ToString("N"))
+    } @{
+        status = 3
+        expectedVersion = 2
+    }
+    Assert-Status $maintenance 200 "Set station administrative maintenance status"
+    if ($maintenance.Json.data.status -ne 3 -or $maintenance.Json.data.agentOnline -ne $false) {
+        throw "Administrative status was not kept separate from Agent runtime state."
+    }
+
+    $logout = Invoke-IdentityRequest "POST" "/api/v1/auth/logout" $operatorHeaders
+    Assert-Status $logout 200 "Operator logout"
+    if (-not $logout.Json.data.success) { throw "The logout endpoint did not report success." }
+
+    $revokedRequest = Invoke-IdentityRequest "GET" "/api/v1/auth/me" $operatorHeaders
+    Assert-Status $revokedRequest 401 "Request with a revoked session token"
+
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $failed = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+            username = $username
+            password = $wrongPassword
+        }
+        Assert-ErrorCode $failed 401 "auth.invalid_credentials" "Failed login attempt $attempt"
+    }
+    $locked = Invoke-IdentityRequest "POST" "/api/v1/auth/login" $contractHeaders @{
+        username = $username
+        password = $wrongPassword
+    }
+    Assert-ErrorCode $locked 401 "auth.invalid_credentials" "Do not disclose operator lockout state in login response"
+
+    Write-Host "IDENTITY / STATIONS / SESSION CASH CHECKOUT / TENDER CORRECTION / FULL REVERSAL / IDEMPOTENCY / AGENT BINDING / SESSION REVOCATION / LOCKOUT CERTIFICATION PASSED."
+    $testSucceeded = $true
+}
+catch {
+    $failureMessage = $_.Exception.ToString()
+    throw
+}
+finally {
+    if ($agentProcess) { Stop-Process -Id $agentProcess.Id -Force -ErrorAction SilentlyContinue; $agentProcess.Dispose() }
+    if ($server) {
+        $server.Refresh()
+        if (-not $server.HasExited) {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+        }
+        $server.Dispose()
+    }
+
+    if ($testSucceeded) {
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    else {
+        $stdout = Read-DiagnosticText $serverLog
+        $stderr = Read-DiagnosticText $serverErrorLog
+        foreach ($secretValue in @($bootstrapSecret, $signingKey, $provisioningKey, $fingerprintKey, $password, $wrongPassword, $accessToken, $basicOperatorPassword, $basicToken, $managerPassword, $managerToken, $stationEnrollmentToken)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$secretValue)) {
+                $stdout = $stdout.Replace([string]$secretValue, "<redacted>")
+                $stderr = $stderr.Replace([string]$secretValue, "<redacted>")
+                $failureMessage = $failureMessage.Replace([string]$secretValue, "<redacted>")
+            }
+        }
+        $stdout = [Regex]::Replace($stdout, '(?i)(password|secret|token|signingkey|provisioningkey|fingerprintkey)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+        $stderr = [Regex]::Replace($stderr, '(?i)(password|secret|token|signingkey|provisioningkey|fingerprintkey)\s*([=:])\s*("[^"]*"|[^;\s,}]+)', '$1$2<redacted>')
+
+        New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
+        $diagnosticPath = Join-Path $diagnosticRoot "identity-runtime-diagnostic-$runToken.txt"
+        @(
+            "commit=$((git rev-parse HEAD 2>$null))"
+            "branch=$((git branch --show-current 2>$null))"
+            "timestampUtc=$([DateTime]::UtcNow.ToString('O'))"
+            "failure=$failureMessage"
+            "serverStdout:"
+            $stdout.Substring(0, [Math]::Min($stdout.Length, 30000))
+            "serverStderr:"
+            $stderr.Substring(0, [Math]::Min($stderr.Length, 30000))
+        ) | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Identity runtime diagnostic written to $diagnosticPath."
+    }
+
+    foreach ($name in $envNames) {
+        [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name], "Process")
+    }
+    if ($null -ne $clearEnrollmentBytes) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($clearEnrollmentBytes)
+    }
+    if ($null -ne $enrollmentEntropy) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($enrollmentEntropy)
+    }
+    if ($null -ne $protectedEnrollmentBytes) {
+        [Security.Cryptography.CryptographicOperations]::ZeroMemory($protectedEnrollmentBytes)
+    }
+    $enrollmentPayload = $null
+    $stationEnrollmentToken = $null
+}

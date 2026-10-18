@@ -1,0 +1,102 @@
+using GameNet.Server.Infrastructure;
+using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Configuration;
+using GameNet.Server.Infrastructure.Health;
+using GameNet.Server.Infrastructure.Idempotency;
+using GameNet.Server.Infrastructure.Outbox;
+using GameNet.Server.Infrastructure.Realtime;
+using GameNet.Server.Infrastructure.Security;
+using GameNet.Server.Infrastructure.Transactions;
+using GameNet.Server.Persistence;
+using GameNet.Server.Modules.Identity.Application;
+using GameNet.Server.Infrastructure.Persistence.Identity;
+using GameNet.Server.Infrastructure.Persistence.Stations;
+using GameNet.Server.Modules.Stations.Application;
+using GameNet.Server.Modules.Sessions.Application;
+using GameNet.Server.Modules.Tariffs.Application;
+using GameNet.Server.Modules.Customers.Contracts;
+using GameNet.Server.Modules.Customers.Application;
+using GameNet.Server.Modules.Customers.Infrastructure;
+using GameNet.Server.Modules.Stations.Contracts;
+using GameNet.Server.Modules.Stations.Infrastructure;
+using GameNet.Server.Modules.Tariffs.Contracts;
+using GameNet.Server.Modules.Tariffs.Infrastructure;
+using GameNet.Server.Modules.Billing.Contracts;
+using GameNet.Server.Modules.Billing.Application;
+using GameNet.Server.Modules.Billing.Infrastructure;
+using GameNet.Server.Modules.Sessions.Contracts;
+using GameNet.Server.Modules.Sessions.Infrastructure;
+using GameNet.Server.Modules.Identity.Infrastructure.Security;
+using GameNet.Shared.Primitives;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+namespace GameNet.Server.Composition;
+
+public static class ServiceRegistration
+{
+    public static IServiceCollection AddGameNetServer(this IServiceCollection services)
+    {
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IGameClock, SystemGameClock>();
+        services.AddSingleton<StartupState>();
+        services.AddOptions<GameNetOptions>()
+            .BindConfiguration(GameNetOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<GameNetOptions>, GameNetOptionsValidator>();
+
+        services.AddScoped<ITransactionCoordinator, EfTransactionCoordinator>();
+        services.AddScoped<CommandMutationPipeline>();
+        services.AddScoped<IServerReadinessProbe, ServerReadinessProbe>();
+        services.AddScoped<IAuditWriter, EfAuditWriter>();
+        services.AddScoped<IIdempotencyStore, EfIdempotencyStore>();
+        services.AddSingleton<IRequestFingerprint, HmacRequestFingerprint>();
+        services.AddScoped<IOutboxWriter, EfOutboxWriter>();
+        services.AddScoped<IOutboxDispatcher, EfOutboxDispatcher>();
+        services.AddScoped<IOutboxInbox, EfOutboxInbox>();
+        services.AddScoped<OutboxHandlerRegistry>();
+        services.AddOptions<OutboxDeliveryOptions>()
+            .BindConfiguration($"{GameNetOptions.SectionName}:OutboxDelivery")
+            .Validate(options => options.IsValid, "GameNet:OutboxDelivery configuration is invalid.")
+            .ValidateOnStart();
+        services.AddHostedService<OutboxDeliveryWorker>();
+        services.AddScoped<IAgentConnectionLeaseStore, EfAgentConnectionLeaseStore>();
+        services.AddSingleton<AgentCommandResultCoordinator>();
+        services.AddScoped<IAgentHealthProbeDispatcher, AgentHealthProbeDispatcher>();
+        services.AddScoped<StationAgentHealthService>();
+        services.AddScoped<IAgentCredentialService, AgentCredentialService>();
+        services.AddScoped<IAgentEnrollmentService, AgentEnrollmentService>();
+        services.AddScoped<IIdentityRepository, EfIdentityRepository>();
+        services.AddScoped<IdentityService>();
+        services.AddScoped<IOperatorManagementRepository, EfOperatorManagementRepository>();
+        services.AddScoped<OperatorManagementService>();
+        services.AddScoped<IStationRepository, EfStationRepository>();
+        services.AddScoped<StationService>();
+        services.AddScoped<ICustomerSessionAccess, CustomerSessionAccess>();
+        services.AddScoped<ICustomerManagementService, CustomerManagementService>();
+        services.AddScoped<IStationSessionAccess, StationSessionAccess>();
+        services.AddScoped<ITariffSessionAccess, TariffSessionAccess>();
+        services.AddScoped<IBillingInvoiceWriter, BillingInvoiceWriter>();
+        services.AddScoped<ISessionSettlement, SessionSettlement>();
+        services.AddScoped<ISessionCheckoutAccess, SessionCheckoutAccess>();
+        services.AddScoped<ISessionService, GameNet.Server.Modules.Sessions.Infrastructure.SessionService>();
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<ITariffService, GameNet.Server.Modules.Tariffs.Infrastructure.TariffService>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<IAgentAccessTokenIssuer, AgentAccessTokenIssuer>();
+
+        services.AddSignalR();
+        services.AddGameNetAuthentication();
+
+        services.AddDbContext<GameNetDbContext>((provider, db) =>
+        {
+            var connection = provider.GetRequiredService<IDatabaseConnectionSecret>().ConnectionString;
+            db.UseNpgsql(
+                connection,
+                npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public"));
+        });
+
+        return services;
+    }
+}

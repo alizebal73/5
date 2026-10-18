@@ -1,0 +1,234 @@
+param(
+    [string]$ModulesRoot = "src/Server/Modules",
+    [switch]$OnlyModuleBoundaries
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+function Assert-NoMatch {
+    param(
+        [string]$Root,
+        [string]$Pattern,
+        [string]$Message,
+        [string[]]$ExcludePath = @()
+    )
+
+    if (-not (Test-Path $Root)) { return }
+
+    $files = Get-ChildItem $Root -Recurse -File -Include *.cs,*.csproj,*.xaml,*.props,*.json |
+        Where-Object {
+            $full = $_.FullName
+            foreach ($excluded in $ExcludePath) {
+                if ($full -like $excluded) { return $false }
+            }
+            return $true
+        }
+
+    $matches = $files | Select-String -Pattern $Pattern
+    if ($matches) {
+        $matches | ForEach-Object {
+            Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())"
+        }
+        throw $Message
+    }
+}
+
+# Layer boundaries: persistence and external side effects belong behind Infrastructure.
+# Domain/Application own business decisions; API adapts inbound requests and must not query the database.
+& "$PSScriptRoot/check-module-layer-boundaries.ps1" -ModulesRoot $ModulesRoot
+
+# Cross-module internal references are forbidden. A module may reference Shared and explicit public contracts,
+# but never another module's implementation namespace.
+$modulesRoot = $ModulesRoot
+$requiredModules = @(
+    "Identity",
+    "Stations",
+    "Agents",
+    "ClientControl",
+    "Customers",
+    "Sessions",
+    "Tariffs",
+    "Billing",
+    "Wallet",
+    "Inventory",
+    "Buffet",
+    "VIP",
+    "Games",
+    "GameAccounts",
+    "Reports",
+    "Shifts",
+    "Settings",
+    "Approvals",
+    "Backup"
+)
+if (-not $OnlyModuleBoundaries) {
+$moduleCatalogPath = Join-Path $modulesRoot "README.md"
+if (-not (Test-Path -LiteralPath $moduleCatalogPath -PathType Leaf)) {
+    throw "Canonical module catalog is missing: $moduleCatalogPath"
+}
+$moduleCatalogText = Get-Content -LiteralPath $moduleCatalogPath -Raw
+foreach ($requiredModule in $requiredModules) {
+    $modulePath = Join-Path $modulesRoot $requiredModule
+    if (-not (Test-Path -LiteralPath $modulePath -PathType Container)) {
+        throw "Required module boundary is missing: $modulePath"
+    }
+    $moduleReadme = Join-Path $modulePath "README.md"
+    if (-not (Test-Path -LiteralPath $moduleReadme -PathType Leaf)) {
+        throw "Required module boundary documentation is missing: $moduleReadme"
+    }
+    $catalogPattern = "(?m)^\|\s*$([regex]::Escape($requiredModule))\s*\|"
+    if ($moduleCatalogText -notmatch $catalogPattern) {
+        throw "Required module '$requiredModule' is missing from the canonical module catalog."
+    }
+}
+
+# The root catalog and actual module directories must be an exact match. This prevents
+# unregistered module folders or undocumented module rows from silently bypassing ownership rules.
+$catalogModuleNames = @(
+    [regex]::Matches($moduleCatalogText, '(?m)^\|\s*([A-Za-z][A-Za-z0-9]*)\s*\|') |
+        ForEach-Object { $_.Groups[1].Value } |
+        Where-Object { $_ -ne "Module" }
+)
+$catalogCounts = @($catalogModuleNames | Group-Object)
+$missingCatalogModules = @($requiredModules | Where-Object { $_ -notin $catalogModuleNames })
+$unexpectedCatalogModules = @($catalogModuleNames | Where-Object { $_ -notin $requiredModules } | Sort-Object -Unique)
+$duplicateCatalogModules = @($catalogCounts | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+$actualModuleNames = @(
+    Get-ChildItem -LiteralPath $modulesRoot -Directory |
+        Select-Object -ExpandProperty Name |
+        Sort-Object
+)
+$unexpectedModuleDirectories = @($actualModuleNames | Where-Object { $_ -notin $requiredModules })
+$catalogIssues = @()
+if ($missingCatalogModules.Count -gt 0) {
+    $catalogIssues += "Missing catalog modules: $($missingCatalogModules -join ', ')"
+}
+if ($unexpectedCatalogModules.Count -gt 0) {
+    $catalogIssues += "Unexpected catalog modules: $($unexpectedCatalogModules -join ', ')"
+}
+if ($duplicateCatalogModules.Count -gt 0) {
+    $catalogIssues += "Duplicate catalog rows: $($duplicateCatalogModules -join ', ')"
+}
+if ($unexpectedModuleDirectories.Count -gt 0) {
+    $catalogIssues += "Unexpected module directories: $($unexpectedModuleDirectories -join ', ')"
+}
+if ($actualModuleNames.Count -ne $requiredModules.Count) {
+    $catalogIssues += "Expected $($requiredModules.Count) module directories but found $($actualModuleNames.Count)"
+}
+if ($catalogIssues.Count -gt 0) {
+    throw "Canonical module catalog and directories must exactly match the approved module list. $($catalogIssues -join '; ')"
+}
+
+}
+if (Test-Path $modulesRoot) {
+    $moduleDirs = Get-ChildItem $modulesRoot -Directory
+    foreach ($module in $moduleDirs) {
+        $others = $moduleDirs | Where-Object Name -ne $module.Name
+        foreach ($other in $others) {
+            # Public cross-module contracts are allowed only through the explicit .Contracts
+            # namespace. References to another module's root types or Domain/Application/
+            # Infrastructure/Api implementations remain forbidden. Allow whitespace around
+            # namespace dots so formatting cannot bypass the guard.
+            $otherNamespace = "GameNet\s*\.\s*Server\s*\.\s*Modules\s*\.\s*" + [regex]::Escape($other.Name)
+            $implementationPattern = "$otherNamespace(?:\s*;|\s*\.\s*(?!Contracts\b)[A-Za-z_][A-Za-z0-9_]*)"
+            Assert-NoMatch (Join-Path $modulesRoot $module.Name) $implementationPattern "Cross-module implementation reference detected: $($module.Name) -> $($other.Name). Use Shared or the target module's explicit Contracts namespace."
+        }
+    }
+}
+
+if ($OnlyModuleBoundaries) {
+    Write-Host "Cross-module boundary check passed."
+    exit 0
+}
+
+# The detailed Domain/Application/API policy is tested by check-module-layer-boundaries.ps1.
+
+# Client boundaries.
+Assert-NoMatch "src/Desktop" "GameNet\.Server\.(Persistence|Modules|Infrastructure)|Microsoft\.EntityFrameworkCore|Npgsql|DbContext" "Desktop may not reference Server implementation or database."
+Assert-NoMatch "src/Client" "GameNet\.Server\.(Persistence|Modules|Infrastructure)|Npgsql|DbContext" "Agent may not reference Server implementation or database."
+
+# Clients may not create duplicate wire contracts. Transport DTOs belong in Shared.Contracts.
+foreach ($root in @("src/Desktop","src/Client")) {
+    Assert-NoMatch $root "\b(public\s+|internal\s+|private\s+)?(sealed\s+)?(record|class|struct)\s+\w*(Dto|Request|Response|Command)\b" "Client runtime contains a duplicate transport contract. Put wire contracts in Shared.Contracts."
+}
+
+# EF migration integrity. Every migration must be a complete EF artifact:
+# implementation + Designer + Migration attribute. Empty/manual migration sources are forbidden.
+$migrationsRoot = "src/Server/Persistence/Migrations"
+if (Test-Path -LiteralPath $migrationsRoot -PathType Container) {
+    $migrationSources = Get-ChildItem -LiteralPath $migrationsRoot -File -Filter "*.cs" |
+        Where-Object { $_.Name -notlike "*.Designer.cs" -and $_.Name -ne "GameNetDbContextModelSnapshot.cs" }
+
+    foreach ($migration in $migrationSources) {
+        $designer = Join-Path $migration.DirectoryName ($migration.BaseName + ".Designer.cs")
+        if (-not (Test-Path -LiteralPath $designer -PathType Leaf)) {
+            throw "EF migration '$($migration.Name)' is missing its Designer artifact."
+        }
+
+        $designerText = Get-Content -LiteralPath $designer -Raw
+        if (-not $designerText.Contains('[Migration("')) {
+            throw "EF migration '$($migration.Name)' Designer is missing its Migration attribute."
+        }
+
+        $sourceText = Get-Content -LiteralPath $migration.FullName -Raw
+        if ($sourceText -notmatch "migrationBuilder") {
+            throw "EF migration '$($migration.Name)' contains no migrationBuilder operation; empty/manual migrations are forbidden."
+        }
+    }
+
+    $designerFiles = Get-ChildItem -LiteralPath $migrationsRoot -File -Filter "*.Designer.cs"
+    foreach ($designer in $designerFiles) {
+        $suffix = ".Designer"
+        if ($designer.BaseName.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)) {
+            $sourceName = $designer.BaseName.Substring(0, $designer.BaseName.Length - $suffix.Length) + ".cs"
+            $source = Join-Path $designer.DirectoryName $sourceName
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "EF migration Designer '$($designer.Name)' has no migration source artifact."
+            }
+        }
+    }
+}
+
+# Agent credential encryption scope must be stable across process/service restarts.
+$agentCredentialStorePath = "src/Client/Identity/AgentCredentialStore.cs"
+if (Test-Path -LiteralPath $agentCredentialStorePath -PathType Leaf) {
+    $credentialStoreText = Get-Content -LiteralPath $agentCredentialStorePath -Raw
+    if ($credentialStoreText -match "DataProtectionScope\.LocalMachine") {
+        throw "Agent credential storage may not use LocalMachine protection when the reader is bound to the service identity."
+    }
+    if ($credentialStoreText -notmatch "ProtectedData\.Protect\(.*DataProtectionScope\.CurrentUser") {
+        throw "Agent credential storage must protect credentials with the same CurrentUser scope used for unprotect."
+    }
+    if ($credentialStoreText -notmatch "ProtectedData\.Unprotect\(.*DataProtectionScope\.CurrentUser") {
+        throw "Agent credential storage must unprotect credentials with the CurrentUser scope."
+    }
+}
+
+# Persistence/time/technology rules.
+Assert-NoMatch "src/Server" "DateTime\.Now|DateTime\.UtcNow|DateTimeOffset\.Now|DateTimeOffset\.UtcNow" "Server code must use IGameClock/TimeProvider."
+Assert-NoMatch "src" "Microsoft\.Data\.Sqlite|UseSqlite|SqliteConnection" "PostgreSQL is the production persistence authority; SQLite is forbidden."
+
+# No fake/demo/mock product paths.
+Assert-NoMatch "src/Server" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Server mock/fake/demo sources are forbidden."
+Assert-NoMatch "src/Desktop" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Desktop mock/fake/demo sources are forbidden."
+Assert-NoMatch "src/Client" "\b(Mock|Fake|Stub|Demo|SampleData)[A-Za-z0-9_]*\b" "Production Agent mock/fake/demo sources are forbidden."
+
+# Business modules never call SaveChanges directly. Platform infrastructure owns its own
+# explicit transaction where needed (for example Outbox leasing).
+if (Test-Path "src/Server/Modules") {
+    $saveMatches = Get-ChildItem "src/Server/Modules" -Recurse -File -Filter *.cs |
+        Select-String -Pattern "\.SaveChanges(Async)?\s*\("
+    if ($saveMatches) {
+        $saveMatches | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+        throw "Business modules may not call SaveChanges/SaveChangesAsync directly."
+    }
+}
+
+# Browser runtime is forbidden.
+Assert-NoMatch "src/Desktop" "WebView2|Microsoft\.Web\.WebView2|BlazorWebView|System\.Windows\.Controls\.WebBrowser" "Browser/WebView runtime is forbidden in Desktop."
+if ((Get-Content "src/Server/Program.cs").Count -gt 120) { throw "Program.cs exceeded the composition-only limit." }
+if (Test-Path "src/Dashboard" -PathType Container) { throw "Browser Dashboard is forbidden." }
+if (Test-Path "package-lock.json" -PathType Leaf) { throw "Node/browser runtime artifacts are forbidden." }
+
+Write-Host "Architecture guard passed."
