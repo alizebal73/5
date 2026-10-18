@@ -277,6 +277,7 @@ internal sealed class MainForm : Form
         try
         {
             SaveOrClearSettings(settings);
+            AssertProcessOnlyPreconditions();
             var port = int.Parse(settings.PostgreSqlPort, System.Globalization.CultureInfo.InvariantCulture);
             var psqlPath = FindPsql();
             var adminPassword = _adminPassword.Text;
@@ -350,6 +351,53 @@ internal sealed class MainForm : Form
             MessageBox.Show(this, exception.Message, "GameNet 5 test could not start",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private static void AssertProcessOnlyPreconditions()
+    {
+        var programDataRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "GameNet Manager");
+        var protectedMarkers = new[]
+        {
+            Path.Combine(programDataRoot, "Config", "server.json"),
+            Path.Combine(programDataRoot, "Config", "server-secrets.bin"),
+            Path.Combine(programDataRoot, "Secrets", "server-secrets.v1.dpapi")
+        };
+        if (protectedMarkers.Any(File.Exists))
+            throw new InvalidOperationException("Existing GameNet Manager Server state was found under ProgramData. The test launcher will not overlap or modify it. Use a clean test environment or review the existing installation first.");
+
+        var scPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "sc.exe");
+        foreach (var serviceName in new[] { "GameNet 5 Server", "GameNet 5 Agent" })
+        {
+            var start = new ProcessStartInfo(scPath)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            start.ArgumentList.Add("query");
+            start.ArgumentList.Add(serviceName);
+            using var process = new Process { StartInfo = start };
+            if (!process.Start())
+                throw new InvalidOperationException("Could not complete the read-only GameNet service preflight. No test database was created.");
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(5000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                throw new InvalidOperationException("The read-only service preflight timed out. No test database was created.");
+            }
+            var stdout = awaitIfCompleted(stdoutTask);
+            var stderr = awaitIfCompleted(stderrTask);
+            if (process.ExitCode == 0)
+                throw new InvalidOperationException($"The service '{serviceName}' already exists. This process-only test will not install, stop, or modify it.");
+            if (process.ExitCode != 1060)
+                throw new InvalidOperationException($"The launcher could not reliably verify whether service '{serviceName}' exists. {SanitizePostgresError(stderr + " " + stdout)}");
+        }
+
+        static string awaitIfCompleted(Task<string> task) => task.GetAwaiter().GetResult();
     }
 
     private static string FindPsql()
