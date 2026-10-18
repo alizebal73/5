@@ -169,6 +169,12 @@ try {
     if ([string]::IsNullOrWhiteSpace($iscc)) {
         throw "Pinned Inno Setup 6.4.3 compiler is missing. The workflow must install it before invoking this builder."
     }
+    $compilerFile = Get-Item -LiteralPath $iscc
+    $compilerVersionText = "$($compilerFile.VersionInfo.ProductVersion) $($compilerFile.VersionInfo.FileVersion)"
+    if ($compilerVersionText -notmatch '(?<!\d)6\.4\.3(?:\.\d+)?(?!\d)') {
+        throw "The test Setup requires the repository-pinned Inno Setup 6.4.3 compiler; found '$compilerVersionText'. Refusing a non-pinned installer build."
+    }
+    Write-Host "INNO_SETUP_PINNED_VERSION=6.4.3"
 
     $env:GAMENET_TEST_SETUP_PAYLOAD_ROOT = $payloadRoot
     $env:GAMENET_TEST_SETUP_OUTPUT_DIR = $outputRoot
