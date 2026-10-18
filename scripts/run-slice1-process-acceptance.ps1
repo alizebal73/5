@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [switch]$GuiMode,
-    [string]$StopSignalPath
+    [string]$StopSignalPath,
+    [string]$ReopenSignalPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,8 +12,11 @@ Set-StrictMode -Version Latest
 $guiSettings = $null
 if ($GuiMode) {
     if ([string]::IsNullOrWhiteSpace($StopSignalPath) -or
-        $StopSignalPath.IndexOfAny([System.IO.Path]::GetInvalidPathChars()) -ge 0) {
-        throw "GUI test mode requires a valid stop-signal path."
+        $StopSignalPath.IndexOfAny([System.IO.Path]::GetInvalidPathChars()) -ge 0 -or
+        [string]::IsNullOrWhiteSpace($ReopenSignalPath) -or
+        $ReopenSignalPath.IndexOfAny([System.IO.Path]::GetInvalidPathChars()) -ge 0 -or
+        [string]::Equals([System.IO.Path]::GetFullPath($StopSignalPath), [System.IO.Path]::GetFullPath($ReopenSignalPath), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "GUI test mode requires distinct valid stop and Desktop-reopen signal paths."
     }
     $guiJson = [Console]::In.ReadToEnd()
     if ([string]::IsNullOrWhiteSpace($guiJson)) {
@@ -828,6 +832,36 @@ try {
         Write-Host "WPF_ACCEPTANCE_READY=true"
         Write-Host "Use the launcher window's Stop button after collecting the screenshot and test evidence."
         while (-not (Test-Path -LiteralPath $StopSignalPath -PathType Leaf)) {
+            if (Test-Path -LiteralPath $ReopenSignalPath -PathType Leaf) {
+                Remove-Item -LiteralPath $ReopenSignalPath -Force
+                if ($null -ne $desktopProcess -and -not $desktopProcess.HasExited) {
+                    Write-Host "DESKTOP_REOPEN_BLOCKED=The Desktop is still running. Close its window first, then try again."
+                }
+                else {
+                    if ($null -ne $desktopProcess) {
+                        $desktopProcess.Dispose()
+                        $desktopProcess = $null
+                    }
+                    try {
+                        $desktopInfo = New-RuntimeProcessInfo -FilePath $desktopExe -ConfigurationDirectory $configDirectory
+                        $desktopProcess = Start-GameNetProcess -StartInfo $desktopInfo
+                        $desktopInfo = $null
+                        Start-Sleep -Seconds 3
+                        if ($desktopProcess.HasExited) {
+                            $desktopExitCode = $desktopProcess.ExitCode
+                            $desktopProcess.Dispose()
+                            $desktopProcess = $null
+                            Write-Host "DESKTOP_REOPEN_FAILED=Desktop exited during startup (exit code $desktopExitCode)."
+                        }
+                        else {
+                            Write-Host "DESKTOP_REOPENED=true"
+                        }
+                    }
+                    catch {
+                        Write-Host "DESKTOP_REOPEN_FAILED=Could not start Desktop ($($_.Exception.GetType().Name))."
+                    }
+                }
+            }
             Start-Sleep -Milliseconds 500
         }
     }

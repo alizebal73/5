@@ -27,6 +27,7 @@ internal sealed class MainForm : Form
     };
     private readonly Button _startButton = new() { Text = "Create fresh test database and launch", AutoSize = true };
     private readonly Button _stopButton = new() { Text = "Stop test processes", AutoSize = true, Enabled = false };
+    private readonly Button _reopenDesktopButton = new() { Text = "Reopen Desktop (same test data)", AutoSize = true, Enabled = false };
     private readonly Button _clearSettingsButton = new() { Text = "Forget saved settings", AutoSize = true };
     private readonly Label _status = new()
     {
@@ -47,6 +48,8 @@ internal sealed class MainForm : Form
 
     private Process? _harnessProcess;
     private string? _stopSignalPath;
+    private string? _reopenSignalPath;
+    private bool _testWorkspaceReady;
     private bool _closing;
 
     public MainForm()
@@ -126,6 +129,7 @@ internal sealed class MainForm : Form
         var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, WrapContents = true };
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
+        buttons.Controls.Add(_reopenDesktopButton);
         buttons.Controls.Add(_clearSettingsButton);
         controls.Controls.Add(buttons);
         controls.Controls.Add(_status);
@@ -142,6 +146,7 @@ internal sealed class MainForm : Form
 
         _startButton.Click += async (_, _) => await StartTestAsync();
         _stopButton.Click += (_, _) => RequestStop();
+        _reopenDesktopButton.Click += (_, _) => RequestReopenDesktop();
         _clearSettingsButton.Click += (_, _) => ForgetSettings();
         FormClosing += OnFormClosing;
 
@@ -330,7 +335,9 @@ internal sealed class MainForm : Form
             AppendLog("Database credentials will be delivered to the short-lived harness over redirected stdin, never through command-line arguments.");
             var testedSha = ReadTestedCheckoutSha();
             var stopPath = Path.Combine(Path.GetTempPath(), "gamenet5-test-stop-" + Guid.NewGuid().ToString("N") + ".signal");
+            var reopenPath = Path.Combine(Path.GetTempPath(), "gamenet5-test-reopen-" + Guid.NewGuid().ToString("N") + ".signal");
             _stopSignalPath = stopPath;
+            _reopenSignalPath = reopenPath;
             var config = new Dictionary<string, object?>
             {
                 ["testedCheckoutSha"] = testedSha,
@@ -341,7 +348,7 @@ internal sealed class MainForm : Form
                 ["ownerPassword"] = settings.OwnerPassword,
                 ["hourlyRateToman"] = long.Parse(settings.HourlyRateToman, System.Globalization.CultureInfo.InvariantCulture)
             };
-            LaunchHarness(config, stopPath);
+            LaunchHarness(config, stopPath, reopenPath);
             connectionString = string.Empty;
             settings.OwnerPassword = string.Empty;
             _ownerPassword.Clear();
@@ -493,7 +500,7 @@ internal sealed class MainForm : Form
         return sha;
     }
 
-    private void LaunchHarness(Dictionary<string, object?> config, string stopPath)
+    private void LaunchHarness(Dictionary<string, object?> config, string stopPath, string reopenPath)
     {
         var root = GetInstallRoot();
         var pwsh = Path.Combine(root, "Setup", "PowerShell", "pwsh.exe");
@@ -511,7 +518,7 @@ internal sealed class MainForm : Form
         foreach (var arg in new[]
         {
             "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-            "-File", script, "-GuiMode", "-StopSignalPath", stopPath
+            "-File", script, "-GuiMode", "-StopSignalPath", stopPath, "-ReopenSignalPath", reopenPath
         })
             start.ArgumentList.Add(arg);
 
@@ -524,10 +531,17 @@ internal sealed class MainForm : Form
             _harnessProcess?.Dispose();
             _harnessProcess = null;
             var signalPath = _stopSignalPath;
+            var reopenSignalPath = _reopenSignalPath;
             _stopSignalPath = null;
-            if (!string.IsNullOrWhiteSpace(signalPath) && File.Exists(signalPath))
+            _reopenSignalPath = null;
+            _testWorkspaceReady = false;
+            _reopenDesktopButton.Enabled = false;
+            foreach (var path in new[] { signalPath, reopenSignalPath })
             {
-                try { File.Delete(signalPath); } catch { }
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                {
+                    try { File.Delete(path); } catch { }
+                }
             }
             if (!_closing)
             {
@@ -568,12 +582,33 @@ internal sealed class MainForm : Form
         {
             File.WriteAllText(_stopSignalPath, "Stop requested by operator.");
             _stopButton.Enabled = false;
+            _reopenDesktopButton.Enabled = false;
             _status.Text = "Stopping the Server, Agent and Desktop processes started for this test…";
             AppendLog("Stop requested. Existing business/legacy processes are not targeted.");
         }
         catch (Exception exception)
         {
             AppendLog($"Could not send a graceful stop signal: {exception.Message}");
+        }
+    }
+
+    private void RequestReopenDesktop()
+    {
+        if (!_testWorkspaceReady || _harnessProcess is null || _harnessProcess.HasExited ||
+            string.IsNullOrWhiteSpace(_reopenSignalPath))
+            return;
+
+        try
+        {
+            File.WriteAllText(_reopenSignalPath, "Reopen Desktop against the existing isolated test workspace.");
+            _reopenDesktopButton.Enabled = false;
+            _status.Text = "Checking whether the Desktop is closed, then reopening it against the same test database…";
+            AppendLog("Desktop reopen requested. Server, Agent and database remain the same; no new database is created.");
+        }
+        catch (Exception exception)
+        {
+            _reopenDesktopButton.Enabled = true;
+            AppendLog($"Could not send the Desktop reopen request: {exception.Message}");
         }
     }
 
@@ -622,6 +657,7 @@ internal sealed class MainForm : Form
     {
         _startButton.Enabled = !busy;
         _stopButton.Enabled = busy && _harnessProcess is not null;
+        _reopenDesktopButton.Enabled = busy && _testWorkspaceReady && _harnessProcess is not null;
         _clearSettingsButton.Enabled = !busy;
         _port.Enabled = !busy;
         _adminUser.Enabled = !busy;
@@ -642,6 +678,35 @@ internal sealed class MainForm : Form
         if (InvokeRequired)
         {
             BeginInvoke((MethodInvoker)(() => AppendLog(message)));
+            return;
+        }
+        if (message == "WPF_ACCEPTANCE_READY=true")
+        {
+            _testWorkspaceReady = true;
+            _reopenDesktopButton.Enabled = _harnessProcess is not null && !_harnessProcess.HasExited;
+            _status.Text = "Test ready. Close only the Desktop window, then use Reopen Desktop to check saved results.";
+            _log.AppendText($"[{DateTime.Now:HH:mm:ss}] Test workspace ready. Keep this Launcher open; close the Desktop window and use Reopen Desktop (same test data) to verify persistence.{Environment.NewLine}");
+            return;
+        }
+        if (message == "DESKTOP_REOPENED=true")
+        {
+            _reopenDesktopButton.Enabled = _testWorkspaceReady && _harnessProcess is not null && !_harnessProcess.HasExited;
+            _status.Text = "Desktop reopened against the same isolated Server and database. Sign in again and refresh recent cash checkouts.";
+            _log.AppendText($"[{DateTime.Now:HH:mm:ss}] Desktop reopened. Sign in again and verify the same paid invoice appears in recent cash checkouts.{Environment.NewLine}");
+            return;
+        }
+        if (message.StartsWith("DESKTOP_REOPEN_BLOCKED=", StringComparison.Ordinal))
+        {
+            _reopenDesktopButton.Enabled = _testWorkspaceReady && _harnessProcess is not null && !_harnessProcess.HasExited;
+            _status.Text = "Close the existing Desktop window before reopening it.";
+            _log.AppendText($"[{DateTime.Now:HH:mm:ss}] {message.Substring("DESKTOP_REOPEN_BLOCKED=".Length)}{Environment.NewLine}");
+            return;
+        }
+        if (message.StartsWith("DESKTOP_REOPEN_FAILED=", StringComparison.Ordinal))
+        {
+            _reopenDesktopButton.Enabled = _testWorkspaceReady && _harnessProcess is not null && !_harnessProcess.HasExited;
+            _status.Text = "Desktop did not reopen. Review the diagnostic message; existing test data is unchanged.";
+            _log.AppendText($"[{DateTime.Now:HH:mm:ss}] {message.Substring("DESKTOP_REOPEN_FAILED=".Length)}{Environment.NewLine}");
             return;
         }
         _log.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");

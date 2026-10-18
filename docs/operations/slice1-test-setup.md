@@ -10,7 +10,8 @@
 4. Enter the PostgreSQL 17 administrator login for the local PostgreSQL instance and the throwaway Owner credentials. Check the explicit new-disposable-database confirmation, then click **Create fresh test database and launch**.
 5. The launcher creates a newly named `gamenet_slice1_test_*` database and restricted `gamenet_slice1_app_*` role. It does not drop or reuse earlier databases. The PostgreSQL administrator password is used only for this creation step and is not stored.
 6. When the WPF Desktop opens, sign in with the Owner username/password you entered in the launcher, verify the test PC is online, start a session, wait about two minutes, end it, and inspect the pending-payment list. For a 1,000-Toman hourly test rate, the resulting charge should be about 33 Toman, subject to the application's rounding rule.
-7. Use **Stop test processes** in the launcher when evidence is captured. Do not kill unrelated GameNet processes.
+7. To verify that the paid checkout survives a Desktop reload, keep the Launcher open and do **not** click Stop yet. Close only the WPF Desktop window, then click **Reopen Desktop (same test data)** in the Launcher. Sign in again with the same throwaway Owner, refresh recent cash checkouts, and verify the paid invoice remains visible with the same amount, received cash, and change. If the Desktop is still open, close it before clicking Reopen. This reuses the running isolated Server and database; it does not create or migrate another database.
+8. After the reload evidence is captured, click **Stop test processes**. Do not kill unrelated GameNet processes.
 
 The Owner and tariff settings can be saved for this Windows user. They are encrypted with Windows DPAPI CurrentUser under LocalAppData. The PostgreSQL administrator password is never saved; it must be entered for each newly created database. A new database per run avoids mixing payments and invoices from separate test attempts.
 
