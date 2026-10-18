@@ -4,7 +4,7 @@
 
 ## 1. Safety boundary and candidate identity
 
-- Use only a disposable Windows PC/VM and disposable PostgreSQL database. Never run a reboot, clock-change, proxy-fault, or service test against the live GameNet/Manager PC, a customer PC, or a database containing real customer/financial records.
+- This procedure contains host-level disruptive tests (Windows clock changes/reboot, proxy or network faults, and service interruption). Run these steps only when interrupting the Windows host is acceptable; a disposable Windows VM/PC with snapshot/revert is preferred. Do not perform them while the PC is serving customers. Use a disposable PostgreSQL database and never use a database containing real customer or financial records. The new GameNet 5 app is separate from older GameNet software: an older app being installed is not itself a blocker for the ordinary loopback functional test, but these host-level experiments can affect the whole PC.
 - Stop if isolation, snapshot/revert, Server database target, and test-only service identity cannot be proven. The Runtime LAN package is portable output only; it does not install/register Windows services and is not Setup/MSI.
 - PR: [#124](https://github.com/alizebal73/5/pull/124).
 - **Before any manual acceptance**, take the source SHA and Git tree from the current PR head; verify Quick Validation/Foundation and Runtime LAN Payload are both green on that exact head. Download the payload artifact from the matching Runtime LAN run, verify its `SHA256SUMS.txt`, and confirm `manifest.json` identifies the same tested checkout SHA. Do not use an artifact built for a previous commit just because only documentation changed; any source SHA change requires matching exact-head evidence.
@@ -16,7 +16,7 @@
 
 ### A. Normal same-boot path and wall-clock movement
 
-1. Log in to the isolated Server and refresh the Session workspace.
+1. Log in to the test Server and refresh the Session workspace.
 2. Select an available disposable PC and fixed PC hourly tariff. Start a Walk-in Session; note Session ID, rate snapshot, and UTC start event time.
 3. While the Session remains active, perform the planned forward/backward Windows clock change only inside the disposable VM (or use a controlled clock test mechanism). Do not reboot Windows in this scenario.
 4. Restart only the Server process/service within the disposable environment, keeping the same Windows boot. Confirm the service is connected to the same disposable database and no second Server instance is active.
@@ -26,18 +26,18 @@
 ### B. Windows reboot / fail-closed / explicit reconciliation
 
 1. Start a new Session on a disposable PC. Record Session ID, version, rate snapshot, and start evidence.
-2. Reboot Windows only inside the disposable VM while the Session remains active. Reopen the app and connect to the same isolated Server/database.
+2. Reboot Windows only inside the disposable VM while the Session remains active. Reopen the app and connect to the same test Server/database.
 3. Select the active Session and click ordinary End. Expected: the Server returns `sessions.timing_recovery_required`; no invoice is created and the Session remains Active. Stop and investigate if a pending invoice or financial record appears here.
 4. With the operator holding both required permissions, select that same Session. The timing-recovery panel must become available only after the ordinary End attempt failed closed for timing continuity.
 5. Independently determine the total billable play duration using approved test evidence (for example, the recorded test plan and controlled session timestamps). Enter whole minutes from 1 through 43,200, add a printable 3–256 character evidence/reason note, and check the explicit confirmation.
 6. Submit once. Record Session ID/version, requested minutes, reason, Invoice ID, elapsed ticks, amount, correlation ID and request time. Expected: Session transitions to PendingSettlement; one PendingPayment invoice is created; no Payment or billing ledger row exists yet.
 7. Refresh the workspace, close/reopen Desktop and log in again. Confirm the same invoice remains pending. Do not repeat a command after a timeout until Server state is reconciled.
-8. Replay the same request key and same payload using a controlled test client only if this can be done safely in the isolated environment. Expected: the same Invoice ID and amount. Reusing the key for a different payload must conflict. Never simulate retries against live financial data.
+8. Replay the same request key and same payload using a controlled test client only if this can be done safely in the controlled test environment. Expected: the same Invoice ID and amount. Reusing the key for a different payload must conflict. Never simulate retries against live financial data.
 9. In the second operator session without `sessions.timing.recover`, verify the panel/command is unavailable. A controlled direct API attempt must return 403 and leave Session, Invoice, Payment, ledger and successful-recovery Audit unchanged.
 
 ### C. Validation/error cases
 
-Verify, through automated tests and isolated direct-API cases where available, that missing confirmation, missing/invalid reason, 0 minutes, more than 43,200 minutes, stale Session version, inactive Session, missing either permission, and attempted manual recovery while continuity is still valid are rejected without creating an invoice. Record any scenario that cannot safely be exercised manually as `NOT RUN`; do not infer a manual pass from CI.
+Verify, through automated tests and direct-API test cases where available, that missing confirmation, missing/invalid reason, 0 minutes, more than 43,200 minutes, stale Session version, inactive Session, missing either permission, and attempted manual recovery while continuity is still valid are rejected without creating an invoice. Record any scenario that cannot safely be exercised manually as `NOT RUN`; do not infer a manual pass from CI.
 
 **Stop condition:** if the Session ID, version, requested duration, immutable tariff snapshot, invoice status/amount, permission decision, or Audit evidence disagrees, preserve the VM/database snapshot and application logs. Do not delete or edit financial records to make a case pass.
 
@@ -174,7 +174,7 @@ Attach to Issue #98:
 
 - [ ] Exact final tested source SHA and Git tree; matching Quick Validation/Foundation and Runtime LAN workflow links.
 - [ ] Payload ZIP SHA-256, `manifest.json` with matching tested checkout SHA, and adjacent checksum evidence.
-- [ ] Windows edition/build, disposable VM snapshot/revert identity, isolated Server endpoint/database, test operator IDs/permissions, and test-run label.
+- [ ] Windows edition/build, disposable VM snapshot/revert identity, test Server endpoint/database, test operator IDs/permissions, and test-run label.
 - [ ] Screenshots for Session start, failed ordinary End with recovery-required state, the gated recovery form, submitted verified duration/reason/confirmation, resulting pending invoice, and post-Desktop-restart state.
 - [ ] Session UUID, Invoice UUID, amount and elapsed ticks, rate snapshot, correlation ID, idempotency key, Audit result and event timestamps.
 - [ ] Read-only SQL outputs A–C and an independent hand calculation of duration and amount.

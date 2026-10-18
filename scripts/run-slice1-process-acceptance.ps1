@@ -60,6 +60,7 @@ foreach ($entry in $manifestEntries) {
 
 $requiredManifestPaths = @(
     "Server/GameNet.Server.exe",
+    "Server/Npgsql.dll",
     "Agent/GameNet.Agent.exe",
     "Desktop/GameNet.Manager.Desktop.exe",
     "Tools/inspect-manager-runtime-state.ps1",
@@ -101,21 +102,6 @@ function Convert-SecureStringToPlainText {
     }
 }
 
-function Get-ConnectionValue {
-    param(
-        [Parameter(Mandatory)][System.Data.Common.DbConnectionStringBuilder]$Builder,
-        [Parameter(Mandatory)][string[]]$Names
-    )
-    foreach ($key in @($Builder.Keys)) {
-        foreach ($name in $Names) {
-            if ([string]$key -ieq $name) {
-                return [string]$Builder[$key]
-            }
-        }
-    }
-    return $null
-}
-
 function Find-Psql {
     $command = Get-Command "psql.exe" -ErrorAction SilentlyContinue
     if ($null -ne $command) {
@@ -138,18 +124,42 @@ function Find-Psql {
 function Assert-DisposableEmptyDatabase {
     param([Parameter(Mandatory)][string]$ConnectionString)
 
-    $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-    try { $builder.ConnectionString = $ConnectionString }
-    catch { throw "The supplied PostgreSQL connection string could not be parsed. No database command was run." }
+    $npgsqlAssemblyPath = Join-Path (Split-Path -Parent $serverExe) "Npgsql.dll"
+    if (-not (Test-Path -LiteralPath $npgsqlAssemblyPath -PathType Leaf)) {
+        throw "The published PostgreSQL driver is missing from the Server payload. No database command was run."
+    }
 
-    $hostName = Get-ConnectionValue -Builder $builder -Names @("Host", "Server", "Data Source", "Address")
-    $database = Get-ConnectionValue -Builder $builder -Names @("Database", "Initial Catalog")
-    $username = Get-ConnectionValue -Builder $builder -Names @("Username", "User ID", "User")
-    $password = Get-ConnectionValue -Builder $builder -Names @("Password", "Pwd")
-    $portText = Get-ConnectionValue -Builder $builder -Names @("Port")
-    $port = 5432
-    if (-not [string]::IsNullOrWhiteSpace($portText) -and
-        (-not [int]::TryParse($portText, [ref]$port) -or $port -lt 1 -or $port -gt 65535)) {
+    try {
+        $npgsqlAssembly = [System.Reflection.Assembly]::LoadFrom($npgsqlAssemblyPath)
+        $builderType = $npgsqlAssembly.GetType("Npgsql.NpgsqlConnectionStringBuilder", $true)
+        $connectionStringConstructor = $builderType.GetConstructor([System.Type[]]@([string]))
+        if ($null -eq $connectionStringConstructor) {
+            throw "The bundled PostgreSQL driver does not expose its connection-string constructor."
+        }
+        # Invoke the real .NET constructor. PowerShell's dictionary adapter can
+        # otherwise route ".ConnectionString =" to the IDictionary indexer as a
+        # literal "ConnectionString" key instead of calling the CLR property setter.
+        $builder = $connectionStringConstructor.Invoke([object[]]@($ConnectionString))
+    }
+    catch {
+        throw "The supplied PostgreSQL connection string could not be parsed by the bundled PostgreSQL driver. No database command was run."
+    }
+
+    # Read values through CLR reflection to bypass PowerShell's dictionary adapter.
+    # This exact access path passed the earlier payload-build parser gate.
+    try {
+        $hostName = [string]$builderType.GetProperty("Host").GetValue($builder)
+        $database = [string]$builderType.GetProperty("Database").GetValue($builder)
+        $username = [string]$builderType.GetProperty("Username").GetValue($builder)
+        $password = [string]$builderType.GetProperty("Password").GetValue($builder)
+        $port = [int]$builderType.GetProperty("Port").GetValue($builder)
+        $sslMode = [string]$builderType.GetProperty("SslMode").GetValue($builder)
+    }
+    catch {
+        throw "The bundled PostgreSQL driver parsed the connection string but its required values could not be read safely. No database command was run."
+    }
+
+    if ($port -lt 1 -or $port -gt 65535) {
         throw "PostgreSQL port is invalid. No database command was run."
     }
 
@@ -177,7 +187,37 @@ SELECT
      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
       AND n.nspname NOT LIKE 'pg_toast%'
+      AND n.nspname NOT LIKE 'pg_temp_%'
+      AND n.nspname NOT LIKE 'pg_toast_temp_%'
       AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')),
+  (
+    (SELECT count(*)
+       FROM pg_catalog.pg_namespace n
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'public')
+        AND n.nspname NOT LIKE 'pg_toast%'
+        AND n.nspname NOT LIKE 'pg_temp_%'
+        AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_type t JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_operator o JOIN pg_catalog.pg_namespace n ON n.oid = o.oprnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_opclass o JOIN pg_catalog.pg_namespace n ON n.oid = o.opcnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_opfamily o JOIN pg_catalog.pg_namespace n ON n.oid = o.opfnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_conversion o JOIN pg_catalog.pg_namespace n ON n.oid = o.connamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_collation o JOIN pg_catalog.pg_namespace n ON n.oid = o.collnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_config o JOIN pg_catalog.pg_namespace n ON n.oid = o.cfgnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_dict o JOIN pg_catalog.pg_namespace n ON n.oid = o.dictnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_parser o JOIN pg_catalog.pg_namespace n ON n.oid = o.prsnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_ts_template o JOIN pg_catalog.pg_namespace n ON n.oid = o.tmplnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%')
+    + (SELECT count(*) FROM pg_catalog.pg_foreign_data_wrapper)
+    + (SELECT count(*) FROM pg_catalog.pg_foreign_server)
+    + (SELECT count(*) FROM pg_catalog.pg_default_acl)
+    + (SELECT count(*) FROM pg_catalog.pg_largeobject_metadata)
+    + (SELECT count(*) FROM pg_catalog.pg_publication)
+    + (SELECT count(*) FROM pg_catalog.pg_subscription)
+    + (SELECT count(*) FROM pg_catalog.pg_event_trigger)
+    + (SELECT count(*) FROM pg_catalog.pg_language WHERE lanname NOT IN ('internal', 'c', 'sql', 'plpgsql'))
+  ),
   (SELECT CASE
       WHEN rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls
         THEN 'ELEVATED'
@@ -203,11 +243,11 @@ SELECT
         $info.ArgumentList.Add($arg)
     }
     $info.Environment["PGPASSWORD"] = $password
-    if ($builder.ContainsKey("SSL Mode")) {
-        $sslMode = [string]$builder["SSL Mode"]
-        $map = @{ Disable = "disable"; Allow = "allow"; Prefer = "prefer"; Require = "require"; VerifyCA = "verify-ca"; VerifyFull = "verify-full" }
-        if ($map.ContainsKey($sslMode)) { $info.Environment["PGSSLMODE"] = $map[$sslMode] }
+    $sslMap = @{ Disable = "disable"; Allow = "allow"; Prefer = "prefer"; Require = "require"; VerifyCA = "verify-ca"; VerifyFull = "verify-full" }
+    if (-not $sslMap.ContainsKey($sslMode)) {
+        throw "Unsupported PostgreSQL SSL mode for the psql isolation preflight. No migration was started."
     }
+    $info.Environment["PGSSLMODE"] = $sslMap[$sslMode]
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $info
@@ -224,12 +264,14 @@ SELECT
         if ($process.ExitCode -ne 0) {
             throw "PostgreSQL isolation preflight failed (exit $($process.ExitCode)). Verify the local test role/database and retry. Details: $($stderr.Trim())"
         }
-        if ($stdout -notmatch '^\s*0\|OK\s*$') {
-            throw "Refusing to migrate: database is not empty or the PostgreSQL role has elevated privileges. Expected empty-object-count|OK; observed '$stdout'."
+        if ($stdout -notmatch '^\s*0\|0\|OK\s*$') {
+            throw "Refusing to migrate: the database has application relations/objects or the PostgreSQL role has elevated privileges. Expected relation-count|other-object-count|OK = 0|0|OK; observed '$stdout'."
         }
     }
     finally {
-        $info.Environment.Remove("PGPASSWORD")
+        # Dictionary.Remove returns a Boolean. Suppress it so the function emits
+        # only the intended database-info object to its caller.
+        [void]$info.Environment.Remove("PGPASSWORD")
         $process.Dispose()
         $builder.Clear()
         $password = $null
@@ -394,6 +436,8 @@ $testRoot = $null
 $connectionString = $null
 $ownerPassword = $null
 $ownerPasswordConfirm = $null
+$secureOwnerPassword = $null
+$secureOwnerPasswordAgain = $null
 $bootstrapSecret = $null
 $signingKey = $null
 $provisioningKey = $null
@@ -425,16 +469,26 @@ try {
         (Join-Path $programDataRoot "Secrets\server-secrets.v1.dpapi")
     )
     if (@($markers | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
-        throw "GameNet Manager Server state already exists under ProgramData. This isolated process test refuses to run here."
+        throw "GameNet 5 Manager Server state already exists under ProgramData. This first-time process acceptance refuses to overlap the new app's existing runtime state; a separate legacy GameNet program is not what this guard targets."
     }
 
     $secureConnection = Read-Host "Paste the connection string for a NEW empty local PostgreSQL test database (input is hidden)" -AsSecureString
     try { $connectionString = Convert-SecureStringToPlainText $secureConnection }
     finally { $secureConnection.Dispose() }
 
-    $databaseInfo = Assert-DisposableEmptyDatabase -ConnectionString $connectionString
+    $databaseInfoItems = @(Assert-DisposableEmptyDatabase -ConnectionString $connectionString)
+    if ($databaseInfoItems.Count -ne 1 -or
+        $databaseInfoItems[0] -isnot [System.Management.Automation.PSCustomObject]) {
+        throw "PostgreSQL preflight returned unexpected pipeline output. No GameNet process or migration was started."
+    }
+    $databaseInfo = $databaseInfoItems[0]
+    foreach ($requiredInfoProperty in @("Database", "Host", "Port", "Username")) {
+        if ($null -eq $databaseInfo.PSObject.Properties[$requiredInfoProperty]) {
+            throw "PostgreSQL preflight omitted required result property '$requiredInfoProperty'. No GameNet process or migration was started."
+        }
+    }
     Write-Host ("Verified empty loopback database: {0} on {1}:{2}, role {3}" -f $databaseInfo.Database, $databaseInfo.Host, $databaseInfo.Port, $databaseInfo.Username)
-    Write-Host "Database preflight: zero non-system relations; role has no elevated PostgreSQL privileges."
+    Write-Host "Database preflight: zero non-system relations and zero additional non-system database objects; role has no elevated PostgreSQL privileges."
     $confirmation = Read-Host "Type exactly USE EMPTY TEST DATABASE to confirm migration of this verified disposable database"
     if ($confirmation -cne "USE EMPTY TEST DATABASE") {
         throw "Confirmation did not match; no GameNet process or migration was started."
@@ -477,6 +531,17 @@ try {
             }
             Setup = [ordered]@{ BootstrapSecret = $bootstrapSecret }
         }
+        # Keep functional-acceptance console output readable. Warnings and errors
+        # remain visible; per-query SQL and routine HTTP diagnostics otherwise
+        # obscure the interactive Read-Host prompts.
+        Logging = [ordered]@{
+            LogLevel = [ordered]@{
+                Default = "Warning"
+                "Microsoft.Hosting.Lifetime" = "Information"
+                "Microsoft.EntityFrameworkCore.Database.Command" = "Warning"
+                "Microsoft.AspNetCore.Hosting.Diagnostics" = "Warning"
+            }
+        }
     }
     Write-JsonFile -Path (Join-Path $configDirectory "server.json") -Value $serverSettings
 
@@ -515,8 +580,8 @@ try {
         $ownerPasswordConfirm = Convert-SecureStringToPlainText $secureOwnerPasswordAgain
     }
     finally {
-        $secureOwnerPassword.Dispose()
         $secureOwnerPasswordAgain.Dispose()
+        $secureOwnerPasswordAgain = $null
     }
     if ($ownerPassword.Length -lt 10 -or $ownerPassword.Length -gt 256 -or
         -not [string]::Equals($ownerPassword, $ownerPasswordConfirm, [StringComparison]::Ordinal)) {
@@ -550,16 +615,24 @@ try {
     $serverInfo = $null
     Wait-GameNetServer -BaseUrl $baseUrl -Process $serverProcess
 
-    $loginPasswordSecure = Read-Host "Enter the throwaway Owner password to prepare the isolated test Station/Tariff/Agent (hidden)" -AsSecureString
-    try { $loginPassword = Convert-SecureStringToPlainText $loginPasswordSecure }
-    finally { $loginPasswordSecure.Dispose() }
+    # Reuse the same SecureString accepted and confirmed for bootstrap instead
+    # of prompting the operator to type it a third time between noisy process logs.
+    # If this login fails, the exact same password was used for both API calls.
+    Write-Host "Owner bootstrap completed; verifying sign-in with the same captured test password..."
     try {
+        $loginPassword = Convert-SecureStringToPlainText $secureOwnerPassword
         $login = Invoke-GameNetApi -Method POST -BaseUrl $baseUrl -Path "/api/v1/auth/login" -Body @{ username = $ownerUsername; password = $loginPassword }
     }
     catch {
-        throw "Owner sign-in failed after bootstrap. Inspect the local Server output; no business database was targeted."
+        throw "Owner sign-in failed after bootstrap using the exact password accepted for bootstrap. Preserve the disposable database and test evidence; this indicates a bootstrap/login integration defect."
     }
-    finally { $loginPassword = $null }
+    finally {
+        $loginPassword = $null
+        if ($null -ne $secureOwnerPassword) {
+            $secureOwnerPassword.Dispose()
+            $secureOwnerPassword = $null
+        }
+    }
     $accessToken = [string]$login.data.accessToken
     if ([string]::IsNullOrWhiteSpace($accessToken)) { throw "Server did not issue a local Owner access token." }
 
@@ -680,6 +753,14 @@ finally {
     $connectionString = $null
     $ownerPassword = $null
     $ownerPasswordConfirm = $null
+    if ($null -ne $secureOwnerPassword) {
+        $secureOwnerPassword.Dispose()
+        $secureOwnerPassword = $null
+    }
+    if ($null -ne $secureOwnerPasswordAgain) {
+        $secureOwnerPasswordAgain.Dispose()
+        $secureOwnerPasswordAgain = $null
+    }
     $bootstrapSecret = $null
     $signingKey = $null
     $provisioningKey = $null
