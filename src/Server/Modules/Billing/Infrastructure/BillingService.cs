@@ -3,6 +3,7 @@ using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Idempotency;
 using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Billing.Application;
+using GameNet.Server.Modules.Billing.Contracts;
 using GameNet.Server.Modules.Billing.Domain;
 using GameNet.Server.Modules.Sessions.Contracts;
 using GameNet.Server.Persistence;
@@ -21,10 +22,41 @@ public sealed partial class BillingService(
     ISessionSettlement sessionSettlement,
     ISessionCheckoutAccess sessionCheckoutAccess,
     IAuditWriter audit,
-    IGameClock clock) : IBillingService
+    IGameClock clock) : IBillingService, ICashReceiptWriter
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Retention = TimeSpan.FromDays(1);
+
+    public Task<Result<WalletCashReceiptResult>> RecordWalletTopUpAsync(
+        RecordWalletTopUpCashReceiptCommand command,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var receipt = CashReceipt.RecordWalletTopUp(
+                command.CashReceiptId, command.CustomerId, command.AmountAppliedToman, command.AmountReceivedToman,
+                command.ReceivedByOperatorId, command.ReceivedAtUtc, command.IdempotencyKey,
+                command.CorrelationId, command.Source);
+            db.CashReceipts.Add(receipt);
+            audit.Append(new AuditRecord(
+                command.ReceivedAtUtc, "Operator", command.ReceivedByOperatorId.ToString("D"),
+                "billing.wallet_cash_receipt", "CashReceipt", receipt.Id.ToString("D"), null,
+                command.CorrelationId, command.Source, "Succeeded", command.IdempotencyKey,
+                AfterJson: JsonSerializer.Serialize(new
+                {
+                    receipt.CustomerId, receipt.Purpose, receipt.AmountAppliedToman,
+                    receipt.AmountReceivedToman, receipt.ChangeGivenToman, receipt.ReceivedAtUtc
+                })));
+            return Task.FromResult(Result<WalletCashReceiptResult>.Success(new WalletCashReceiptResult(
+                receipt.Id, receipt.CustomerId, receipt.AmountAppliedToman, receipt.AmountReceivedToman,
+                receipt.ChangeGivenToman, receipt.ReceivedAtUtc)));
+        }
+        catch (ArgumentException ex)
+        {
+            return Task.FromResult(Result<WalletCashReceiptResult>.Failure(new Error("wallet.invalid", ex.Message)));
+        }
+    }
 
     public async Task<Result<IReadOnlyList<InvoicePreviewResponse>>> ListPendingInvoicesAsync(
         BillingActorContext actor,
