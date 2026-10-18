@@ -387,6 +387,23 @@ try {
         }
     }
 
+    $previousWalletIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_WALLET_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_WALLET_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~WalletCashTopUpPostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Wallet cash-top-up idempotency/ledger/balance PostgreSQL verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousWalletIntegrationFlag) {
+            Remove-Item Env:GAMENET_WALLET_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_WALLET_POSTGRES_TESTS = $previousWalletIntegrationFlag
+        }
+    }
+
     $previousAgentDispatchIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_AGENT_DISPATCH_POSTGRES_TESTS", "Process")
     try {
         $env:GAMENET_AGENT_DISPATCH_POSTGRES_TESTS = "true"
