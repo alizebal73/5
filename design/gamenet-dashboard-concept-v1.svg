@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+<title id="title">طرح مفهومی داشبورد مدیریت گیم‌نت GameNet 5</title>
+<desc id="desc">طرح ثابت رابط دسکتاپ فارسی راست‌به‌چپ، با وضعیت ایستگاه‌ها، نشست‌های فعال، صورتحساب‌های در انتظار پرداخت و فعالیت‌های اخیر. داده‌ها نمونه هستند.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0A1020"/><stop offset="100%" stop-color="#111B2E"/></linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#7667F5"/></linearGradient>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#050914" flood-opacity=".18"/></filter>
+  <style>
+    text { font-family: "Vazirmatn","Segoe UI",Tahoma,sans-serif; }
+    .label { fill:#A8B4C8; font-size:13px; }
+    .heading { fill:#F1F5F9; font-size:18px; font-weight:700; }
+    .muted { fill:#8795AD; font-size:12px; }
+    .body { fill:#D9E2F0; font-size:13px; }
+    .panel { fill:#121D30; stroke:#27344B; stroke-width:1; }
+  </style>
+</defs>
+<rect width="1600" height="1000" fill="url(#bg)"/>
+<circle cx="1530" cy="20" r="220" fill="#6D5DF0" opacity=".035"/>
+<circle cx="90" cy="980" r="250" fill="#2F8DDE" opacity=".035"/>
+
+<!-- Header -->
+<g>
+  <rect x="32" y="24" width="1536" height="64" rx="16" fill="#111B2D" stroke="#26334B"/>
+  <rect x="1490" y="37" width="36" height="36" rx="11" fill="url(#accent)"/>
+  <path d="M1501 48 L1515 48 L1518 53 L1518 63 L1506 63 L1501 58 Z" fill="none" stroke="#FFF" stroke-width="2" stroke-linejoin="round"/>
+  <text x="1478" y="51" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="19" font-weight="800" fill="#F8FAFC">GameNet 5</text>
+  <text x="1478" y="70" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="10.5" fill="#8FA1BA">مدیریت گیم‌نت</text>
+  <rect x="1343" y="39" width="1" height="34" fill="#2D3A51"/>
+  <rect x="1293" y="42" width="28" height="28" rx="9" fill="#202D44"/>
+  <path d="M1300 54 Q1307 46 1314 54 L1312 62 L1302 62 Z" fill="none" stroke="#A9B7CD" stroke-width="1.5"/>
+  <text x="1279" y="52" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12" fill="#DDE6F3">شیفت جاری</text>
+  <text x="1279" y="68" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="10.5" fill="#8190A8">اپراتور اصلی</text>
+  <circle cx="72" cy="56" r="17" fill="#202D44"/>
+  <path d="M65 56 L70 61 L80 50" fill="none" stroke="#40D49A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="99" y="52" font-size="12" fill="#D6E0EE">سرور محلی</text>
+  <text x="99" y="68" font-size="10.5" fill="#40D49A">متصل و آماده</text>
+</g>
+
+<!-- Navigation -->
+<g>
+  <rect x="32" y="101" width="1536" height="56" rx="14" fill="#10192B" stroke="#26334B"/>
+  <rect x="1285" y="109" width="252" height="40" rx="10" fill="#25365A"/>
+  <rect x="1519" y="119" width="3" height="20" rx="1.5" fill="#7097FF"/>
+  <text x="1408" y="134" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="13.5" font-weight="700" fill="#FFFFFF">نمای کلی</text>
+  <text x="1208" y="134" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="13" fill="#AAB7CC">ایستگاه‌ها</text>
+  <text x="1020" y="134" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="13" fill="#AAB7CC">نشست و صندوق</text>
+  <text x="829" y="134" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="13" fill="#AAB7CC">مشتریان</text>
+  <text x="645" y="134" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="13" fill="#AAB7CC">تعرفه‌ها</text>
+  <text x="462" y="134" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="13" fill="#AAB7CC">گزارش‌ها</text>
+  <rect x="67" y="116" width="102" height="27" rx="8" fill="#1A263A" stroke="#34425B"/>
+  <text x="118" y="134" text-anchor="middle" font-size="11" fill="#C3CFE0">تنظیمات ⚙</text>
+</g>
+
+<!-- Title -->
+<text x="1538" y="195" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="25" font-weight="800" fill="#F8FAFC">داشبورد گیم‌نت</text>
+<text x="1538" y="215" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12" fill="#91A0B8">نمای کلی وضعیت سالن و عملیات امروز</text>
+<rect x="66" y="177" width="143" height="32" rx="9" fill="#172338" stroke="#2B3A54"/>
+<text x="137" y="197" text-anchor="middle" font-size="11.5" fill="#C1CEE1">↻  تازه‌سازی</text>
+<text x="226" y="197" text-anchor="start" font-size="11.5" fill="#8594AD">داده‌های نمونه</text>
+
+<!-- KPI cards -->
+<g filter="url(#shadow)">
+  <rect x="1196" y="232" width="342" height="94" rx="15" class="panel"/>
+  <rect x="1196" y="232" width="4" height="94" rx="2" fill="#7892FF"/>
+  <rect x="1220" y="254" width="42" height="42" rx="12" fill="#202D49"/>
+  <rect x="1231" y="263" width="20" height="14" rx="2" fill="none" stroke="#91A9FF" stroke-width="1.8"/><path d="M1237 282 L1245 282 M1241 277 L1241 282" stroke="#91A9FF" stroke-width="1.7"/>
+  <text x="1514" y="258" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="label">کل ایستگاه‌ها</text>
+  <text x="1514" y="298" text-anchor="end" font-size="29" font-weight="800" fill="#F8FAFC">۳۰</text>
+  <text x="1482" y="298" text-anchor="end" font-size="11" fill="#9AA9C0">دستگاه</text>
+
+  <rect x="812" y="232" width="342" height="94" rx="15" class="panel"/>
+  <rect x="812" y="232" width="4" height="94" rx="2" fill="#31C48D"/>
+  <rect x="836" y="254" width="42" height="42" rx="12" fill="#12392F"/>
+  <circle cx="857" cy="275" r="10" fill="none" stroke="#43D4A0" stroke-width="2"/><path d="M851 275 L855 279 L863 270" fill="none" stroke="#43D4A0" stroke-width="2" stroke-linecap="round"/>
+  <text x="1130" y="258" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="label">آزاد و آماده</text>
+  <text x="1130" y="298" text-anchor="end" font-size="29" font-weight="800" fill="#43D4A0">۱۸</text>
+  <text x="1097" y="298" text-anchor="end" font-size="11" fill="#9AA9C0">ایستگاه</text>
+
+  <rect x="428" y="232" width="342" height="94" rx="15" class="panel"/>
+  <rect x="428" y="232" width="4" height="94" rx="2" fill="#5B8CFF"/>
+  <rect x="452" y="254" width="42" height="42" rx="12" fill="#172D50"/>
+  <circle cx="473" cy="275" r="10" fill="none" stroke="#76A0FF" stroke-width="2"/><path d="M473 269 L473 275 L478 278" fill="none" stroke="#76A0FF" stroke-width="2" stroke-linecap="round"/>
+  <text x="746" y="258" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="label">در حال استفاده</text>
+  <text x="746" y="298" text-anchor="end" font-size="29" font-weight="800" fill="#76A0FF">۱۰</text>
+  <text x="713" y="298" text-anchor="end" font-size="11" fill="#9AA9C0">ایستگاه</text>
+
+  <rect x="44" y="232" width="342" height="94" rx="15" class="panel"/>
+  <rect x="44" y="232" width="4" height="94" rx="2" fill="#F5B544"/>
+  <rect x="68" y="254" width="42" height="42" rx="12" fill="#3A3020"/>
+  <path d="M89 263 L99 282 L79 282 Z" fill="none" stroke="#F5C35E" stroke-width="2" stroke-linejoin="round"/><path d="M89 269 L89 275 M89 278 L89 279" stroke="#F5C35E" stroke-width="2" stroke-linecap="round"/>
+  <text x="362" y="258" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="label">نیازمند بررسی</text>
+  <text x="362" y="298" text-anchor="end" font-size="29" font-weight="800" fill="#F5C35E">۲</text>
+  <text x="329" y="298" text-anchor="end" font-size="11" fill="#9AA9C0">ایستگاه</text>
+</g>
+
+<!-- Main station panel -->
+<g filter="url(#shadow)">
+  <rect x="430" y="346" width="1108" height="366" rx="16" class="panel"/>
+  <text x="1506" y="376" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="heading">وضعیت ایستگاه‌ها</text>
+  <text x="1506" y="396" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="muted">نمایش زنده و قابل فیلتر برای سالن</text>
+  <rect x="1265" y="405" width="241" height="30" rx="9" fill="#26365A"/>
+  <text x="1385" y="424" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="11.5" font-weight="700" fill="#DDE7FF">همه ایستگاه‌ها</text>
+  <rect x="1148" y="405" width="104" height="30" rx="9" fill="#19253A" stroke="#2B3A54"/><text x="1200" y="424" text-anchor="middle" font-size="11.5" fill="#B5C2D6">PC</text>
+  <rect x="1030" y="405" width="104" height="30" rx="9" fill="#19253A" stroke="#2B3A54"/><text x="1082" y="424" text-anchor="middle" font-size="11.5" fill="#B5C2D6">PS5</text>
+  <rect x="878" y="405" width="140" height="30" rx="9" fill="#19253A" stroke="#2B3A54"/><text x="948" y="424" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#B5C2D6">فوتبال‌دستی</text>
+  <rect x="493" y="405" width="362" height="30" rx="9" fill="#0D1627" stroke="#2B3A54"/>
+  <circle cx="519" cy="420" r="5" fill="none" stroke="#7B8BA5" stroke-width="1.5"/><path d="M523 424 L528 429" stroke="#7B8BA5" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="831" y="424" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#7687A2">جست‌وجوی شماره یا نام ایستگاه</text>
+  <g>
+    <rect x="1266" y="444" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="1490" y="456" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="1280" y="459" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="1291" y="467" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 1297 485 L 1306 485 M 1301.5 482 L 1301.5 489 M 1295 490 L 1308 490" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="1477" y="473" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-01</text>
+    <text x="1477" y="493" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۱</text>
+    <circle cx="1468" cy="506" r="3.5" fill="#31C48D"/>
+    <text x="1457" y="510" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+<g>
+    <rect x="1014" y="444" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="1238" y="456" width="3" height="52" rx="1.5" fill="#5B8CFF"/>
+    <rect x="1028" y="459" width="43" height="43" rx="10" fill="#172C50"/>
+    <rect x="1039" y="467" width="21" height="15" rx="2" fill="none" stroke="#5B8CFF" stroke-width="1.8"/>
+    <path d="M 1045 485 L 1054 485 M 1049.5 482 L 1049.5 489 M 1043 490 L 1056 490" stroke="#5B8CFF" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="1225" y="473" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-02</text>
+    <text x="1225" y="493" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۲</text>
+    <circle cx="1216" cy="506" r="3.5" fill="#5B8CFF"/>
+    <text x="1205" y="510" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#5B8CFF">در حال استفاده</text>
+    <text x="1079" y="473" text-anchor="start" font-size="12" fill="#B8CCF7">۰۰:۲۴</text>
+  </g>
+<g>
+    <rect x="762" y="444" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="986" y="456" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="776" y="459" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="787" y="467" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 793 485 L 802 485 M 797.5 482 L 797.5 489 M 791 490 L 804 490" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="973" y="473" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-03</text>
+    <text x="973" y="493" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۳</text>
+    <circle cx="964" cy="506" r="3.5" fill="#31C48D"/>
+    <text x="953" y="510" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+<g>
+    <rect x="510" y="444" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="734" y="456" width="3" height="52" rx="1.5" fill="#718096"/>
+    <rect x="524" y="459" width="43" height="43" rx="10" fill="#252D3E"/>
+    <rect x="535" y="467" width="21" height="15" rx="2" fill="none" stroke="#8B98AE" stroke-width="1.8"/>
+    <path d="M 541 485 L 550 485 M 545.5 482 L 545.5 489 M 539 490 L 552 490" stroke="#8B98AE" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="721" y="473" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-04</text>
+    <text x="721" y="493" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۴</text>
+    <circle cx="712" cy="506" r="3.5" fill="#8B98AE"/>
+    <text x="701" y="510" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#8B98AE">آفلاین</text>
+    
+  </g>
+<g>
+    <rect x="1266" y="528" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="1490" y="540" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="1280" y="543" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="1291" y="551" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 1297 569 L 1306 569 M 1301.5 566 L 1301.5 573 M 1295 574 L 1308 574" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="1477" y="557" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-05</text>
+    <text x="1477" y="577" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۵</text>
+    <circle cx="1468" cy="590" r="3.5" fill="#31C48D"/>
+    <text x="1457" y="594" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+<g>
+    <rect x="1014" y="528" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="1238" y="540" width="3" height="52" rx="1.5" fill="#5B8CFF"/>
+    <rect x="1028" y="543" width="43" height="43" rx="10" fill="#172C50"/>
+    <rect x="1039" y="551" width="21" height="15" rx="2" fill="none" stroke="#5B8CFF" stroke-width="1.8"/>
+    <path d="M 1045 569 L 1054 569 M 1049.5 566 L 1049.5 573 M 1043 574 L 1056 574" stroke="#5B8CFF" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="1225" y="557" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-06</text>
+    <text x="1225" y="577" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۶</text>
+    <circle cx="1216" cy="590" r="3.5" fill="#5B8CFF"/>
+    <text x="1205" y="594" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#5B8CFF">در حال استفاده</text>
+    <text x="1079" y="557" text-anchor="start" font-size="12" fill="#B8CCF7">۰۰:۴۸</text>
+  </g>
+<g>
+    <rect x="762" y="528" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="986" y="540" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="776" y="543" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="787" y="551" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 793 569 L 802 569 M 797.5 566 L 797.5 573 M 791 574 L 804 574" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="973" y="557" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-07</text>
+    <text x="973" y="577" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۷</text>
+    <circle cx="964" cy="590" r="3.5" fill="#31C48D"/>
+    <text x="953" y="594" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+<g>
+    <rect x="510" y="528" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="734" y="540" width="3" height="52" rx="1.5" fill="#F5B544"/>
+    <rect x="524" y="543" width="43" height="43" rx="10" fill="#3A3020"/>
+    <rect x="535" y="551" width="21" height="15" rx="2" fill="none" stroke="#F5B544" stroke-width="1.8"/>
+    <path d="M 541 569 L 550 569 M 545.5 566 L 545.5 573 M 539 574 L 552 574" stroke="#F5B544" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="721" y="557" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-08</text>
+    <text x="721" y="577" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۸</text>
+    <circle cx="712" cy="590" r="3.5" fill="#F5B544"/>
+    <text x="701" y="594" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#F5B544">نیازمند بررسی</text>
+    
+  </g>
+<g>
+    <rect x="1266" y="612" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="1490" y="624" width="3" height="52" rx="1.5" fill="#5B8CFF"/>
+    <rect x="1280" y="627" width="43" height="43" rx="10" fill="#172C50"/>
+    <rect x="1291" y="635" width="21" height="15" rx="2" fill="none" stroke="#5B8CFF" stroke-width="1.8"/>
+    <path d="M 1297 653 L 1306 653 M 1301.5 650 L 1301.5 657 M 1295 658 L 1308 658" stroke="#5B8CFF" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="1477" y="641" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PS-01</text>
+    <text x="1477" y="661" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کنسول پلی‌استیشن</text>
+    <circle cx="1468" cy="674" r="3.5" fill="#5B8CFF"/>
+    <text x="1457" y="678" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#5B8CFF">در حال استفاده</text>
+    <text x="1331" y="641" text-anchor="start" font-size="12" fill="#B8CCF7">۰۱:۱۲</text>
+  </g>
+<g>
+    <rect x="1014" y="612" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="1238" y="624" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="1028" y="627" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="1039" y="635" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 1045 653 L 1054 653 M 1049.5 650 L 1049.5 657 M 1043 658 L 1056 658" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="1225" y="641" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-09</text>
+    <text x="1225" y="661" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۹</text>
+    <circle cx="1216" cy="674" r="3.5" fill="#31C48D"/>
+    <text x="1205" y="678" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+<g>
+    <rect x="762" y="612" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="986" y="624" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="776" y="627" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="787" y="635" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 793 653 L 802 653 M 797.5 650 L 797.5 657 M 791 658 L 804 658" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="973" y="641" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PC-10</text>
+    <text x="973" y="661" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کامپیوتر شماره ۱۰</text>
+    <circle cx="964" cy="674" r="3.5" fill="#31C48D"/>
+    <text x="953" y="678" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+<g>
+    <rect x="510" y="612" width="238" height="76" rx="12" fill="#151F33" stroke="#29354C"/>
+    <rect x="734" y="624" width="3" height="52" rx="1.5" fill="#31C48D"/>
+    <rect x="524" y="627" width="43" height="43" rx="10" fill="#11352F"/>
+    <rect x="535" y="635" width="21" height="15" rx="2" fill="none" stroke="#31C48D" stroke-width="1.8"/>
+    <path d="M 541 653 L 550 653 M 545.5 650 L 545.5 657 M 539 658 L 552 658" stroke="#31C48D" stroke-width="1.8" stroke-linecap="round"/>
+    <text x="721" y="641" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="16" font-weight="700" fill="#F1F5F9">PS-02</text>
+    <text x="721" y="661" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A6B3C8">کنسول پلی‌استیشن</text>
+    <circle cx="712" cy="674" r="3.5" fill="#31C48D"/>
+    <text x="701" y="678" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#31C48D">آزاد</text>
+    
+  </g>
+  <text x="1506" y="697" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="10.5" fill="#7F90AA">نمایش ۱۲ ایستگاه از ۳۰</text>
+  <text x="456" y="697" text-anchor="start" font-size="10.5" fill="#8797B0">صفحه ۱ از ۳</text>
+</g>
+
+<!-- Active sessions panel -->
+<g filter="url(#shadow)">
+  <rect x="62" y="346" width="342" height="366" rx="16" class="panel"/>
+  <text x="373" y="376" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="heading">نشست‌های فعال</text>
+  <text x="373" y="396" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="muted">مدت سپری‌شده و وضعیت جاری</text>
+  <rect x="82" y="418" width="300" height="105" rx="12" fill="#17243A" stroke="#2B3A54"/>
+  <text x="363" y="444" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="14" font-weight="700" fill="#F1F5F9">PC-02</text>
+  <text x="363" y="463" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A1B1C8">مشتری حضوری</text>
+  <rect x="100" y="432" width="78" height="26" rx="8" fill="#1C3D60"/><text x="139" y="449" text-anchor="middle" font-size="11" fill="#8DB9FF">۰۰:۲۴</text>
+  <rect x="100" y="479" width="264" height="5" rx="2.5" fill="#2A3850"/><rect x="100" y="479" width="153" height="5" rx="2.5" fill="#5B8CFF"/>
+  <text x="363" y="505" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="10.5" fill="#8495AF">شروع نشست ۱۲:۴۰</text>
+  <rect x="82" y="535" width="300" height="105" rx="12" fill="#17243A" stroke="#2B3A54"/>
+  <text x="363" y="561" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="14" font-weight="700" fill="#F1F5F9">PS-01</text>
+  <text x="363" y="580" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11.5" fill="#A1B1C8">نشست کنسول</text>
+  <rect x="100" y="549" width="78" height="26" rx="8" fill="#1C3D60"/><text x="139" y="566" text-anchor="middle" font-size="11" fill="#8DB9FF">۰۱:۱۲</text>
+  <rect x="100" y="596" width="264" height="5" rx="2.5" fill="#2A3850"/><rect x="100" y="596" width="204" height="5" rx="2.5" fill="#5B8CFF"/>
+  <text x="363" y="622" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="10.5" fill="#8495AF">شروع نشست ۱۱:۵۲</text>
+  <text x="363" y="677" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12" font-weight="700" fill="#8EABFF">مشاهده همه نشست‌ها ←</text>
+</g>
+
+<!-- Bottom: invoices -->
+<g filter="url(#shadow)">
+  <rect x="778" y="733" width="760" height="224" rx="16" class="panel"/>
+  <text x="1506" y="765" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="heading">صورتحساب‌های در انتظار پرداخت</text>
+  <text x="1506" y="785" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="muted">فاکتورهای صادرشده و تسویه‌نشده</text>
+  <rect x="802" y="800" width="712" height="33" rx="7" fill="#1A2941"/>
+  <text x="1487" y="821" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11" fill="#9FB0C9">ایستگاه</text>
+  <text x="1300" y="821" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11" fill="#9FB0C9">مشتری</text>
+  <text x="1121" y="821" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11" fill="#9FB0C9">مبلغ</text>
+  <text x="979" y="821" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="11" fill="#9FB0C9">وضعیت</text>
+  <text x="863" y="821" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="11" fill="#9FB0C9">عملیات</text>
+  <line x1="802" y1="875" x2="1514" y2="875" stroke="#29364D"/>
+  <text x="1487" y="856" text-anchor="end" font-size="12.5" font-weight="700" fill="#E7EDF7">PC-03</text>
+  <text x="1300" y="856" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12" fill="#C5D1E3">مشتری حضوری</text>
+  <text x="1121" y="856" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="13" font-weight="700" fill="#F1F5F9">۳۳ تومان</text>
+  <rect x="907" y="842" width="79" height="23" rx="7" fill="#3A3020"/><text x="946" y="857" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="10" fill="#F5C35E">در انتظار</text>
+  <rect x="806" y="840" width="92" height="27" rx="8" fill="url(#accent)"/><text x="852" y="858" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="10.5" font-weight="700" fill="#FFFFFF">ثبت پرداخت</text>
+  <text x="1487" y="902" text-anchor="end" font-size="12.5" font-weight="700" fill="#E7EDF7">PC-09</text>
+  <text x="1300" y="902" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12" fill="#C5D1E3">مشتری حضوری</text>
+  <text x="1121" y="902" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="13" font-weight="700" fill="#F1F5F9">۱۲۵ تومان</text>
+  <rect x="907" y="888" width="79" height="23" rx="7" fill="#3A3020"/><text x="946" y="903" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="10" fill="#F5C35E">در انتظار</text>
+  <rect x="806" y="886" width="92" height="27" rx="8" fill="url(#accent)"/><text x="852" y="904" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-size="10.5" font-weight="700" fill="#FFFFFF">ثبت پرداخت</text>
+</g>
+
+<!-- Recent activity -->
+<g filter="url(#shadow)">
+  <rect x="62" y="733" width="690" height="224" rx="16" class="panel"/>
+  <text x="720" y="765" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="heading">فعالیت‌های اخیر</text>
+  <text x="720" y="785" text-anchor="end" direction="rtl" unicode-bidi="plaintext" class="muted">رویدادهای مهم برای اپراتور</text>
+  <circle cx="705" cy="824" r="5" fill="#31C48D"/>
+  <text x="687" y="828" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12.5" fill="#D9E2F0">صورتحساب ۳۳ تومانی صادر شد</text>
+  <text x="102" y="828" text-anchor="start" font-size="10.5" fill="#8495AF">چند لحظه پیش</text>
+  <line x1="88" y1="846" x2="724" y2="846" stroke="#29364D"/>
+  <circle cx="705" cy="866" r="5" fill="#5B8CFF"/>
+  <text x="687" y="870" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12.5" fill="#D9E2F0">نشست PC-03 پایان یافت</text>
+  <text x="102" y="870" text-anchor="start" font-size="10.5" fill="#8495AF">۱۲:۵۸</text>
+  <line x1="88" y1="888" x2="724" y2="888" stroke="#29364D"/>
+  <circle cx="705" cy="908" r="5" fill="#F5B544"/>
+  <text x="687" y="912" text-anchor="end" direction="rtl" unicode-bidi="plaintext" font-size="12.5" fill="#D9E2F0">Agent ایستگاه PC-04 آفلاین شد</text>
+  <text x="102" y="912" text-anchor="start" font-size="10.5" fill="#8495AF">۱۲:۵۱</text>
+</g>
+
+<!-- Footer note -->
+<text x="800" y="984" text-anchor="middle" font-size="10.5" fill="#677891">طرح مفهومی رابط کاربری • داده‌ها نمونه هستند • این فایل به منطق اجرایی برنامه متصل نیست</text>
+</svg>
