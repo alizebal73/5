@@ -12,6 +12,7 @@ using GameNet.Server.Modules.Stations.Api;
 using GameNet.Server.Modules.Sessions.Api;
 using GameNet.Server.Modules.Tariffs.Api;
 using GameNet.Server.Modules.Billing.Api;
+using GameNet.Server.Modules.Wallet.Api;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using GameNet.Server.Persistence;
@@ -93,6 +94,7 @@ app.MapStationEndpoints();
 app.MapTariffEndpoints();
 app.MapSessionEndpoints();
 app.MapBillingEndpoints();
+app.MapWalletEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 app.MapGet("/health", async (
