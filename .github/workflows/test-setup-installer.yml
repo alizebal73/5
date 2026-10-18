@@ -139,7 +139,7 @@ jobs:
               throw "Invalid SHA256SUMS.txt entry."
             }
             $expected = $Matches.hash.ToLowerInvariant()
-            $relative = $Matches.path.Replace('/', '\\')
+            $relative = $Matches.path.Replace('/', [string][char]92)
             $actualHash = (Get-FileHash -LiteralPath (Join-Path $out $relative) -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($actualHash -ne $expected) {
               throw "Setup artifact SHA-256 mismatch: $relative"
