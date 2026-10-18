@@ -84,6 +84,13 @@ try {
         }
     }
 
+    $launcherExe = Join-Path $launcherOutput "GameNet5.TestLauncher.exe"
+    & $launcherExe --self-test
+    if ($LASTEXITCODE -ne 0) {
+        throw "The GUI test launcher failed its DPAPI protected-settings self-test."
+    }
+    Write-Host "TEST_LAUNCHER_DPAPI_SELF_TEST=PASS"
+
     Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/run-slice1-process-acceptance.ps1") -Destination $toolsOutput
     Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/inspect-manager-runtime-state.ps1") -Destination $toolsOutput
     Copy-Item -LiteralPath (Join-Path $repoRoot "docs/operations/slice1-process-acceptance.md") -Destination (Join-Path $toolsOutput "slice1-process-acceptance.md")
