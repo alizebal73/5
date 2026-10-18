@@ -251,6 +251,7 @@
                         <Setter Property="Visibility" Value="Visible"/>
                       </DataTrigger>
                       <DataTrigger Binding="{Binding CanCheckout}" Value="False">
+                        <Setter Property="Visibility" Value="Visible"/>
                         <Setter Property="Text" Value="{DynamicResource Billing.CheckoutPermissionRequired}"/>
                       </DataTrigger>
                     </Style.Triggers>
