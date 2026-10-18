@@ -310,6 +310,9 @@ internal sealed class MainForm : Form
                 throw;
             }
 
+            adminPassword = string.Empty;
+            _adminPassword.Clear();
+
             var builder = new DbConnectionStringBuilder
             {
                 ["Host"] = "127.0.0.1",
