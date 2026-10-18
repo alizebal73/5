@@ -91,25 +91,58 @@ jobs:
           }
           Write-Host "TEST_SETUP_POWERSHELL_PARSE=PASS"
 
-      - name: Install pinned Inno Setup compiler
+      - name: Download and verify pinned Inno Setup installer
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $programFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
-          $candidates = @()
-          if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
-            $candidates += Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"
+          $installerUrl = "https://github.com/jrsoftware/issrc/releases/download/is-6_4_3/innosetup-6.4.3.exe"
+          $expectedSha256 = "f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b"
+          $installer = Join-Path $env:RUNNER_TEMP "innosetup-6.4.3.exe"
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installer
+          $actualSha256 = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Downloaded Inno Setup 6.4.3 installer SHA-256 did not match the immutable upstream release asset."
           }
-          if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
-            $candidates += Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"
+          $signature = Get-AuthenticodeSignature -FilePath $installer
+          if ($signature.Status -ne "Valid" -or
+              $null -eq $signature.SignerCertificate -or
+              $signature.SignerCertificate.Subject -notmatch "Pyrsys B\.V\.") {
+            throw "Inno Setup installer Authenticode signature is not valid or publisher is unexpected."
           }
-          choco install innosetup --version=6.4.3 --force --allow-downgrade --yes --no-progress
-          if ($LASTEXITCODE -ne 0) {
-            throw "Pinned Inno Setup 6.4.3 installation/downgrade failed."
+          Write-Host "INNO_SETUP_INSTALLER_SHA256=$actualSha256"
+          Write-Host "INNO_SETUP_AUTHENTICODE=PASS"
+
+      - name: Install pinned Inno Setup compiler in isolated temporary folder
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:RUNNER_TEMP "innosetup-6.4.3.exe"
+          $compilerRoot = Join-Path $env:RUNNER_TEMP "innosetup-6.4.3"
+          if (Test-Path -LiteralPath $compilerRoot) {
+            throw "Pinned compiler staging directory already exists; refusing to reuse it."
           }
-          $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-          if ([string]::IsNullOrWhiteSpace($iscc)) {
-            throw "Inno Setup 6.4.3 compiler was not found after installation."
+          New-Item -ItemType Directory -Path $compilerRoot | Out-Null
+          $installLog = Join-Path $env:RUNNER_TEMP "innosetup-6.4.3-install.log"
+          $arguments = @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/SP-",
+            "/DIR=`"$compilerRoot`"",
+            "/LOG=`"$installLog`""
+          )
+          $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
+          $exitCode = $process.ExitCode
+          $process.Dispose()
+          if ($exitCode -ne 0) {
+            if (Test-Path -LiteralPath $installLog) {
+              Get-Content -LiteralPath $installLog -Tail 100 | ForEach-Object { Write-Host $_ }
+            }
+            throw "Pinned Inno Setup 6.4.3 temporary installation failed (exit code $exitCode)."
+          }
+          $iscc = Join-Path $compilerRoot "ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+            throw "Pinned Inno Setup compiler is missing after temporary installation."
           }
           $compilerFile = Get-Item -LiteralPath $iscc
           $compilerVersionText = "$($compilerFile.VersionInfo.ProductVersion) $($compilerFile.VersionInfo.FileVersion)"
@@ -125,7 +158,8 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $version = "0.1.0-test.${{ github.run_number }}.${{ github.run_attempt }}"
-          .\scripts\build-slice1-test-setup.ps1 -Version $version -OutputDirectory "artifacts/test-setup/out"
+          $iscc = Join-Path $env:RUNNER_TEMP "innosetup-6.4.3\ISCC.exe"
+          .\scripts\build-slice1-test-setup.ps1 -Version $version -OutputDirectory "artifacts/test-setup/out" -InnoSetupCompilerPath $iscc
 
           $actual = ((& git rev-parse HEAD) -join "").Trim()
           if ($LASTEXITCODE -ne 0 -or $actual -ne $env:GAMENET_EXPECTED_SOURCE_SHA) {
