@@ -70,7 +70,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         get => amountToCreditText;
         set
         {
-            if (!CanEditInput) return;
+            if (pendingIdempotencyKey is not null) return;
             if (SetField(ref amountToCreditText, value)) { OnPropertyChanged(nameof(SummaryText)); RaiseCommand(); }
         }
     }
@@ -80,7 +80,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         get => cashReceivedText;
         set
         {
-            if (!CanEditInput) return;
+            if (pendingIdempotencyKey is not null) return;
             if (SetField(ref cashReceivedText, value)) { OnPropertyChanged(nameof(SummaryText)); RaiseCommand(); }
         }
     }
