@@ -175,10 +175,94 @@ try {
     if ([string]::IsNullOrWhiteSpace($iscc) -or -not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
         throw "Pinned Inno Setup 6.4.3 compiler was not found at the supplied path or default compiler locations."
     }
-    $compilerFile = Get-Item -LiteralPath $iscc
-    $compilerVersionText = "$($compilerFile.VersionInfo.ProductVersion) $($compilerFile.VersionInfo.FileVersion)"
-    if ($compilerVersionText -notmatch '(?<!\d)6\.4\.3(?:\.\d+)?(?!\d)') {
-        throw "The test Setup requires the repository-pinned Inno Setup 6.4.3 compiler; found '$compilerVersionText'. Refusing a non-pinned installer build."
+    $probeRoot = Join-Path $workRoot "inno-compiler-version-probe"
+    $probeOutput = Join-Path $probeRoot "output"
+    $probeScript = Join-Path $probeRoot "compiler-probe.iss"
+    New-Item -ItemType Directory -Force -Path $probeOutput | Out-Null
+    $probeSource = @"
+[Setup]
+AppName=GameNet Inno Compiler Version Probe
+AppVersion=1.0
+DefaultDirName={tmp}\GameNetInnoCompilerVersionProbe
+OutputDir=$probeOutput
+OutputBaseFilename=InnoCompilerProbe
+Uninstallable=no
+"@
+    Write-Utf8File -Path $probeScript -Text $probeSource
+    $probeLog = @(& $iscc $probeScript 2>&1)
+    $probeExitCode = $LASTEXITCODE
+    $probeText = $probeLog -join [Environment]::NewLine
+    if ($probeExitCode -ne 0 -or
+        $probeText -notmatch '(?m)^Compiler engine version: Inno Setup 6\.4\.3\s*
+    $env:GAMENET_TEST_SETUP_PAYLOAD_ROOT = $payloadRoot
+    $env:GAMENET_TEST_SETUP_OUTPUT_DIR = $outputRoot
+    try {
+        & $iscc "/DSetupVersion=$Version" (Join-Path $repoRoot "installer/Slice1-TestSetup.iss")
+        if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
+    }
+    finally {
+        Remove-Item Env:\GAMENET_TEST_SETUP_PAYLOAD_ROOT -ErrorAction SilentlyContinue
+        Remove-Item Env:\GAMENET_TEST_SETUP_OUTPUT_DIR -ErrorAction SilentlyContinue
+    }
+
+    $setupPath = Join-Path $outputRoot "GameNet5-TestSetup.exe"
+    if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
+        throw "Inno Setup did not create GameNet5-TestSetup.exe."
+    }
+    Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $outputRoot "manifest.json")
+    $setupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $setupManifest = [ordered]@{
+        formatVersion = 1
+        product = "GameNet 5 Slice 1 Test Setup"
+        purpose = "Issue #98 bounded PC Session-to-invoice process acceptance"
+        source = [ordered]@{
+            repository = "alizebal73/5"
+            branch = if ([string]::IsNullOrWhiteSpace($env:GITHUB_REF_NAME)) { "local" } else { $env:GITHUB_REF_NAME }
+            testedCheckoutSha = $sourceSha
+        }
+        safety = [ordered]@{
+            productionRelease = $false
+            registersWindowsServices = $false
+            changesMachineProgramData = $false
+            changesMachineCertificatesFirewallOrRegistry = $false
+            changesSystemTimeOrLan = $false
+            usesLocalLoopbackPostgreSqlOnly = $true
+        }
+        payloadManifest = [ordered]@{
+            fileName = "manifest.json"
+            sha256 = $manifestHash
+            fileCount = $files.Count
+        }
+        installer = [ordered]@{
+            fileName = "GameNet5-TestSetup.exe"
+            sizeBytes = (Get-Item -LiteralPath $setupPath).Length
+            sha256 = $setupHash
+        }
+    }
+    Write-Utf8File -Path (Join-Path $outputRoot "setup-manifest.json") -Text (ConvertTo-Json -InputObject $setupManifest -Depth 8)
+    $setupManifestHash = (Get-FileHash -LiteralPath (Join-Path $outputRoot "setup-manifest.json") -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sumLines = @(
+        "$setupHash  GameNet5-TestSetup.exe"
+        "$manifestHash  manifest.json"
+        "$setupManifestHash  setup-manifest.json"
+    )
+    Write-Utf8File -Path (Join-Path $outputRoot "SHA256SUMS.txt") -Text (($sumLines -join [Environment]::NewLine) + [Environment]::NewLine)
+
+    Write-Host "TEST_SETUP_READY=true"
+    Write-Host "TESTED_SOURCE_SHA=$sourceSha"
+    Write-Host "SETUP_EXE=$setupPath"
+    Write-Host "SETUP_EXE_SHA256=$setupHash"
+    Write-Host "PAYLOAD_FILE_COUNT=$($files.Count)"
+    Write-Host "TEST_SETUP_IS_PRODUCTION=false"
+}
+finally {
+    if (Test-Path -LiteralPath $workRoot) {
+        Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+) {
+        throw "The selected compiler did not prove Inno Setup 6.4.3. Refusing to package with an unverified compiler. Output: $probeText"
     }
     Write-Host "INNO_SETUP_PINNED_VERSION=6.4.3"
 
