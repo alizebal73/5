@@ -231,16 +231,33 @@ jobs:
           if (-not (Test-Path -LiteralPath $shortcut -PathType Leaf)) {
             throw "The installer did not create the expected Desktop shortcut."
           }
-          & (Join-Path $smokeRoot "Launcher\GameNet5.TestLauncher.exe") --self-test
-          if ($LASTEXITCODE -ne 0) { throw "Installed Test Launcher failed its DPAPI settings self-test." }
+          $launcherExe = Join-Path $smokeRoot "Launcher\GameNet5.TestLauncher.exe"
+          $launcherStdout = Join-Path $env:RUNNER_TEMP "gamenet5-test-launcher-self-test.out"
+          $launcherStderr = Join-Path $env:RUNNER_TEMP "gamenet5-test-launcher-self-test.err"
+          $launcherProcess = Start-Process -FilePath $launcherExe -ArgumentList @("--self-test") -Wait -PassThru -NoNewWindow -RedirectStandardOutput $launcherStdout -RedirectStandardError $launcherStderr
+          $launcherExitCode = $launcherProcess.ExitCode
+          $launcherProcess.Dispose()
+          $launcherOutputText = if (Test-Path -LiteralPath $launcherStdout) { Get-Content -LiteralPath $launcherStdout -Raw } else { "" }
+          $launcherErrorText = if (Test-Path -LiteralPath $launcherStderr) { Get-Content -LiteralPath $launcherStderr -Raw } else { "" }
+          Write-Host $launcherOutputText
+          if ($launcherExitCode -ne 0 -or
+              $launcherOutputText -notmatch "TEST_LAUNCHER_DPAPI_SELF_TEST=PASS" -or
+              $launcherErrorText -match "TEST_LAUNCHER_DPAPI_SELF_TEST=FAIL") {
+            Write-Host "TEST_LAUNCHER_SELF_TEST_EXIT_CODE=$launcherExitCode"
+            if (-not [string]::IsNullOrWhiteSpace($launcherErrorText)) { Write-Host $launcherErrorText }
+            throw "Installed Test Launcher failed its DPAPI settings self-test."
+          }
 
           $afterServices = @(Get-CimInstance Win32_Service | Where-Object { $_.Name -in @("GameNet 5 Server", "GameNet 5 Agent") } | ForEach-Object Name)
           if (@($afterServices | Where-Object { $_ -notin $beforeServices }).Count -gt 0) {
             throw "The process-only test installer unexpectedly registered a Windows service."
           }
 
-          & (Join-Path $smokeRoot "unins000.exe") /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-          if ($LASTEXITCODE -ne 0) { throw "Silent test Setup smoke uninstall failed." }
+          $uninstaller = Join-Path $smokeRoot "unins000.exe"
+          $uninstallProcess = Start-Process -FilePath $uninstaller -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru -NoNewWindow
+          $uninstallExitCode = $uninstallProcess.ExitCode
+          $uninstallProcess.Dispose()
+          if ($uninstallExitCode -ne 0) { throw "Silent test Setup smoke uninstall failed (exit code $uninstallExitCode)." }
           if (Test-Path -LiteralPath $shortcut) {
             throw "The uninstaller left the test Desktop shortcut behind."
           }
