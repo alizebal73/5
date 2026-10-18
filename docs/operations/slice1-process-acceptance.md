@@ -1,5 +1,8 @@
 # Slice 1 process-based Windows acceptance
 
+> **Owner-run test delivery rule (binding from 2026-10-18):** This document is an internal maintainer/developer reference, not instructions for the GameNet owner to execute manually. Do not ask the owner to copy PowerShell commands, enter connection strings in a shell, or run this script directly. Owner-run acceptance must be delivered through a test-only Windows `Setup.exe`/GUI Launcher with a Desktop shortcut, saved per-user settings, automatic preflight, visible progress/errors, and evidence collection. Until that installer exists and is verified for the exact candidate SHA, the manual owner test is BLOCKED. This test-only installer is permitted before Issue #98 acceptance and is distinct from production Setup/Updater.
+
+
 ## Purpose and boundary
 
 Use this procedure only for early Issue #98 functional acceptance of the PC Session → invoice → cash checkout path. The script starts the published Server, Agent and WPF Desktop as ordinary processes on one Windows PC. The Server URL is restricted to 127.0.0.1 on a temporary port.
