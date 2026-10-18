@@ -1,7 +1,6 @@
 using System.Data.Common;
 using System.Diagnostics;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace GameNet.TestLauncher;
@@ -336,8 +335,6 @@ internal sealed class MainForm : Form
                 ownerPassword = settings.OwnerPassword,
                 hourlyRateToman = long.Parse(settings.HourlyRateToman, System.Globalization.CultureInfo.InvariantCulture)
             };
-            CryptographicOperations.ZeroMemory(Encoding.UTF8.GetBytes(connectionString));
-            CryptographicOperations.ZeroMemory(Encoding.UTF8.GetBytes(rolePassword));
             LaunchHarness(config, stopPath);
             _adminPassword.Clear();
             _confirmDisposable.Checked = false;
@@ -381,6 +378,11 @@ internal sealed class MainForm : Form
         };
         foreach (var arg in new[] { "-X", "-w", "-h", "127.0.0.1", "-p", port.ToString(System.Globalization.CultureInfo.InvariantCulture), "-U", username, "-d", "postgres", "-v", "ON_ERROR_STOP=1" })
             start.ArgumentList.Add(arg);
+        foreach (var key in start.Environment.Keys.ToArray())
+        {
+            if (key.StartsWith("PG", StringComparison.OrdinalIgnoreCase))
+                start.Environment.Remove(key);
+        }
         start.Environment["PGPASSWORD"] = password;
         start.Environment["PGSSLMODE"] = "disable";
         using var process = new Process { StartInfo = start };
