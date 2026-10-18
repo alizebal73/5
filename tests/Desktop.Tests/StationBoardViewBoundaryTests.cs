@@ -11,35 +11,35 @@ public sealed class StationBoardViewBoundaryTests
         "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Fact]
-    public void Main_window_plugs_feature_views_into_distinct_valid_rows_and_keeps_shell_responsibilities()
+    public void Main_window_keeps_session_workflow_visible_and_station_administration_collapsed()
     {
         var root = FindRepositoryRoot();
         var mainPath = Path.Combine(root, "src", "Desktop", "Shell", "MainWindow.xaml");
         var main = XDocument.Load(mainPath);
 
-        var host = Assert.Single(main.Descendants(), element => element.Name.LocalName == "StationBoardView");
-        var stationRowText = (string?)host.Attribute("Grid.Row");
-        Assert.NotNull(stationRowText);
-        Assert.True(int.TryParse(stationRowText, out var stationRow));
+        var sessionView = Assert.Single(main.Descendants(),
+            element => element.Name.LocalName == "SessionWorkflowView");
 
-        var hostGrid = host.Parent;
-        Assert.NotNull(hostGrid);
-        Assert.Equal("Grid", hostGrid!.Name.LocalName);
-        var rowDefinitions = hostGrid.Elements()
-            .Where(element => element.Name.LocalName == "Grid.RowDefinitions")
-            .SelectMany(element => element.Elements())
-            .Count(element => element.Name.LocalName == "RowDefinition");
-        Assert.True(rowDefinitions > 0);
-        Assert.InRange(stationRow, 0, rowDefinitions - 1);
+        // The session/invoice/cash workflow must remain visible without expanding a secondary section.
+        Assert.DoesNotContain(sessionView.Ancestors(),
+            element => element.Name.LocalName == "Expander");
+        Assert.Contains(sessionView.Ancestors(),
+            element => element.Name.LocalName == "ScrollViewer");
+        Assert.Equal("{Binding SessionWorkflow}",
+            (string?)sessionView.Attribute("DataContext"));
 
-        var sessionHost = Assert.Single(main.Descendants(),
+        var stationView = Assert.Single(main.Descendants(),
+            element => element.Name.LocalName == "StationBoardView");
+        var stationAdminHost = Assert.Single(main.Descendants(),
             element => element.Name.LocalName == "Expander" &&
-                       element.Descendants().Any(child => child.Name.LocalName == "SessionWorkflowView"));
-        var sessionRowText = (string?)sessionHost.Attribute("Grid.Row");
-        Assert.NotNull(sessionRowText);
-        Assert.True(int.TryParse(sessionRowText, out var sessionRow));
-        Assert.InRange(sessionRow, 0, rowDefinitions - 1);
-        Assert.NotEqual(stationRow, sessionRow);
+                       element.Descendants().Any(child => child.Name.LocalName == "StationBoardView"));
+
+        // Infrequent station administration is collapsed by default, not placed ahead of checkout.
+        Assert.Equal("{DynamicResource Station.Title}",
+            (string?)stationAdminHost.Attribute("Header"));
+        Assert.Equal("False", (string?)stationAdminHost.Attribute("IsExpanded"));
+        Assert.Contains(stationView.Ancestors(),
+            element => element.Name.LocalName == "ScrollViewer");
 
         Assert.Equal("clr-namespace:GameNet.Desktop.Features.Stations",
             (string?)main.Root?.Attribute(XNamespace.Xmlns + "stations"));
@@ -78,6 +78,31 @@ public sealed class StationBoardViewBoundaryTests
             attribute => attribute.Name.LocalName is "Click" or "Loaded" or "PasswordChanged");
         Assert.DoesNotContain(view.Descendants(), element => element.Name.LocalName == "PasswordBox");
     }
+
+
+    [Fact]
+    public void Session_workflow_keeps_pending_invoices_visible_outside_secondary_expanders()
+    {
+        var root = FindRepositoryRoot();
+        var sessionPath = Path.Combine(root, "src", "Desktop", "Features", "Sessions", "SessionWorkflowView.xaml");
+        var session = XDocument.Load(sessionPath);
+
+        var pendingList = Assert.Single(session.Descendants(), element =>
+            element.Name.LocalName == "ListBox" &&
+            (string?)element.Attribute("ItemsSource") == "{Binding PendingInvoices}");
+
+        Assert.Equal("{Binding SelectedPendingInvoice, Mode=TwoWay}",
+            (string?)pendingList.Attribute("SelectedItem"));
+        Assert.DoesNotContain(pendingList.Ancestors(),
+            element => element.Name.LocalName == "Expander");
+        Assert.Contains(pendingList.Ancestors(),
+            element => element.Name.LocalName == "Border" &&
+                       (string?)element.Attribute("Grid.Column") == "2");
+        Assert.Contains(session.Descendants(), element =>
+            element.Name.LocalName == "TextBlock" &&
+            (string?)element.Attribute("Text") == "{Binding PendingInvoices.Count}");
+    }
+
 
     private static string FindRepositoryRoot()
     {
