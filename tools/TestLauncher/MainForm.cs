@@ -321,22 +321,27 @@ internal sealed class MainForm : Form
                 ["Pooling"] = false
             };
             var connectionString = builder.ConnectionString;
+            builder.Clear();
+            rolePassword = string.Empty;
             AppendLog($"Created disposable database '{databaseName}' and restricted role '{roleName}'.");
             AppendLog("Database credentials will be delivered to the short-lived harness over redirected stdin, never through command-line arguments.");
             var testedSha = ReadTestedCheckoutSha();
             var stopPath = Path.Combine(Path.GetTempPath(), "gamenet5-test-stop-" + Guid.NewGuid().ToString("N") + ".signal");
             _stopSignalPath = stopPath;
-            var config = new
+            var config = new Dictionary<string, object?>
             {
-                testedCheckoutSha = testedSha,
-                connectionString,
-                confirmedDisposableDatabase = true,
-                ownerUsername = settings.OwnerUsername,
-                ownerDisplayName = settings.OwnerDisplayName,
-                ownerPassword = settings.OwnerPassword,
-                hourlyRateToman = long.Parse(settings.HourlyRateToman, System.Globalization.CultureInfo.InvariantCulture)
+                ["testedCheckoutSha"] = testedSha,
+                ["connectionString"] = connectionString,
+                ["confirmedDisposableDatabase"] = true,
+                ["ownerUsername"] = settings.OwnerUsername,
+                ["ownerDisplayName"] = settings.OwnerDisplayName,
+                ["ownerPassword"] = settings.OwnerPassword,
+                ["hourlyRateToman"] = long.Parse(settings.HourlyRateToman, System.Globalization.CultureInfo.InvariantCulture)
             };
             LaunchHarness(config, stopPath);
+            connectionString = string.Empty;
+            settings.OwnerPassword = string.Empty;
+            _ownerPassword.Clear();
             _adminPassword.Clear();
             _confirmDisposable.Checked = false;
             SetBusy(true, "Test processes are starting. The GameNet Desktop will open separately.");
@@ -485,7 +490,7 @@ internal sealed class MainForm : Form
         return sha;
     }
 
-    private void LaunchHarness(object config, string stopPath)
+    private void LaunchHarness(Dictionary<string, object?> config, string stopPath)
     {
         var root = GetInstallRoot();
         var pwsh = Path.Combine(root, "Setup", "PowerShell", "pwsh.exe");
@@ -534,8 +539,18 @@ internal sealed class MainForm : Form
         _harnessProcess = process;
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        process.StandardInput.Write(JsonSerializer.Serialize(config));
-        process.StandardInput.Close();
+        var json = JsonSerializer.Serialize(config);
+        try
+        {
+            process.StandardInput.Write(json);
+            process.StandardInput.Close();
+        }
+        finally
+        {
+            json = string.Empty;
+            config["connectionString"] = null;
+            config["ownerPassword"] = null;
+        }
     }
 
     private static string GetInstallRoot() =>
