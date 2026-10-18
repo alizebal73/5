@@ -103,15 +103,20 @@ jobs:
           if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
             $candidates += Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"
           }
-          $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-          if ([string]::IsNullOrWhiteSpace($iscc)) {
-            choco install innosetup --version=6.4.3 --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { throw "Pinned Inno Setup 6.4.3 installation failed." }
+          choco install innosetup --version=6.4.3 --force --allow-downgrade --yes --no-progress
+          if ($LASTEXITCODE -ne 0) {
+            throw "Pinned Inno Setup 6.4.3 installation/downgrade failed."
           }
           $iscc = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
           if ([string]::IsNullOrWhiteSpace($iscc)) {
             throw "Inno Setup 6.4.3 compiler was not found after installation."
           }
+          $compilerFile = Get-Item -LiteralPath $iscc
+          $compilerVersionText = "$($compilerFile.VersionInfo.ProductVersion) $($compilerFile.VersionInfo.FileVersion)"
+          if ($compilerVersionText -notmatch '(?<!\d)6\.4\.3(?:\.\d+)?(?!\d)') {
+            throw "Expected pinned Inno Setup 6.4.3, but found '$compilerVersionText' at '$iscc'."
+          }
+          Write-Host "INNO_SETUP_PINNED_VERSION=6.4.3"
           Write-Host "INNO_SETUP_COMPILER=$iscc"
 
       - name: Build Setup.exe and verify source/hash manifests
