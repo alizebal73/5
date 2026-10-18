@@ -141,9 +141,9 @@ public sealed class StationBoardViewBoundaryTests
         {
             var resources = XDocument.Load(resourcePath);
             var keys = resources.Descendants()
-                .Select(element => (string?)element.Attribute(XNamespace.Xml + "Key"))
+                .Select(element => (string?)element.Attribute(XamlNamespace + "Key"))
                 .Where(key => key is not null)
-                .ToHashSet(StringComparer.Ordinal);
+                .ToHashSet(System.StringComparer.Ordinal);
 
             Assert.Contains("Billing.NoPendingInvoices", keys);
             Assert.Contains("Billing.CheckoutPermissionRequired", keys);
