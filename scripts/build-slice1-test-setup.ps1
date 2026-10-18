@@ -192,8 +192,10 @@ Uninstallable=no
     $probeLog = @(& $iscc $probeScript 2>&1)
     $probeExitCode = $LASTEXITCODE
     $probeText = $probeLog -join [Environment]::NewLine
-    if ($probeExitCode -ne 0 -or
-        $probeText -notmatch '(?m)^Compiler engine version: Inno Setup 6\.4\.3\s*
+    if ($probeExitCode -ne 0 -or -not $probeText.Contains("Compiler engine version: Inno Setup 6.4.3")) {
+        throw "The selected compiler did not prove Inno Setup 6.4.3. Refusing to package with an unverified compiler. Output: $probeText"
+    }
+    Write-Host "INNO_SETUP_PINNED_VERSION=6.4.3"
     $env:GAMENET_TEST_SETUP_PAYLOAD_ROOT = $payloadRoot
     $env:GAMENET_TEST_SETUP_OUTPUT_DIR = $outputRoot
     try {
