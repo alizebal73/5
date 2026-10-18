@@ -185,6 +185,7 @@ try {
     if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
         throw "Inno Setup did not create GameNet5-TestSetup.exe."
     }
+    Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $outputRoot "manifest.json")
     $setupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $setupManifest = [ordered]@{
