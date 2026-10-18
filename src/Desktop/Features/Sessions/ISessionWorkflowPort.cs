@@ -34,6 +34,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand ActivateCustomerCommand { get; }
     ICommand DeactivateCustomerCommand { get; }
     ICommand BlockCustomerCommand { get; }
+    ICommand WalletTopUpCommand { get; }
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
     ICommand EndSessionCommand { get; }
@@ -45,6 +46,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     bool CanManageTariffs { get; }
     bool CanReadCustomers { get; }
     bool CanWriteCustomers { get; }
+    bool CanTopUpWallet { get; }
     bool CanOperateSessions { get; }
     bool CanRecoverSessionTiming { get; }
     bool CanCheckout { get; }
@@ -67,6 +69,10 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string CustomerStatusReasonText { get; set; }
     bool CustomerIncludeInactive { get; set; }
     string CustomerStatusSummaryText { get; }
+    string WalletBalanceText { get; }
+    string WalletTopUpAmountText { get; set; }
+    string WalletCashReceivedText { get; set; }
+    string WalletTopUpSummaryText { get; }
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
     string ReconciledElapsedMinutesText { get; set; }
