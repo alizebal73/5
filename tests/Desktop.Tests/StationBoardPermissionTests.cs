@@ -15,6 +15,7 @@ using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Protocol;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.System;
@@ -506,6 +507,11 @@ public sealed class StationBoardPermissionTests
             ProbeCalls++;
             throw new InvalidOperationException("A probe request must not run while another command is busy.");
         }
+
+        public Task<WalletBalanceResponse> GetWalletBalanceAsync(Guid customerId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WalletBalanceResponse(customerId, 0, 0, null));
+        public Task<WalletCashTopUpResponse> CashTopUpWalletAsync(Guid customerId, WalletCashTopUpRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("An unauthorized Wallet mutation reached the server client.");
 
         public Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(string? query = null, bool includeInactive = false, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<CustomerResponse>>(Array.Empty<CustomerResponse>());
