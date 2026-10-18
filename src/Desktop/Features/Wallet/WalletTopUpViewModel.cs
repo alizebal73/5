@@ -39,6 +39,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     public event PropertyChangedEventHandler? PropertyChanged;
     public ICommand TopUpCommand => topUpCommand;
     public bool CanTopUpWallet => hasPermission(Permissions.WalletWrite);
+    public bool CanEditInput => !IsBusy && pendingIdempotencyKey is null;
     public bool IsBusy { get => isBusy; private set { if (SetField(ref isBusy, value)) RaiseCommand(); } }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
@@ -50,8 +51,15 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         set
         {
             if (!SetField(ref selectedCustomer, value)) return;
-            ErrorMessage = string.Empty;
-            StatusMessage = string.Empty;
+            if (pendingIdempotencyKey is null)
+            {
+                ErrorMessage = string.Empty;
+                StatusMessage = string.Empty;
+            }
+            else
+            {
+                ErrorMessage = PendingReconciliationText;
+            }
             RaiseCommand();
             RefreshBalance();
         }
@@ -60,13 +68,21 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     public string AmountToCreditText
     {
         get => amountToCreditText;
-        set { if (SetField(ref amountToCreditText, value)) { OnPropertyChanged(nameof(SummaryText)); RaiseCommand(); } }
+        set
+        {
+            if (!CanEditInput) return;
+            if (SetField(ref amountToCreditText, value)) { OnPropertyChanged(nameof(SummaryText)); RaiseCommand(); }
+        }
     }
 
     public string CashReceivedText
     {
         get => cashReceivedText;
-        set { if (SetField(ref cashReceivedText, value)) { OnPropertyChanged(nameof(SummaryText)); RaiseCommand(); } }
+        set
+        {
+            if (!CanEditInput) return;
+            if (SetField(ref cashReceivedText, value)) { OnPropertyChanged(nameof(SummaryText)); RaiseCommand(); }
+        }
     }
 
     public string SummaryText
@@ -92,6 +108,17 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     public void Reset()
     {
         balanceRefreshGeneration++;
+        // A request may already have committed even if its response was lost or the user logs out.
+        // Preserve the exact target and tender until the same idempotency key is reconciled.
+        if (pendingIdempotencyKey is not null)
+        {
+            ErrorMessage = PendingReconciliationText;
+            StatusMessage = string.Empty;
+            OnPropertyChanged(nameof(CanEditInput));
+            RaiseCommand();
+            return;
+        }
+
         selectedCustomer = null;
         OnPropertyChanged(nameof(SelectedCustomer));
         AmountToCreditText = string.Empty;
@@ -99,8 +126,6 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
         BalanceText = Text("برای مشاهدهٔ موجودی، مشتری ثبت‌شده را انتخاب کنید.", "Select a registered customer to view its Wallet balance.");
-        // Preserve unresolved idempotency state and busy state across logout/reset.
-        // If an in-flight cash request commits after the view resets, a retry must reuse its key.
     }
 
     private void RefreshBalance()
@@ -146,10 +171,21 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         }
     }
 
-    private bool CanSubmit => !IsBusy && CanTopUpWallet &&
-        SelectedCustomer is { Kind: CustomerKindContract.Registered, Status: CustomerStatusContract.Active } &&
-        TryParseToman(AmountToCreditText, out var credit) && credit > 0 &&
-        TryParseToman(CashReceivedText, out var received) && received >= credit;
+    private bool CanSubmit
+    {
+        get
+        {
+            if (IsBusy || !CanTopUpWallet ||
+                SelectedCustomer is not { Kind: CustomerKindContract.Registered, Status: CustomerStatusContract.Active } customer ||
+                !TryParseToman(AmountToCreditText, out var credit) || credit <= 0 ||
+                !TryParseToman(CashReceivedText, out var received) || received < credit)
+                return false;
+
+            var currentFingerprint = Fingerprint(customer, credit, received);
+            return pendingIdempotencyKey is null ||
+                string.Equals(pendingFingerprint, currentFingerprint, StringComparison.Ordinal);
+        }
+    }
 
     private async Task TopUpAsync()
     {
@@ -160,11 +196,18 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
 
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
-        var fingerprint = $"{target.Id:D}|{target.Version}|{credit}|{received}";
-        if (!string.Equals(pendingFingerprint, fingerprint, StringComparison.Ordinal))
+        var fingerprint = Fingerprint(target, credit, received);
+        if (pendingIdempotencyKey is null)
         {
             pendingFingerprint = fingerprint;
             pendingIdempotencyKey = Guid.NewGuid().ToString("N");
+            OnPropertyChanged(nameof(CanEditInput));
+        }
+        else if (!string.Equals(pendingFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            // Never mint a fresh key while the prior cash outcome is unresolved.
+            ErrorMessage = PendingReconciliationText;
+            return;
         }
 
         var key = pendingIdempotencyKey!;
@@ -173,44 +216,64 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         {
             var result = await api.CashTopUpWalletAsync(
                 target.Id, new WalletCashTopUpRequest(credit, received, target.Version), key);
-            pendingFingerprint = null;
-            pendingIdempotencyKey = null;
+            ClearPendingRequest();
+            AmountToCreditText = string.Empty;
+            CashReceivedText = string.Empty;
+            StatusMessage = Text(
+                $"کیف پول مشتری {target.Code} به مبلغ {FormatToman(result.AmountCreditedToman)} شارژ شد؛ باقی‌پول {FormatToman(result.ChangeGivenToman)}.",
+                $"Customer {target.Code} Wallet credited by {FormatToman(result.AmountCreditedToman)}; change {FormatToman(result.ChangeGivenToman)}.");
             if (SelectedCustomer?.Id == target.Id)
-            {
-                AmountToCreditText = string.Empty;
-                CashReceivedText = string.Empty;
-                StatusMessage = Text(
-                    $"کیف پول مشتری {target.Code} به مبلغ {FormatToman(result.AmountCreditedToman)} شارژ شد؛ باقی‌پول {FormatToman(result.ChangeGivenToman)}.",
-                    $"Customer {target.Code} Wallet credited by {FormatToman(result.AmountCreditedToman)}; change {FormatToman(result.ChangeGivenToman)}.");
                 await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
-            }
         }
         catch (GameNetApiException ex)
         {
-            if (SelectedCustomer?.Id == target.Id)
+            if (ex.Code is "idempotency.in_flight" or "idempotency.key_reused")
+                ErrorMessage = PendingReconciliationText;
+            else
+            {
+                ClearPendingRequest();
                 ErrorMessage = ErrorText(ex.Code);
+            }
         }
         catch (HttpRequestException)
         {
+            ErrorMessage = PendingReconciliationText;
             await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
-            if (SelectedCustomer?.Id == target.Id)
-                ErrorMessage = Text(
-                    "پاسخ شارژ دریافت نشد. مبلغ‌ها را تغییر نده؛ ابتدا موجودی را بررسی کن. تکرار همان درخواست، با همان کلید، نتیجه را امن تطبیق می‌دهد.",
-                    "The top-up response was lost. Do not change the amounts; check the balance first. Retrying the same request reuses its idempotency key.");
+            ErrorMessage = PendingReconciliationText;
         }
         catch (TaskCanceledException)
         {
+            ErrorMessage = PendingReconciliationText;
             await LoadBalanceAsync(target.Id, ++balanceRefreshGeneration);
-            if (SelectedCustomer?.Id == target.Id)
-                ErrorMessage = Text(
-                    "پاسخ شارژ زمان‌بر شد. مبلغ‌ها را تغییر نده؛ موجودی را بررسی کن و فقط همان درخواست را تطبیق بده.",
-                    "The top-up response timed out. Do not change the amounts; check the balance and reconcile the same request.");
+            ErrorMessage = PendingReconciliationText;
         }
         catch
         {
-            ErrorMessage = Text("شارژ کیف پول انجام نشد؛ وضعیت سرور را بررسی کنید.", "Wallet top-up failed. Check Server state.");
+            // Treat unexpected transport/response failures as ambiguous until the same
+            // idempotent request is replayed; do not permit a new key for another amount.
+            ErrorMessage = PendingReconciliationText;
         }
-        finally { IsBusy = false; }
+        finally
+        {
+            IsBusy = false;
+            OnPropertyChanged(nameof(CanEditInput));
+            RaiseCommand();
+        }
+    }
+
+    private static string Fingerprint(CustomerResponse customer, long credit, long received) =>
+        $"{customer.Id:D}|{customer.Version}|{credit}|{received}";
+
+    private string PendingReconciliationText => Text(
+        "شارژ قبلی هنوز تعیین‌تکلیف نشده است. مشتری و مبلغ‌ها را به درخواست قبلی برگردان و همان شارژ را دوباره بزن تا همان کلید امن تطبیق داده شود؛ فعلاً شارژ جدید مجاز نیست.",
+        "A previous top-up outcome is unresolved. Restore the original customer and amounts, then retry that same request so its idempotency key can safely reconcile it. New top-ups are blocked.");
+
+    private void ClearPendingRequest()
+    {
+        pendingFingerprint = null;
+        pendingIdempotencyKey = null;
+        OnPropertyChanged(nameof(CanEditInput));
+        RaiseCommand();
     }
 
     private string ErrorText(string code) => code switch
