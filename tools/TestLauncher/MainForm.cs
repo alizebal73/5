@@ -379,13 +379,17 @@ internal sealed class MainForm : Form
             RedirectStandardError = true,
             RedirectStandardInput = true
         };
-        foreach (var arg in new[] { "-X", "-w", "-h", "127.0.0.1", "-p", port.ToString(System.Globalization.CultureInfo.InvariantCulture), "-U", username, "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", sql })
+        foreach (var arg in new[] { "-X", "-w", "-h", "127.0.0.1", "-p", port.ToString(System.Globalization.CultureInfo.InvariantCulture), "-U", username, "-d", "postgres", "-v", "ON_ERROR_STOP=1" })
             start.ArgumentList.Add(arg);
         start.Environment["PGPASSWORD"] = password;
         start.Environment["PGSSLMODE"] = "disable";
         using var process = new Process { StartInfo = start };
         if (!process.Start())
             throw new InvalidOperationException($"{operation} could not start.");
+        start.Environment.Remove("PGPASSWORD");
+        start.Environment.Remove("PGSSLMODE");
+        await process.StandardInput.WriteLineAsync(sql);
+        process.StandardInput.Close();
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
@@ -456,12 +460,17 @@ internal sealed class MainForm : Form
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) AppendLog(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) AppendLog("ERROR: " + e.Data); };
-        process.Exited += (_, _) => BeginInvoke(() =>
+        process.Exited += (_, _) => BeginInvoke((MethodInvoker)(() =>
         {
             var exitCode = process.ExitCode;
             _harnessProcess?.Dispose();
             _harnessProcess = null;
+            var signalPath = _stopSignalPath;
             _stopSignalPath = null;
+            if (!string.IsNullOrWhiteSpace(signalPath) && File.Exists(signalPath))
+            {
+                try { File.Delete(signalPath); } catch { }
+            }
             if (!_closing)
             {
                 SetBusy(false, exitCode == 0
@@ -469,7 +478,7 @@ internal sealed class MainForm : Form
                     : $"Test harness exited with code {exitCode}. Review the diagnostic log.");
                 AppendLog($"Harness exited (code {exitCode}).");
             }
-        });
+        }));
         if (!process.Start())
             throw new InvalidOperationException("Could not start the hidden test harness.");
         _harnessProcess = process;
@@ -564,7 +573,7 @@ internal sealed class MainForm : Form
             return;
         if (InvokeRequired)
         {
-            BeginInvoke(() => AppendLog(message));
+            BeginInvoke((MethodInvoker)(() => AppendLog(message)));
             return;
         }
         _log.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
