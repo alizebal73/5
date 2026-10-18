@@ -239,8 +239,24 @@
                 </DataTemplate>
               </ListBox.ItemTemplate>
               </ListBox>
-              
-              
+              <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Margin="12,6" TextAlignment="Center" TextWrapping="Wrap"
+                         Foreground="#667085" FontSize="11" IsHitTestVisible="False">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Setter Property="Text" Value="{DynamicResource Billing.NoPendingInvoices}"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding PendingInvoices.Count}" Value="0">
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding CanCheckout}" Value="False">
+                        <Setter Property="Text" Value="{DynamicResource Billing.CheckoutPermissionRequired}"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
             </Grid>
             <TextBlock Text="{Binding CashCheckoutSummaryText}" FontSize="11"
                        Foreground="#344054" TextWrapping="Wrap" Margin="0,7,0,5"/>
