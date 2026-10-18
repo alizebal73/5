@@ -1,9 +1,37 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param()
+param(
+    [switch]$GuiMode,
+    [string]$StopSignalPath
+)
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+$guiSettings = $null
+if ($GuiMode) {
+    if ([string]::IsNullOrWhiteSpace($StopSignalPath) -or
+        $StopSignalPath.IndexOfAny([System.IO.Path]::GetInvalidPathChars()) -ge 0) {
+        throw "GUI test mode requires a valid stop-signal path."
+    }
+    $guiJson = [Console]::In.ReadToEnd()
+    if ([string]::IsNullOrWhiteSpace($guiJson)) {
+        throw "The GUI launcher did not provide test settings. No GameNet process was started."
+    }
+    try { $guiSettings = $guiJson | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "GUI test settings could not be read. No GameNet process was started." }
+    finally { $guiJson = $null }
+
+    if ($guiSettings.confirmedDisposableDatabase -ne $true -or
+        [string]::IsNullOrWhiteSpace([string]$guiSettings.testedCheckoutSha) -or
+        [string]::IsNullOrWhiteSpace([string]$guiSettings.connectionString) -or
+        [string]::IsNullOrWhiteSpace([string]$guiSettings.ownerUsername) -or
+        [string]::IsNullOrWhiteSpace([string]$guiSettings.ownerDisplayName) -or
+        [string]::IsNullOrEmpty([string]$guiSettings.ownerPassword) -or
+        $null -eq $guiSettings.hourlyRateToman) {
+        throw "GUI test settings are incomplete or the disposable-database confirmation is missing."
+    }
+}
 
 if (-not $IsWindows) {
     throw "Slice 1 process acceptance is supported only on Windows."
@@ -75,21 +103,33 @@ foreach ($requiredPath in $requiredManifestPaths) {
     }
 }
 
-$actualPackagedFiles = Get-ChildItem -LiteralPath $bundleRoot -Recurse -File
+$managedPayloadRoots = @("Server", "Agent", "Desktop", "Tools", "Setup", "Launcher")
+$actualPackagedFiles = Get-ChildItem -LiteralPath $bundleRoot -Recurse -File | Where-Object {
+    $relativeForScope = [System.IO.Path]::GetRelativePath($bundleRoot, $_.FullName)
+    $firstSegment = ($relativeForScope -split '[\\/]')[0]
+    $managedPayloadRoots -contains $firstSegment
+}
 foreach ($actualFile in $actualPackagedFiles) {
     if ([string]::Equals($actualFile.FullName, $manifestPath, [StringComparison]::OrdinalIgnoreCase)) {
         continue
     }
     $actualRelative = [System.IO.Path]::GetRelativePath($bundleRoot, $actualFile.FullName).Replace("\", "/")
     if (-not $manifestPaths.Contains($actualRelative)) {
-        throw "Unmanifested file found in the runtime/test bundle: '$actualRelative'. Refusing to start any process."
+        throw "Unmanifested file found in the runtime/test payload: '$actualRelative'. Refusing to start any process."
     }
 }
 
-$shaConfirmation = (Read-Host "Type the exact tested checkout SHA from manifest.json to confirm this candidate").Trim()
+
+if ($GuiMode) {
+    $shaConfirmation = ([string]$guiSettings.testedCheckoutSha).Trim()
+}
+else {
+    $shaConfirmation = (Read-Host "Type the exact tested checkout SHA from manifest.json to confirm this candidate").Trim()
+}
 if (-not [string]::Equals($shaConfirmation, [string]$manifest.source.testedCheckoutSha, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Source SHA confirmation did not match manifest.json. No GameNet process or database migration was started."
 }
+
 
 function Convert-SecureStringToPlainText {
     param([Parameter(Mandatory)][Security.SecureString]$Value)
@@ -452,10 +492,17 @@ $serverInfo = $null
 try {
     Write-Host ""
     Write-Host "GameNet 5 - Slice 1 process-based acceptance"
-    Write-Host "This is NOT Setup/MSI and NOT a production install."
-    Write-Host "It runs temporary Server/Agent/Desktop processes on this same PC."
-    Write-Host "It does not register services or modify ProgramData, certificates, firewall, registry, or system settings."
+    if ($GuiMode) {
+        Write-Host "Started by the test-only Windows GUI Setup. This is not a production release."
+        Write-Host "Only temporary Server/Agent/Desktop processes are started on loopback."
+    }
+    else {
+        Write-Host "Internal developer harness. This is NOT Setup/MSI and NOT a production install."
+        Write-Host "It runs temporary Server/Agent/Desktop processes on this same PC."
+    }
+    Write-Host "No Windows services or machine-wide ProgramData, certificates, firewall, registry, clock, or LAN settings are changed."
     Write-Host ""
+
 
     $services = @(Get-CimInstance -ClassName Win32_Service -ErrorAction Stop |
         Where-Object { $_.Name -in @("GameNet 5 Server", "GameNet 5 Agent") -or $_.DisplayName -in @("GameNet 5 Server", "GameNet 5 Agent") })
@@ -472,9 +519,15 @@ try {
         throw "GameNet 5 Manager Server state already exists under ProgramData. This first-time process acceptance refuses to overlap the new app's existing runtime state; a separate legacy GameNet program is not what this guard targets."
     }
 
-    $secureConnection = Read-Host "Paste the connection string for a NEW empty local PostgreSQL test database (input is hidden)" -AsSecureString
-    try { $connectionString = Convert-SecureStringToPlainText $secureConnection }
-    finally { $secureConnection.Dispose() }
+    if ($GuiMode) {
+        $connectionString = [string]$guiSettings.connectionString
+    }
+    else {
+        $secureConnection = Read-Host "Paste the connection string for a NEW empty local PostgreSQL test database (input is hidden)" -AsSecureString
+        try { $connectionString = Convert-SecureStringToPlainText $secureConnection }
+        finally { $secureConnection.Dispose() }
+    }
+
 
     $databaseInfoItems = @(Assert-DisposableEmptyDatabase -ConnectionString $connectionString)
     if ($databaseInfoItems.Count -ne 1 -or
@@ -489,10 +542,18 @@ try {
     }
     Write-Host ("Verified empty loopback database: {0} on {1}:{2}, role {3}" -f $databaseInfo.Database, $databaseInfo.Host, $databaseInfo.Port, $databaseInfo.Username)
     Write-Host "Database preflight: zero non-system relations and zero additional non-system database objects; role has no elevated PostgreSQL privileges."
-    $confirmation = Read-Host "Type exactly USE EMPTY TEST DATABASE to confirm migration of this verified disposable database"
-    if ($confirmation -cne "USE EMPTY TEST DATABASE") {
-        throw "Confirmation did not match; no GameNet process or migration was started."
+    if ($GuiMode) {
+        if ($guiSettings.confirmedDisposableDatabase -ne $true) {
+            throw "The GUI did not explicitly confirm a new disposable test database. No migration was started."
+        }
     }
+    else {
+        $confirmation = Read-Host "Type exactly USE EMPTY TEST DATABASE to confirm migration of this verified disposable database"
+        if ($confirmation -cne "USE EMPTY TEST DATABASE") {
+            throw "Confirmation did not match; no GameNet process or migration was started."
+        }
+    }
+
 
     $testRoot = Join-Path $env:TEMP ("GameNet5-Slice1-" + [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + [Guid]::NewGuid().ToString("N"))
     $configDirectory = Join-Path $testRoot "Config"
@@ -568,20 +629,32 @@ try {
         throw "Fresh-database Owner bootstrap was unexpectedly already completed; stop and investigate before proceeding."
     }
 
-    $ownerUsername = (Read-Host "Choose a throwaway Owner username for this test database").Trim()
-    $ownerDisplayName = (Read-Host "Choose a test-only Owner display name").Trim()
+    if ($GuiMode) {
+        $ownerUsername = ([string]$guiSettings.ownerUsername).Trim()
+        $ownerDisplayName = ([string]$guiSettings.ownerDisplayName).Trim()
+        $ownerPassword = [string]$guiSettings.ownerPassword
+        $secureOwnerPassword = ConvertTo-SecureString -String $ownerPassword -AsPlainText -Force
+        $ownerPasswordConfirm = $ownerPassword
+        $secureOwnerPasswordAgain = $null
+    }
+    else {
+        $ownerUsername = (Read-Host "Choose a throwaway Owner username for this test database").Trim()
+        $ownerDisplayName = (Read-Host "Choose a test-only Owner display name").Trim()
+    }
     if ($ownerUsername.Length -lt 3 -or $ownerUsername.Length -gt 64 -or $ownerDisplayName.Length -lt 1 -or $ownerDisplayName.Length -gt 120) {
         throw "Owner username/display name is outside the supported test input length."
     }
-    $secureOwnerPassword = Read-Host "Choose a throwaway Owner password (10-256 characters; hidden)" -AsSecureString
-    $secureOwnerPasswordAgain = Read-Host "Repeat the throwaway Owner password (hidden)" -AsSecureString
-    try {
-        $ownerPassword = Convert-SecureStringToPlainText $secureOwnerPassword
-        $ownerPasswordConfirm = Convert-SecureStringToPlainText $secureOwnerPasswordAgain
-    }
-    finally {
-        $secureOwnerPasswordAgain.Dispose()
-        $secureOwnerPasswordAgain = $null
+    if (-not $GuiMode) {
+        $secureOwnerPassword = Read-Host "Choose a throwaway Owner password (10-256 characters; hidden)" -AsSecureString
+        $secureOwnerPasswordAgain = Read-Host "Repeat the throwaway Owner password (hidden)" -AsSecureString
+        try {
+            $ownerPassword = Convert-SecureStringToPlainText $secureOwnerPassword
+            $ownerPasswordConfirm = Convert-SecureStringToPlainText $secureOwnerPasswordAgain
+        }
+        finally {
+            $secureOwnerPasswordAgain.Dispose()
+            $secureOwnerPasswordAgain = $null
+        }
     }
     if ($ownerPassword.Length -lt 10 -or $ownerPassword.Length -gt 256 -or
         -not [string]::Equals($ownerPassword, $ownerPasswordConfirm, [StringComparison]::Ordinal)) {
@@ -636,7 +709,12 @@ try {
     $accessToken = [string]$login.data.accessToken
     if ([string]::IsNullOrWhiteSpace($accessToken)) { throw "Server did not issue a local Owner access token." }
 
-    $rateText = (Read-Host "Enter the fixed hourly tariff in whole Toman for this test only (no real payment)").Trim()
+    if ($GuiMode) {
+        $rateText = ([string]$guiSettings.hourlyRateToman).Trim()
+    }
+    else {
+        $rateText = (Read-Host "Enter the fixed hourly tariff in whole Toman for this test only (no real payment)").Trim()
+    }
     [long]$hourlyRate = 0
     if (-not [long]::TryParse($rateText, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture, [ref]$hourlyRate) -or $hourlyRate -lt 1) {
         throw "Tariff must be a positive integer number of Toman."
@@ -742,7 +820,16 @@ try {
     Write-Host "Owner password, DB connection string, Server keys and Agent enrollment token are not passed on command lines or persisted in Server config."
     Write-Host "Desktop will now open. Follow Tools\slice1-process-acceptance.md and use test amounts only."
     Write-Host "When evidence is saved, return here and press Enter to stop these test processes."
-    $null = Read-Host "Press Enter after WPF acceptance is complete"
+    if ($GuiMode) {
+        Write-Host "WPF_ACCEPTANCE_READY=true"
+        Write-Host "Use the launcher window's Stop button after collecting the screenshot and test evidence."
+        while (-not (Test-Path -LiteralPath $StopSignalPath -PathType Leaf)) {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    else {
+        $null = Read-Host "Press Enter after WPF acceptance is complete"
+    }
 }
 finally {
     Stop-GameNetProcess -Process $desktopProcess -CloseWindowFirst
