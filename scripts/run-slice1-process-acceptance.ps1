@@ -687,6 +687,10 @@ try {
     $fingerprintKey = $null
     $serverInfo = $null
     Wait-GameNetServer -BaseUrl $baseUrl -Process $serverProcess
+    if ($GuiMode) {
+        $guiSettings.connectionString = $null
+        $guiSettings.ownerPassword = $null
+    }
 
     # Reuse the same SecureString accepted and confirmed for bootstrap instead
     # of prompting the operator to type it a third time between noisy process logs.
