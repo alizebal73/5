@@ -1,13 +1,9 @@
-using GameNet.Server.Persistence;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace GameNet.Server.Persistence.Migrations;
 
-[DbContext(typeof(GameNetDbContext))]
-[Migration("20261019100000_WalletCashTopUp")]
 public partial class WalletCashTopUp : Migration
 {
     protected override void Up(MigrationBuilder m)
