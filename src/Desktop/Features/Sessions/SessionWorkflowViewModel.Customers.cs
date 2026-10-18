@@ -307,7 +307,6 @@ public sealed partial class SessionWorkflowViewModel
     {
         OnPropertyChanged(nameof(CanReadCustomers));
         OnPropertyChanged(nameof(CanWriteCustomers));
-        OnPropertyChanged(nameof(CanTopUpWallet));
         if (!CanReadCustomers)
         {
             customerRefreshGeneration++;
