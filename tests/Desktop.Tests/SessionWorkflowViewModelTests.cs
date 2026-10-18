@@ -251,6 +251,59 @@ public sealed class SessionWorkflowViewModelTests
 
 
     [Fact]
+    public async Task End_session_keeps_server_confirmed_invoice_visible_when_secondary_refresh_fails()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-INVOICE-01", "Invoice PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-STD", "PC Standard", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            var viewModel = new SessionWorkflowViewModel(
+                client,
+                permission => permission is Permissions.StationsRead
+                    or Permissions.SessionsOperate or Permissions.BillingWrite);
+
+            await viewModel.RefreshAsync();
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman,
+                Guid.NewGuid(), DateTimeOffset.UtcNow, null, null, null, null,
+                SessionStatusContract.Active, 1);
+            client.ActiveSessions.Add(session);
+            await viewModel.RefreshAsync();
+            viewModel.SelectedActiveSession = viewModel.ActiveSessions.Single();
+
+            // Ending the Session is confirmed by the Server, but an unrelated tariff refresh fails
+            // before the full pending-invoice refresh can run.
+            client.NextGetTariffsException = new GameNetApiException("tariffs.lookup_failed", 500);
+            var endStatus = WaitForStatusAsync(
+                viewModel,
+                message => message.StartsWith("Invoice issued:", StringComparison.Ordinal));
+            Assert.True(viewModel.EndSessionCommand.CanExecute(null));
+            viewModel.EndSessionCommand.Execute(null);
+
+            Assert.Contains("30,000 Toman", await endStatus);
+            var pending = Assert.Single(viewModel.PendingInvoices);
+            Assert.Equal(InvoiceStatusContract.PendingPayment, pending.Invoice.Status);
+            Assert.Equal(pending.Invoice.InvoiceId, viewModel.SelectedPendingInvoice?.Invoice.InvoiceId);
+            Assert.False(string.IsNullOrWhiteSpace(viewModel.ErrorMessage));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
     public async Task Start_session_shows_clear_error_if_server_reports_station_became_unavailable()
     {
         var originalUiCulture = CultureInfo.CurrentUICulture;
