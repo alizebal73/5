@@ -251,13 +251,15 @@ jobs:
           $readme = @'
           # GameNet 5 — temporary Runtime LAN Smoke payload
 
-          **This is NOT Setup and is NOT a production release.** It is a portable, self-contained Windows x64 payload built from one exact candidate checkout. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
+          **Internal engineering payload only — NOT the owner-facing test installer and NOT a production release.** This is a portable, self-contained Windows x64 payload built from one exact candidate checkout. Do not hand this artifact to the owner as the manual test procedure. It does not register Windows services, install PostgreSQL, create production secrets, or enable update/repair/rollback.
 
           ## Choose the test path
 
-          For early Issue #98 PC Session to invoice to cash functional acceptance, use Tools/slice1-process-acceptance.md and Tools/run-slice1-process-acceptance.ps1 only. This path runs Server, Agent and WPF Desktop as Development processes on loopback with a verified empty local test database. It does not register services or change machine settings.
+          **Owner-run Issue #98 acceptance is BLOCKED until a dedicated test-only Windows Setup.exe/GUI Launcher is built and verified for the exact candidate SHA.** The owner must launch that installed GUI from a Desktop shortcut; do not ask the owner to open PowerShell, paste connection strings, unpack payloads, or run this script directly. The installer/launcher must handle configuration, disposable-database preflight, process start/stop, progress/errors, and evidence collection while keeping all GameNet business data isolated.
 
-          The separate Runtime LAN smoke sequence below is for later isolated-machine service/TLS/LAN feasibility work. Do not use that service-based sequence as the early #98 process acceptance path, and never use this payload on live GameNet PCs.
+          Developers may use Tools/slice1-process-acceptance.md and Tools/run-slice1-process-acceptance.ps1 as internal engineering automation in a controlled test environment. That path runs Server, Agent and WPF Desktop as Development processes on loopback with a verified empty local test database. It is not a substitute for the owner-facing installer.
+
+          The separate Runtime LAN smoke sequence below is internal reference for later isolated-machine service/TLS/LAN feasibility work. It is not the early #98 owner acceptance path, and this payload must never be used against live GameNet business data.
 
 
           ## Included
