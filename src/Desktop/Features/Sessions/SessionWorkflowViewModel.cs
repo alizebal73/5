@@ -49,17 +49,20 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             message => ErrorMessage = message, SessionWorkflowErrorText.For,
             OnPrepaidSessionStartedAsync);
         CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
+        InitializeStationTypeOptions();
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
         CreateTariffCommand = new AsyncUiAction(CreateTariffAsync, () => !IsBusy && CanManageTariffs &&
+            Enum.IsDefined(TariffStationType) &&
             !string.IsNullOrWhiteSpace(TariffCode) && !string.IsNullOrWhiteSpace(TariffName) && TryParseToman(HourlyRateText, out var rate) && rate > 0);
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
-            SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
+            SelectedStation is { Status: StationStatusContract.Available } station &&
+            station.Type is (StationTypeContract.Pc or StationTypeContract.Ps5 or StationTypeContract.Foosball) &&
+            SelectedTariff is { IsActive: true } tariff &&
+            tariff.StationType == station.Type &&
             (SelectedCustomer is null || SelectedCustomer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active) &&
-            SelectedStation is not null &&
-            !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
-            !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
+            !ActiveSessions.Any(x => x.Session.StationId == station.Id) &&
+            !PendingInvoices.Any(x => x.Invoice.StationId == station.Id));
         StartPrepaidSessionFromStationCommand = new AsyncParameterUiAction(
             prepaidStationEntryCoordinator.StartAsync,
             parameter => !IsBusy && CanOperateSessions && CanReadCustomers &&
@@ -113,7 +116,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public StationResponse? SelectedStation
     {
         get => selectedStation;
-        set { if (SetField(ref selectedStation, value)) RaiseCommands(); }
+        set { if (SetField(ref selectedStation, value)) OnSelectedStationChanged(); }
     }
 
     public TariffResponse? SelectedTariff
@@ -250,58 +253,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 return;
 
             ErrorMessage = string.Empty;
-            if (CanReadStations)
-            {
-                StationResponse[] stations;
-                try
-                {
-                    stations = (await api.GetStationsAsync())
-                        .Where(x => x.Type == StationTypeContract.Pc)
-                        .OrderBy(x => x.Code, StringComparer.Ordinal)
-                        .ToArray();
-                }
-                catch (Exception ex) when (!CanOperateSessions &&
-                    (ex is GameNetApiException || ex is HttpRequestException || ex is TaskCanceledException))
-                {
-                    // A station-code lookup enriches invoice rows; it must not block a cashier from loading invoices.
-                    stations = [];
-                    stationLabelsUnavailable = true;
-                }
-
-                stationLabels.Clear();
-                foreach (var station in stations)
-                    stationLabels[station.Id] = station.Code;
-
-                if (CanOperateSessions)
-                {
-                    Replace(PcStations, stations, SelectedStation?.Id, x => x.Id, out var currentStation);
-                    SelectedStation = currentStation;
-                }
-                else
-                {
-                    // Station labels may be visible to a cashier without granting Session operations.
-                    PcStations.Clear();
-                    SelectedStation = null;
-                }
-            }
-            else
-            {
-                stationLabels.Clear();
-                PcStations.Clear();
-                SelectedStation = null;
-            }
-
-            if (CanOperateSessions || CanManageTariffs)
-            {
-                var tariffs = await api.GetTariffsAsync(StationTypeContract.Pc);
-                Replace(Tariffs, tariffs, SelectedTariff?.Id, x => x.Id, out var currentTariff);
-                SelectedTariff = currentTariff;
-            }
-            else
-            {
-                Tariffs.Clear();
-                SelectedTariff = null;
-            }
+            stationLabelsUnavailable = await RefreshStationAndTariffChoicesAsync();
 
             if (CanOperateSessions)
             {
@@ -422,6 +374,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         stationLabels.Clear();
         PcStations.Clear();
+        ResetStationAndTariffChoices();
+        TariffStationType = StationTypeContract.Pc;
         Tariffs.Clear();
         ActiveSessions.Clear();
         PendingInvoices.Clear();
@@ -468,13 +422,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             return;
         }
 
-        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{rate}|{IsDefaultTariff}";
+        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{(int)TariffStationType}|{rate}|{IsDefaultTariff}";
         var key = GetKey("tariff.create", fingerprint);
         BeginBusy();
         try
         {
             var created = await api.CreateTariffAsync(
-                new CreateTariffRequest(TariffCode, TariffName, StationTypeContract.Pc, rate, IsDefaultTariff),
+                new CreateTariffRequest(TariffCode, TariffName, TariffStationType, rate, IsDefaultTariff),
                 key);
             pendingKeys.Remove("tariff.create");
             await RefreshAsync();
