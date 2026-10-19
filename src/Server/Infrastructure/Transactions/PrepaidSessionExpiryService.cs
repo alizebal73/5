@@ -46,14 +46,19 @@ public sealed class PrepaidSessionExpiryService(
 
             var maximumElapsedTicks = PrepaidSessionBudget.CalculateMaximumElapsedTicks(
                 reservation.ReservedAmountToman, session.TariffHourlyRateTomanSnapshot);
-            if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
-                    session.StartedMonotonicTimestamp,
-                    session.StartedMonotonicFrequency,
-                    session.StartedSystemUptimeMilliseconds,
-                    session.StartedBootIdentifier,
-                    snapshot,
-                    out var elapsedTicks) ||
-                elapsedTicks < maximumElapsedTicks)
+            if (session.CurrentSegmentStartedMonotonicTimestamp is not long segmentTimestamp ||
+                session.CurrentSegmentStartedMonotonicFrequency is not long segmentFrequency ||
+                session.CurrentSegmentStartedSystemUptimeMilliseconds is not long segmentUptime ||
+                session.CurrentSegmentStartedBootIdentifier is not Guid segmentBoot ||
+                !MonotonicElapsedTime.TryCalculateElapsedTicks(
+                    segmentTimestamp, segmentFrequency, segmentUptime, segmentBoot, snapshot,
+                    out var activeSegmentTicks))
+                continue;
+
+            long elapsedTicks;
+            try { elapsedTicks = checked(session.AccumulatedElapsedTicks + activeSegmentTicks); }
+            catch (OverflowException) { continue; }
+            if (elapsedTicks < maximumElapsedTicks)
                 continue;
 
             // A stable per-Session/version key makes periodic retries safe after timeouts or restarts.
