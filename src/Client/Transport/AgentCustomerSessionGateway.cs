@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -47,7 +48,19 @@ public sealed class AgentCustomerSessionGateway(
         using var response = await client.SendAsync(message, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            // A server-side failure may occur after the Session transaction committed but
+            // before its response reached the Agent. Never tell the Client to issue a new key
+            // for an outcome that cannot be proven.
+            if (response.StatusCode == HttpStatusCode.RequestTimeout ||
+                (int)response.StatusCode >= 500)
+                return Rejected("client.result_unknown",
+                    "The Server could not confirm the entry result. Retry with the same idempotency key.");
+
             var failure = await response.Content.ReadFromJsonAsync<ApiFailure>(JsonOptions, cancellationToken);
+            if (failure is null && response.StatusCode == HttpStatusCode.Conflict)
+                return Rejected("client.result_unknown",
+                    "The Server returned an unclassified conflict. Retry with the same idempotency key.");
+
             return Rejected(
                 failure?.Error.Code ?? $"server.http_{(int)response.StatusCode}",
                 failure?.Error.Message ?? "The Server rejected customer entry.");
