@@ -12,6 +12,7 @@ public sealed class WalletAccountConfiguration : IEntityTypeConfiguration<Wallet
         {
             table.HasCheckConstraint("ck_wallet_accounts_balance_nonnegative", "balance_toman >= 0");
             table.HasCheckConstraint("ck_wallet_accounts_version_nonnegative", "version >= 0");
+            table.HasCheckConstraint("ck_wallet_accounts_reserved_nonnegative", "reserved_balance_toman >= 0");
         });
         b.HasKey(x => x.CustomerId).HasName("pk_wallet_accounts");
         b.Property(x => x.CustomerId).ValueGeneratedNever().HasColumnName("customer_id");

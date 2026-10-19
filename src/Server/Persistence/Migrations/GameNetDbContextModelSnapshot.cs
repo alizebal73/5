@@ -835,6 +835,13 @@ namespace GameNet.Server.Persistence.Migrations
                         .HasConstraintName("fk_customer_login_sessions_customers_customer_id");
                 });
 
+            modelBuilder.Entity("GameNet.Server.Modules.Wallet.Domain.WalletLedgerEntry", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Sessions.Domain.Session", null).WithMany()
+                        .HasForeignKey("SessionId").OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_wallet_ledger_sessions_session_id");
+                });
+
             modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.CashReceipt", b =>
                 {
                     b.Property<Guid>("Id").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("id");
@@ -865,6 +872,7 @@ namespace GameNet.Server.Persistence.Migrations
                 {
                     b.Property<Guid>("CustomerId").ValueGeneratedNever().HasColumnType("uuid").HasColumnName("customer_id");
                     b.Property<long>("BalanceToman").HasColumnType("bigint").HasColumnName("balance_toman");
+                    b.Property<long>("ReservedBalanceToman").HasDefaultValue(0L).HasColumnType("bigint").HasColumnName("reserved_balance_toman");
                     b.Property<DateTimeOffset>("UpdatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("updated_at_utc");
                     b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
                     b.HasKey("CustomerId").HasName("pk_wallet_accounts");
@@ -872,6 +880,7 @@ namespace GameNet.Server.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_wallet_accounts_balance_nonnegative", "balance_toman >= 0");
                             t.HasCheckConstraint("ck_wallet_accounts_version_nonnegative", "version >= 0");
+                            t.HasCheckConstraint("ck_wallet_accounts_reserved_nonnegative", "reserved_balance_toman >= 0");
                         });
                 });
 
@@ -881,19 +890,27 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<Guid>("ActorId").HasColumnType("uuid").HasColumnName("actor_id");
                     b.Property<long>("AmountToman").HasColumnType("bigint").HasColumnName("amount_toman");
                     b.Property<long>("BalanceAfterToman").HasColumnType("bigint").HasColumnName("balance_after_toman");
-                    b.Property<Guid>("CashReceiptId").HasColumnType("uuid").HasColumnName("cash_receipt_id");
+                    b.Property<Guid?>("CashReceiptId").HasColumnType("uuid").HasColumnName("cash_receipt_id");
+                    b.Property<Guid?>("SessionId").HasColumnType("uuid").HasColumnName("session_id");
+                    b.Property<string>("ActorType").IsRequired().HasMaxLength(32).HasDefaultValue("Operator").HasColumnType("character varying(32)").HasColumnName("actor_type");
+                    b.Property<long>("ReservedBalanceAfterToman").HasDefaultValue(0L).HasColumnType("bigint").HasColumnName("reserved_balance_after_toman");
                     b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
                     b.Property<int>("EntryType").HasColumnType("integer").HasColumnName("entry_type");
                     b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone").HasColumnName("occurred_at_utc");
                     b.Property<int>("WalletVersionAfter").HasColumnType("integer").HasColumnName("wallet_version_after");
                     b.HasKey("Id").HasName("pk_wallet_ledger_entries");
                     b.HasIndex("CashReceiptId").IsUnique().HasDatabaseName("ux_wallet_ledger_cash_receipt");
+                    b.HasIndex("SessionId").HasDatabaseName("ix_wallet_ledger_session_id");
+                    b.HasIndex("SessionId", "EntryType").IsUnique().HasDatabaseName("ux_wallet_ledger_session_entry_type").HasFilter("session_id IS NOT NULL");
                     b.HasIndex("CustomerId", "OccurredAtUtc").HasDatabaseName("ix_wallet_ledger_customer_occurred_at");
                     b.ToTable("wallet_ledger_entries", null, t =>
                         {
                             t.HasCheckConstraint("ck_wallet_ledger_amount_positive", "amount_toman > 0");
-                            t.HasCheckConstraint("ck_wallet_ledger_balance_after_covers_credit", "balance_after_toman >= amount_toman");
-                            t.HasCheckConstraint("ck_wallet_ledger_entry_type", "entry_type = 1");
+                            t.HasCheckConstraint("ck_wallet_ledger_balance_nonnegative", "balance_after_toman >= 0");
+                            t.HasCheckConstraint("ck_wallet_ledger_reserved_nonnegative", "reserved_balance_after_toman >= 0");
+                            t.HasCheckConstraint("ck_wallet_ledger_entry_shape", "((entry_type = 1 AND cash_receipt_id IS NOT NULL AND session_id IS NULL AND balance_after_toman >= amount_toman) OR (entry_type BETWEEN 2 AND 4 AND cash_receipt_id IS NULL AND session_id IS NOT NULL))");
+                            t.HasCheckConstraint("ck_wallet_ledger_actor_type", "actor_type IN ('Operator', 'Customer', 'System')");
+                            t.HasCheckConstraint("ck_wallet_ledger_entry_type", "entry_type BETWEEN 1 AND 4");
                             t.HasCheckConstraint("ck_wallet_ledger_wallet_version_positive", "wallet_version_after > 0");
                         });
                 });
@@ -915,7 +932,7 @@ namespace GameNet.Server.Persistence.Migrations
             modelBuilder.Entity("GameNet.Server.Modules.Wallet.Domain.WalletLedgerEntry", b =>
                 {
                     b.HasOne("GameNet.Server.Modules.Billing.Domain.CashReceipt", null).WithMany()
-                        .HasForeignKey("CashReceiptId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasForeignKey("CashReceiptId").OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_wallet_ledger_cash_receipts_cash_receipt_id");
                     b.HasOne("GameNet.Server.Modules.Customers.Domain.Customer", null).WithMany()
                         .HasForeignKey("CustomerId").OnDelete(DeleteBehavior.Restrict).IsRequired()
