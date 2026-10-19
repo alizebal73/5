@@ -105,6 +105,11 @@
   <system:String x:Key="Customer.Activate">Activate</system:String>
   <system:String x:Key="Customer.Deactivate">Deactivate</system:String>
   <system:String x:Key="Customer.Block">Block</system:String>
+  <system:String x:Key="Customer.CredentialsTitle">Customer client login credentials</system:String>
+  <system:String x:Key="Customer.LoginUsername">Login username (separate from Customer ID)</system:String>
+  <system:String x:Key="Customer.LoginPassword">New password</system:String>
+  <system:String x:Key="Customer.CredentialsHint">Use this username and password on the PC client's lock screen. The password is only sent to the Server for hashing; it is not saved in the desktop profile.</system:String>
+  <system:String x:Key="Customer.SaveCredentials">Save login credentials</system:String>
   <system:String x:Key="Wallet.TopUpTitle">Wallet top-up</system:String>
   <system:String x:Key="Wallet.CreditAmount">Amount to add to Wallet (Toman)</system:String>
   <system:String x:Key="Wallet.CashReceived">Physical cash received (Toman)</system:String>

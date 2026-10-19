@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Customers;
 using GameNet.Desktop.Features.Wallet;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Security;
@@ -39,6 +40,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
+        CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
         CreateTariffCommand = new AsyncUiAction(CreateTariffAsync, () => !IsBusy && CanManageTariffs &&
@@ -86,6 +88,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
     public ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; } = [];
 
+    public CustomerCredentialsViewModel CustomerCredentials { get; }
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
     public ICommand StartSessionCommand { get; }

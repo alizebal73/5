@@ -70,6 +70,7 @@ public sealed partial class SessionWorkflowViewModel
             OnPropertyChanged(nameof(CustomerStatusSummaryText));
             OnPropertyChanged(nameof(IsNewCustomer));
             WalletTopUp.SelectedCustomer = value;
+            CustomerCredentials.SelectedCustomer = value;
             RaiseCustomerCommands();
         }
     }
@@ -292,6 +293,12 @@ public sealed partial class SessionWorkflowViewModel
         RaiseCustomerCommands();
     }
 
+    private async Task RefreshManagedCustomerAfterCredentialsAsync(Guid customerId)
+    {
+        await RefreshCustomersAsync();
+        SelectedManagedCustomer = Customers.FirstOrDefault(x => x.Id == customerId);
+    }
+
     private (Guid? CustomerId, string? CustomerCode, string Fingerprint) BuildSessionStartContext(Guid stationId, Guid tariffId)
     {
         var customerId = SelectedCustomer?.Id;
@@ -308,6 +315,7 @@ public sealed partial class SessionWorkflowViewModel
     {
         OnPropertyChanged(nameof(CanReadCustomers));
         OnPropertyChanged(nameof(CanWriteCustomers));
+        CustomerCredentials.NotifyPermissionsChanged();
         if (!CanReadCustomers)
         {
             customerRefreshGeneration++;

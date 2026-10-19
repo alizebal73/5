@@ -105,6 +105,11 @@
   <system:String x:Key="Customer.Activate">فعال‌سازی</system:String>
   <system:String x:Key="Customer.Deactivate">غیرفعال‌سازی</system:String>
   <system:String x:Key="Customer.Block">مسدودسازی</system:String>
+  <system:String x:Key="Customer.CredentialsTitle">مشخصات ورود مشتری به کلاینت</system:String>
+  <system:String x:Key="Customer.LoginUsername">نام کاربری ورود (جدا از شناسهٔ مشتری)</system:String>
+  <system:String x:Key="Customer.LoginPassword">رمز عبور جدید</system:String>
+  <system:String x:Key="Customer.CredentialsHint">مشتری همین نام کاربری و رمز را در صفحهٔ قفل کلاینت وارد می‌کند. رمز فقط برای هش‌شدن به سرور ارسال می‌شود و در برنامهٔ اپراتور ذخیره نمی‌شود.</system:String>
+  <system:String x:Key="Customer.SaveCredentials">ذخیرهٔ مشخصات ورود</system:String>
   <system:String x:Key="Wallet.TopUpTitle">شارژ کیف پول</system:String>
   <system:String x:Key="Wallet.CreditAmount">مبلغی که به کیف پول اضافه می‌شود (تومان)</system:String>
   <system:String x:Key="Wallet.CashReceived">وجه نقدی که واقعاً دریافت شد (تومان)</system:String>

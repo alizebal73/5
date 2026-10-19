@@ -134,6 +134,26 @@
                   <Button Content="{DynamicResource Customer.Deactivate}" Command="{Binding DeactivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
                   <Button Content="{DynamicResource Customer.Block}" Command="{Binding BlockCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
                 </WrapPanel>
+                <Border Margin="0,8,0,8" Padding="10" Background="#F8FAFC" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6"
+                        Visibility="{Binding CustomerCredentials.CanManageCredentials, Converter={StaticResource BooleanToVisibilityConverter}}">
+                  <StackPanel>
+                    <TextBlock Text="{DynamicResource Customer.CredentialsTitle}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <TextBlock Text="{DynamicResource Customer.LoginUsername}" FontSize="12"/>
+                    <TextBox Margin="0,3,0,7" Padding="5"
+                             Text="{Binding CustomerCredentials.Username, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="{DynamicResource Customer.LoginPassword}" FontSize="12"/>
+                    <PasswordBox x:Name="CustomerLoginPasswordInput" Margin="0,3,0,7" Padding="5"
+                                 PasswordChanged="CustomerLoginPasswordInput_OnPasswordChanged"/>
+                    <TextBlock Text="{DynamicResource Customer.CredentialsHint}" FontSize="11" Foreground="#667085"
+                               TextWrapping="Wrap" Margin="0,0,0,7"/>
+                    <TextBlock Text="{Binding CustomerCredentials.ErrorMessage}" Foreground="#B42318"
+                               TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding CustomerCredentials.StatusMessage}" Foreground="#475467"
+                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <Button Content="{DynamicResource Customer.SaveCredentials}"
+                            Command="{Binding CustomerCredentials.SetCredentialsCommand}" Padding="7,5"/>
+                  </StackPanel>
+                </Border>
                 <wallet:WalletTopUpView DataContext="{Binding WalletTopUp}"/>
               </StackPanel>
             </Expander>
