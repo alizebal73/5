@@ -63,6 +63,10 @@ public sealed class WalletService(
             command.ExpectedCustomerVersion
         };
 
+        // The Customer row lock serializes every Wallet mutation for this customer. Use
+        // READ COMMITTED for this operation so statements after waiting on that lock see
+        // the wallet row committed by the request that released it. A transaction-wide
+        // SERIALIZABLE snapshot can predate that first account insert and miss the row.
         return mutationPipeline.ExecuteAsync(
             scope, "wallet.cash-top-up", command.IdempotencyKey,
             requestFingerprint.Compute(payload), 200, Lease, Retention,
@@ -135,7 +139,7 @@ public sealed class WalletService(
 
                 return Result<WalletCashTopUpResponse>.Success(response);
             },
-            cancellationToken);
+            cancellationToken, System.Data.IsolationLevel.ReadCommitted);
     }
 
     private static Result<T> Fail<T>(string code, string message) => Result<T>.Failure(new Error(code, message));

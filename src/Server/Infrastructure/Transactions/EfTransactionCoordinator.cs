@@ -7,11 +7,14 @@ namespace GameNet.Server.Infrastructure.Transactions;
 
 public sealed class EfTransactionCoordinator(GameNetDbContext db) : ITransactionCoordinator
 {
-    public async Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken = default)
+    public async Task<T> ExecuteAsync<T>(
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken cancellationToken = default,
+        System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.Serializable)
     {
         for (var attempt = 1; attempt <= 3; attempt++)
         {
-            await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+            await using var tx = await db.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
             try
             {
                 var result = await action(cancellationToken);

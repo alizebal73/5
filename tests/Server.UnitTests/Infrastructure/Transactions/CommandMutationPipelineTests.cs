@@ -145,16 +145,37 @@ public sealed class CommandMutationPipelineTests
         Assert.Equal(0, transactions.RollbackCount);
     }
 
+    [Fact]
+    public async Task Explicit_isolation_level_is_passed_to_the_transaction_boundary()
+    {
+        var transactions = new RecordingTransactionCoordinator();
+        var idempotency = new MemoryIdempotencyStore(() => transactions.IsActive);
+        var pipeline = new CommandMutationPipeline(transactions, idempotency);
+
+        var result = await pipeline.ExecuteAsync(
+            "test.scope", "test.create", "intent-isolation", "fingerprint-isolation", 200,
+            TimeSpan.FromSeconds(30), TimeSpan.FromDays(1),
+            _ => Task.FromResult(Result<string>.Success("created")),
+            CancellationToken.None,
+            System.Data.IsolationLevel.ReadCommitted);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(System.Data.IsolationLevel.ReadCommitted, transactions.LastIsolationLevel);
+    }
+
     private sealed class RecordingTransactionCoordinator : ITransactionCoordinator
     {
         public bool IsActive { get; private set; }
         public int CommitCount { get; private set; }
         public int RollbackCount { get; private set; }
+        public System.Data.IsolationLevel LastIsolationLevel { get; private set; } = System.Data.IsolationLevel.Serializable;
 
         public async Task<T> ExecuteAsync<T>(
             Func<CancellationToken, Task<T>> action,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.Serializable)
         {
+            LastIsolationLevel = isolationLevel;
             Assert.False(IsActive);
             IsActive = true;
             try
