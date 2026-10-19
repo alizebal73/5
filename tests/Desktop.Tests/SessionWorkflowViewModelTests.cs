@@ -1148,14 +1148,6 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
-        public TaskCompletionSource<bool> CustomerCredentialsRequestReceived { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource<SetCustomerCredentialsResponse> CustomerCredentialsCompletion { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Guid? LastCredentialsCustomerId { get; private set; }
-        public SetCustomerCredentialsRequest? LastCredentialsRequest { get; private set; }
-        public string? LastCredentialsIdempotencyKey { get; private set; }
-
     [Fact]
     public async Task Customer_credentials_form_sends_separate_username_and_never_retains_password_after_success()
     {
@@ -1224,6 +1216,14 @@ public sealed class SessionWorkflowViewModelTests
         IReadOnlyList<StationResponse> stations,
         IReadOnlyList<TariffResponse> tariffs) : IGameNetServerClient
     {
+        public TaskCompletionSource<bool> CustomerCredentialsRequestReceived { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<SetCustomerCredentialsResponse> CustomerCredentialsCompletion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Guid? LastCredentialsCustomerId { get; private set; }
+        public SetCustomerCredentialsRequest? LastCredentialsRequest { get; private set; }
+        public string? LastCredentialsIdempotencyKey { get; private set; }
+
         public TaskCompletionSource<bool> StartRequestReceived { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
