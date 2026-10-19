@@ -12,6 +12,8 @@ using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Modules.Customers.Infrastructure;
 using GameNet.Server.Modules.Stations.Infrastructure;
 using GameNet.Server.Modules.Tariffs.Infrastructure;
+using GameNet.Server.Modules.Wallet.Application;
+using GameNet.Server.Modules.Wallet.Domain;
 using GameNet.Server.Modules.Wallet.Infrastructure;
 using GameNet.Server.Modules.Sessions.Infrastructure;
 using GameNet.Server.Modules.Sessions.Application;
