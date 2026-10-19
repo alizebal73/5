@@ -63,6 +63,8 @@
   <system:String x:Key="Session.CustomerWalkIn">This slice creates a Walk-in customer and does not collect personal details.</system:String>
   <system:String x:Key="Session.WalkInOnlyHint">Start without an ID is for Walk-in customers. For a registered customer, right-click the PC and choose Customer login.</system:String>
   <system:String x:Key="Session.ActiveTitle">Active Sessions</system:String>
+  <system:String x:Key="Session.Pause">Pause billing time</system:String>
+  <system:String x:Key="Session.Resume">Resume play</system:String>
   <system:String x:Key="Session.End">End and issue invoice</system:String>
   <system:String x:Key="Tariff.CreateTitle">Configure a PC tariff</system:String>
   <system:String x:Key="Tariff.Code">Tariff code</system:String>
