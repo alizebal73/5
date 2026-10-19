@@ -85,7 +85,8 @@ public sealed class CustomerEntryPipeWorker(
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
-            PipeAccessRights.ReadWrite, AccessControlType.Allow));
+            PipeAccessRights.ReadData | PipeAccessRights.WriteData | PipeAccessRights.Synchronize,
+            AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(
             new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
             PipeAccessRights.FullControl, AccessControlType.Allow));
@@ -97,11 +98,11 @@ public sealed class CustomerEntryPipeWorker(
             PipeName,
             PipeDirection.InOut,
             maxNumberOfServerInstances: 1,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous,
+            transmissionMode: PipeTransmissionMode.Byte,
+            options: PipeOptions.Asynchronous,
             inBufferSize: 4096,
             outBufferSize: 4096,
-            security);
+            pipeSecurity: security);
     }
 
     private static async Task<byte[]> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)
