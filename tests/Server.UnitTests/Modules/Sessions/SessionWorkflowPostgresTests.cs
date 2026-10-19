@@ -958,6 +958,17 @@ public sealed class SessionWorkflowPostgresTests
         string idempotencyPrefix)
     {
         await using var db = CreateContext(connectionString);
+
+        // Wallet ledger rows are intentionally append-only at the database layer. When this
+        // test has emitted immutable wallet movements, keep its uniquely identified financial
+        // aggregate (Session, Customer, Wallet, Invoice and Audit) intact in the disposable
+        // per-run database instead of trying to DELETE the evidence during fixture cleanup.
+        // The Foundation job discards this database after the suite; other tests use unique IDs.
+        if (customerId.HasValue &&
+            await db.WalletLedgerEntries.AsNoTracking()
+                .AnyAsync(x => x.CustomerId == customerId.Value))
+            return;
+
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM audit_entries WHERE correlation_id = {correlation}");
         await db.Database.ExecuteSqlInterpolatedAsync(
