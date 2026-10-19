@@ -1,3 +1,4 @@
+using System.Globalization;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Sessions;
 
@@ -14,6 +15,10 @@ public sealed record ActiveSessionListItem(
 {
     public Guid Id => Session.Id;
     public string TariffNameSnapshot => Session.TariffNameSnapshot;
+    public string StatusDisplayText =>
+        Session.Status == SessionStatusContract.Paused
+            ? (CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? "متوقف" : "Paused")
+            : (CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? "در حال اجرا" : "Running");
 }
 
 /// <summary>
