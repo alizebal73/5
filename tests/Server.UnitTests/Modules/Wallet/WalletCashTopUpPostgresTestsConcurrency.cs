@@ -21,6 +21,7 @@ namespace GameNet.Server.UnitTests.Modules.Wallet;
 
 // The class name intentionally matches the WalletCashTopUpPostgresTests filter
 // used by scripts/verify-postgresql.ps1, so this regression runs in Foundation CI.
+[Collection("WalletPostgresSerialCollection")]
 public sealed class WalletCashTopUpPostgresTestsConcurrency
 {
     [Fact]
