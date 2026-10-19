@@ -49,6 +49,15 @@ public sealed class DesktopBindingAndPasswordContractTests
                     var bindingBody = match.Groups.Count > 1 && match.Groups[1].Success
                         ? match.Groups[1].Value
                         : string.Empty;
+
+                    // Bindings with an explicit source (RelativeSource/ElementName/Source) resolve
+                    // against that WPF source, not the view's inherited data context. Their
+                    // concrete source contract is checked separately below.
+                    if (bindingBody.Contains("RelativeSource=", StringComparison.OrdinalIgnoreCase) ||
+                        bindingBody.Contains("ElementName=", StringComparison.OrdinalIgnoreCase) ||
+                        bindingBody.Contains("Source=", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
                     var path = bindingBody.Split(',')[0].Trim();
                     if (path.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
                         path = path["Path=".Length..].Trim();
@@ -76,6 +85,21 @@ public sealed class DesktopBindingAndPasswordContractTests
                 $"{Path.GetFileName(viewPath)} contains invalid WPF binding paths:" + Environment.NewLine +
                 string.Join(Environment.NewLine, failures));
         }
+    }
+
+    [Fact]
+    public void Station_context_menu_bindings_use_their_explicit_WPF_sources()
+    {
+        var root = FindRepositoryRoot();
+        var view = XDocument.Load(Path.Combine(root, "src", "Desktop", "Features", "Stations", "StationBoardView.xaml"));
+        var serialized = view.ToString();
+
+        // The context-menu is outside the normal visual/logical tree; these commands intentionally
+        // resolve through ContextMenu.PlacementTarget instead of the inherited LoginViewModel.
+        Assert.Contains("RelativeSource AncestorType={x:Type UserControl}", serialized, StringComparison.Ordinal);
+        Assert.Contains("PlacementTarget.Tag.SessionWorkflow.StartPrepaidSessionFromStationCommand", serialized, StringComparison.Ordinal);
+        Assert.Contains("RelativeSource AncestorType={x:Type ContextMenu}", serialized, StringComparison.Ordinal);
+        Assert.Contains("PlacementTarget.DataContext.Station", serialized, StringComparison.Ordinal);
     }
 
     [Fact]
