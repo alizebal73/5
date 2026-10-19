@@ -18,7 +18,8 @@ public sealed record CreatePendingInvoiceCommand(
     DateTimeOffset IssuedAtUtc,
     string CorrelationId,
     string Source,
-    string IdempotencyKey);
+    string IdempotencyKey,
+    bool IssuedBySystem = false);
 
 /// <summary>
 /// Called while the Sessions use case's mutation transaction is active. The Billing
@@ -33,7 +34,7 @@ public interface IBillingInvoiceWriter
     Task<Result<InvoicePreviewResponse>> MarkPrepaidPaidAsync(
         Guid invoiceId,
         int sessionVersion,
-        Guid paidByOperatorId,
+        Guid paidByCustomerId,
         DateTimeOffset paidAtUtc,
         string correlationId,
         string source,
