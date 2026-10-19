@@ -16,7 +16,7 @@ public sealed class TariffSessionAccess(GameNetDbContext db) : ITariffSessionAcc
         CancellationToken cancellationToken)
     {
         var tariff = await db.Tariffs.AsNoTracking()
-            .Where(x => x.IsActive && x.IsDefault && x.StationType == (int)stationType)
+            .Where(x => x.IsActive && x.IsDefault && x.StationType == stationType)
             .OrderBy(x => x.Code)
             .FirstOrDefaultAsync(cancellationToken);
         return tariff is null

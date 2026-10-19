@@ -15,7 +15,7 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
 {
     private readonly CustomerEntryPipeClient gateway;
     private readonly DispatcherTimer countdownTimer;
-    private readonly AsyncCommand loginCommand;
+    private readonly AsyncLoginAction loginCommand;
     private string username = string.Empty;
     private string password = string.Empty;
     private string errorMessage = string.Empty;
@@ -30,7 +30,7 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
     public CustomerClientViewModel(CustomerEntryPipeClient gateway)
     {
         this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
-        loginCommand = new AsyncCommand(LoginAsync, () => CanSubmit);
+        loginCommand = new AsyncLoginAction(LoginAsync, () => CanSubmit);
         LoginCommand = loginCommand;
         countdownTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -165,7 +165,7 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
         countdownTimer.Tick -= CountdownTimerOnTick;
     }
 
-    private sealed class AsyncCommand(Func<Task> execute, Func<bool> canExecute) : ICommand
+    private sealed class AsyncLoginAction(Func<Task> execute, Func<bool> canExecute) : ICommand
     {
         public event EventHandler? CanExecuteChanged;
         public bool CanExecute(object? parameter) => canExecute();
