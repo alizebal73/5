@@ -16,6 +16,7 @@ using Xunit;
 
 namespace GameNet.Server.UnitTests.Modules.Wallet;
 
+[Collection("WalletPostgresSerialCollection")]
 public sealed class WalletCashTopUpPostgresTests
 {
     [Fact]
