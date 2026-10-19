@@ -21,8 +21,8 @@ public sealed class PrepaidSessionExpiryWorker(
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
-                var sessions = scope.ServiceProvider.GetRequiredService<ISessionService>();
-                var expired = await sessions.ExpireDuePrepaidSessionsAsync(stoppingToken);
+                var expiry = scope.ServiceProvider.GetRequiredService<IPrepaidSessionExpiryService>();
+                var expired = await expiry.ExpireDueAsync(stoppingToken);
                 if (expired > 0)
                     logger.LogInformation("Expired {Count} prepaid GameNet Session(s).", expired);
             }

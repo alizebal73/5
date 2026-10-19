@@ -93,6 +93,7 @@ public static class ServiceRegistration
         services.AddScoped<ICashReceiptWriter>(provider => provider.GetRequiredService<BillingService>());
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletSessionFunding, WalletSessionFunding>();
+        services.AddScoped<IPrepaidSessionExpiryService, PrepaidSessionExpiryService>();
         services.AddHostedService<PrepaidSessionExpiryWorker>();
         services.AddScoped<ITariffService, GameNet.Server.Modules.Tariffs.Infrastructure.TariffService>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
