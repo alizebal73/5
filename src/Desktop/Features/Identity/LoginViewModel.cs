@@ -27,10 +27,6 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     public LoginViewModel(IGameNetServerClient serverClient)
     {
         this.serverClient = serverClient;
-        LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
-        LogoutCommand = new AsyncUiAction(LogoutAsync, () =>
-            !IsBusy && IsAuthenticated && !SessionWorkflow.WalletTopUp.IsBusy);
-        ChangePasswordCommand = new AsyncUiAction(ChangePasswordAsync, () => !IsBusy && IsAuthenticated);
         StationBoard = new StationBoardViewModel(serverClient, HasPermission);
         SessionWorkflow = new SessionWorkflowViewModel(serverClient, HasPermission);
         SessionWorkflow.WalletTopUp.PropertyChanged += (_, args) =>
@@ -38,6 +34,10 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             if (args.PropertyName == nameof(IWalletTopUpPort.IsBusy))
                 RaiseCommands();
         };
+        LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
+        LogoutCommand = new AsyncUiAction(LogoutAsync, () =>
+            !IsBusy && IsAuthenticated && !SessionWorkflow.WalletTopUp.IsBusy);
+        ChangePasswordCommand = new AsyncUiAction(ChangePasswordAsync, () => !IsBusy && IsAuthenticated);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
