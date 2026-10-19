@@ -52,7 +52,7 @@ public sealed class SessionService(
                 command.StationId, customerId, command.IdempotencyKey, command.Actor), cancellationToken);
 
         var payload = new { command.StationId, command.TariffId, command.CustomerId, Prepaid = false };
-        var scope = $"sessions.start:{command.Actor.OperatorId:D}";
+        var scope = $"sessions.start:{command.Actor.ActorType}:{command.Actor.ActorId:D}";
         return StartCoreAsync(command, scope, payload, requirePrepaidWallet: false, cancellationToken);
     }
 
@@ -70,7 +70,7 @@ public sealed class SessionService(
         var internalCommand = new StartSessionCommand(
             command.StationId, Guid.Empty, command.CustomerId, command.IdempotencyKey, command.Actor);
         var payload = new { command.StationId, command.CustomerId, Prepaid = true };
-        var scope = $"sessions.prepaid-start:{command.Actor.OperatorId:D}";
+        var scope = $"sessions.prepaid-start:{command.Actor.ActorType}:{command.Actor.ActorId:D}";
         return StartCoreAsync(internalCommand, scope, payload, requirePrepaidWallet: true, cancellationToken);
     }
 
@@ -153,7 +153,7 @@ public sealed class SessionService(
                             ? command.Actor.ActorType
                             : "Operator";
                         var reserveResult = await walletFunding.ReserveForSessionAsync(
-                            customer.Id, sessionId, command.Actor.OperatorId, reservationActorType,
+                            customer.Id, sessionId, command.Actor.ActorId, reservationActorType,
                             command.Actor.CorrelationId, command.Actor.Source, command.IdempotencyKey, token);
                         if (!reserveResult.IsSuccess)
                             return Fail<SessionResponse>(reserveResult.Error.Code, reserveResult.Error.Message);
@@ -182,12 +182,13 @@ public sealed class SessionService(
                         tariff.Code,
                         tariff.Name,
                         tariff.HourlyRateToman,
-                        command.Actor.OperatorId,
+                        command.Actor.ActorType == "Customer" ? Guid.Empty : command.Actor.OperatorId,
                         startSnapshot.UtcNow,
                         startSnapshot.Timestamp,
                         startSnapshot.TimestampFrequency,
                         startSnapshot.SystemUptimeMilliseconds,
-                        startSnapshot.BootIdentifier);
+                        startSnapshot.BootIdentifier,
+                        command.Actor.ActorType == "Customer" ? command.Actor.CustomerId : null);
                     await db.Sessions.AddAsync(session, token);
 
                     var response = ToResponse(session);
@@ -199,8 +200,8 @@ public sealed class SessionService(
                         };
                     audit.Append(new AuditRecord(
                         clock.UtcNow,
-                        requirePrepaidWallet && command.Actor.ActorType == "Customer" ? "Customer" : "Operator",
-                        command.Actor.OperatorId.ToString("D"),
+                        command.Actor.ActorType,
+                        command.Actor.ActorId.ToString("D"),
                         "sessions.start",
                         "Session",
                         session.Id.ToString("D"),
@@ -230,7 +231,7 @@ public sealed class SessionService(
         if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
             return Fail<InvoicePreviewResponse>("sessions.forbidden", "Not allowed to end sessions.");
 
-        var scope = $"sessions.end:{command.Actor.OperatorId:D}";
+        var scope = $"sessions.end:{command.Actor.ActorType}:{command.Actor.ActorId:D}";
         try
         {
             return await mutationPipeline.ExecuteAsync(
@@ -292,7 +293,9 @@ public sealed class SessionService(
                     var before = ToResponse(session);
                     try
                     {
-                        session.End(command.Actor.OperatorId, endedAt, elapsedTicks);
+                        session.End(
+                            command.Actor.OperatorId, endedAt, elapsedTicks,
+                            endedBySystem: command.Actor.ActorType == "System");
                     }
                     catch (InvalidOperationException)
                     {
@@ -305,8 +308,8 @@ public sealed class SessionService(
 
                     audit.Append(new AuditRecord(
                         clock.UtcNow,
-                        "Operator",
-                        command.Actor.OperatorId.ToString("D"),
+                        command.Actor.ActorType,
+                        command.Actor.ActorId.ToString("D"),
                         "sessions.end",
                         "Session",
                         session.Id.ToString("D"),
@@ -330,11 +333,12 @@ public sealed class SessionService(
                             session.TariffHourlyRateTomanSnapshot,
                             session.ElapsedTicks!.Value,
                             session.Version,
-                            command.Actor.OperatorId,
+                            command.Actor.ActorType == "System" ? Guid.Empty : command.Actor.OperatorId,
                             endedAt,
                             command.Actor.CorrelationId,
                             command.Actor.Source,
-                            command.IdempotencyKey),
+                            command.IdempotencyKey,
+                            command.Actor.ActorType == "System"),
                         token);
                     if (!invoiceResult.IsSuccess)
                         return Fail<InvoicePreviewResponse>(invoiceResult.Error.Code, invoiceResult.Error.Message);
@@ -448,7 +452,9 @@ public sealed class SessionService(
                     var before = ToResponse(session);
                     try
                     {
-                        session.End(command.Actor.OperatorId, reconciledAtUtc, elapsedTicks);
+                        session.End(
+                            command.Actor.OperatorId, reconciledAtUtc, elapsedTicks,
+                            endedBySystem: command.Actor.ActorType == "System");
                     }
                     catch (InvalidOperationException)
                     {
@@ -493,11 +499,12 @@ public sealed class SessionService(
                             session.TariffHourlyRateTomanSnapshot,
                             session.ElapsedTicks!.Value,
                             session.Version,
-                            command.Actor.OperatorId,
+                            command.Actor.ActorType == "System" ? Guid.Empty : command.Actor.OperatorId,
                             reconciledAtUtc,
                             command.Actor.CorrelationId,
                             command.Actor.Source,
-                            command.IdempotencyKey),
+                            command.IdempotencyKey,
+                            command.Actor.ActorType == "System"),
                         token);
                     if (!invoiceResult.IsSuccess)
                         return Fail<InvoicePreviewResponse>(invoiceResult.Error.Code, invoiceResult.Error.Message);
@@ -529,10 +536,8 @@ public sealed class SessionService(
             return Fail<InvoicePreviewResponse>("sessions.prepaid_budget_exceeded",
                 "The Session charge exceeds its valid prepaid reservation; Session settlement was rolled back.");
 
-        var ledgerActorType = string.Equals(actor.Source, "PrepaidExpiryWorker", StringComparison.Ordinal)
-            ? "System"
-            : "Operator";
-        var ledgerActorId = ledgerActorType == "System" ? Guid.Empty : actor.OperatorId;
+        var ledgerActorType = actor.ActorType;
+        var ledgerActorId = actor.ActorId;
         var walletResult = await walletFunding.SettleSessionAsync(
             session.CustomerId, session.Id, invoice.AmountToman, ledgerActorId, ledgerActorType,
             actor.CorrelationId, actor.Source, idempotencyKey, cancellationToken);
@@ -545,7 +550,7 @@ public sealed class SessionService(
         }
 
         var invoicePaid = await invoices.MarkPrepaidPaidAsync(
-            invoice.InvoiceId, session.Version, actor.OperatorId, settledAtUtc,
+            invoice.InvoiceId, session.Version, session.CustomerId, settledAtUtc,
             actor.CorrelationId, actor.Source, idempotencyKey, cancellationToken);
         if (!invoicePaid.IsSuccess)
             return Fail<InvoicePreviewResponse>(invoicePaid.Error.Code, invoicePaid.Error.Message);
@@ -553,7 +558,7 @@ public sealed class SessionService(
         var beforePaid = ToResponse(session);
         try
         {
-            session.MarkPaid(actor.OperatorId, settledAtUtc);
+            session.MarkPaid(Guid.Empty, settledAtUtc, session.CustomerId);
         }
         catch (InvalidOperationException)
         {
@@ -623,7 +628,10 @@ public sealed class SessionService(
         new(session.Id, session.StationId, session.CustomerId, session.TariffId,
             session.TariffCodeSnapshot, session.TariffNameSnapshot, session.TariffHourlyRateTomanSnapshot,
             session.StartedByOperatorId, session.StartedAtUtc, session.EndedByOperatorId, session.EndedAtUtc,
-            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version);
+            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version,
+            StartedByCustomerId: session.StartedByCustomerId,
+            EndedBySystem: session.EndedBySystem,
+            PaidByCustomerId: session.PaidByCustomerId);
 
     private static Result<T> Fail<T>(string code, string message) =>
         Result<T>.Failure(new Error(code, message));
