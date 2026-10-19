@@ -17,8 +17,6 @@ public sealed record CustomerClientEntryResponse(
     bool Succeeded,
     Guid? CustomerId,
     string? DisplayName,
-    string? CustomerAccessToken,
-    DateTimeOffset? CustomerTokenExpiresAtUtc,
     Guid? SessionId,
     long? PrepaidReservedAmountToman,
     long? PrepaidBudgetTicks,

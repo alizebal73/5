@@ -130,5 +130,5 @@ public sealed class CustomerEntryPipeWorker(
     }
 
     private static CustomerClientEntryResponse Rejected(string code, string message) =>
-        new(false, null, null, null, null, null, null, null, code, message);
+        new(false, null, null, null, null, null, code, message);
 }

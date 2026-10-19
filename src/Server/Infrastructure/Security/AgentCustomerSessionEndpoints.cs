@@ -88,12 +88,22 @@ public static class AgentCustomerSessionEndpoints
                 return Failure(started.Error.Code, message, status, context);
             }
 
+            // This Agent-mediated Client flow needs only the authenticated Session result.
+            // Revoke the transient credential token so it is not left usable after entry.
+            try
+            {
+                await customerAuthentication.LogoutAsync(
+                    login.Value.CustomerId, jti, correlationId, CancellationToken.None);
+            }
+            catch
+            {
+                // The Session is valid even if transient-token cleanup needs later reconciliation.
+            }
+
             var response = new CustomerClientEntryResponse(
                 true,
                 login.Value.CustomerId,
                 login.Value.DisplayName,
-                login.Value.AccessToken,
-                login.Value.ExpiresAtUtc,
                 started.Value.Id,
                 started.Value.PrepaidReservedAmountToman,
                 started.Value.PrepaidBudgetTicks,

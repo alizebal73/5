@@ -4,8 +4,6 @@ using System.Text.Json;
 using GameNet.Agent.Identity;
 using GameNet.Shared.Contracts.V1.Api;
 using GameNet.Shared.Contracts.V1.Customers;
-using GameNet.Shared.Contracts.V1.Protocol;
-using GameNet.Agent.Identity;
 using Microsoft.Extensions.Options;
 
 namespace GameNet.Agent.Transport;
@@ -58,12 +56,12 @@ public sealed class AgentCustomerSessionGateway(
         var envelope = await response.Content.ReadFromJsonAsync<ApiEnvelope<CustomerClientEntryResponse>>(
             JsonOptions, cancellationToken);
         if (envelope?.Data is not { Succeeded: true, CustomerId: not null, SessionId: not null,
-            CustomerAccessToken: not null, PrepaidReservedAmountToman: > 0, PrepaidBudgetTicks: > 0 } data)
+            PrepaidReservedAmountToman: > 0, PrepaidBudgetTicks: > 0 } data)
             return Rejected("agent.server_response_invalid", "The Server returned an incomplete prepaid Session result.");
 
         return data;
     }
 
     private static CustomerClientEntryResponse Rejected(string code, string message) =>
-        new(false, null, null, null, null, null, null, null, code, message);
+        new(false, null, null, null, null, null, code, message);
 }
