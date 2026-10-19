@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO;
 using System.IO.Pipes;
 using System.Text.Json;
 using GameNet.Shared.Contracts.V1.Customers;
