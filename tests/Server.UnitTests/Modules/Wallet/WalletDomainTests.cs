@@ -82,7 +82,8 @@ public sealed class WalletDomainTests
 
         var settlement = account.SettlePrepaidReservation(105_000, 33_000, now);
 
-        Assert.Equal(33_000, settlement.ChargeBalanceAfterToman + 0);
+        Assert.Equal(0, settlement.ChargeBalanceAfterToman);
+        Assert.Equal(72_000, settlement.ChargeReservedBalanceAfterToman);
         Assert.Equal(72_000, settlement.ReleaseAmountToman);
         Assert.Equal(72_000, settlement.FinalBalanceToman);
         Assert.Equal(0, settlement.FinalReservedBalanceToman);
