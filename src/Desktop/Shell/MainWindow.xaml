@@ -76,7 +76,7 @@
     <StackPanel>
       <sessions:SessionWorkflowView DataContext="{Binding SessionWorkflow}" Margin="0,0,0,12"/>
 
-      <Expander Header="{DynamicResource Station.Title}" IsExpanded="False" Margin="0,0,0,12">
+      <Expander Header="{DynamicResource Station.Title}" IsExpanded="True" Margin="0,0,0,12">
         <Border Padding="12" Background="White" BorderBrush="#DCE2EA"
                 BorderThickness="1" CornerRadius="8">
           <StackPanel>
