@@ -21,7 +21,7 @@ public sealed class BillingInvoiceWriter(
     public async Task<Result<InvoicePreviewResponse>> MarkPrepaidPaidAsync(
         Guid invoiceId,
         int sessionVersion,
-        Guid paidByOperatorId,
+        Guid paidByCustomerId,
         DateTimeOffset paidAtUtc,
         string correlationId,
         string source,
@@ -41,7 +41,7 @@ public sealed class BillingInvoiceWriter(
             return Result<InvoicePreviewResponse>.Failure(
                 new Error("billing.invoice_not_pending", "Prepaid invoice is not awaiting settlement."));
 
-        try { invoice.MarkPaid(paidByOperatorId, paidAtUtc); }
+        try { invoice.MarkPaid(Guid.Empty, paidAtUtc, paidByCustomerId); }
         catch (InvalidOperationException)
         {
             return Result<InvoicePreviewResponse>.Failure(
@@ -59,7 +59,7 @@ public sealed class BillingInvoiceWriter(
             invoice.TariffHourlyRateTomanSnapshot, invoice.ElapsedTicks, invoice.AmountToman,
             (InvoiceStatusContract)invoice.Status, invoice.IssuedAtUtc, invoice.PaidAtUtc);
         audit.Append(new AuditRecord(
-            clock.UtcNow, "Operator", paidByOperatorId.ToString("D"),
+            clock.UtcNow, "Customer", paidByCustomerId.ToString("D"),
             "billing.prepaid_invoice_paid", "Invoice", invoice.Id.ToString("D"), null,
             correlationId, source, "Succeeded", idempotencyKey,
             AfterJson: JsonSerializer.Serialize(response)));
@@ -103,7 +103,8 @@ public sealed class BillingInvoiceWriter(
                 charge.ElapsedTicks,
                 charge.AmountToman,
                 command.IssuedByOperatorId,
-                command.IssuedAtUtc);
+                command.IssuedAtUtc,
+                command.IssuedBySystem);
 
             await db.Invoices.AddAsync(invoice, cancellationToken);
             var response = new InvoicePreviewResponse(
@@ -124,7 +125,7 @@ public sealed class BillingInvoiceWriter(
 
             audit.Append(new AuditRecord(
                 clock.UtcNow,
-                "Operator",
+                command.IssuedBySystem ? "System" : "Operator",
                 command.IssuedByOperatorId.ToString("D"),
                 "billing.invoice_issued",
                 "Invoice",
