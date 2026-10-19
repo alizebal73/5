@@ -28,6 +28,36 @@ public sealed class InvoiceTests
     }
 
     [Fact]
+    public void Wallet_paid_invoice_records_customer_payer_not_operator()
+    {
+        var issuedAt = DateTimeOffset.Parse("2026-10-14T10:30:00Z");
+        var customerId = Guid.NewGuid();
+        var invoice = Invoice.CreateForSession(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), customerId, Guid.NewGuid(),
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks,
+            30_000L, Guid.NewGuid(), issuedAt);
+
+        invoice.MarkPaid(Guid.Empty, issuedAt.AddSeconds(5), customerId);
+
+        Assert.Equal(Guid.Empty, invoice.PaidByOperatorId);
+        Assert.Equal(customerId, invoice.PaidByCustomerId);
+        Assert.Equal(InvoiceStatus.Paid, invoice.Status);
+    }
+
+    [Fact]
+    public void Automatic_invoice_uses_system_issuer_without_impersonating_an_operator()
+    {
+        var issuedAt = DateTimeOffset.Parse("2026-10-14T10:30:00Z");
+        var invoice = Invoice.CreateForSession(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "PC-STANDARD", "PC Standard", 60_000L, TimeSpan.FromMinutes(30).Ticks,
+            30_000L, Guid.Empty, issuedAt, issuedBySystem: true);
+
+        Assert.True(invoice.IssuedBySystem);
+        Assert.Equal(Guid.Empty, invoice.IssuedByOperatorId);
+    }
+
+    [Fact]
     public void Invoice_rejects_non_positive_amount()
     {
         var issuedAt = DateTimeOffset.Parse("2026-10-14T10:30:00Z");
