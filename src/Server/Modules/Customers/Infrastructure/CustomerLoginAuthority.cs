@@ -17,7 +17,7 @@ public sealed class CustomerLoginAuthority(GameNetDbContext db, IGameClock clock
                 where login.Jti == jti && login.CustomerId == customerId &&
                       login.RevokedAtUtc == null && login.ExpiresAtUtc > now &&
                       customer.Kind == GameNet.Server.Modules.Customers.Domain.CustomerKind.Registered &&
-                      customer.IsActive && !customer.IsBlocked && customer.PasswordHash != null
+                      customer.IsActive && !customer.IsBlocked && customer.LoginUsername != null && customer.PasswordHash != null
                 select login.Jti).AnyAsync(cancellationToken);
     }
 }

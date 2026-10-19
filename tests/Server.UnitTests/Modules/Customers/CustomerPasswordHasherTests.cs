@@ -32,7 +32,7 @@ public sealed class CustomerPasswordHasherTests
     public void Failed_password_attempts_lock_customer_after_five_tries()
     {
         var customer = Customer.CreateRegistered(Guid.NewGuid(), "CUS-001", "Test Customer", DateTimeOffset.UtcNow);
-        customer.SetPasswordHash(new CustomerPasswordHasher().HashPassword("a valid customer password"));
+        customer.SetCredentials("player-001", new CustomerPasswordHasher().HashPassword("a valid customer password"));
         var now = new DateTimeOffset(2026, 10, 19, 10, 0, 0, TimeSpan.Zero);
         for (var i = 0; i < 4; i++) customer.RecordFailedPasswordAttempt(now);
         Assert.False(customer.IsPasswordLoginLocked(now));

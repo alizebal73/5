@@ -16,8 +16,8 @@ public static class CustomerAuthenticationEndpoints
     public static void MapCustomerAuthenticationEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var operatorGroup = endpoints.MapGroup("/api/v1/customers").RequireAuthorization("Operator");
-        operatorGroup.MapPost("/{customerId:guid}/password", async (
-            Guid customerId, SetCustomerPasswordRequest request, ICustomerAuthenticationService service,
+        operatorGroup.MapPost("/{customerId:guid}/credentials", async (
+            Guid customerId, SetCustomerCredentialsRequest request, ICustomerAuthenticationService service,
             HttpContext context, CancellationToken ct) =>
         {
             var idText = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub);
@@ -25,12 +25,12 @@ public static class CustomerAuthenticationEndpoints
                 return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
             var permissions = context.User.Claims.Where(x => string.Equals(x.Type, "permission", StringComparison.OrdinalIgnoreCase))
                 .Select(x => x.Value).ToHashSet(StringComparer.Ordinal);
-            var result = await service.SetPasswordAsync(new SetCustomerPasswordCommand(customerId, request.Password,
+            var result = await service.SetCredentialsAsync(new SetCustomerCredentialsCommand(customerId, request.Username, request.Password,
                 request.ExpectedVersion, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(),
                 new CustomerPasswordActor(operatorId, CorrelationIdMiddleware.GetCurrent(context), "Desktop", permissions)), ct);
             return result.IsSuccess
-                ? Results.Ok(new ApiEnvelope<SetCustomerPasswordResponse>(new SetCustomerPasswordResponse(
-                    result.Value.CustomerId, result.Value.CustomerCode, result.Value.CustomerVersion, result.Value.ChangedAtUtc),
+                ? Results.Ok(new ApiEnvelope<SetCustomerCredentialsResponse>(new SetCustomerPasswordResponse(
+                    result.Value.CustomerId, result.Value.Username, result.Value.CustomerVersion, result.Value.ChangedAtUtc),
                     CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.CustomersCredentialsManage);

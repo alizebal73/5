@@ -527,6 +527,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<bool>("IsBlocked").HasDefaultValue(false).HasColumnType("boolean").HasColumnName("is_blocked");
                     b.Property<string>("Nickname").HasMaxLength(60).HasColumnType("character varying(60)").HasColumnName("nickname");
                     b.Property<string>("PhoneNumber").HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("phone_number");
+                    b.Property<string>("LoginUsername").HasMaxLength(40).HasColumnType("character varying(40)").HasColumnName("login_username");
                     b.Property<string>("PasswordHash").HasMaxLength(256).HasColumnType("character varying(256)").HasColumnName("password_hash");
                     b.Property<int>("PasswordFailedAttempts").HasDefaultValue(0).HasColumnType("integer").HasColumnName("password_failed_attempts");
                     b.Property<DateTimeOffset?>("PasswordLockedUntilUtc").HasColumnType("timestamp with time zone").HasColumnName("password_locked_until_utc");
@@ -535,6 +536,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
                     b.HasKey("Id").HasName("pk_customers");
                     b.HasIndex("Code").IsUnique().HasDatabaseName("ux_customers_code");
+                    b.HasIndex("LoginUsername").IsUnique().HasDatabaseName("ux_customers_login_username");
                     b.HasIndex("Kind", "IsActive").HasDatabaseName("ix_customers_kind_active");
                     b.ToTable("customers", null, t =>
                         {

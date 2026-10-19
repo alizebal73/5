@@ -28,6 +28,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.CreatedAtUtc).IsRequired().HasColumnName("created_at_utc");
         b.Property(x => x.Version).IsConcurrencyToken().IsRequired().HasColumnName("version");
         b.HasIndex(x => x.Code).IsUnique().HasDatabaseName("ux_customers_code");
+        b.HasIndex(x => x.LoginUsername).IsUnique().HasDatabaseName("ux_customers_login_username");
         b.HasIndex(x => new { x.Kind, x.IsActive }).HasDatabaseName("ix_customers_kind_active");
     }
 }

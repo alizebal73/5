@@ -28,54 +28,56 @@ public sealed class CustomerAuthenticationService(
     private static readonly TimeSpan Retention = TimeSpan.FromDays(1);
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(4);
 
-    public async Task<Result<CustomerPasswordSetResult>> SetPasswordAsync(SetCustomerPasswordCommand command, CancellationToken cancellationToken)
+    public async Task<Result<CustomerCredentialsSetResult>> SetCredentialsAsync(SetCustomerCredentialsCommand command, CancellationToken cancellationToken)
     {
         if (!command.Actor.Permissions.Contains(Permissions.CustomersCredentialsManage))
-            return Fail<CustomerPasswordSetResult>("customers.credentials_forbidden", "Not allowed to manage customer passwords.");
-        if (command.CustomerId == Guid.Empty || command.ExpectedVersion < 1 || !passwordHasher.IsValidPassword(command.Password))
-            return Fail<CustomerPasswordSetResult>("customers.credentials_invalid", "Customer, version or password is invalid.");
+            return Fail<CustomerCredentialsSetResult>("customers.credentials_forbidden", "Not allowed to manage customer credentials.");
+        if (command.CustomerId == Guid.Empty || command.ExpectedVersion < 1 || string.IsNullOrWhiteSpace(command.Username) || !passwordHasher.IsValidPassword(command.Password))
+            return Fail<CustomerCredentialsSetResult>("customers.credentials_invalid", "Customer, username, version or password is invalid.");
         if (string.IsNullOrWhiteSpace(command.IdempotencyKey))
-            return Fail<CustomerPasswordSetResult>("idempotency.required", "An idempotency key is required.");
+            return Fail<CustomerCredentialsSetResult>("idempotency.required", "An idempotency key is required.");
 
         var encodedHash = passwordHasher.HashPassword(command.Password);
         var key = command.IdempotencyKey.Trim();
-        var fingerprint = requestFingerprint.Compute(new { command.CustomerId, command.ExpectedVersion, Password = command.Password });
+        var fingerprint = requestFingerprint.Compute(new { command.CustomerId, Username = command.Username, command.ExpectedVersion, Password = command.Password });
         try
         {
             return await mutationPipeline.ExecuteAsync(
-                $"customers.password.set:{command.Actor.OperatorId:D}", "customer.password.set", key, fingerprint, 200,
+                $"customers.credentials.set:{command.Actor.OperatorId:D}", "customer.credentials.set", key, fingerprint, 200,
                 Lease, Retention,
                 async ct =>
                 {
                     var customer = await db.Customers.FromSqlInterpolated(
                         $"SELECT * FROM customers WHERE id = {command.CustomerId} FOR UPDATE").SingleOrDefaultAsync(ct);
                     if (customer is null || customer.Kind != CustomerKind.Registered)
-                        return Fail<CustomerPasswordSetResult>("customers.not_found", "Registered customer was not found.");
+                        return Fail<CustomerCredentialsSetResult>("customers.not_found", "Registered customer was not found.");
                     if (customer.Version != command.ExpectedVersion)
-                        return Fail<CustomerPasswordSetResult>("customers.version_conflict", "Customer data changed; refresh before setting the password.");
+                        return Fail<CustomerCredentialsSetResult>("customers.version_conflict", "Customer data changed; refresh before setting the password.");
 
                     var oldVersion = customer.Version;
-                    var passwordWasConfigured = customer.PasswordHash is not null;
-                    customer.SetPasswordHash(encodedHash);
+                    var oldUsername = customer.LoginUsername;
+                    var credentialsWereConfigured = customer.PasswordHash is not null;
+                    try { customer.SetCredentials(command.Username, encodedHash); }
+                    catch (ArgumentException ex) { return Fail<CustomerCredentialsSetResult>("customers.credentials_invalid", ex.Message); }
                     var now = clock.UtcNow;
                     await db.CustomerLoginSessions.Where(x => x.CustomerId == customer.Id && x.RevokedAtUtc == null)
                         .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, now), ct);
-                    var response = new CustomerPasswordSetResult(customer.Id, customer.Code, customer.Version, now);
+                    var response = new CustomerCredentialsSetResult(customer.Id, customer.Code, customer.Version, now);
                     audit.Append(new AuditRecord(now, "Operator", command.Actor.OperatorId.ToString("D"),
-                        "customers.password.set", "Customer", customer.Id.ToString("D"), null, command.Actor.CorrelationId,
+                        "customer.credentials.set", "Customer", customer.Id.ToString("D"), null, command.Actor.CorrelationId,
                         command.Actor.Source, "Succeeded", key,
-                        JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, CustomerVersion = oldVersion, PasswordConfigured = passwordWasConfigured }),
-                        JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, CustomerVersion = customer.Version, PasswordConfigured = true, ExistingCustomerLoginsRevoked = true })));
-                    return Result<CustomerPasswordSetResult>.Success(response);
+                        JsonSerializer.Serialize(new { customer.Id, Username = oldUsername, CustomerVersion = oldVersion, CredentialsConfigured = credentialsWereConfigured }),
+                        JsonSerializer.Serialize(new { customer.Id, Username = customer.LoginUsername, CustomerVersion = customer.Version, CredentialsConfigured = true, ExistingCustomerLoginsRevoked = true })));
+                    return Result<CustomerCredentialsSetResult>.Success(response);
                 }, cancellationToken, IsolationLevel.ReadCommitted);
         }
         catch (PersistenceConflictException)
         {
-            return Fail<CustomerPasswordSetResult>("customers.version_conflict", "Customer data changed concurrently; refresh before retrying.");
+            return Fail<CustomerCredentialsSetResult>("customers.version_conflict", "Customer data changed concurrently; refresh before retrying.");
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Fail<CustomerPasswordSetResult>("customers.version_conflict", "Customer data changed concurrently; refresh before retrying.");
+            return Fail<CustomerCredentialsSetResult>("customers.version_conflict", "Customer data changed concurrently; refresh before retrying.");
         }
     }
 
@@ -98,7 +100,7 @@ public sealed class CustomerAuthenticationService(
                            passwordHasher.IsValidPassword(password);
             var now = clock.UtcNow;
             var eligible = customer is not null && customer.Kind == GameNet.Server.Modules.Customers.Domain.CustomerKind.Registered &&
-                           customer.IsActive && !customer.IsBlocked && customer.PasswordHash is not null;
+                           customer.IsActive && !customer.IsBlocked && customer.LoginUsername is not null && customer.PasswordHash is not null;
             var locked = customer?.IsPasswordLoginLocked(now) ?? false;
 
             if (!eligible || !verified || locked)

@@ -21,6 +21,7 @@ public sealed class Customer
     public bool IsBlocked { get; private set; }
     public CustomerStatus Status => IsBlocked ? CustomerStatus.Blocked : IsActive ? CustomerStatus.Active : CustomerStatus.Inactive;
     public DateTimeOffset CreatedAtUtc { get; private set; }
+    public string? LoginUsername { get; private set; }
     public string? PasswordHash { get; private set; }
     public int PasswordFailedAttempts { get; private set; }
     public DateTimeOffset? PasswordLockedUntilUtc { get; private set; }
@@ -73,16 +74,30 @@ public sealed class Customer
         Version = checked(Version + 1);
     }
 
-    public void SetPasswordHash(string encodedHash)
+    public void SetCredentials(string username, string encodedHash)
     {
         if (Kind != CustomerKind.Registered)
-            throw new InvalidOperationException("CUSTOMER_WALKIN_PASSWORD_IS_NOT_CONFIGURABLE");
+            throw new InvalidOperationException("CUSTOMER_WALKIN_CREDENTIALS_ARE_NOT_CONFIGURABLE");
+        var normalizedUsername = NormalizeLoginUsername(username);
         if (string.IsNullOrWhiteSpace(encodedHash) || encodedHash.Length > 256)
             throw new ArgumentException("Encoded customer password hash is invalid.", nameof(encodedHash));
+        LoginUsername = normalizedUsername;
         PasswordHash = encodedHash;
         PasswordFailedAttempts = 0;
         PasswordLockedUntilUtc = null;
         Version = checked(Version + 1);
+    }
+
+    private static string NormalizeLoginUsername(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+            throw new ArgumentException("Customer username is required.", nameof(username));
+        var value = username.Trim().ToUpperInvariant();
+        if (value.Length is < 2 or > 40 ||
+            value.Any(ch => !(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_')) ||
+            !char.IsAsciiLetterOrDigit(value[0]) || !char.IsAsciiLetterOrDigit(value[^1]))
+            throw new ArgumentException("Customer username must be 2-40 ASCII letters, digits, dashes or underscores.", nameof(username));
+        return value;
     }
 
     public bool IsPasswordLoginLocked(DateTimeOffset nowUtc) =>

@@ -8,11 +8,13 @@ public partial class CustomerPasswordLogin : Migration
 {
     protected override void Up(MigrationBuilder m)
     {
+        m.AddColumn<string>(name: "login_username", table: "customers", type: "character varying(40)", maxLength: 40, nullable: true);
         m.AddColumn<string>(name: "password_hash", table: "customers", type: "character varying(256)", maxLength: 256, nullable: true);
         m.AddColumn<int>(name: "password_failed_attempts", table: "customers", type: "integer", nullable: false, defaultValue: 0);
         m.AddColumn<DateTimeOffset>(name: "password_locked_until_utc", table: "customers", type: "timestamp with time zone", nullable: true);
         m.AddCheckConstraint(name: "ck_customers_password_failed_attempts_range", table: "customers",
             sql: "password_failed_attempts BETWEEN 0 AND 4");
+        m.CreateIndex(name: "ux_customers_login_username", table: "customers", column: "login_username", unique: true);
         m.CreateTable(
             name: "customer_login_sessions",
             columns: table => new
@@ -38,7 +40,7 @@ public partial class CustomerPasswordLogin : Migration
         m.Sql("""
             DO $$
             BEGIN
-                IF EXISTS (SELECT 1 FROM customers WHERE password_hash IS NOT NULL)
+                IF EXISTS (SELECT 1 FROM customers WHERE login_username IS NOT NULL OR password_hash IS NOT NULL)
                    OR EXISTS (SELECT 1 FROM customer_login_sessions) THEN
                     RAISE EXCEPTION 'CUSTOMER_PASSWORD_LOGIN_DOWN_BLOCKED: customer credentials or login history would be lost';
                 END IF;
@@ -46,6 +48,8 @@ public partial class CustomerPasswordLogin : Migration
             """);
         m.DropTable(name: "customer_login_sessions");
         m.DropCheckConstraint(name: "ck_customers_password_failed_attempts_range", table: "customers");
+        m.DropIndex(name: "ux_customers_login_username", table: "customers");
+        m.DropColumn(name: "login_username", table: "customers");
         m.DropColumn(name: "password_hash", table: "customers");
         m.DropColumn(name: "password_failed_attempts", table: "customers");
         m.DropColumn(name: "password_locked_until_utc", table: "customers");
