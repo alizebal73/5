@@ -5,10 +5,11 @@
     <AssemblyName>GameNet.Agent</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Customer\\**\\*.cs" />
-    <Page Remove="Customer\\**\\*.xaml" />
-    <ApplicationDefinition Remove="Customer\\**\\*.xaml" />
-    <ProjectReference Include="..\Shared\GameNet.Shared.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+    <Compile Remove="Customer/**/*.cs" />
+    <Page Remove="Customer/**/*.xaml" />
+    <ApplicationDefinition Remove="Customer/**/*.xaml" />
+    <ProjectReference Include="..\Shared\GameNet.Shared.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     <PackageReference Include="Microsoft.Extensions.Http" />
