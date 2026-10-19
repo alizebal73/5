@@ -14,6 +14,23 @@ namespace GameNet.Server.Modules.Stations.Infrastructure;
 /// </summary>
 public sealed class StationSessionAccess(GameNetDbContext db, IGameClock clock) : IStationSessionAccess
 {
+    public async Task<Guid?> FindAssignedPcStationIdForAgentAsync(
+        string deviceId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Length > 128)
+            return null;
+
+        var ids = await db.Stations.AsNoTracking()
+            .Where(x => x.AgentDeviceId == deviceId &&
+                        x.Type == GameNet.Server.Modules.Stations.Domain.StationType.Pc)
+            .Select(x => x.Id)
+            .Take(2)
+            .ToArrayAsync(cancellationToken);
+        // One trusted Agent device may own only one customer-entry PC.
+        return ids.Length == 1 ? ids[0] : null;
+    }
+
     public async Task<StationSessionAvailability?> FindForSessionStartAsync(
         Guid stationId,
         CancellationToken cancellationToken)

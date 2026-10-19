@@ -149,8 +149,11 @@ public sealed class SessionService(
                     long? prepaidBudgetTicks = null;
                     if (requirePrepaidWallet)
                     {
+                        var reservationActorType = command.Actor.ActorType is "Operator" or "Customer"
+                            ? command.Actor.ActorType
+                            : "Operator";
                         var reserveResult = await walletFunding.ReserveForSessionAsync(
-                            customer.Id, sessionId, command.Actor.OperatorId, "Operator",
+                            customer.Id, sessionId, command.Actor.OperatorId, reservationActorType,
                             command.Actor.CorrelationId, command.Actor.Source, command.IdempotencyKey, token);
                         if (!reserveResult.IsSuccess)
                             return Fail<SessionResponse>(reserveResult.Error.Code, reserveResult.Error.Message);
@@ -196,7 +199,7 @@ public sealed class SessionService(
                         };
                     audit.Append(new AuditRecord(
                         clock.UtcNow,
-                        "Operator",
+                        requirePrepaidWallet && command.Actor.ActorType == "Customer" ? "Customer" : "Operator",
                         command.Actor.OperatorId.ToString("D"),
                         "sessions.start",
                         "Session",
