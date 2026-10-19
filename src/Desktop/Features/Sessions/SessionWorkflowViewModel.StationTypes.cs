@@ -114,8 +114,13 @@ public sealed partial class SessionWorkflowViewModel
             }
 
             stationLabels.Clear();
+            PcStations.Clear();
             foreach (var station in stations)
+            {
                 stationLabels[station.Id] = station.Code;
+                if (station.Type == StationTypeContract.Pc)
+                    PcStations.Add(station);
+            }
 
             if (CanOperateSessions)
             {
