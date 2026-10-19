@@ -67,26 +67,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 parameter is StationResponse { Type: StationTypeContract.Pc, Status: StationStatusContract.Available });
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
-        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
-            !unresolvedCashCheckoutInvoiceId.HasValue &&
-            SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
-            TryParseToman(AmountReceivedText, out var received) &&
-            SelectedPendingInvoice is not null &&
-            received >= SelectedPendingInvoice.Invoice.AmountToman &&
-            ConfirmCashCheckout);
+        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, CanCheckoutCashNow);
         ReverseCashSaleCommand = new AsyncUiAction(ReverseCashSaleAsync, () => !IsBusy && CanReverseCashSale &&
             !unresolvedCashSaleReversalInvoiceId.HasValue &&
             SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } &&
             IsValidCashSaleReversalReason(CashSaleReversalReasonText) &&
             ConfirmCashSaleReversal);
-        CorrectCashTenderCommand = new AsyncUiAction(CorrectCashTenderAsync, () => !IsBusy && CanCorrectCashTender &&
-            unresolvedCashTenderCorrection is null &&
-            SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } selected &&
-            TryParseToman(CorrectedCashReceivedText, out var correctedReceived) &&
-            correctedReceived >= selected.Outcome.AmountToman &&
-            correctedReceived != (selected.Outcome.EffectiveAmountReceivedToman ?? selected.Outcome.AmountReceivedToman) &&
-            IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
-            ConfirmCashTenderCorrection);
+        CorrectCashTenderCommand = new AsyncUiAction(CorrectCashTenderAsync, CanCorrectCashTenderNow);
         WalletTopUp = new WalletTopUpViewModel(api, hasPermission);
         InitializeCustomerCommands();
     }
