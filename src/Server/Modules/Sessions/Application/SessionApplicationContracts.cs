@@ -2,7 +2,21 @@ using GameNet.Shared.Contracts.V1.Sessions;
 
 namespace GameNet.Server.Modules.Sessions.Application;
 
-public sealed record SessionActorContext(Guid OperatorId, string CorrelationId, string Source, IReadOnlySet<string> Permissions, string ActorType = "Operator");
+public sealed record SessionActorContext(
+    Guid OperatorId,
+    string CorrelationId,
+    string Source,
+    IReadOnlySet<string> Permissions,
+    string ActorType = "Operator",
+    Guid? CustomerId = null)
+{
+    public Guid ActorId => ActorType switch
+    {
+        "Customer" => CustomerId ?? Guid.Empty,
+        "System" => Guid.Empty,
+        _ => OperatorId
+    };
+}
 public sealed record StartSessionCommand(Guid StationId, Guid TariffId, Guid? CustomerId, string IdempotencyKey, SessionActorContext Actor);
 public sealed record StartPrepaidSessionCommand(Guid StationId, Guid CustomerId, string IdempotencyKey, SessionActorContext Actor);
 public sealed record EndSessionCommand(Guid SessionId, int ExpectedVersion, string IdempotencyKey, SessionActorContext Actor);
