@@ -157,6 +157,11 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         SendMutationAsync<StartSessionRequest, SessionResponse>(
             HttpMethod.Post, "/api/v1/sessions", body, idempotencyKey, cancellationToken);
 
+    public Task<SessionResponse> StartPrepaidSessionAsync(
+        StartPrepaidSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<StartPrepaidSessionRequest, SessionResponse>(
+            HttpMethod.Post, "/api/v1/sessions/prepaid", body, idempotencyKey, cancellationToken);
+
     public Task<InvoicePreviewResponse> EndSessionAsync(
         Guid id, EndSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendMutationAsync<EndSessionRequest, InvoicePreviewResponse>(

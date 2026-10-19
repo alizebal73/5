@@ -40,6 +40,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand BlockCustomerCommand { get; }
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
+    ICommand StartPrepaidSessionFromStationCommand { get; }
     ICommand EndSessionCommand { get; }
     ICommand ReconcileSessionTimingCommand { get; }
     ICommand CheckoutCashCommand { get; }

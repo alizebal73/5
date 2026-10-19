@@ -34,6 +34,12 @@ public interface IGameNetServerClient
     Task<TariffResponse> CreateTariffAsync(CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SessionResponse>> GetActiveSessionsAsync(Guid? stationId = null, CancellationToken cancellationToken = default);
     Task<SessionResponse> StartSessionAsync(StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SessionResponse> StartPrepaidSessionAsync(
+        StartPrepaidSessionRequest request,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default) =>
+        StartSessionAsync(new StartSessionRequest(request.StationId, Guid.Empty, request.CustomerId),
+            idempotencyKey, cancellationToken);
     Task<InvoicePreviewResponse> EndSessionAsync(Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(Guid id, ReconcileSessionTimingRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default);
