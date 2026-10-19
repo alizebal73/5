@@ -8,7 +8,6 @@ using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Infrastructure.Security.Transport;
 using GameNet.Server.Modules.Identity.Api;
 using GameNet.Server.Modules.Customers.Api;
-using GameNet.Server.Infrastructure.Security;
 using GameNet.Server.Modules.Stations.Api;
 using GameNet.Server.Modules.Sessions.Api;
 using GameNet.Server.Modules.Tariffs.Api;

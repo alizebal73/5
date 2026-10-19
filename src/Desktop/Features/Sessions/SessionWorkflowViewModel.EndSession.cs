@@ -31,7 +31,7 @@ public sealed partial class SessionWorkflowViewModel
             var issuedInvoiceItem = new PendingInvoiceListItem(
                 invoice,
                 GetStationLabel(invoice.StationId),
-                FormatDurationDisplayText(invoice.ElapsedTicks),
+                SessionWorkflowFormatting.FormatDurationDisplayText(invoice.ElapsedTicks),
                 FormatAmountDisplayText(invoice.AmountToman));
             var existingInvoice = PendingInvoices.FirstOrDefault(x => x.Invoice.InvoiceId == invoice.InvoiceId);
             if (existingInvoice is null)
