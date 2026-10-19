@@ -6,8 +6,8 @@ public sealed record CustomerPasswordActor(Guid OperatorId, string CorrelationId
 public sealed record SetCustomerCredentialsCommand(Guid CustomerId, string Username, string Password, int ExpectedVersion, string IdempotencyKey, CustomerPasswordActor Actor);
 public sealed record CustomerCredentialsSetResult(Guid CustomerId, string Username, int CustomerVersion, DateTimeOffset ChangedAtUtc);
 public sealed record CustomerLoginCommand(string? Username, string? Password, string CorrelationId, string Source);
-public sealed record CustomerLoginResult(string AccessToken, DateTimeOffset ExpiresAtUtc, Guid CustomerId, string CustomerCode, string? DisplayName);
-public sealed record CustomerLoginProfile(Guid CustomerId, string CustomerCode, string? DisplayName, DateTimeOffset CreatedAtUtc);
+public sealed record CustomerLoginResult(string AccessToken, DateTimeOffset ExpiresAtUtc, Guid CustomerId, string Username, string? DisplayName);
+public sealed record CustomerLoginProfile(Guid CustomerId, string Username, string? DisplayName, DateTimeOffset CreatedAtUtc);
 public sealed record CustomerLogoutResult(bool LoggedOut);
 
 public interface ICustomerPasswordHasher

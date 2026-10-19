@@ -62,7 +62,7 @@ public sealed class CustomerAuthenticationService(
                     var now = clock.UtcNow;
                     await db.CustomerLoginSessions.Where(x => x.CustomerId == customer.Id && x.RevokedAtUtc == null)
                         .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, now), ct);
-                    var response = new CustomerCredentialsSetResult(customer.Id, customer.Code, customer.Version, now);
+                    var response = new CustomerCredentialsSetResult(customer.Id, customer.LoginUsername!, customer.Version, now);
                     audit.Append(new AuditRecord(now, "Operator", command.Actor.OperatorId.ToString("D"),
                         "customer.credentials.set", "Customer", customer.Id.ToString("D"), null, command.Actor.CorrelationId,
                         command.Actor.Source, "Succeeded", key,
@@ -95,7 +95,7 @@ public sealed class CustomerAuthenticationService(
             }
 
             var customer = await db.Customers.FromSqlInterpolated(
-                $"SELECT * FROM customers WHERE code = {username} FOR UPDATE").SingleOrDefaultAsync(ct);
+                $"SELECT * FROM customers WHERE login_username = {username} FOR UPDATE").SingleOrDefaultAsync(ct);
             var verified = passwordHasher.VerifyPassword(password, customer?.PasswordHash ?? CustomerPasswordHasher.DummyHash) &&
                            passwordHasher.IsValidPassword(password);
             var now = clock.UtcNow;
@@ -126,7 +126,7 @@ public sealed class CustomerAuthenticationService(
             {
                 new Claim(JwtRegisteredClaimNames.Sub, customer.Id.ToString("D")),
                 new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString("D")),
-                new Claim(ClaimTypes.Name, customer.Code),
+                new Claim(ClaimTypes.Name, customer.LoginUsername!),
                 new Claim("actor_type", "Customer"),
                 new Claim("customer_id", customer.Id.ToString("D")),
                 new Claim("customer_code", customer.Code),
@@ -138,9 +138,9 @@ public sealed class CustomerAuthenticationService(
             var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
             audit.Append(new AuditRecord(now, "Customer", customer.Id.ToString("D"), "customers.login", "Customer",
                 customer.Id.ToString("D"), null, command.CorrelationId, command.Source, "Succeeded",
-                AfterJson: JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, ExpiresAtUtc = expires })));
+                AfterJson: JsonSerializer.Serialize(new { customer.Id, Username = customer.LoginUsername, ExpiresAtUtc = expires })));
             return Result<CustomerLoginResult>.Success(
-                new CustomerLoginResult(accessToken, expires, customer.Id, customer.Code, customer.DisplayName));
+                new CustomerLoginResult(accessToken, expires, customer.Id, customer.LoginUsername!, customer.DisplayName));
         }, cancellationToken, IsolationLevel.ReadCommitted);
 
     public async Task<Result<CustomerLoginProfile>> GetCurrentProfileAsync(Guid customerId, CancellationToken cancellationToken)
@@ -150,7 +150,7 @@ public sealed class CustomerAuthenticationService(
                  x.IsActive && !x.IsBlocked, cancellationToken);
         return customer is null
             ? Fail<CustomerLoginProfile>("customer_auth.invalid_credentials", "Customer session is invalid.")
-            : Result<CustomerLoginProfile>.Success(new CustomerLoginProfile(customer.Id, customer.Code, customer.DisplayName, customer.CreatedAtUtc));
+            : Result<CustomerLoginProfile>.Success(new CustomerLoginProfile(customer.Id, customer.LoginUsername!, customer.DisplayName, customer.CreatedAtUtc));
     }
 
     public Task<Result<CustomerLogoutResult>> LogoutAsync(

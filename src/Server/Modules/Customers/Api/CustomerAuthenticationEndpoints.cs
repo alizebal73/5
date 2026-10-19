@@ -29,7 +29,7 @@ public static class CustomerAuthenticationEndpoints
                 request.ExpectedVersion, context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(),
                 new CustomerPasswordActor(operatorId, CorrelationIdMiddleware.GetCurrent(context), "Desktop", permissions)), ct);
             return result.IsSuccess
-                ? Results.Ok(new ApiEnvelope<SetCustomerCredentialsResponse>(new SetCustomerPasswordResponse(
+                ? Results.Ok(new ApiEnvelope<SetCustomerCredentialsResponse>(new SetCustomerCredentialsResponse(
                     result.Value.CustomerId, result.Value.Username, result.Value.CustomerVersion, result.Value.ChangedAtUtc),
                     CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
@@ -44,7 +44,7 @@ public static class CustomerAuthenticationEndpoints
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CustomerLoginResponse>(new CustomerLoginResponse(
                     result.Value.AccessToken, "Bearer", result.Value.ExpiresAtUtc, result.Value.CustomerId,
-                    result.Value.CustomerCode, result.Value.DisplayName), CorrelationIdMiddleware.GetCurrent(context)))
+                    result.Value.Username, result.Value.DisplayName), CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).AllowAnonymous().RequireRateLimiting("customer-password-login");
 
@@ -55,7 +55,7 @@ public static class CustomerAuthenticationEndpoints
             var result = await service.GetCurrentProfileAsync(customerId, ct);
             return result.IsSuccess
                 ? Results.Ok(new ApiEnvelope<CustomerLoginProfileResponse>(new CustomerLoginProfileResponse(
-                    result.Value.CustomerId, result.Value.CustomerCode, result.Value.DisplayName, result.Value.CreatedAtUtc),
+                    result.Value.CustomerId, result.Value.Username, result.Value.DisplayName, result.Value.CreatedAtUtc),
                     CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization("Customer");

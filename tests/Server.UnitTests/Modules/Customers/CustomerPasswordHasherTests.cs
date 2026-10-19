@@ -33,6 +33,8 @@ public sealed class CustomerPasswordHasherTests
     {
         var customer = Customer.CreateRegistered(Guid.NewGuid(), "CUS-001", "Test Customer", DateTimeOffset.UtcNow);
         customer.SetCredentials("player-001", new CustomerPasswordHasher().HashPassword("a valid customer password"));
+        Assert.Equal("PLAYER-001", customer.LoginUsername);
+        Assert.Equal("CUS-001", customer.Code);
         var now = new DateTimeOffset(2026, 10, 19, 10, 0, 0, TimeSpan.Zero);
         for (var i = 0; i < 4; i++) customer.RecordFailedPasswordAttempt(now);
         Assert.False(customer.IsPasswordLoginLocked(now));
@@ -48,6 +50,6 @@ public sealed class CustomerPasswordHasherTests
     public void Walk_in_customer_cannot_have_customer_password()
     {
         var customer = Customer.CreateWalkIn(Guid.NewGuid(), DateTimeOffset.UtcNow);
-        Assert.Throws<InvalidOperationException>(() => customer.SetPasswordHash(new CustomerPasswordHasher().HashPassword("a valid customer password")));
+        Assert.Throws<InvalidOperationException>(() => customer.SetCredentials("walkin-user", new CustomerPasswordHasher().HashPassword("a valid customer password")));
     }
 }
