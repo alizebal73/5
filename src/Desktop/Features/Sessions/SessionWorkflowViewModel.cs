@@ -88,7 +88,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
     public ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; } = [];
 
-    public CustomerCredentialsViewModel CustomerCredentials { get; }
+    public ICustomerCredentialsPort CustomerCredentials { get; }
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
     public ICommand StartSessionCommand { get; }

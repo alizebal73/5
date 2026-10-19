@@ -13,7 +13,7 @@ namespace GameNet.Desktop.Features.Customers;
 /// Owns the operator's customer-credential form and ambiguous-request recovery state.
 /// Customer profile, Wallet and Session data remain in their own feature services.
 /// </summary>
-public sealed class CustomerCredentialsViewModel : INotifyPropertyChanged
+public sealed class CustomerCredentialsViewModel : ICustomerCredentialsPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
