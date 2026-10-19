@@ -21,7 +21,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
-    private readonly ICustomerEntryPrompt? customerEntryPrompt;
+    private readonly PrepaidStationEntryCoordinator prepaidStationEntryCoordinator;
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
@@ -44,7 +44,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
-        this.customerEntryPrompt = customerEntryPrompt;
+        prepaidStationEntryCoordinator = new PrepaidStationEntryCoordinator(
+            api, customerEntryPrompt, BeginBusy, EndBusy,
+            message => ErrorMessage = message, ErrorText,
+            OnPrepaidSessionStartedAsync);
         CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
@@ -58,9 +61,9 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
             !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
         StartPrepaidSessionFromStationCommand = new AsyncParameterUiAction(
-            StartPrepaidSessionFromStationAsync,
+            prepaidStationEntryCoordinator.StartAsync,
             parameter => !IsBusy && CanOperateSessions && CanReadCustomers &&
-                customerEntryPrompt is not null &&
+                prepaidStationEntryCoordinator.CanPrompt &&
                 parameter is StationResponse { Type: StationTypeContract.Pc, Status: StationStatusContract.Available });
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
@@ -521,6 +524,17 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         finally { EndBusy(); }
     }
 
+    private async Task OnPrepaidSessionStartedAsync(
+        StationResponse station,
+        GameNet.Shared.Contracts.V1.Customers.CustomerResponse customer,
+        SessionResponse session)
+    {
+        await RefreshAsync();
+        SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
+        StatusMessage = Text(
+            $"مشتری {customer.Code} روی {station.Code} وارد شد؛ اعتبار رزروشده {FormatToman(session.PrepaidReservedAmountToman ?? 0)} تومان.",
+            $"Customer {customer.Code} started on {station.Code}; {FormatToman(session.PrepaidReservedAmountToman ?? 0)} Toman was reserved.");
+    }
     private string GetStationLabel(Guid stationId)
     {
         return stationLabels.TryGetValue(stationId, out var stationCode) &&
@@ -621,13 +635,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
         "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
         "sessions.customer_blocked" => Text("این مشتری مسدود است و نمی‌تواند Session جدیدی شروع کند.", "This customer is blocked and cannot start a new Session."),
-        "sessions.customer_has_active_session" => Text("این مشتری روی رایانهٔ دیگری Session فعال دارد.", "This customer already has an active Session on another PC."),
-        "sessions.prepaid_customer_required" => Text("شناسهٔ مشتری ثبت‌شده لازم است.", "A registered Customer ID is required."),
-        "sessions.default_pc_tariff_not_found" => Text("تعرفهٔ پیش‌فرض فعال PC تنظیم نشده است.", "No active default PC tariff is configured."),
-        "wallet.insufficient_balance" => Text("اعتبار کیف پول مشتری کافی نیست.", "The customer's Wallet does not have enough credit."),
-        "wallet.prepaid_reservation_active" => Text("اعتبار این مشتری قبلاً برای یک Session رزرو شده است.", "This customer's credit is already reserved by an active Session."),
-        "wallet.prepaid_budget_exceeded" or "sessions.prepaid_budget_exceeded" => Text("شارژ جلسه از اعتبار رزروشده بیشتر است؛ پرداخت انجام نشد.", "The Session charge exceeds its prepaid reservation; settlement was not confirmed."),
-        "customers.forbidden" => Text("مجوز مشاهدهٔ مشتریان را ندارید.", "You do not have permission to read customers."),
         "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
         "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
         "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
