@@ -11,13 +11,14 @@ public sealed class CashReceipt
     private CashReceipt() { }
     private CashReceipt(Guid id, Guid customerId, CashReceiptPurpose purpose, long amountAppliedToman,
         long amountReceivedToman, Guid receivedByOperatorId, DateTimeOffset receivedAtUtc,
-        string idempotencyKey, string correlationId, string source)
+        string idempotencyKey, string correlationId, string source, string requestFingerprint)
     {
         Id = id; CustomerId = customerId; Purpose = purpose;
         AmountAppliedToman = amountAppliedToman; AmountReceivedToman = amountReceivedToman;
         ChangeGivenToman = checked(amountReceivedToman - amountAppliedToman);
         ReceivedByOperatorId = receivedByOperatorId; ReceivedAtUtc = receivedAtUtc.ToUniversalTime();
         IdempotencyKey = idempotencyKey; CorrelationId = correlationId; Source = source;
+        RequestFingerprint = requestFingerprint;
     }
     public Guid Id { get; private set; }
     public Guid CustomerId { get; private set; }
@@ -28,12 +29,13 @@ public sealed class CashReceipt
     public Guid ReceivedByOperatorId { get; private set; }
     public DateTimeOffset ReceivedAtUtc { get; private set; }
     public string IdempotencyKey { get; private set; } = null!;
+    public string RequestFingerprint { get; private set; } = null!;
     public string CorrelationId { get; private set; } = null!;
     public string Source { get; private set; } = null!;
 
     public static CashReceipt RecordWalletTopUp(Guid id, Guid customerId, long amountAppliedToman,
         long amountReceivedToman, Guid receivedByOperatorId, DateTimeOffset receivedAtUtc,
-        string idempotencyKey, string correlationId, string source)
+        string idempotencyKey, string correlationId, string source, string requestFingerprint)
     {
         if (id == Guid.Empty) throw new ArgumentException("Cash receipt id is required.", nameof(id));
         if (customerId == Guid.Empty) throw new ArgumentException("Customer id is required.", nameof(customerId));
@@ -47,7 +49,10 @@ public sealed class CashReceipt
             throw new ArgumentException("A valid correlation id is required.", nameof(correlationId));
         if (string.IsNullOrWhiteSpace(source) || source.Length > 64)
             throw new ArgumentException("A valid source is required.", nameof(source));
+        if (string.IsNullOrWhiteSpace(requestFingerprint) || requestFingerprint.Trim().Length > 128)
+            throw new ArgumentException("A valid request fingerprint is required.", nameof(requestFingerprint));
         return new CashReceipt(id, customerId, CashReceiptPurpose.WalletTopUp, amountAppliedToman,
-            amountReceivedToman, receivedByOperatorId, receivedAtUtc, idempotencyKey.Trim(), correlationId, source);
+            amountReceivedToman, receivedByOperatorId, receivedAtUtc, idempotencyKey.Trim(), correlationId, source,
+            requestFingerprint.Trim());
     }
 }

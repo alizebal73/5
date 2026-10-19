@@ -818,6 +818,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<long>("ChangeGivenToman").HasColumnType("bigint").HasColumnName("change_given_toman");
                     b.Property<string>("CorrelationId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("correlation_id");
                     b.Property<string>("IdempotencyKey").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)").HasColumnName("idempotency_key");
+                    b.Property<string>("RequestFingerprint").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)").HasColumnName("request_fingerprint");
                     b.Property<DateTimeOffset>("ReceivedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("received_at_utc");
                     b.Property<Guid>("ReceivedByOperatorId").HasColumnType("uuid").HasColumnName("received_by_operator_id");
                     b.Property<int>("Purpose").HasColumnType("integer").HasColumnName("purpose");
@@ -858,6 +859,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
                     b.Property<int>("EntryType").HasColumnType("integer").HasColumnName("entry_type");
                     b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone").HasColumnName("occurred_at_utc");
+                    b.Property<int>("WalletVersionAfter").HasColumnType("integer").HasColumnName("wallet_version_after");
                     b.HasKey("Id").HasName("pk_wallet_ledger_entries");
                     b.HasIndex("CashReceiptId").IsUnique().HasDatabaseName("ux_wallet_ledger_cash_receipt");
                     b.HasIndex("CustomerId", "OccurredAtUtc").HasDatabaseName("ix_wallet_ledger_customer_occurred_at");
@@ -866,6 +868,7 @@ namespace GameNet.Server.Persistence.Migrations
                             t.HasCheckConstraint("ck_wallet_ledger_amount_positive", "amount_toman > 0");
                             t.HasCheckConstraint("ck_wallet_ledger_balance_after_covers_credit", "balance_after_toman >= amount_toman");
                             t.HasCheckConstraint("ck_wallet_ledger_entry_type", "entry_type = 1");
+                            t.HasCheckConstraint("ck_wallet_ledger_wallet_version_positive", "wallet_version_after > 0");
                         });
                 });
 

@@ -11,7 +11,8 @@ public sealed record RecordWalletTopUpCashReceiptCommand(
     DateTimeOffset ReceivedAtUtc,
     string IdempotencyKey,
     string CorrelationId,
-    string Source);
+    string Source,
+    string RequestFingerprint);
 
 public sealed record WalletCashReceiptResult(
     Guid CashReceiptId,

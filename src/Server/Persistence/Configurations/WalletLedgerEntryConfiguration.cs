@@ -13,6 +13,7 @@ public sealed class WalletLedgerEntryConfiguration : IEntityTypeConfiguration<Wa
             table.HasCheckConstraint("ck_wallet_ledger_amount_positive", "amount_toman > 0");
             table.HasCheckConstraint("ck_wallet_ledger_balance_after_covers_credit", "balance_after_toman >= amount_toman");
             table.HasCheckConstraint("ck_wallet_ledger_entry_type", "entry_type = 1");
+            table.HasCheckConstraint("ck_wallet_ledger_wallet_version_positive", "wallet_version_after > 0");
         });
         b.HasKey(x => x.Id).HasName("pk_wallet_ledger_entries");
         b.Property(x => x.Id).ValueGeneratedNever().HasColumnName("id");
@@ -23,6 +24,7 @@ public sealed class WalletLedgerEntryConfiguration : IEntityTypeConfiguration<Wa
         b.Property(x => x.BalanceAfterToman).IsRequired().HasColumnName("balance_after_toman");
         b.Property(x => x.ActorId).IsRequired().HasColumnName("actor_id");
         b.Property(x => x.OccurredAtUtc).IsRequired().HasColumnName("occurred_at_utc");
+        b.Property(x => x.WalletVersionAfter).IsRequired().HasColumnName("wallet_version_after");
         b.HasIndex(x => x.CashReceiptId).IsUnique().HasDatabaseName("ux_wallet_ledger_cash_receipt");
         b.HasIndex(x => new { x.CustomerId, x.OccurredAtUtc }).HasDatabaseName("ix_wallet_ledger_customer_occurred_at");
         b.HasOne<GameNet.Server.Modules.Customers.Domain.Customer>().WithMany().HasForeignKey(x => x.CustomerId)

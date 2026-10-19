@@ -37,7 +37,7 @@ public sealed partial class BillingService(
             var receipt = CashReceipt.RecordWalletTopUp(
                 command.CashReceiptId, command.CustomerId, command.AmountAppliedToman, command.AmountReceivedToman,
                 command.ReceivedByOperatorId, command.ReceivedAtUtc, command.IdempotencyKey,
-                command.CorrelationId, command.Source);
+                command.CorrelationId, command.Source, command.RequestFingerprint);
             db.CashReceipts.Add(receipt);
             audit.Append(new AuditRecord(
                 command.ReceivedAtUtc, "Operator", command.ReceivedByOperatorId.ToString("D"),

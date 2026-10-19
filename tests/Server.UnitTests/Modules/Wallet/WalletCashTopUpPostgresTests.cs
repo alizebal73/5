@@ -70,6 +70,33 @@ public sealed class WalletCashTopUpPostgresTests
                 Assert.False(conflict.IsSuccess);
                 Assert.Equal("idempotency.key_reused", conflict.Error.Code);
 
+                // The immutable receipt/ledger, not a one-day cache entry, is the durable replay anchor.
+                await using (var durableReplayDb = CreateContext(connectionString!))
+                {
+                    var expiredClock = new TestClock(now.AddDays(2));
+                    var replayPipeline = new CommandMutationPipeline(
+                        new EfTransactionCoordinator(durableReplayDb),
+                        new EfIdempotencyStore(durableReplayDb, expiredClock));
+                    var replayFingerprint = new TestFingerprint();
+                    var replayBilling = new BillingService(durableReplayDb, replayPipeline, replayFingerprint,
+                        null!, null!, new EfAuditWriter(durableReplayDb), expiredClock);
+                    var replayWallet = new WalletService(durableReplayDb,
+                        new CustomerWalletEligibilityService(durableReplayDb), replayPipeline, replayFingerprint,
+                        replayBilling, new EfAuditWriter(durableReplayDb), expiredClock);
+
+                    var expiredReplay = await replayWallet.CashTopUpAsync(command, CancellationToken.None);
+                    Assert.True(expiredReplay.IsSuccess, expiredReplay.IsSuccess ? "" : expiredReplay.Error.Code);
+                    Assert.Equal(credited.Value.CashReceiptId, expiredReplay.Value.CashReceiptId);
+                    Assert.Equal(credited.Value.WalletLedgerEntryId, expiredReplay.Value.WalletLedgerEntryId);
+                    Assert.Equal(credited.Value.BalanceAfterToman, expiredReplay.Value.BalanceAfterToman);
+                    Assert.Equal(credited.Value.WalletVersion, expiredReplay.Value.WalletVersion);
+
+                    var expiredConflict = await replayWallet.CashTopUpAsync(
+                        command with { AmountToCreditToman = 100_000 }, CancellationToken.None);
+                    Assert.False(expiredConflict.IsSuccess);
+                    Assert.Equal("idempotency.key_reused", expiredConflict.Error.Code);
+                }
+
                 var balance = await wallet.GetBalanceAsync(customerId, actor, CancellationToken.None);
                 Assert.True(balance.IsSuccess);
                 Assert.Equal(105_000, balance.Value.BalanceToman);
@@ -78,6 +105,7 @@ public sealed class WalletCashTopUpPostgresTests
                 var ledger = await db.WalletLedgerEntries.AsNoTracking().SingleAsync(x => x.Id == credited.Value.WalletLedgerEntryId);
                 var account = await db.WalletAccounts.AsNoTracking().SingleAsync(x => x.CustomerId == customerId);
                 Assert.Equal(receipt.AmountAppliedToman, ledger.AmountToman);
+                Assert.Equal(1, ledger.WalletVersionAfter);
                 Assert.Equal(ledger.BalanceAfterToman, account.BalanceToman);
                 Assert.Equal(await db.WalletLedgerEntries.Where(x => x.CustomerId == customerId).SumAsync(x => x.AmountToman), account.BalanceToman);
                 Assert.Contains(await db.AuditEntries.AsNoTracking().Where(x => x.CorrelationId == correlation).ToArrayAsync(),

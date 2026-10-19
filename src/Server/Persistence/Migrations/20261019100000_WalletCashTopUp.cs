@@ -21,6 +21,7 @@ public partial class WalletCashTopUp : Migration
                 received_by_operator_id = table.Column<Guid>(type: "uuid", nullable: false),
                 received_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                 idempotency_key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                request_fingerprint = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                 correlation_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                 source = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false)
             },
@@ -62,7 +63,8 @@ public partial class WalletCashTopUp : Migration
                 amount_toman = table.Column<long>(type: "bigint", nullable: false),
                 balance_after_toman = table.Column<long>(type: "bigint", nullable: false),
                 actor_id = table.Column<Guid>(type: "uuid", nullable: false),
-                occurred_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                occurred_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                wallet_version_after = table.Column<int>(type: "integer", nullable: false)
             },
             constraints: table =>
             {
@@ -70,6 +72,7 @@ public partial class WalletCashTopUp : Migration
                 table.CheckConstraint("ck_wallet_ledger_amount_positive", "amount_toman > 0");
                 table.CheckConstraint("ck_wallet_ledger_balance_after_covers_credit", "balance_after_toman >= amount_toman");
                 table.CheckConstraint("ck_wallet_ledger_entry_type", "entry_type = 1");
+                table.CheckConstraint("ck_wallet_ledger_wallet_version_positive", "wallet_version_after > 0");
                 table.ForeignKey("fk_wallet_ledger_customers_customer_id", x => x.customer_id, "customers", "id", onDelete: ReferentialAction.Restrict);
                 table.ForeignKey("fk_wallet_ledger_cash_receipts_cash_receipt_id", x => x.cash_receipt_id, "cash_receipts", "id", onDelete: ReferentialAction.Restrict);
             });

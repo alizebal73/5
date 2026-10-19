@@ -25,6 +25,7 @@ public sealed class CashReceiptConfiguration : IEntityTypeConfiguration<CashRece
         b.Property(x => x.ReceivedByOperatorId).IsRequired().HasColumnName("received_by_operator_id");
         b.Property(x => x.ReceivedAtUtc).IsRequired().HasColumnName("received_at_utc");
         b.Property(x => x.IdempotencyKey).HasMaxLength(200).IsRequired().HasColumnName("idempotency_key");
+        b.Property(x => x.RequestFingerprint).HasMaxLength(128).IsRequired().HasColumnName("request_fingerprint");
         b.Property(x => x.CorrelationId).HasMaxLength(128).IsRequired().HasColumnName("correlation_id");
         b.Property(x => x.Source).HasMaxLength(64).IsRequired().HasColumnName("source");
         b.HasIndex(x => new { x.ReceivedByOperatorId, x.IdempotencyKey }).IsUnique().HasDatabaseName("ux_cash_receipts_operator_idempotency");

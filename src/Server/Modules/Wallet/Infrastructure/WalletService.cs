@@ -45,14 +45,16 @@ public sealed class WalletService(
             : new WalletBalanceResponse(account.CustomerId, account.BalanceToman, account.Version, account.UpdatedAtUtc));
     }
 
-    public Task<Result<WalletCashTopUpResponse>> CashTopUpAsync(
+    public async Task<Result<WalletCashTopUpResponse>> CashTopUpAsync(
         CashTopUpWalletCommand command, CancellationToken cancellationToken)
     {
         if (!command.Actor.Permissions.Contains(Permissions.WalletWrite))
-            return Task.FromResult(Fail<WalletCashTopUpResponse>("wallet.forbidden", "Not allowed to add Wallet credit."));
+            return Fail<WalletCashTopUpResponse>("wallet.forbidden", "Not allowed to add Wallet credit.");
         if (command.CustomerId == Guid.Empty || command.ExpectedCustomerVersion < 1 ||
             command.AmountToCreditToman <= 0 || command.AmountReceivedToman < command.AmountToCreditToman)
-            return Task.FromResult(Fail<WalletCashTopUpResponse>("wallet.invalid", "Customer, expected version, credited amount or received cash is invalid."));
+            return Fail<WalletCashTopUpResponse>("wallet.invalid", "Customer, expected version, credited amount or received cash is invalid.");
+        if (string.IsNullOrWhiteSpace(command.IdempotencyKey))
+            return Fail<WalletCashTopUpResponse>("idempotency.required", "An idempotency key is required.");
 
         var scope = $"wallet.cash-top-up:{command.Actor.OperatorId:D}";
         var payload = new
@@ -63,13 +65,47 @@ public sealed class WalletService(
             command.ExpectedCustomerVersion
         };
 
+        var idempotencyKey = command.IdempotencyKey.Trim();
+        var requestHash = requestFingerprint.Compute(payload);
+
+        // The append-only Billing receipt is the durable replay anchor even after the
+        // generic idempotency response expires. This matters because an interrupted Desktop
+        // may retain its recovery marker beyond the generic one-day response-retention window.
+        var existingReceipt = await db.CashReceipts.AsNoTracking().SingleOrDefaultAsync(
+            x => x.ReceivedByOperatorId == command.Actor.OperatorId && x.IdempotencyKey == idempotencyKey,
+            cancellationToken);
+        if (existingReceipt is not null)
+        {
+            if (!string.Equals(existingReceipt.RequestFingerprint, requestHash, StringComparison.Ordinal))
+                return Fail<WalletCashTopUpResponse>("idempotency.key_reused", "The idempotency key was already used with a different request.");
+            var existingLedger = await db.WalletLedgerEntries.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.CashReceiptId == existingReceipt.Id, cancellationToken);
+            if (existingReceipt.CustomerId != command.CustomerId ||
+                existingReceipt.AmountAppliedToman != command.AmountToCreditToman ||
+                existingReceipt.AmountReceivedToman != command.AmountReceivedToman ||
+                existingLedger is null ||
+                existingLedger.CustomerId != existingReceipt.CustomerId ||
+                existingLedger.ActorId != command.Actor.OperatorId ||
+                existingLedger.EntryType != WalletLedgerEntryType.CashTopUp ||
+                existingLedger.AmountToman != existingReceipt.AmountAppliedToman ||
+                existingLedger.WalletVersionAfter < 1 ||
+                existingLedger.BalanceAfterToman < existingLedger.AmountToman)
+                return Fail<WalletCashTopUpResponse>("wallet.financial_records_inconsistent",
+                    "The durable cash receipt and Wallet ledger do not reconcile. No additional credit was applied.");
+
+            return Result<WalletCashTopUpResponse>.Success(new WalletCashTopUpResponse(
+                existingReceipt.CustomerId, existingReceipt.Id, existingLedger.Id, existingReceipt.AmountAppliedToman,
+                existingReceipt.AmountReceivedToman, existingReceipt.ChangeGivenToman, existingLedger.BalanceAfterToman,
+                existingLedger.WalletVersionAfter, existingReceipt.ReceivedAtUtc));
+        }
+
         // The Customer row lock serializes every Wallet mutation for this customer. Use
         // READ COMMITTED for this operation so statements after waiting on that lock see
         // the wallet row committed by the request that released it. A transaction-wide
         // SERIALIZABLE snapshot can predate that first account insert and miss the row.
-        return mutationPipeline.ExecuteAsync(
-            scope, "wallet.cash-top-up", command.IdempotencyKey,
-            requestFingerprint.Compute(payload), 200, Lease, Retention,
+        return await mutationPipeline.ExecuteAsync(
+            scope, "wallet.cash-top-up", idempotencyKey,
+            requestHash, 200, Lease, Retention,
             async token =>
             {
                 // Customer module owns registration/status/version rules and locks the row
@@ -111,15 +147,15 @@ public sealed class WalletService(
                 var receiptId = Guid.NewGuid();
                 var receiptResult = await cashReceiptWriter.RecordWalletTopUpAsync(new RecordWalletTopUpCashReceiptCommand(
                     receiptId, customer.CustomerId, command.AmountToCreditToman, command.AmountReceivedToman,
-                    command.Actor.OperatorId, now, command.IdempotencyKey.Trim(),
-                    command.Actor.CorrelationId, command.Actor.Source), token);
+                    command.Actor.OperatorId, now, idempotencyKey,
+                    command.Actor.CorrelationId, command.Actor.Source, requestHash), token);
                 if (!receiptResult.IsSuccess)
                     return Fail<WalletCashTopUpResponse>(receiptResult.Error.Code, receiptResult.Error.Message);
 
                 var ledgerId = Guid.NewGuid();
                 await db.WalletLedgerEntries.AddAsync(WalletLedgerEntry.RecordCashTopUp(
                     ledgerId, customer.CustomerId, receiptId, command.AmountToCreditToman,
-                    balanceAfter, command.Actor.OperatorId, now), token);
+                    balanceAfter, command.Actor.OperatorId, now, account.Version), token);
 
                 var response = new WalletCashTopUpResponse(
                     customer.CustomerId, receiptId, ledgerId, command.AmountToCreditToman,

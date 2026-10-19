@@ -14,9 +14,9 @@ public sealed class WalletDomainTests
         var balance = account.Credit(105_000, now);
 
         var receipt = CashReceipt.RecordWalletTopUp(Guid.NewGuid(), account.CustomerId,
-            105_000, 110_000, Guid.NewGuid(), now, "wallet-test-1", "correlation-1", "UnitTest");
+            105_000, 110_000, Guid.NewGuid(), now, "wallet-test-1", "correlation-1", "UnitTest", "fingerprint-test-1");
         var entry = WalletLedgerEntry.RecordCashTopUp(Guid.NewGuid(), account.CustomerId, receipt.Id,
-            105_000, balance, receipt.ReceivedByOperatorId, now);
+            105_000, balance, receipt.ReceivedByOperatorId, now, account.Version);
 
         Assert.Equal(105_000, account.BalanceToman);
         Assert.Equal(1, account.Version);
@@ -52,13 +52,13 @@ public sealed class WalletDomainTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => CashReceipt.RecordWalletTopUp(
             Guid.NewGuid(), Guid.NewGuid(), 100, 99, Guid.NewGuid(), DateTimeOffset.UtcNow,
-            "wallet-underpaid", "correlation", "UnitTest"));
+            "wallet-underpaid", "correlation", "UnitTest", "fingerprint-underpaid"));
     }
 
     [Fact]
     public void Ledger_RejectsBalanceAfterBelowCredit()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => WalletLedgerEntry.RecordCashTopUp(
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100, 99, Guid.NewGuid(), DateTimeOffset.UtcNow));
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 100, 99, Guid.NewGuid(), DateTimeOffset.UtcNow, 1));
     }
 }
