@@ -4,6 +4,7 @@ Authoritative mutations run inside an explicit transaction boundary owned by the
 
 Rules:
 - serializable isolation is the initial safety baseline for contention-sensitive operations;
+- a use case may choose a weaker isolation level only when an explicit lock covers its full contention key, the reason is documented, and PostgreSQL tests cover independent concurrent first-write and repeat-write requests;
 - retry only when the operation is retry-safe and idempotent;
 - no network, Agent, SignalR, filesystem or irreversible side effect inside the transaction;
 - audit and Outbox records that must be atomic are written in the same transaction;

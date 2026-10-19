@@ -24,7 +24,8 @@ public sealed class CommandMutationPipeline(
         TimeSpan leaseDuration,
         TimeSpan retention,
         Func<CancellationToken, Task<Result<T>>> action,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.Serializable)
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
             return Fail<T>("idempotency.required", "A valid Idempotency-Key is required.");
@@ -59,7 +60,7 @@ public sealed class CommandMutationPipeline(
                     scope, normalizedKey, claim.LeaseToken, statusCode, JsonSerializer.Serialize(result.Value), token);
 
                 return result;
-            }, cancellationToken);
+            }, cancellationToken, isolationLevel);
         }
         catch (AbortMutation ex)
         {

@@ -6,6 +6,7 @@ using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Stations;
 using GameNet.Desktop.Features.Sessions;
+using GameNet.Desktop.Features.Wallet;
 using GameNet.Shared.Contracts.V1.Identity;
 using GameNet.Shared.Contracts.V1.Security;
 
@@ -26,11 +27,17 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     public LoginViewModel(IGameNetServerClient serverClient)
     {
         this.serverClient = serverClient;
-        LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
-        LogoutCommand = new AsyncUiAction(LogoutAsync, () => !IsBusy && IsAuthenticated);
-        ChangePasswordCommand = new AsyncUiAction(ChangePasswordAsync, () => !IsBusy && IsAuthenticated);
         StationBoard = new StationBoardViewModel(serverClient, HasPermission);
         SessionWorkflow = new SessionWorkflowViewModel(serverClient, HasPermission);
+        SessionWorkflow.WalletTopUp.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(IWalletTopUpPort.IsBusy))
+                RaiseCommands();
+        };
+        LoginCommand = new AsyncUiAction(LoginAsync, () => !IsBusy && !IsAuthenticated);
+        LogoutCommand = new AsyncUiAction(LogoutAsync, () =>
+            !IsBusy && IsAuthenticated && !SessionWorkflow.WalletTopUp.IsBusy);
+        ChangePasswordCommand = new AsyncUiAction(ChangePasswordAsync, () => !IsBusy && IsAuthenticated);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -68,6 +75,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
 
     private async Task LoginAsync()
     {
+        SessionWorkflow.WalletTopUp.SetCurrentOperatorId(null);
         SetPermissions(Array.Empty<string>());
         ErrorMessage = string.Empty;
         if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
@@ -83,6 +91,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             SetPermissions(current.Permissions ?? Array.Empty<string>());
             DisplayName = current.DisplayName;
             CurrentUsername = current.Username;
+            SessionWorkflow.WalletTopUp.SetCurrentOperatorId(current.UserId);
             IsAuthenticated = true;
             Password = string.Empty;
             await StationBoard.RefreshAsync();
@@ -221,6 +230,7 @@ public sealed class LoginViewModel : INotifyPropertyChanged
             CurrentUsername = string.Empty;
             Password = string.Empty;
             StationBoard.ClearLocalState();
+            SessionWorkflow.WalletTopUp.SetCurrentOperatorId(null);
             SessionWorkflow.Reset();
             CurrentPassword = string.Empty;
             NewPassword = string.Empty;

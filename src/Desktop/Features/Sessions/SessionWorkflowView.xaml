@@ -1,6 +1,7 @@
 <UserControl x:Class="GameNet.Desktop.Features.Sessions.SessionWorkflowView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wallet="clr-namespace:GameNet.Desktop.Features.Wallet"
              MinWidth="0" MinHeight="0">
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
@@ -133,6 +134,7 @@
                   <Button Content="{DynamicResource Customer.Deactivate}" Command="{Binding DeactivateCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
                   <Button Content="{DynamicResource Customer.Block}" Command="{Binding BlockCustomerCommand}" Padding="6,4" Margin="0,0,4,4"/>
                 </WrapPanel>
+                <wallet:WalletTopUpView DataContext="{Binding WalletTopUp}"/>
               </StackPanel>
             </Expander>
 

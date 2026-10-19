@@ -69,6 +69,7 @@ public sealed partial class SessionWorkflowViewModel
             }
             OnPropertyChanged(nameof(CustomerStatusSummaryText));
             OnPropertyChanged(nameof(IsNewCustomer));
+            WalletTopUp.SelectedCustomer = value;
             RaiseCustomerCommands();
         }
     }
@@ -81,7 +82,6 @@ public sealed partial class SessionWorkflowViewModel
     public string CustomerPhoneText { get => customerPhoneText; set { if (SetField(ref customerPhoneText, value)) RaiseCustomerCommands(); } }
     public string CustomerStatusReasonText { get => customerStatusReasonText; set { if (SetField(ref customerStatusReasonText, value)) RaiseCustomerCommands(); } }
     public bool CustomerIncludeInactive { get => customerIncludeInactive; set { if (SetField(ref customerIncludeInactive, value)) RaiseCustomerCommands(); } }
-
     public string CustomerStatusSummaryText => SelectedManagedCustomer?.Status switch
     {
         CustomerStatusContract.Active => Text("وضعیت مشتری: فعال", "Customer status: Active"),

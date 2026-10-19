@@ -6,11 +6,13 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Wallet;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
+using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
@@ -70,10 +72,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             correctedReceived != (selected.Outcome.EffectiveAmountReceivedToman ?? selected.Outcome.AmountReceivedToman) &&
             IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
             ConfirmCashTenderCorrection);
+        WalletTopUp = new WalletTopUpViewModel(api, hasPermission);
         InitializeCustomerCommands();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public IWalletTopUpPort WalletTopUp { get; }
 
     public ObservableCollection<StationResponse> PcStations { get; } = [];
     public ObservableCollection<TariffResponse> Tariffs { get; } = [];
@@ -400,6 +405,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(nameof(CanUseWorkspace));
         RaiseCommands();
         EnforceCustomerPermissions();
+        WalletTopUp.NotifyPermissionsChanged();
     }
 
     public void Reset()
@@ -429,6 +435,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         ConfirmTimingRecovery = false;
         timingRecoveryRequiredSessionId = null;
         ResetCustomerState();
+        WalletTopUp.Reset();
         OnPropertyChanged(nameof(CanRecoverSessionTiming));
         RaiseCommands();
         ErrorMessage = string.Empty;

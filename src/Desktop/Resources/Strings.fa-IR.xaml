@@ -105,4 +105,8 @@
   <system:String x:Key="Customer.Activate">فعال‌سازی</system:String>
   <system:String x:Key="Customer.Deactivate">غیرفعال‌سازی</system:String>
   <system:String x:Key="Customer.Block">مسدودسازی</system:String>
+  <system:String x:Key="Wallet.TopUpTitle">شارژ کیف پول</system:String>
+  <system:String x:Key="Wallet.CreditAmount">مبلغی که به کیف پول اضافه می‌شود (تومان)</system:String>
+  <system:String x:Key="Wallet.CashReceived">وجه نقدی که واقعاً دریافت شد (تومان)</system:String>
+  <system:String x:Key="Wallet.TopUp">ثبت شارژ نقدی</system:String>
 </ResourceDictionary>

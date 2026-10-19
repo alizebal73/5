@@ -422,6 +422,8 @@ Acceptance:
 
 ## Stage 7 — Tariffs, billing and wallet
 
+**Current bounded candidate (2026-10-19):** Issue #137 / PR #145 adds operator-only purchased-value cash top-up through WPF → Server → PostgreSQL with an actual cash receipt, immutable Wallet ledger, balance projection, idempotency, Audit and dedicated tests. It remains a candidate until the latest exact-SHA CI and review/acceptance checks are green; do not describe the whole Wallet module as complete or promote it before that evidence. Customer PIN/self-login, Wallet spending against Sessions, countdown/PC control, debt/free credit/time, discounts/VIP, card/terminal and refunds remain separate later slices.
+
 Implement:
 
 - a Server-owned base tariff for every supported station type before the first usable Session flow for that type;

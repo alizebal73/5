@@ -10,7 +10,7 @@ Use the live Integration branch and relevant PR/Actions evidence when verifying 
 - A Desktop operation uses `IGameNetServerClient` and typed Shared V1 contracts. Desktop/Agent never connect directly to PostgreSQL.
 - Mutations use the Server's stable error contract, actor/correlation data, idempotency and Audit behavior as listed below. Never invent a local success path or assume a timeout means the mutation failed.
 - `Desktop UI: yes` means an action is reachable in the current WPF shell. `Server API only` means the API exists, but no operator-management screen/command is currently wired in this Desktop shell.
-- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, and the integrated full cash-sale reversal action. It does not describe the full future scope: customer profiles/login, Wallet/debt, card payments, tender correction, partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
+- This catalog covers current Identity/Station operations, the partial Slice 1 Session-to-cash implementation, the integrated full cash-sale reversal action, and the Draft Wallet cash top-up candidate. Wallet cash top-up is not yet accepted until exact-head CI and independent financial reconciliation pass. Customer PIN/login, Wallet spending on Sessions, debt/free credit, card payments, partial refunds, PS5/foosball timed billing, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. Define any new action contract before adding its UI Command.
 
 ## 1. Current Desktop Identity operations
 
@@ -231,17 +231,40 @@ The endpoints below exist in the current Server, but this initial Desktop shell 
 - **UI entry / states:** `ReverseCashSaleCommand` in the Session workflow WPF view. The operator selects a recent paid cash checkout, reviews the amount, enters a reason and explicitly confirms. If a response is lost, the command remains blocked until the durable Server outcome proves whether it committed; no optimistic success or blind second refund.
 - **Evidence / acceptance:** `BillingService.ReverseCashSaleAsync`, `CashSaleReversal`, migration `20261016100000_CashSaleReversal`, `CashSaleReversalTests`, `SessionWorkflowPostgresTests` and `SessionWorkflowViewModelTests`. PR #120 was squash-merged to `integration/runtime-operator-v1` at merge SHA `0660e632f0e38ec1654a2830f633e2f3cd60ae5f`. Its exact PR head `ad92960382088872b1da0441241f4d71ff3603f9` passed Quick Validation, Full Foundation (PostgreSQL, backup/restore, Desktop and Agent runtime certification), and the Runtime LAN Smoke Payload artifact build. Post-merge Quick Validation passed on the merge SHA. This action remains unaccepted for operational use until manual WPF acceptance/recovery testing and independent Invoice/Payment/Reversal/Ledger/Audit reconciliation are recorded. Cash tender correction remains a separate not-yet-implemented action.
 
-## 6. Cross-cutting error and permission rules
+
+## 6. Wallet cash top-up — candidate, not yet accepted
+
+**Acceptance boundary:** this new candidate is being built on PR #145 and is not yet accepted for use with real money. It adds purchased-value credit only. Customer self-login/PIN, Wallet spending against PC Sessions, session countdown/PC control, bonus/free time, debt, discounts/VIP, card/terminal, refunds and PS/foosball remain separate future capabilities. A successful UI response or a green unit-test run alone does not accept the action.
+
+### `wallet.balance.read`
+- **Owner / outcome:** Wallet; read the current balance projection for one registered customer.
+- **Contract:** `GET /api/v1/wallet/customers/{customerId}/balance` → `WalletBalanceResponse`.
+- **Permission / preconditions:** authenticated Operator with Server-side `wallet.write`; only registered customers have Wallet accounts.
+- **Idempotency / concurrency:** read-only; no key. The response includes Wallet version and the projection's last update timestamp. A future spend mutation must enforce current balance atomically on the Server.
+- **Audit:** no mutation Audit expected.
+- **UI entry / states:** customer-management's collapsed Wallet panel. It shows the Server-provided balance; it must not infer a balance from the operator's local input.
+- **Evidence / acceptance:** `WalletEndpoints`, `WalletService.GetBalanceAsync`, `IGameNetServerClient.GetWalletBalanceAsync`; exact-SHA and manual acceptance remain pending.
+
+### `wallet.cash-top-up`
+- **Owner / outcome:** Wallet coordinates a cash top-up for a registered, active, unblocked customer; Billing owns the immutable cash receipt, Wallet owns its ledger entry and balance projection.
+- **Contract:** `POST /api/v1/wallet/customers/{customerId}/cash-top-up`; `WalletCashTopUpRequest → WalletCashTopUpResponse`; `Idempotency-Key` required. Request fields are amount applied to Wallet, physical cash received, and expected Customer version.
+- **Permission / preconditions:** authenticated Operator with Server-side `wallet.write`; registered customer required, inactive/blocked customers rejected, expected Customer version must match, and cash received must be at least the credited amount. All amounts are positive integer Toman in signed 64-bit storage; excess cash is change, never extra Wallet credit.
+- **Idempotency / concurrency:** shared `CommandMutationPipeline`, request fingerprint and customer-row lock; changed payload under the same key conflicts. The Wallet projection, immutable cash receipt, immutable ledger movement, idempotency record and Audit events must commit or roll back together. The ledger and cash receipt are append-only; corrections require a separate compensating action.
+- **Audit:** `wallet.cash_top_up` records the customer, cash receipt/ledger identifiers, credited value, received cash, change and resulting balance; Billing also records the physical cash receipt Audit event.
+- **UI entry / states:** the collapsed `WalletTopUpView` under Customer Management. The UI previews credit, received cash and change but does not calculate authoritative money or update a balance locally. Denied/invalid/inactive/version-conflict/overflow/in-flight/key-reuse/server-error/timeout states must not claim success. Before sending a mutation, it writes the exact unresolved request (original Operator ID, Customer ID/version, integer-Toman amounts and idempotency key; no credentials) to the current Windows user's LocalAppData recovery file. On restart the same operator can replay the same key; a different operator or unreadable recovery file blocks new top-ups. Ambiguous results keep the exact key and block a different top-up until reconciled.
+- **Evidence / acceptance:** `WalletService`, `CustomerWalletEligibilityService`, `CashReceipt`, `WalletLedgerEntry`, migration `20261019100000_WalletCashTopUp`, `WalletDomainTests`, `WalletCashTopUpPostgresTests`, and `Wallet_top_up_reuses_persisted_idempotency_key_after_lost_response_and_app_restart`. PostgreSQL reconciliation, exact-head CI and manual acceptance are still required before calling the action accepted.
+
+## 7. Cross-cutting error and permission rules
 
 - Station list and health probe require `stations.read`; station mutation requires `stations.operate`. The Server checks these; UI `CanExecute` never grants authority.
 - Current station mutation typed error codes include `stations.forbidden`, `stations.invalid`, `stations.code_exists`, `stations.not_found`, `stations.agent_not_provisioned`, `stations.agent_not_applicable`, `stations.agent_not_bound`, `stations.device_already_bound`, `stations.version_conflict`, `stations.invalid_transition`, `idempotency.required`, `idempotency.in_flight`, `idempotency.key_reused` and `security.https_required`.
 - Login's current unauthenticated response normalizes invalid credentials, disabled accounts and locked accounts to avoid account-state disclosure; treat any client message as presentation, not as a second authority.
 - The current Windows shell uses inherited `LoginViewModel` DataContext for both shell and StationBoard View. The View has no direct database access, no business code-behind, and no invented success path.
 
-## 7. Verification evidence and future updates
+## 8. Verification evidence and future updates
 
 - View extraction / binding checks: update `tests/Desktop.Tests/DesktopBindingAndPasswordContractTests.cs`, `DesktopResourceContractTests.cs`, and `StationBoardViewBoundaryTests.cs` when applicable.
 - Existing permission, filter and client/server behavior coverage: `StationBoardPermissionTests.cs`, `StationBoardFilterTests.cs`, `GameNetServerClientStationTests.cs`, `StationService` and `StationAgentHealthService` tests.
 - For any new action, add Requirement ID, stable Action ID, owner module, Shared request/response, server permission, idempotency/optimistic-concurrency semantics, Audit/outbox effects, every UI entry point, disabled/busy/loading/empty/offline/timeout/denied/conflict/success states, and exact-SHA tests.
-- **Catalog completeness is intentionally limited** to current Identity/Station actions, Customer profile core in section 3, and the partial Slice 1 Session-to-cash actions in section 4. Customer PIN/login, Wallet/debt, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work.
+- **Catalog completeness is intentionally limited** to current Identity/Station actions, Customer profile core in section 3, and the partial Slice 1 Session-to-cash actions in section 4. Customer PIN/login, Wallet spending on Sessions, debt/free credit, refunds/card, Buffet/Inventory, VIP, Reports, Shifts and full Settings workflows remain future work. The Wallet cash top-up candidate is documented in section 6 but is not yet accepted.
 
