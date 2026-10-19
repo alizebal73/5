@@ -65,8 +65,12 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             parameter => !IsBusy && CanOperateSessions && CanReadCustomers &&
                 prepaidStationEntryCoordinator.CanPrompt &&
                 parameter is StationResponse { Type: StationTypeContract.Pc, Status: StationStatusContract.Available });
-        EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
+        PauseSessionCommand = new AsyncUiAction(PauseSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
+        ResumeSessionCommand = new AsyncUiAction(ResumeSessionAsync, () => !IsBusy && CanOperateSessions &&
+            SelectedActiveSession?.Session.Status == SessionStatusContract.Paused);
+        EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
+            SelectedActiveSession?.Session.Status is SessionStatusContract.Active or SessionStatusContract.Paused);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, CanCheckoutCashNow);
         ReverseCashSaleCommand = new AsyncUiAction(ReverseCashSaleAsync, () => !IsBusy && CanReverseCashSale &&
             !unresolvedCashSaleReversalInvoiceId.HasValue &&
@@ -94,6 +98,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ICommand StartSessionCommand { get; }
     public ICommand StartPrepaidSessionFromStationCommand { get; }
     public ICommand EndSessionCommand { get; }
+    public ICommand PauseSessionCommand { get; }
+    public ICommand ResumeSessionCommand { get; }
     public ICommand CheckoutCashCommand { get; }
 
     public bool CanManageTariffs => hasPermission(Permissions.SettingsWrite);
@@ -564,6 +570,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (StartPrepaidSessionFromStationCommand as AsyncParameterUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        RaiseLifecycleCommands();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
