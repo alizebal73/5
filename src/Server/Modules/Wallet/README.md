@@ -13,6 +13,7 @@ Own purchased stored value, free money, free time and debt ledgers plus reconcil
 - Wallet-owned immutable ledger entry and balance projection update atomically with the cash receipt, idempotency record and Audit.
 - Whole-Toman signed 64-bit amounts only; excess tender is change, never extra credit.
 - Wallet ledger and receipt rows reject update/delete; corrections must be compensating, separately authorized operations.
+- Desktop persists the exact unresolved top-up request and idempotency key in the current Windows user's LocalAppData before sending money-mutating HTTP. It stores no credential. An unreadable recovery file or a pending request from another operator fails closed; only the original operator can replay the same request and clear the marker.
 
 ## Explicitly not implemented by this slice
 
