@@ -97,10 +97,10 @@ public sealed class WalletCashTopUpPostgresTestsConcurrency
                 {
                     await using var guard = CreateContext(connectionString!);
                     await guard.Database.ExecuteSqlInterpolatedAsync(
-                        $"UPDATE wallet_ledger_entries SET amount_toman = amount_toman + 1 WHERE id = {ledgerId}");
+                        $"UPDATE wallet_ledger_entries SET actor_id = {Guid.NewGuid()} WHERE id = {ledgerId}");
                 });
                 Assert.NotNull(ledgerUpdateFailure);
-                Assert.Contains("WALLET_FINANCIAL_RECORD_APPEND_ONLY", ledgerUpdateFailure!.ToString(), StringComparison.Ordinal);
+                AssertAppendOnlyViolation(ledgerUpdateFailure);
 
                 var ledgerDeleteFailure = await Record.ExceptionAsync(async () =>
                 {
@@ -109,16 +109,16 @@ public sealed class WalletCashTopUpPostgresTestsConcurrency
                         $"DELETE FROM wallet_ledger_entries WHERE id = {ledgerId}");
                 });
                 Assert.NotNull(ledgerDeleteFailure);
-                Assert.Contains("WALLET_FINANCIAL_RECORD_APPEND_ONLY", ledgerDeleteFailure!.ToString(), StringComparison.Ordinal);
+                AssertAppendOnlyViolation(ledgerDeleteFailure);
 
                 var receiptUpdateFailure = await Record.ExceptionAsync(async () =>
                 {
                     await using var guard = CreateContext(connectionString!);
                     await guard.Database.ExecuteSqlInterpolatedAsync(
-                        $"UPDATE cash_receipts SET amount_received_toman = amount_received_toman + 1 WHERE id = {receiptId}");
+                        $"UPDATE cash_receipts SET source = source || '-tamper' WHERE id = {receiptId}");
                 });
                 Assert.NotNull(receiptUpdateFailure);
-                Assert.Contains("WALLET_FINANCIAL_RECORD_APPEND_ONLY", receiptUpdateFailure!.ToString(), StringComparison.Ordinal);
+                AssertAppendOnlyViolation(receiptUpdateFailure);
 
                 var receiptDeleteFailure = await Record.ExceptionAsync(async () =>
                 {
@@ -127,7 +127,7 @@ public sealed class WalletCashTopUpPostgresTestsConcurrency
                         $"DELETE FROM cash_receipts WHERE id = {receiptId}");
                 });
                 Assert.NotNull(receiptDeleteFailure);
-                Assert.Contains("WALLET_FINANCIAL_RECORD_APPEND_ONLY", receiptDeleteFailure!.ToString(), StringComparison.Ordinal);
+                AssertAppendOnlyViolation(receiptDeleteFailure);
             }
         }
         finally
@@ -137,6 +137,13 @@ public sealed class WalletCashTopUpPostgresTestsConcurrency
             // test must not disable their guards or delete the evidence it just verified.
             // Foundation creates and destroys this isolated database for the certification run.
         }
+    }
+
+    private static void AssertAppendOnlyViolation(Exception? exception)
+    {
+        var postgres = Assert.IsType<Npgsql.PostgresException>(exception);
+        Assert.Equal("P0001", postgres.SqlState);
+        Assert.StartsWith("WALLET_FINANCIAL_RECORD_APPEND_ONLY:", postgres.MessageText);
     }
 
     private static async Task<Result<WalletCashTopUpResponse>> ExecuteTopUpAsync(
