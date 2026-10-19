@@ -24,7 +24,7 @@ public sealed class WalletEndpointContractTests
         using var app = builder.Build();
         app.MapWalletEndpoints();
 
-        var routes = app.DataSources
+        var routes = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>()
             .ToArray();
