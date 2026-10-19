@@ -49,6 +49,25 @@ public static class SessionEndpoints
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.SessionsOperate);
 
+        group.MapPost("/prepaid", async (
+            StartSessionRequest request,
+            ISessionService service,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryGetActor(context, out var actor))
+                return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
+
+            var command = new StartSessionCommand(
+                request.StationId, request.TariffId, request.CustomerId,
+                context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
+            var result = await service.StartPrepaidAsync(command, cancellationToken);
+            return result.IsSuccess
+                ? Results.Created($"/api/v1/sessions/{result.Value.Id:D}",
+                    new ApiEnvelope<SessionResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
+                : Failure(result.Error, context);
+        }).RequireAuthorization(Permissions.SessionsOperate);
+
         group.MapPost("/{id:guid}/end", async (
             Guid id,
             EndSessionRequest request,
@@ -119,11 +138,13 @@ public static class SessionEndpoints
             "sessions.forbidden" => StatusCodes.Status403Forbidden,
             "sessions.not_found" or "sessions.station_not_found" or "sessions.tariff_not_found" or "sessions.customer_not_found" => StatusCodes.Status404NotFound,
             "sessions.customer_blocked" => StatusCodes.Status409Conflict,
-            "sessions.station_unavailable" or "sessions.agent_unavailable" or "sessions.station_has_active_session" or "sessions.station_pending_settlement" or "sessions.tariff_station_mismatch" or
+            "sessions.station_unavailable" or "sessions.agent_unavailable" or "sessions.station_has_active_session" or "sessions.station_pending_settlement" or "sessions.customer_has_active_session" or "sessions.prepaid_budget_exceeded" or
+            "sessions.tariff_station_mismatch" or "wallet.insufficient_balance" or "wallet.prepaid_reservation_active" or "wallet.prepaid_budget_exceeded" or
+            "wallet.reservation_missing" or "wallet.reservation_inconsistent" or "wallet.customer_inactive" or "billing.invoice_not_pending" or
             "sessions.version_conflict" or "sessions.invalid_state" or "sessions.invalid_clock" or "sessions.amount_overflow" or
-            "sessions.timing_recovery_required" or "sessions.timing_recovery_not_required" or
+            "sessions.timing_recovery_required" or "sessions.timing_recovery_not_required" or "billing.non_cash_invoice" or
             "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
-            "sessions.pc_only" or "sessions.timing_recovery_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "sessions.pc_only" or "sessions.prepaid_customer_required" or "sessions.timing_recovery_invalid" or "wallet.invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(

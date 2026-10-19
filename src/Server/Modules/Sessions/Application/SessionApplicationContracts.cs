@@ -10,6 +10,7 @@ public sealed record ReconcileSessionTimingCommand(Guid SessionId, int ExpectedS
 public interface ISessionService
 {
     Task<GameNet.Shared.Primitives.Result<SessionResponse>> StartAsync(StartSessionCommand command, CancellationToken cancellationToken);
+    Task<GameNet.Shared.Primitives.Result<SessionResponse>> StartPrepaidAsync(StartSessionCommand command, CancellationToken cancellationToken) => StartAsync(command, cancellationToken);
     Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> EndAsync(EndSessionCommand command, CancellationToken cancellationToken);
     Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> ReconcileTimingAsync(ReconcileSessionTimingCommand command, CancellationToken cancellationToken);
     Task<GameNet.Shared.Primitives.Result<IReadOnlyList<SessionResponse>>> ListActiveAsync(SessionActorContext actor, Guid? stationId, CancellationToken cancellationToken);

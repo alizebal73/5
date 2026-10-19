@@ -29,4 +29,16 @@ public interface IBillingInvoiceWriter
     Task<Result<InvoicePreviewResponse>> CreatePendingAsync(
         CreatePendingInvoiceCommand command,
         CancellationToken cancellationToken);
+
+    Task<Result<InvoicePreviewResponse>> MarkPrepaidPaidAsync(
+        Guid invoiceId,
+        int sessionVersion,
+        Guid paidByOperatorId,
+        DateTimeOffset paidAtUtc,
+        string correlationId,
+        string source,
+        string idempotencyKey,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(Result<InvoicePreviewResponse>.Failure(
+            new Error("billing.prepaid_writer_unavailable", "Prepaid invoice settlement is not configured.")));
 }

@@ -106,6 +106,10 @@ public sealed partial class BillingService(
 
         var payment = await db.Payments.AsNoTracking()
             .SingleOrDefaultAsync(x => x.InvoiceId == invoiceId, cancellationToken);
+        if ((invoice.Status == InvoiceStatus.Paid || invoice.Status == InvoiceStatus.Reversed) &&
+            (payment is null || payment.Method != PaymentMethod.Cash))
+            return Fail<CashCheckoutOutcomeResponse>("billing.non_cash_invoice",
+                "This invoice was settled from prepaid Wallet credit, not by cash checkout.");
         var saleLedger = await db.BillingLedgerEntries.AsNoTracking()
             .SingleOrDefaultAsync(x => x.InvoiceId == invoiceId && x.EntryType == BillingLedgerEntryType.CashSale, cancellationToken);
         var reversalLedger = await db.BillingLedgerEntries.AsNoTracking()
@@ -129,7 +133,8 @@ public sealed partial class BillingService(
 
         const int historyLimit = 20;
         var invoices = await db.Invoices.AsNoTracking()
-            .Where(x => x.Status == InvoiceStatus.Paid || x.Status == InvoiceStatus.Reversed)
+            .Where(x => (x.Status == InvoiceStatus.Paid || x.Status == InvoiceStatus.Reversed) &&
+                db.Payments.Any(payment => payment.InvoiceId == x.Id && payment.Method == PaymentMethod.Cash))
             .OrderByDescending(x => x.PaidAtUtc)
             .ThenBy(x => x.Id)
             .Take(historyLimit)

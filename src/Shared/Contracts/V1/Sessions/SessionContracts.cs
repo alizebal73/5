@@ -34,7 +34,9 @@ public sealed record SessionResponse(
     Guid? PaidByOperatorId,
     DateTimeOffset? PaidAtUtc,
     SessionStatusContract Status,
-    int Version);
+    int Version,
+    long? PrepaidReservedAmountToman = null,
+    long? PrepaidBudgetTicks = null);
 
 public sealed record InvoicePreviewResponse(
     Guid InvoiceId,
