@@ -111,7 +111,6 @@ public sealed class SessionTests
     public void Session_rejects_mixed_or_missing_actor_identity()
     {
         var start = DateTimeOffset.Parse("2026-10-14T10:00:00Z");
-        var args = new object[] { };
         Assert.Throws<ArgumentException>(() => Session.Start(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             "PC-STANDARD", "PC Standard", 60_000L, Guid.Empty, start,
@@ -126,7 +125,10 @@ public sealed class SessionTests
             TimeSpan.FromMinutes(1).Ticks, endedBySystem: true));
         Assert.Throws<ArgumentException>(() => session.End(Guid.Empty, start.AddMinutes(1),
             TimeSpan.FromMinutes(1).Ticks));
-        Assert.Throws<ArgumentException>(() => session.MarkPaid(Guid.Empty, start.AddMinutes(1)));
+
+        var pending = NewSession(start);
+        pending.End(Guid.NewGuid(), start.AddMinutes(1), TimeSpan.FromMinutes(1).Ticks);
+        Assert.Throws<ArgumentException>(() => pending.MarkPaid(Guid.Empty, start.AddMinutes(2)));
     }
 
     private static Session NewSession(DateTimeOffset start) => Session.Start(
