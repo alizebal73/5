@@ -21,6 +21,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
+    private readonly ICustomerEntryPrompt? customerEntryPrompt;
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
@@ -36,10 +37,14 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     private bool isBusy;
     private int busyDepth;
 
-    public SessionWorkflowViewModel(IGameNetServerClient api, Func<string, bool> hasPermission)
+    public SessionWorkflowViewModel(
+        IGameNetServerClient api,
+        Func<string, bool> hasPermission,
+        ICustomerEntryPrompt? customerEntryPrompt = null)
     {
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
+        this.customerEntryPrompt = customerEntryPrompt;
         CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
@@ -52,6 +57,11 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedStation is not null &&
             !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
             !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
+        StartPrepaidSessionFromStationCommand = new AsyncParameterUiAction(
+            StartPrepaidSessionFromStationAsync,
+            parameter => !IsBusy && CanOperateSessions && CanReadCustomers &&
+                customerEntryPrompt is not null &&
+                parameter is StationResponse { Type: StationTypeContract.Pc, Status: StationStatusContract.Available });
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
@@ -92,6 +102,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
     public ICommand StartSessionCommand { get; }
+    public ICommand StartPrepaidSessionFromStationCommand { get; }
     public ICommand EndSessionCommand { get; }
     public ICommand CheckoutCashCommand { get; }
 
@@ -510,6 +521,74 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         finally { EndBusy(); }
     }
 
+    private async Task StartPrepaidSessionFromStationAsync(object? parameter)
+    {
+        if (parameter is not StationResponse station ||
+            station.Type != StationTypeContract.Pc ||
+            station.Status != StationStatusContract.Available ||
+            customerEntryPrompt is null)
+            return;
+
+        var enteredCode = customerEntryPrompt.PromptForCustomerCode(station);
+        if (enteredCode is null)
+            return;
+
+        var customerCode = enteredCode.Trim();
+        if (customerCode.Length == 0)
+        {
+            ErrorMessage = Text("شناسه مشتری را وارد کنید.", "Enter a Customer ID.");
+            return;
+        }
+
+        BeginBusy();
+        ErrorMessage = string.Empty;
+        try
+        {
+            var candidates = await api.GetCustomersAsync(customerCode, includeInactive: true);
+            var customer = candidates.SingleOrDefault(x =>
+                string.Equals(x.Code, customerCode, StringComparison.OrdinalIgnoreCase));
+            if (customer is null)
+            {
+                ErrorMessage = Text("مشتری با این شناسه پیدا نشد.", "No customer was found with that ID.");
+                return;
+            }
+            if (customer.Kind != GameNet.Shared.Contracts.V1.Customers.CustomerKindContract.Registered ||
+                customer.Status != GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active)
+            {
+                ErrorMessage = customer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Blocked
+                    ? Text("این مشتری مسدود است.", "This customer is blocked.")
+                    : Text("برای ورود باید یک مشتری ثبت‌شده و فعال انتخاب شود.", "Entry requires an active registered customer.");
+                return;
+            }
+
+            var fingerprint = $"{station.Id:D}|{customer.Id:D}";
+            var key = GetKey("session.prepaid-start", fingerprint);
+            var session = await api.StartPrepaidSessionAsync(
+                new StartPrepaidSessionRequest(station.Id, customer.Id), key);
+            pendingKeys.Remove("session.prepaid-start");
+
+            await RefreshAsync();
+            SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
+            StatusMessage = Text(
+                $"مشتری {customer.Code} روی {station.Code} وارد شد؛ اعتبار رزروشده {FormatToman(session.PrepaidReservedAmountToman ?? 0)} تومان.",
+                $"Customer {customer.Code} started on {station.Code}; {FormatToman(session.PrepaidReservedAmountToman ?? 0)} Toman was reserved.");
+        }
+        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = Text("پاسخ شروع ورود مشتری نامشخص است؛ وضعیت را تازه‌سازی کنید.", "Customer entry result is unknown; refresh to reconcile.");
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorMessage = Text("پاسخی از سرور دریافت نشد؛ پیش از تلاش مجدد وضعیت را تازه‌سازی کنید.", "The Server did not respond; refresh before retrying.");
+        }
+        catch
+        {
+            ErrorMessage = Text("ورود مشتری انجام نشد؛ وضعیت را تازه‌سازی کنید.", "Customer entry failed; refresh to reconcile.");
+        }
+        finally { EndBusy(); }
+    }
+
     private string GetStationLabel(Guid stationId)
     {
         return stationLabels.TryGetValue(stationId, out var stationCode) &&
@@ -610,6 +689,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
         "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
         "sessions.customer_blocked" => Text("این مشتری مسدود است و نمی‌تواند Session جدیدی شروع کند.", "This customer is blocked and cannot start a new Session."),
+        "sessions.customer_has_active_session" => Text("این مشتری روی رایانهٔ دیگری Session فعال دارد.", "This customer already has an active Session on another PC."),
+        "sessions.prepaid_customer_required" => Text("شناسهٔ مشتری ثبت‌شده لازم است.", "A registered Customer ID is required."),
+        "sessions.default_pc_tariff_not_found" => Text("تعرفهٔ پیش‌فرض فعال PC تنظیم نشده است.", "No active default PC tariff is configured."),
+        "wallet.insufficient_balance" => Text("اعتبار کیف پول مشتری کافی نیست.", "The customer's Wallet does not have enough credit."),
+        "wallet.prepaid_reservation_active" => Text("اعتبار این مشتری قبلاً برای یک Session رزرو شده است.", "This customer's credit is already reserved by an active Session."),
+        "wallet.prepaid_budget_exceeded" or "sessions.prepaid_budget_exceeded" => Text("شارژ جلسه از اعتبار رزروشده بیشتر است؛ پرداخت انجام نشد.", "The Session charge exceeds its prepaid reservation; settlement was not confirmed."),
+        "customers.forbidden" => Text("مجوز مشاهدهٔ مشتریان را ندارید.", "You do not have permission to read customers."),
         "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
         "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
         "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
@@ -650,6 +736,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (RefreshCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CreateTariffCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (StartPrepaidSessionFromStationCommand as AsyncParameterUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
