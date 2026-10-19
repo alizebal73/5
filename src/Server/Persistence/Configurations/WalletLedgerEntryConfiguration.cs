@@ -33,6 +33,8 @@ public sealed class WalletLedgerEntryConfiguration : IEntityTypeConfiguration<Wa
         b.Property(x => x.OccurredAtUtc).IsRequired().HasColumnName("occurred_at_utc");
         b.Property(x => x.WalletVersionAfter).IsRequired().HasColumnName("wallet_version_after");
         b.HasIndex(x => x.CashReceiptId).IsUnique().HasDatabaseName("ux_wallet_ledger_cash_receipt");
+        // Keep the migration-defined lookup index for all funding movements tied to one Session.
+        b.HasIndex(x => x.SessionId).HasDatabaseName("ix_wallet_ledger_session_id");
         b.HasIndex(x => new { x.SessionId, x.EntryType }).IsUnique()
             .HasFilter("session_id IS NOT NULL").HasDatabaseName("ux_wallet_ledger_session_entry_type");
         b.HasIndex(x => new { x.CustomerId, x.OccurredAtUtc }).HasDatabaseName("ix_wallet_ledger_customer_occurred_at");
