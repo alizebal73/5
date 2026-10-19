@@ -221,7 +221,10 @@ public sealed class OperatorManagementAuditReasonTests
 
     private sealed class InlineTransactionCoordinator : ITransactionCoordinator
     {
-        public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken = default) =>
+        public Task<T> ExecuteAsync<T>(
+            Func<CancellationToken, Task<T>> action,
+            CancellationToken cancellationToken = default,
+            System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.Serializable) =>
             action(cancellationToken);
     }
 
