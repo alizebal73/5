@@ -21,7 +21,7 @@ namespace GameNet.Server.Modules.Customers.Infrastructure;
 
 public sealed class CustomerAuthenticationService(
     GameNetDbContext db, CommandMutationPipeline mutationPipeline, IRequestFingerprint requestFingerprint,
-    ICustomerPasswordHasher passwordHasher, IAuditWriter audit, IGameClock clock, IOptions<GameNetOptions> options,
+    ICustomerPasswordHasher passwordHasher, IAuditWriter audit, IGameClock clock, ITransactionCoordinator transactions, IOptions<GameNetOptions> options,
     IJwtSigningKeySecret signingSecret) : ICustomerAuthenticationService
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
@@ -55,6 +55,7 @@ public sealed class CustomerAuthenticationService(
                         return Fail<CustomerPasswordSetResult>("customers.version_conflict", "Customer data changed; refresh before setting the password.");
 
                     var oldVersion = customer.Version;
+                    var passwordWasConfigured = customer.PasswordHash is not null;
                     customer.SetPasswordHash(encodedHash);
                     var now = clock.UtcNow;
                     await db.CustomerLoginSessions.Where(x => x.CustomerId == customer.Id && x.RevokedAtUtc == null)
@@ -63,7 +64,7 @@ public sealed class CustomerAuthenticationService(
                     audit.Append(new AuditRecord(now, "Operator", command.Actor.OperatorId.ToString("D"),
                         "customers.password.set", "Customer", customer.Id.ToString("D"), null, command.Actor.CorrelationId,
                         command.Actor.Source, "Succeeded", key,
-                        JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, CustomerVersion = oldVersion, PasswordConfigured = customer.PasswordHash is not null }),
+                        JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, CustomerVersion = oldVersion, PasswordConfigured = passwordWasConfigured }),
                         JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, CustomerVersion = customer.Version, PasswordConfigured = true, ExistingCustomerLoginsRevoked = true })));
                     return Result<CustomerPasswordSetResult>.Success(response);
                 }, cancellationToken, IsolationLevel.ReadCommitted);
@@ -78,70 +79,67 @@ public sealed class CustomerAuthenticationService(
         }
     }
 
-    public async Task<Result<CustomerLoginResult>> LoginAsync(CustomerLoginCommand command, CancellationToken cancellationToken)
-    {
-        var username = NormalizeUsername(command.Username);
-        var password = command.Password ?? string.Empty;
-        if (username is null)
+    public Task<Result<CustomerLoginResult>> LoginAsync(CustomerLoginCommand command, CancellationToken cancellationToken) =>
+        transactions.ExecuteAsync(async ct =>
         {
-            _ = passwordHasher.VerifyPassword(password, CustomerPasswordHasher.DummyHash);
-            audit.Append(new AuditRecord(clock.UtcNow, "Anonymous", "anonymous", "customers.login",
-                "Customer", null, "Credentials rejected", command.CorrelationId, command.Source, "Rejected"));
-            await db.SaveChangesAsync(cancellationToken);
-            return Fail<CustomerLoginResult>("customer_auth.invalid_credentials", "Username or password is incorrect.");
-        }
+            var username = NormalizeUsername(command.Username);
+            var password = command.Password ?? string.Empty;
+            if (username is null)
+            {
+                _ = passwordHasher.VerifyPassword(password, CustomerPasswordHasher.DummyHash);
+                audit.Append(new AuditRecord(clock.UtcNow, "Anonymous", "anonymous", "customers.login",
+                    "Customer", null, "Credentials rejected", command.CorrelationId, command.Source, "Rejected"));
+                return Fail<CustomerLoginResult>("customer_auth.invalid_credentials", "Username or password is incorrect.");
+            }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        var customer = await db.Customers.FromSqlInterpolated(
-            $"SELECT * FROM customers WHERE code = {username} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
-        var verified = passwordHasher.VerifyPassword(password, customer?.PasswordHash ?? CustomerPasswordHasher.DummyHash) &&
-                       passwordHasher.IsValidPassword(password);
-        var now = clock.UtcNow;
-        var eligible = customer is not null && customer.Kind == GameNet.Server.Modules.Customers.Domain.CustomerKind.Registered &&
-                       customer.IsActive && !customer.IsBlocked && customer.PasswordHash is not null;
-        var locked = customer?.IsPasswordLoginLocked(now) ?? false;
+            var customer = await db.Customers.FromSqlInterpolated(
+                $"SELECT * FROM customers WHERE code = {username} FOR UPDATE").SingleOrDefaultAsync(ct);
+            var verified = passwordHasher.VerifyPassword(password, customer?.PasswordHash ?? CustomerPasswordHasher.DummyHash) &&
+                           passwordHasher.IsValidPassword(password);
+            var now = clock.UtcNow;
+            var eligible = customer is not null && customer.Kind == GameNet.Server.Modules.Customers.Domain.CustomerKind.Registered &&
+                           customer.IsActive && !customer.IsBlocked && customer.PasswordHash is not null;
+            var locked = customer?.IsPasswordLoginLocked(now) ?? false;
 
-        if (!eligible || !verified || locked)
-        {
-            if (customer is not null && customer.Kind == GameNet.Server.Modules.Customers.Domain.CustomerKind.Registered && !verified && !locked)
-                customer.RecordFailedPasswordAttempt(now);
-            audit.Append(new AuditRecord(now, "Anonymous", "anonymous", "customers.login", "Customer",
-                customer?.Id.ToString("D"), "Credentials rejected", command.CorrelationId, command.Source, "Rejected"));
-            await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return Fail<CustomerLoginResult>("customer_auth.invalid_credentials", "Username or password is incorrect.");
-        }
+            if (!eligible || !verified || locked)
+            {
+                if (customer is not null && customer.Kind == GameNet.Server.Modules.Customers.Domain.CustomerKind.Registered &&
+                    !verified && !locked)
+                    customer.RecordFailedPasswordAttempt(now);
+                audit.Append(new AuditRecord(now, "Anonymous", "anonymous", "customers.login", "Customer",
+                    customer?.Id.ToString("D"), "Credentials rejected", command.CorrelationId, command.Source, "Rejected"));
+                return Fail<CustomerLoginResult>("customer_auth.invalid_credentials", "Username or password is incorrect.");
+            }
 
-        customer!.RecordSuccessfulPasswordLogin();
-        var jti = Guid.NewGuid().ToString("N");
-        var expires = now.Add(TokenLifetime);
-        await db.CustomerLoginSessions.AddAsync(CustomerLoginSession.Create(jti, customer.Id, now, expires), cancellationToken);
-        var auth = options.Value.Authentication;
-        if (!auth.Enabled || string.IsNullOrWhiteSpace(auth.Issuer) || string.IsNullOrWhiteSpace(auth.Audience) ||
-            string.IsNullOrWhiteSpace(signingSecret.SigningKey))
-            throw new InvalidOperationException("Customer authentication is not fully configured.");
+            customer!.RecordSuccessfulPasswordLogin();
+            var jti = Guid.NewGuid().ToString("N");
+            var expires = now.Add(TokenLifetime);
+            await db.CustomerLoginSessions.AddAsync(CustomerLoginSession.Create(jti, customer.Id, now, expires), ct);
+            var auth = options.Value.Authentication;
+            if (!auth.Enabled || string.IsNullOrWhiteSpace(auth.Issuer) || string.IsNullOrWhiteSpace(auth.Audience) ||
+                string.IsNullOrWhiteSpace(signingSecret.SigningKey))
+                throw new InvalidOperationException("Customer authentication is not fully configured.");
 
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, customer.Id.ToString("D")),
-            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString("D")),
-            new Claim(ClaimTypes.Name, customer.Code),
-            new Claim("actor_type", "Customer"),
-            new Claim("customer_id", customer.Id.ToString("D")),
-            new Claim("customer_code", customer.Code),
-            new Claim("display_name", customer.DisplayName ?? string.Empty),
-            new Claim(JwtRegisteredClaimNames.Jti, jti)
-        };
-        var token = new JwtSecurityToken(auth.Issuer, auth.Audience, claims, now.UtcDateTime, expires.UtcDateTime,
-            new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingSecret.SigningKey)), SecurityAlgorithms.HmacSha256));
-        var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
-        audit.Append(new AuditRecord(now, "Customer", customer.Id.ToString("D"), "customers.login", "Customer",
-            customer.Id.ToString("D"), null, command.CorrelationId, command.Source, "Succeeded",
-            AfterJson: JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, ExpiresAtUtc = expires })));
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return Result<CustomerLoginResult>.Success(new CustomerLoginResult(accessToken, expires, customer.Id, customer.Code, customer.DisplayName));
-    }
+            var claims = new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, customer.Id.ToString("D")),
+                new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString("D")),
+                new Claim(ClaimTypes.Name, customer.Code),
+                new Claim("actor_type", "Customer"),
+                new Claim("customer_id", customer.Id.ToString("D")),
+                new Claim("customer_code", customer.Code),
+                new Claim("display_name", customer.DisplayName ?? string.Empty),
+                new Claim(JwtRegisteredClaimNames.Jti, jti)
+            };
+            var token = new JwtSecurityToken(auth.Issuer, auth.Audience, claims, now.UtcDateTime, expires.UtcDateTime,
+                new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingSecret.SigningKey)), SecurityAlgorithms.HmacSha256));
+            var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
+            audit.Append(new AuditRecord(now, "Customer", customer.Id.ToString("D"), "customers.login", "Customer",
+                customer.Id.ToString("D"), null, command.CorrelationId, command.Source, "Succeeded",
+                AfterJson: JsonSerializer.Serialize(new { customer.Id, Username = customer.Code, ExpiresAtUtc = expires })));
+            return Result<CustomerLoginResult>.Success(
+                new CustomerLoginResult(accessToken, expires, customer.Id, customer.Code, customer.DisplayName));
+        }, cancellationToken, IsolationLevel.ReadCommitted);
 
     public async Task<Result<CustomerLoginProfile>> GetCurrentProfileAsync(Guid customerId, CancellationToken cancellationToken)
     {
@@ -153,23 +151,24 @@ public sealed class CustomerAuthenticationService(
             : Result<CustomerLoginProfile>.Success(new CustomerLoginProfile(customer.Id, customer.Code, customer.DisplayName, customer.CreatedAtUtc));
     }
 
-    public async Task<Result<CustomerLogoutResult>> LogoutAsync(Guid customerId, string jti, string correlationId, CancellationToken cancellationToken)
-    {
-        if (customerId == Guid.Empty || string.IsNullOrWhiteSpace(jti) || jti.Length != 32)
-            return Fail<CustomerLogoutResult>("customer_auth.invalid_credentials", "Customer session is invalid.");
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        var session = await db.CustomerLoginSessions.SingleOrDefaultAsync(x => x.Jti == jti && x.CustomerId == customerId, cancellationToken);
-        if (session is not null && session.RevokedAtUtc is null)
+    public Task<Result<CustomerLogoutResult>> LogoutAsync(
+        Guid customerId, string jti, string correlationId, CancellationToken cancellationToken) =>
+        transactions.ExecuteAsync(async ct =>
         {
-            var now = clock.UtcNow;
-            session.Revoke(now);
-            audit.Append(new AuditRecord(now, "Customer", customerId.ToString("D"), "customers.logout",
-                "Customer", customerId.ToString("D"), null, correlationId, "CustomerClient", "Succeeded"));
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        await transaction.CommitAsync(cancellationToken);
-        return Result<CustomerLogoutResult>.Success(new CustomerLogoutResult(true));
-    }
+            if (customerId == Guid.Empty || string.IsNullOrWhiteSpace(jti) || jti.Length != 32)
+                return Fail<CustomerLogoutResult>("customer_auth.invalid_credentials", "Customer session is invalid.");
+
+            var session = await db.CustomerLoginSessions.SingleOrDefaultAsync(
+                x => x.Jti == jti && x.CustomerId == customerId, ct);
+            if (session is not null && session.RevokedAtUtc is null)
+            {
+                var now = clock.UtcNow;
+                session.Revoke(now);
+                audit.Append(new AuditRecord(now, "Customer", customerId.ToString("D"), "customers.logout",
+                    "Customer", customerId.ToString("D"), null, correlationId, "CustomerClient", "Succeeded"));
+            }
+            return Result<CustomerLogoutResult>.Success(new CustomerLogoutResult(true));
+        }, cancellationToken, IsolationLevel.ReadCommitted);
 
     private static string? NormalizeUsername(string? username)
     {
