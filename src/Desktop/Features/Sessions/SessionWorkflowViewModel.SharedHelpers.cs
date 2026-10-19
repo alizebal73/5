@@ -27,7 +27,8 @@ public sealed partial class SessionWorkflowViewModel
             return false;
 
         var selected = SelectedRecentCashCheckout;
-        if (selected?.Outcome.Status != InvoiceStatusContract.Paid || selected.Outcome.PaymentId is null ||
+        if (selected is null || selected.Outcome.Status != InvoiceStatusContract.Paid ||
+            selected.Outcome.PaymentId is null ||
             !TryParseToman(CorrectedCashReceivedText, out var correctedReceived))
             return false;
 
