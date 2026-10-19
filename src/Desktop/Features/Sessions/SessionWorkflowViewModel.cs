@@ -476,7 +476,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             StatusMessage = Text($"تعرفهٔ {created.Code} با نرخ {FormatToman(created.HourlyRateToman)} ساخته شد.",
                 $"Tariff {created.Code} was created at {FormatToman(created.HourlyRateToman)}.");
         }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (GameNetApiException ex) { ErrorMessage = SessionWorkflowErrorText.For(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ ساخت تعرفه نامشخص است؛ تازه‌سازی کنید و از ارسال درخواست جدید خودداری کنید.", "Tariff creation result is unknown; refresh before issuing a new request."); }
         catch { ErrorMessage = Text("ساخت تعرفه انجام نشد.", "Tariff creation failed."); }
         finally { EndBusy(); }
@@ -505,7 +505,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
             StatusMessage = SessionStartedMessage(stationCode, customerCode);
         }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (GameNetApiException ex) { ErrorMessage = SessionWorkflowErrorText.For(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
         catch { ErrorMessage = Text("شروع Session انجام نشد.", "Session start failed."); }
         finally { EndBusy(); }
