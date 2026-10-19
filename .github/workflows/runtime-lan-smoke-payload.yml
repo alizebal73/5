@@ -133,9 +133,10 @@ jobs:
           $serverOutput = Join-Path $payloadRoot "Server"
           $agentOutput = Join-Path $payloadRoot "Agent"
           $desktopOutput = Join-Path $payloadRoot "Desktop"
+          $customerOutput = Join-Path $payloadRoot "Customer"
           $toolsOutput = Join-Path $payloadRoot "Tools"
           $modulesOutput = Join-Path $toolsOutput "modules"
-          New-Item -ItemType Directory -Force -Path $serverOutput, $agentOutput, $desktopOutput, $modulesOutput | Out-Null
+          New-Item -ItemType Directory -Force -Path $serverOutput, $agentOutput, $desktopOutput, $customerOutput, $modulesOutput | Out-Null
 
           Invoke-DotNet @(
             "publish", "src/Server/GameNet.Server.csproj",
@@ -157,6 +158,14 @@ jobs:
             "--self-contained", "true", "--no-restore",
             "-p:PublishSingleFile=false",
             "--output", $desktopOutput
+          )
+
+          Invoke-DotNet @(
+            "publish", "src/Client/Customer/GameNet.CustomerClient.csproj",
+            "--configuration", "Release", "--runtime", "win-x64",
+            "--self-contained", "true", "--no-restore",
+            "-p:PublishSingleFile=false",
+            "--output", $customerOutput
           )
 
           # Execute the same provider-specific parse used by the process acceptance
@@ -262,6 +271,7 @@ jobs:
             (Join-Path $serverOutput "GameNet.Server.exe"),
             (Join-Path $agentOutput "GameNet.Agent.exe"),
             (Join-Path $desktopOutput "GameNet.Manager.Desktop.exe"),
+            (Join-Path $customerOutput "GameNet.CustomerClient.exe"),
             $migrationBundle,
             (Join-Path $toolsOutput "configure-agent-runtime-state.ps1"),
             (Join-Path $toolsOutput "provision-agent-enrollment.ps1"),
@@ -301,6 +311,7 @@ jobs:
           - `Server\GameNet.Server.exe`
           - `Agent\GameNet.Agent.exe`
           - `Desktop\GameNet.Manager.Desktop.exe`
+          - `Customer\GameNet.CustomerClient.exe` — direct customer username/password entry through the local Agent
           - `Tools\GameNet.Migrations.exe` — an explicit EF migration bundle
           - TLS and endpoint configuration/check scripts under `Tools\`
           - `Tools\write-protected-server-settings.ps1` for LocalMachine-DPAPI-protected setup settings
