@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -16,7 +17,13 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
+    private readonly IWalletPendingRequestStore pendingRequestStore;
     private readonly TopUpAction topUpCommand;
+    private Guid? currentOperatorId;
+    private Guid? pendingCustomerId;
+    private int? pendingCustomerVersion;
+    private string? pendingCustomerCode;
+    private bool pendingRecoveryStoreUnavailable;
     private CustomerResponse? selectedCustomer;
     private string amountToCreditText = string.Empty;
     private string cashReceivedText = string.Empty;
@@ -28,10 +35,14 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     private int balanceRefreshGeneration;
     private bool isBusy;
 
-    public WalletTopUpViewModel(IGameNetServerClient api, Func<string, bool> hasPermission)
+    public WalletTopUpViewModel(
+        IGameNetServerClient api,
+        Func<string, bool> hasPermission,
+        IWalletPendingRequestStore? pendingRequestStore = null)
     {
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
+        this.pendingRequestStore = pendingRequestStore ?? new FileWalletPendingRequestStore();
         topUpCommand = new TopUpAction(this);
         BalanceText = Text("برای مشاهدهٔ موجودی، مشتری ثبت‌شده را انتخاب کنید.", "Select a registered customer to view its Wallet balance.");
     }
@@ -39,7 +50,7 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     public event PropertyChangedEventHandler? PropertyChanged;
     public ICommand TopUpCommand => topUpCommand;
     public bool CanTopUpWallet => hasPermission(Permissions.WalletWrite);
-    public bool CanEditInput => !IsBusy && pendingIdempotencyKey is null;
+    public bool CanEditInput => !IsBusy && pendingIdempotencyKey is null && !pendingRecoveryStoreUnavailable;
     public bool IsBusy { get => isBusy; private set { if (SetField(ref isBusy, value)) RaiseCommand(); } }
     public string ErrorMessage { get => errorMessage; private set => SetField(ref errorMessage, value); }
     public string StatusMessage { get => statusMessage; private set => SetField(ref statusMessage, value); }
@@ -105,9 +116,76 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         RefreshBalance();
     }
 
+    public void SetCurrentOperatorId(Guid? operatorId)
+    {
+        if (currentOperatorId == operatorId && !pendingRecoveryStoreUnavailable) return;
+
+        currentOperatorId = operatorId;
+        selectedCustomer = null;
+        OnPropertyChanged(nameof(SelectedCustomer));
+        pendingFingerprint = null;
+        pendingIdempotencyKey = null;
+        pendingCustomerId = null;
+        pendingCustomerVersion = null;
+        pendingCustomerCode = null;
+        pendingRecoveryStoreUnavailable = false;
+        AmountToCreditText = string.Empty;
+        CashReceivedText = string.Empty;
+        ErrorMessage = string.Empty;
+        StatusMessage = string.Empty;
+
+        if (operatorId is Guid authenticatedOperatorId)
+        {
+            try
+            {
+                var pending = pendingRequestStore.Load();
+                if (pending is not null)
+                {
+                    if (pending.OperatorId != authenticatedOperatorId)
+                    {
+                        // Fail closed across operator changes: an uncertain physical-cash
+                        // operation must be reconciled by its original operator first.
+                        pendingRecoveryStoreUnavailable = true;
+                        ErrorMessage = ForeignOperatorPendingText;
+                    }
+                    else
+                    {
+                        AmountToCreditText = pending.AmountToCreditToman.ToString(CultureInfo.InvariantCulture);
+                        CashReceivedText = pending.AmountReceivedToman.ToString(CultureInfo.InvariantCulture);
+                        pendingCustomerId = pending.CustomerId;
+                        pendingCustomerVersion = pending.CustomerVersion;
+                        pendingCustomerCode = pending.CustomerCode;
+                        pendingFingerprint = Fingerprint(
+                            pending.CustomerId, pending.CustomerVersion,
+                            pending.AmountToCreditToman, pending.AmountReceivedToman);
+                        pendingIdempotencyKey = pending.IdempotencyKey;
+                        ErrorMessage = PendingReconciliationText;
+                    }
+                }
+            }
+            catch
+            {
+                // A corrupt/inaccessible recovery record blocks new financial operations.
+                // Never discard the file automatically: the Server may already have committed it.
+                pendingRecoveryStoreUnavailable = true;
+                ErrorMessage = RecoveryStoreUnavailableText;
+            }
+        }
+
+        OnPropertyChanged(nameof(CanEditInput));
+        RaiseCommand();
+        RefreshBalance();
+    }
+
     public void Reset()
     {
         balanceRefreshGeneration++;
+        if (pendingRecoveryStoreUnavailable)
+        {
+            OnPropertyChanged(nameof(CanEditInput));
+            RaiseCommand();
+            return;
+        }
         // A request may already have committed even if its response was lost or the user logs out.
         // Preserve the exact target and tender until the same idempotency key is reconciled.
         if (pendingIdempotencyKey is not null)
@@ -175,15 +253,20 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
     {
         get
         {
-            if (IsBusy || !CanTopUpWallet ||
-                SelectedCustomer is not { Kind: CustomerKindContract.Registered, Status: CustomerStatusContract.Active } customer ||
+            if (IsBusy || pendingRecoveryStoreUnavailable || currentOperatorId is null || !CanTopUpWallet ||
+                SelectedCustomer is not { Kind: CustomerKindContract.Registered } customer ||
+                (pendingIdempotencyKey is null && customer.Status != CustomerStatusContract.Active) ||
                 !TryParseToman(AmountToCreditText, out var credit) || credit <= 0 ||
                 !TryParseToman(CashReceivedText, out var received) || received < credit)
                 return false;
 
-            var currentFingerprint = Fingerprint(customer, credit, received);
+            var requestVersion = pendingIdempotencyKey is null ? customer.Version : pendingCustomerVersion;
+            if (!requestVersion.HasValue) return false;
+
+            var currentFingerprint = Fingerprint(customer.Id, requestVersion.Value, credit, received);
             return pendingIdempotencyKey is null ||
-                string.Equals(pendingFingerprint, currentFingerprint, StringComparison.Ordinal);
+                (customer.Id == pendingCustomerId &&
+                 string.Equals(pendingFingerprint, currentFingerprint, StringComparison.Ordinal));
         }
     }
 
@@ -196,14 +279,19 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
 
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
-        var fingerprint = Fingerprint(target, credit, received);
+        var requestVersion = pendingIdempotencyKey is null ? target.Version : pendingCustomerVersion!.Value;
+        var fingerprint = Fingerprint(target.Id, requestVersion, credit, received);
         if (pendingIdempotencyKey is null)
         {
             pendingFingerprint = fingerprint;
+            pendingCustomerId = target.Id;
+            pendingCustomerVersion = target.Version;
+            pendingCustomerCode = target.Code;
             pendingIdempotencyKey = Guid.NewGuid().ToString("N");
             OnPropertyChanged(nameof(CanEditInput));
         }
-        else if (!string.Equals(pendingFingerprint, fingerprint, StringComparison.Ordinal))
+        else if (target.Id != pendingCustomerId ||
+                 !string.Equals(pendingFingerprint, fingerprint, StringComparison.Ordinal))
         {
             // Never mint a fresh key while the prior cash outcome is unresolved.
             ErrorMessage = PendingReconciliationText;
@@ -211,12 +299,30 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         }
 
         var key = pendingIdempotencyKey!;
+        try
+        {
+            // Persist the exact request before sending it. If the app exits after a lost
+            // response, the next launch can safely replay this same idempotency key.
+            pendingRequestStore.Save(new PendingWalletTopUp(
+                currentOperatorId!.Value, pendingCustomerId!.Value, pendingCustomerCode ?? target.Code,
+                pendingCustomerVersion!.Value, credit, received, key));
+        }
+        catch
+        {
+            ErrorMessage = RecoveryCheckpointSaveFailedText;
+            return; // Do not send a financial request without a durable recovery marker.
+        }
+
         IsBusy = true;
         try
         {
             var result = await api.CashTopUpWalletAsync(
-                target.Id, new WalletCashTopUpRequest(credit, received, target.Version), key);
-            ClearPendingRequest();
+                target.Id, new WalletCashTopUpRequest(credit, received, requestVersion), key);
+            if (!ClearPendingRequest())
+            {
+                ErrorMessage = RecoveryCheckpointClearFailedText;
+                return;
+            }
             AmountToCreditText = string.Empty;
             CashReceivedText = string.Empty;
             StatusMessage = Text(
@@ -237,7 +343,11 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
             }
             else
             {
-                ClearPendingRequest();
+                if (!ClearPendingRequest())
+                {
+                    ErrorMessage = RecoveryCheckpointClearFailedText;
+                    return;
+                }
                 ErrorMessage = ErrorText(ex.Code);
             }
         }
@@ -267,19 +377,55 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         }
     }
 
-    private static string Fingerprint(CustomerResponse customer, long credit, long received) =>
-        $"{customer.Id:D}|{customer.Version}|{credit}|{received}";
+    private static string Fingerprint(Guid customerId, int customerVersion, long credit, long received) =>
+        $"{customerId:D}|{customerVersion}|{credit}|{received}";
 
-    private string PendingReconciliationText => Text(
-        "شارژ قبلی هنوز تعیین‌تکلیف نشده است. مشتری و مبلغ‌ها را به درخواست قبلی برگردان و همان شارژ را دوباره بزن تا همان کلید امن تطبیق داده شود؛ فعلاً شارژ جدید مجاز نیست.",
-        "A previous top-up outcome is unresolved. Restore the original customer and amounts, then retry that same request so its idempotency key can safely reconcile it. New top-ups are blocked.");
-
-    private void ClearPendingRequest()
+    private string PendingReconciliationText
     {
+        get
+        {
+            var customer = string.IsNullOrWhiteSpace(pendingCustomerCode) ? "" : $" ({pendingCustomerCode})";
+            return Text(
+                $"شارژ قبلی{customer} هنوز تعیین‌تکلیف نشده است. همان مشتری و مبلغ‌ها را انتخاب کنید و همان درخواست را دوباره بزنید؛ تا آن زمان شارژ جدید مجاز نیست.",
+                $"A previous top-up{customer} is unresolved. Select the original customer and amounts, then retry the same request. New top-ups remain blocked until reconciliation.");
+        }
+    }
+
+    private string ForeignOperatorPendingText => Text(
+        "یک درخواست شارژ نامشخص از اپراتور دیگری وجود دارد. برای جلوگیری از ثبت دوباره وجه، باید اپراتور اصلی وارد شود و همان درخواست را تعیین‌تکلیف کند؛ شارژ جدید فعلاً مسدود است.",
+        "An unresolved cash top-up belongs to another operator. Sign in as that original operator and reconcile the same request before any new Wallet top-up; new top-ups are blocked.");
+
+    private string RecoveryStoreUnavailableText => Text(
+        "وضعیت بازیابی شارژ کیف پول خوانده نشد یا معتبر نیست. برای جلوگیری از شارژ تکراری، عملیات مالی مسدود شد؛ فایل بازیابی را حذف نکنید.",
+        "The Wallet recovery record is unreadable or invalid. Financial actions are blocked to prevent duplicate credit; do not delete the recovery file.");
+
+    private string RecoveryCheckpointSaveFailedText => Text(
+        "نشانگر بازیابی شارژ ذخیره نشد؛ درخواست به سرور ارسال نشده است. مجوز نوشتن پوشه کاربر را بررسی و دوباره تلاش کنید.",
+        "The Wallet recovery checkpoint could not be saved; the request was not sent to the Server. Check write access to the current user's local data and retry.");
+
+    private string RecoveryCheckpointClearFailedText => Text(
+        "نتیجهٔ شارژ با سرور دریافت شد، اما نشانگر بازیابی محلی پاک نشد. همان درخواست را دوباره بزنید تا با همان کلید تطبیق و سپس پاک شود؛ شارژ دوباره ثبت نمی‌شود.",
+        "The Server response was received, but the local recovery checkpoint could not be cleared. Retry the same request to reconcile and clear it; the idempotency key prevents duplicate credit.");
+
+    private bool ClearPendingRequest()
+    {
+        try
+        {
+            pendingRequestStore.Clear();
+        }
+        catch
+        {
+            return false;
+        }
+
         pendingFingerprint = null;
         pendingIdempotencyKey = null;
+        pendingCustomerId = null;
+        pendingCustomerVersion = null;
+        pendingCustomerCode = null;
         OnPropertyChanged(nameof(CanEditInput));
         RaiseCommand();
+        return true;
     }
 
     private string ErrorText(string code) => code switch

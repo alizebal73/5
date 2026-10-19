@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -27,31 +28,33 @@ namespace GameNet.Desktop.Tests;
 public sealed class SessionWorkflowViewModelTests
 {
     [Fact]
-    public async Task Wallet_top_up_reuses_idempotency_key_after_lost_response_and_blocks_new_amounts()
+    public async Task Wallet_top_up_reuses_persisted_idempotency_key_after_lost_response_and_app_restart()
     {
         var oldUiCulture = CultureInfo.CurrentUICulture;
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        var storageRoot = Path.Combine(Path.GetTempPath(), "gamenet-wallet-recovery-" + Guid.NewGuid().ToString("N"));
         try
         {
             var customer = new CustomerResponse(
                 Guid.NewGuid(), "C-WALLET-01", "Wallet Test", null, null,
                 CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 1);
+            var operatorId = Guid.NewGuid();
+            var store = new FileWalletPendingRequestStore(storageRoot);
             var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>())
             {
                 LoseNextWalletTopUpResponseAfterCommit = true
             };
-            var viewModel = new WalletTopUpViewModel(client, permission => permission == Permissions.WalletWrite)
-            {
-                SelectedCustomer = customer,
-                AmountToCreditText = "100",
-                CashReceivedText = "100"
-            };
+            var viewModel = new WalletTopUpViewModel(client, permission => permission == Permissions.WalletWrite, store);
+            viewModel.SetCurrentOperatorId(operatorId);
+            viewModel.SelectedCustomer = customer;
+            viewModel.AmountToCreditText = "100";
+            viewModel.CashReceivedText = "100";
 
             var unresolved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             viewModel.PropertyChanged += (_, args) =>
             {
                 if ((args.PropertyName == nameof(viewModel.ErrorMessage) || args.PropertyName == nameof(viewModel.IsBusy)) &&
-                    viewModel.ErrorMessage.Contains("A previous top-up outcome is unresolved", StringComparison.Ordinal) &&
+                    viewModel.ErrorMessage.Contains("A previous top-up", StringComparison.Ordinal) &&
                     !viewModel.IsBusy)
                     unresolved.TrySetResult(true);
             };
@@ -63,30 +66,41 @@ public sealed class SessionWorkflowViewModelTests
             Assert.False(viewModel.CanEditInput);
             Assert.True(viewModel.TopUpCommand.CanExecute(null), "The exact same request must remain replayable.");
             var originalKey = Assert.Single(client.WalletTopUpIdempotencyKeys);
+            Assert.Equal(originalKey, store.Load()?.IdempotencyKey);
             viewModel.AmountToCreditText = "200";
             viewModel.CashReceivedText = "250";
             Assert.Equal("100", viewModel.AmountToCreditText);
             Assert.Equal("100", viewModel.CashReceivedText);
 
+            // Recreate the UI object to model closing and reopening the Desktop process.
+            var resumed = new WalletTopUpViewModel(client, permission => permission == Permissions.WalletWrite, store);
+            resumed.SetCurrentOperatorId(operatorId);
+            resumed.SelectedCustomer = customer;
+            Assert.Equal("100", resumed.AmountToCreditText);
+            Assert.Equal("100", resumed.CashReceivedText);
+            Assert.False(resumed.CanEditInput);
+
             var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            viewModel.PropertyChanged += (_, args) =>
+            resumed.PropertyChanged += (_, args) =>
             {
-                if ((args.PropertyName == nameof(viewModel.StatusMessage) || args.PropertyName == nameof(viewModel.IsBusy)) &&
-                    viewModel.StatusMessage.Contains("Wallet credited by", StringComparison.Ordinal) &&
-                    !viewModel.IsBusy)
+                if ((args.PropertyName == nameof(resumed.StatusMessage) || args.PropertyName == nameof(resumed.IsBusy)) &&
+                    resumed.StatusMessage.Contains("Wallet credited by", StringComparison.Ordinal) &&
+                    !resumed.IsBusy)
                     completed.TrySetResult(true);
             };
 
-            viewModel.TopUpCommand.Execute(null);
+            resumed.TopUpCommand.Execute(null);
             await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(2, client.WalletTopUpCallCount);
             Assert.Equal(originalKey, client.WalletTopUpIdempotencyKeys[1]);
             Assert.Equal(100, client.WalletBalanceToman);
-            Assert.True(viewModel.CanEditInput);
+            Assert.True(resumed.CanEditInput);
+            Assert.Null(store.Load());
         }
         finally
         {
+            if (Directory.Exists(storageRoot)) Directory.Delete(storageRoot, recursive: true);
             CultureInfo.CurrentUICulture = oldUiCulture;
         }
     }

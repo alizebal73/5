@@ -18,5 +18,6 @@ public interface IWalletTopUpPort : INotifyPropertyChanged
     string CashReceivedText { get; set; }
     string SummaryText { get; }
     void NotifyPermissionsChanged();
+    void SetCurrentOperatorId(Guid? operatorId);
     void Reset();
 }
