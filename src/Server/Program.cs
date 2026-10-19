@@ -56,8 +56,7 @@ var app = builder.Build();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<SecureTransportMiddleware>();
-app.UseMiddleware<ContractVersionMiddleware>();
-app.UseRateLimiter();
+app.UseMiddleware<ContractVersionMiddleware>(); app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -91,12 +90,10 @@ app.MapAgentEnrollmentRoutes();
 app.MapIdentityEndpoints();
 app.MapOperatorManagementEndpoints();
 app.MapCustomerEndpoints();
-app.MapCustomerAuthenticationEndpoints();
 app.MapStationEndpoints();
 app.MapTariffEndpoints();
 app.MapSessionEndpoints();
-app.MapBillingEndpoints();
-app.MapWalletEndpoints();
+app.MapBillingEndpoints(); app.MapWalletEndpoints();
 app.MapHub<AgentHub>("/hubs/agent");
 
 app.MapGet("/health", async (
