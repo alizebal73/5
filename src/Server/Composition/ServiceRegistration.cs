@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using GameNet.Server.Infrastructure;
 using GameNet.Server.Infrastructure.Audit;
 using GameNet.Server.Infrastructure.Configuration;
@@ -92,6 +93,7 @@ public static class ServiceRegistration
         services.AddScoped<ICashReceiptWriter>(provider => provider.GetRequiredService<BillingService>());
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletSessionFunding, WalletSessionFunding>();
+        services.AddHostedService<PrepaidSessionExpiryWorker>();
         services.AddScoped<ITariffService, GameNet.Server.Modules.Tariffs.Infrastructure.TariffService>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();

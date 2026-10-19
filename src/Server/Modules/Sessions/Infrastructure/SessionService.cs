@@ -263,6 +263,17 @@ public sealed class SessionService(
                             "Monotonic time continuity could not be verified. No invoice was created; timing recovery is required.");
                     }
 
+                    var activeReservation = await walletFunding.FindActiveReservationAsync(session.Id, token);
+                    if (activeReservation is not null)
+                    {
+                        var maximumElapsed = PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                            activeReservation.ReservedAmountToman, session.TariffHourlyRateTomanSnapshot);
+                        // Never allow the financial calculation to exceed the money reserved.
+                        // The expiry worker makes this a normal automatic stop; this clamp is
+                        // the safe reconciliation path if an operator ends just after the deadline.
+                        elapsedTicks = Math.Min(elapsedTicks, maximumElapsed);
+                    }
+
                     var endedAt = endSnapshot.UtcNow;
                     var before = ToResponse(session);
                     try
@@ -393,6 +404,18 @@ public sealed class SessionService(
                     {
                         // Timing-source failure is a valid reason for an explicitly authorized,
                         // audited manual reconciliation; it never permits an automatic estimate.
+                    }
+
+                    var activeReservation = await walletFunding.FindActiveReservationAsync(session.Id, token);
+                    if (activeReservation is not null)
+                    {
+                        elapsedTicks = Math.Min(
+                            elapsedTicks,
+                            PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                                activeReservation.ReservedAmountToman, session.TariffHourlyRateTomanSnapshot));
+                        if (elapsedTicks <= 0)
+                            return Fail<InvoicePreviewResponse>("wallet.insufficient_balance",
+                                "The prepaid Wallet reservation does not cover a billable Session duration.");
                     }
 
                     DateTimeOffset reconciledAtUtc;
@@ -551,6 +574,59 @@ public sealed class SessionService(
         !string.IsNullOrWhiteSpace(reason) &&
         reason.Trim().Length is >= 3 and <= 256 &&
         !reason.Any(char.IsControl);
+
+    public async Task<int> ExpireDuePrepaidSessionsAsync(CancellationToken cancellationToken)
+    {
+        var sessions = await db.Sessions.AsNoTracking()
+            .Where(x => x.Status == SessionStatus.Active)
+            .OrderBy(x => x.StartedAtUtc)
+            .ToArrayAsync(cancellationToken);
+        if (sessions.Length == 0)
+            return 0;
+
+        GameClockSnapshot snapshot;
+        try { snapshot = clock.Capture(); }
+        catch (Exception ex) when (ex is InvalidOperationException or DllNotFoundException or EntryPointNotFoundException)
+        {
+            return 0;
+        }
+
+        var expiredCount = 0;
+        foreach (var session in sessions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var reservation = await walletFunding.FindActiveReservationAsync(session.Id, cancellationToken);
+            if (reservation is null)
+                continue;
+
+            var maximumElapsedTicks = PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                reservation.ReservedAmountToman, session.TariffHourlyRateTomanSnapshot);
+            if (!MonotonicElapsedTime.TryCalculateElapsedTicks(
+                    session.StartedMonotonicTimestamp,
+                    session.StartedMonotonicFrequency,
+                    session.StartedSystemUptimeMilliseconds,
+                    session.StartedBootIdentifier,
+                    snapshot,
+                    out var elapsedTicks) ||
+                elapsedTicks < maximumElapsedTicks)
+                continue;
+
+            // A stable per-Session/version key makes periodic retries safe after timeouts or restarts.
+            var key = $"prepaid-expiry-{session.Id:N}-{session.Version}";
+            var actor = new SessionActorContext(
+                session.StartedByOperatorId,
+                $"prepaid-expiry:{session.Id:D}",
+                "PrepaidExpiryWorker",
+                new HashSet<string>(StringComparer.Ordinal) { Permissions.SessionsOperate });
+            var result = await EndAsync(
+                new EndSessionCommand(session.Id, session.Version, key, actor),
+                cancellationToken);
+            if (result.IsSuccess && result.Value.Status == InvoiceStatusContract.Paid)
+                expiredCount++;
+        }
+
+        return expiredCount;
+    }
 
     public async Task<Result<IReadOnlyList<SessionResponse>>> ListActiveAsync(
         SessionActorContext actor,

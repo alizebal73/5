@@ -14,5 +14,6 @@ public interface ISessionService
     Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> EndAsync(EndSessionCommand command, CancellationToken cancellationToken);
     Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> ReconcileTimingAsync(ReconcileSessionTimingCommand command, CancellationToken cancellationToken);
     Task<GameNet.Shared.Primitives.Result<IReadOnlyList<SessionResponse>>> ListActiveAsync(SessionActorContext actor, Guid? stationId, CancellationToken cancellationToken);
+    Task<int> ExpireDuePrepaidSessionsAsync(CancellationToken cancellationToken) => Task.FromResult(0);
 }
 
