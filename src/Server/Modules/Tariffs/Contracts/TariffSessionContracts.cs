@@ -17,4 +17,5 @@ public sealed record TariffSessionSnapshot(
 public interface ITariffSessionAccess
 {
     Task<TariffSessionSnapshot?> FindActiveAsync(Guid tariffId, CancellationToken cancellationToken);
+    Task<TariffSessionSnapshot?> FindDefaultActiveAsync(StationTypeContract stationType, CancellationToken cancellationToken);
 }

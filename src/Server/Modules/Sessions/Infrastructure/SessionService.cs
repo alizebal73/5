@@ -46,25 +46,32 @@ public sealed class SessionService(
         if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
             return Task.FromResult(Fail<SessionResponse>("sessions.forbidden", "Not allowed to start sessions."));
 
+        // Any customer-bound PC Session is prepaid; null CustomerId remains the walk-in/cash path.
+        if (command.CustomerId is Guid customerId)
+            return StartPrepaidAsync(new StartPrepaidSessionCommand(
+                command.StationId, customerId, command.IdempotencyKey, command.Actor), cancellationToken);
+
         var payload = new { command.StationId, command.TariffId, command.CustomerId, Prepaid = false };
         var scope = $"sessions.start:{command.Actor.OperatorId:D}";
-
         return StartCoreAsync(command, scope, payload, requirePrepaidWallet: false, cancellationToken);
     }
 
     public Task<Result<SessionResponse>> StartPrepaidAsync(
-        StartSessionCommand command,
+        StartPrepaidSessionCommand command,
         CancellationToken cancellationToken)
     {
         if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
             return Task.FromResult(Fail<SessionResponse>("sessions.forbidden", "Not allowed to start sessions."));
-        if (command.CustomerId is null || command.CustomerId == Guid.Empty)
+        if (command.StationId == Guid.Empty || command.CustomerId == Guid.Empty)
             return Task.FromResult(Fail<SessionResponse>("sessions.prepaid_customer_required",
-                "A registered customer is required for a prepaid Session."));
+                "A registered customer and target Station are required for a prepaid Session."));
 
-        var payload = new { command.StationId, command.TariffId, command.CustomerId, Prepaid = true };
+        // Tariff choice is a Server decision, not an amount/rate supplied by the UI or Client.
+        var internalCommand = new StartSessionCommand(
+            command.StationId, Guid.Empty, command.CustomerId, command.IdempotencyKey, command.Actor);
+        var payload = new { command.StationId, command.CustomerId, Prepaid = true };
         var scope = $"sessions.prepaid-start:{command.Actor.OperatorId:D}";
-        return StartCoreAsync(command, scope, payload, requirePrepaidWallet: true, cancellationToken);
+        return StartCoreAsync(internalCommand, scope, payload, requirePrepaidWallet: true, cancellationToken);
     }
 
     private async Task<Result<SessionResponse>> StartCoreAsync(
@@ -93,9 +100,13 @@ public sealed class SessionService(
                             "sessions.agent_unavailable",
                             "PC Agent is unbound, offline, lacks an active credential, or has no fresh authoritative heartbeat/lease. Session was not started.");
 
-                    var tariff = await tariffs.FindActiveAsync(command.TariffId, token);
+                    var tariff = requirePrepaidWallet
+                        ? await tariffs.FindDefaultActiveAsync(StationTypeContract.Pc, token)
+                        : await tariffs.FindActiveAsync(command.TariffId, token);
                     if (tariff is null)
-                        return Fail<SessionResponse>("sessions.tariff_not_found", "Active tariff was not found.");
+                        return Fail<SessionResponse>(
+                            requirePrepaidWallet ? "sessions.default_pc_tariff_not_found" : "sessions.tariff_not_found",
+                            requirePrepaidWallet ? "No active default PC tariff is configured." : "Active tariff was not found.");
                     if (tariff.StationType != StationTypeContract.Pc)
                         return Fail<SessionResponse>("sessions.tariff_station_mismatch", "Tariff is not for PC stations.");
 

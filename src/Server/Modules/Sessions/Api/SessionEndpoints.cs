@@ -50,7 +50,7 @@ public static class SessionEndpoints
         }).RequireAuthorization(Permissions.SessionsOperate);
 
         group.MapPost("/prepaid", async (
-            StartSessionRequest request,
+            StartPrepaidSessionRequest request,
             ISessionService service,
             HttpContext context,
             CancellationToken cancellationToken) =>
@@ -58,8 +58,8 @@ public static class SessionEndpoints
             if (!TryGetActor(context, out var actor))
                 return Failure(new Error("auth.identity_missing", "The authenticated operator identity is missing."), context);
 
-            var command = new StartSessionCommand(
-                request.StationId, request.TariffId, request.CustomerId,
+            var command = new StartPrepaidSessionCommand(
+                request.StationId, request.CustomerId,
                 context.Request.Headers[ApiHeaders.IdempotencyKey].ToString(), actor);
             var result = await service.StartPrepaidAsync(command, cancellationToken);
             return result.IsSuccess
@@ -144,7 +144,7 @@ public static class SessionEndpoints
             "sessions.version_conflict" or "sessions.invalid_state" or "sessions.invalid_clock" or "sessions.amount_overflow" or
             "sessions.timing_recovery_required" or "sessions.timing_recovery_not_required" or "billing.non_cash_invoice" or
             "idempotency.in_flight" or "idempotency.key_reused" => StatusCodes.Status409Conflict,
-            "sessions.pc_only" or "sessions.prepaid_customer_required" or "sessions.timing_recovery_invalid" or "wallet.invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
+            "sessions.pc_only" or "sessions.prepaid_customer_required" or "sessions.default_pc_tariff_not_found" or "sessions.timing_recovery_invalid" or "wallet.invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(
