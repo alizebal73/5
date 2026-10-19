@@ -13,7 +13,7 @@ namespace GameNet.CustomerClient.Features;
 /// </summary>
 public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposable
 {
-    private readonly CustomerEntryPipeClient gateway;
+    private readonly ICustomerEntryGateway gateway;
     private readonly DispatcherTimer countdownTimer;
     private readonly AsyncLoginAction loginCommand;
     private string username = string.Empty;
@@ -27,7 +27,7 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
     private long remainingSeconds;
     private string? pendingIdempotencyKey;
 
-    public CustomerClientViewModel(CustomerEntryPipeClient gateway)
+    public CustomerClientViewModel(ICustomerEntryGateway gateway)
     {
         this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         loginCommand = new AsyncLoginAction(LoginAsync, () => CanSubmit);
@@ -76,12 +76,26 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
         try
         {
             var response = await gateway.StartAsync(request);
-            if (!response.Succeeded || response.CustomerId is null ||
-                response.SessionId is null || response.PrepaidReservedAmountToman is not > 0 ||
-                response.PrepaidBudgetTicks is not > 0)
+            if (!response.Succeeded)
             {
+                // A delivered business rejection is definitive, so the next deliberate
+                // attempt (after fixing credentials, credit or station state) needs a new key.
+                // Transport/commit uncertainty and an in-flight request must keep the old key.
+                if (!IsAmbiguousEntryFailure(response.ErrorCode))
+                    pendingIdempotencyKey = null;
+
                 ErrorMessage = LocalizeError(response.ErrorCode, response.ErrorMessage);
                 StatusMessage = "ورود انجام نشد؛ بررسی کیف پول و اتصال رایانه به سرور لازم است.";
+                return;
+            }
+
+            if (response.CustomerId is null || response.SessionId is null ||
+                response.PrepaidReservedAmountToman is not > 0 || response.PrepaidBudgetTicks is not > 0)
+            {
+                // Success without the committed Session facts is ambiguous. Retain the key
+                // so a retry cannot create a second Session.
+                ErrorMessage = LocalizeError("client.result_unknown", null);
+                StatusMessage = "پاسخ ورود ناقص است؛ برای بررسی نتیجه از همان درخواست استفاده کنید.";
                 return;
             }
 
@@ -128,6 +142,13 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
         return $"{hours:00}:{minutes:00}:{seconds:00}";
     }
 
+    private static bool IsAmbiguousEntryFailure(string? code) => code is
+        "client.result_unknown" or
+        "client.server_unavailable" or
+        "client.invalid_response" or
+        "agent.server_response_invalid" or
+        "idempotency.in_flight";
+
     private static string LocalizeError(string? code, string? message) => code switch
     {
         "customer_auth.invalid_credentials" => "نام کاربری یا رمز عبور نادرست است، یا حساب اجازهٔ ورود ندارد.",
@@ -137,7 +158,9 @@ public sealed class CustomerClientViewModel : INotifyPropertyChanged, IDisposabl
         "sessions.station_unavailable" or "sessions.agent_unavailable" or "agent.customer_station_unbound" =>
             "این رایانه آمادهٔ ورود نیست؛ با اپراتور تماس بگیرید.",
         "client.agent_unavailable" => "سرویس GameNet روی این رایانه در دسترس نیست.",
-        "client.result_unknown" => "نتیجهٔ ورود نامشخص است؛ با همان درخواست دوباره تلاش کنید.",
+        "client.result_unknown" or "client.server_unavailable" or "agent.server_response_invalid" =>
+            "نتیجهٔ ورود مشخص نیست؛ برای جلوگیری از شروع تکراری با همان درخواست دوباره تلاش کنید.",
+        "idempotency.in_flight" => "درخواست قبلی هنوز در حال اجراست؛ کمی بعد با همان درخواست دوباره تلاش کنید.",
         _ => string.IsNullOrWhiteSpace(message) ? "ورود انجام نشد؛ وضعیت را بررسی کنید." : message
     };
 
