@@ -1,7 +1,6 @@
 using System.Text.Json;
 using GameNet.Server.Modules.Wallet.Api;
 using GameNet.Server.Modules.Wallet.Application;
-using GameNet.Server.Modules.Wallet.Infrastructure;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Wallet;
 using Microsoft.AspNetCore.Authorization;
@@ -23,7 +22,7 @@ public sealed class WalletEndpointContractTests
         });
         builder.Services.AddAuthorization();
         // Minimal API parameter-source inference recognizes IWalletService as an injected service.
-        builder.Services.AddScoped<IWalletService, WalletService>();
+        builder.Services.AddScoped<IWalletService>(_ => throw new InvalidOperationException("Metadata-only endpoint contract test must not invoke Wallet service."));
 
         using var app = builder.Build();
         app.MapWalletEndpoints();
