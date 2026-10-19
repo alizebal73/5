@@ -4,7 +4,8 @@ public enum SessionStatusContract
 {
     Active = 1,
     PendingSettlement = 2,
-    Paid = 3
+    Paid = 3,
+    Paused = 4
 }
 
 public enum InvoiceStatusContract
@@ -17,6 +18,7 @@ public enum InvoiceStatusContract
 public sealed record StartSessionRequest(Guid StationId, Guid TariffId, Guid? CustomerId);
 public sealed record StartPrepaidSessionRequest(Guid StationId, Guid CustomerId);
 public sealed record EndSessionRequest(int ExpectedVersion);
+public sealed record SessionLifecycleRequest(int ExpectedVersion);
 public sealed record ReconcileSessionTimingRequest(int ExpectedSessionVersion, long ReconciledElapsedMinutes, string Reason, bool Confirmed);
 public sealed record CashCheckoutRequest(long AmountReceivedToman, int ExpectedSessionVersion);
 
@@ -40,7 +42,8 @@ public sealed record SessionResponse(
     long? PrepaidBudgetTicks = null,
     Guid? StartedByCustomerId = null,
     bool EndedBySystem = false,
-    Guid? PaidByCustomerId = null);
+    Guid? PaidByCustomerId = null,
+    long AccumulatedElapsedTicks = 0);
 
 public sealed record InvoicePreviewResponse(
     Guid InvoiceId,
