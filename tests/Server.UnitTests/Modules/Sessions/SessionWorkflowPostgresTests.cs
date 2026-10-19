@@ -12,6 +12,7 @@ using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Modules.Customers.Infrastructure;
 using GameNet.Server.Modules.Stations.Infrastructure;
 using GameNet.Server.Modules.Tariffs.Infrastructure;
+using GameNet.Server.Modules.Wallet.Infrastructure;
 using GameNet.Server.Modules.Sessions.Infrastructure;
 using GameNet.Server.Modules.Sessions.Application;
 using GameNet.Server.Modules.Sessions.Domain;
@@ -798,6 +799,7 @@ public sealed class SessionWorkflowPostgresTests
             new StationSessionAccess(db, clock),
             new TariffSessionAccess(db),
             new BillingInvoiceWriter(db, audit, clock),
+            new WalletSessionFunding(db, new CustomerWalletEligibilityService(db), audit, clock),
             audit,
             clock);
     }

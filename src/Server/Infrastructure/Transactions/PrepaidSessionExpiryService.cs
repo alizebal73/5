@@ -3,7 +3,7 @@ using GameNet.Server.Modules.Sessions.Domain;
 using GameNet.Server.Modules.Wallet.Contracts;
 using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Billing;
-using GameNet.Shared.Contracts.V1.Protocol;
+using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Primitives;
 using Microsoft.EntityFrameworkCore;
 
