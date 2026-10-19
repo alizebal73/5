@@ -91,11 +91,13 @@ public sealed partial class SessionService(
                     var station = await stations.FindForSessionStartAsync(command.StationId, token);
                     if (station is null)
                         return Fail<SessionResponse>("sessions.station_not_found", "Station was not found.");
-                    if (station.Type != StationTypeContract.Pc)
-                        return Fail<SessionResponse>("sessions.pc_only", "This first session flow supports PC stations only.");
+                    if (station.Type is not (StationTypeContract.Pc or StationTypeContract.Ps5 or StationTypeContract.Foosball))
+                        return Fail<SessionResponse>("sessions.station_type_unsupported", "This station type cannot host a timed Session.");
+                    if (requirePrepaidWallet && station.Type != StationTypeContract.Pc)
+                        return Fail<SessionResponse>("sessions.pc_only", "Prepaid customer Sessions are supported on PC stations only.");
                     if (station.Status != StationStatusContract.Available)
                         return Fail<SessionResponse>("sessions.station_unavailable", "Station is not available.");
-                    if (!station.AgentOnline)
+                    if (station.Type == StationTypeContract.Pc && !station.AgentOnline)
                         return Fail<SessionResponse>(
                             "sessions.agent_unavailable",
                             "PC Agent is unbound, offline, lacks an active credential, or has no fresh authoritative heartbeat/lease. Session was not started.");
@@ -107,8 +109,8 @@ public sealed partial class SessionService(
                         return Fail<SessionResponse>(
                             requirePrepaidWallet ? "sessions.default_pc_tariff_not_found" : "sessions.tariff_not_found",
                             requirePrepaidWallet ? "No active default PC tariff is configured." : "Active tariff was not found.");
-                    if (tariff.StationType != StationTypeContract.Pc)
-                        return Fail<SessionResponse>("sessions.tariff_station_mismatch", "Tariff is not for PC stations.");
+                    if (tariff.StationType != station.Type)
+                        return Fail<SessionResponse>("sessions.tariff_station_mismatch", "Tariff type must match the selected station type.");
 
                     var activeExists = await db.Sessions.AnyAsync(
                         x => x.StationId == station.Id && (x.Status == SessionStatus.Active || x.Status == SessionStatus.Paused), token);
