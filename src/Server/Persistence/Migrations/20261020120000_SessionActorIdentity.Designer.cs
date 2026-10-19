@@ -593,7 +593,6 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<DateTimeOffset?>("EndedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("ended_at_utc");
                     b.Property<long?>("ElapsedTicks").HasColumnType("bigint").HasColumnName("elapsed_ticks");
                     b.Property<Guid?>("PaidByCustomerId").HasColumnType("uuid").HasColumnName("paid_by_customer_id");
-                    b.Property<Guid?>("PaidByCustomerId").HasColumnType("uuid").HasColumnName("paid_by_customer_id");
                     b.Property<Guid?>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
                     b.Property<DateTimeOffset?>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
                     b.Property<Guid?>("StartedByCustomerId").HasColumnType("uuid").HasColumnName("started_by_customer_id");
@@ -639,6 +638,7 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<bool>("IssuedBySystem").HasColumnType("boolean").HasColumnName("issued_by_system");
                     b.Property<DateTimeOffset?>("PaidAtUtc").HasColumnType("timestamp with time zone").HasColumnName("paid_at_utc");
                     b.Property<Guid?>("PaidByOperatorId").HasColumnType("uuid").HasColumnName("paid_by_operator_id");
+                    b.Property<Guid?>("PaidByCustomerId").HasColumnType("uuid").HasColumnName("paid_by_customer_id");
                     b.Property<Guid>("SessionId").HasColumnType("uuid").HasColumnName("session_id");
                     b.Property<Guid>("StationId").HasColumnType("uuid").HasColumnName("station_id");
                     b.Property<int>("Status").HasColumnType("integer").HasColumnName("status");
