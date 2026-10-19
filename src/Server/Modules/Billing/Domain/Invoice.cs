@@ -80,7 +80,7 @@ public sealed class Invoice
         if (amountToman <= 0) throw new ArgumentOutOfRangeException(nameof(amountToman));
 
         return new Invoice(id, sessionId, stationId, customerId, tariffId, tariffCodeSnapshot,
-            tariffNameSnapshot, tariffHourlyRateTomanSnapshot, elapsedTicks, amountToman, issuedByOperatorId, issuedAtUtc);
+            tariffNameSnapshot, tariffHourlyRateTomanSnapshot, elapsedTicks, amountToman, issuedByOperatorId, issuedAtUtc, issuedBySystem);
     }
 
     public void MarkPaid(Guid paidByOperatorId, DateTimeOffset paidAtUtc, Guid? paidByCustomerId = null)
