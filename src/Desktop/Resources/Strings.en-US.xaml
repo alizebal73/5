@@ -57,7 +57,7 @@
   <system:String x:Key="Session.Refresh">Refresh status</system:String>
   <system:String x:Key="Session.ControlWarning">Warning: actual PC lock/unlock is still being evaluated in Issue #92. This panel currently tests Session/accounting flow, not operational PC control.</system:String>
   <system:String x:Key="Session.StartTitle">Start a Session</system:String>
-  <system:String x:Key="Session.PcStation">PC station</system:String>
+  <system:String x:Key="Session.PcStation">Station (PC, PS5 or foosball)</system:String>
   <system:String x:Key="Session.Tariff">Hourly tariff</system:String>
   <system:String x:Key="Session.Start">Start Session</system:String>
   <system:String x:Key="Session.CustomerWalkIn">This slice creates a Walk-in customer and does not collect personal details.</system:String>
@@ -67,10 +67,11 @@
   <system:String x:Key="Session.Resume">Resume play</system:String>
   <system:String x:Key="Session.End">End and issue invoice</system:String>
   <system:String x:Key="Tariff.CreateTitle">Configure a PC tariff</system:String>
+  <system:String x:Key="Tariff.StationType">Station type</system:String>
   <system:String x:Key="Tariff.Code">Tariff code</system:String>
   <system:String x:Key="Tariff.Name">Tariff name</system:String>
   <system:String x:Key="Tariff.HourlyRate">Hourly rate (whole Toman)</system:String>
-  <system:String x:Key="Tariff.IsDefault">Make default for PC</system:String>
+  <system:String x:Key="Tariff.IsDefault">Make default for this station type</system:String>
   <system:String x:Key="Tariff.Create">Create tariff</system:String>
   <system:String x:Key="Tariff.ManagePermissionRequired">The Settings Write permission is required to create tariffs.</system:String>
   <system:String x:Key="Billing.PendingTitle">Invoices awaiting payment</system:String>
