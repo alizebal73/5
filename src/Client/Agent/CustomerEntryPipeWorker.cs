@@ -18,7 +18,7 @@ public sealed class CustomerEntryPipeWorker(
     IAgentCustomerSessionGateway gateway,
     ILogger<CustomerEntryPipeWorker> logger) : BackgroundService
 {
-    public const string PipeName = "GameNet5.Agent.CustomerEntry.v1";
+    public const string PipeName = GameNet.Shared.Runtime.CustomerEntryPipeProtocol.PipeName;
     private const int MaximumFrameBytes = 16 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 

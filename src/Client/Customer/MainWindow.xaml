@@ -35,7 +35,7 @@
               <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,6"/>
               <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                        Padding="11" FontSize="15" Margin="0,0,0,15"
-                       IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}"/>
+                       />
               <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,6"/>
               <PasswordBox x:Name="PasswordInput" Padding="11" FontSize="15"
                            PasswordChanged="PasswordInput_OnPasswordChanged" Margin="0,0,0,18"/>
