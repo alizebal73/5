@@ -18,8 +18,7 @@ public sealed class Session
         long startedMonotonicTimestamp,
         long startedMonotonicFrequency,
         long startedSystemUptimeMilliseconds,
-        Guid startedBootIdentifier,
-        Guid? startedByCustomerId = null)
+        Guid startedBootIdentifier)
     {
         Id = id;
         StationId = stationId;
@@ -76,7 +75,8 @@ public sealed class Session
         long startedMonotonicTimestamp,
         long startedMonotonicFrequency,
         long startedSystemUptimeMilliseconds,
-        Guid startedBootIdentifier)
+        Guid startedBootIdentifier,
+        Guid? startedByCustomerId = null)
     {
         if (id == Guid.Empty) throw new ArgumentException("Session id is required.", nameof(id));
         if (stationId == Guid.Empty) throw new ArgumentException("Station id is required.", nameof(stationId));
