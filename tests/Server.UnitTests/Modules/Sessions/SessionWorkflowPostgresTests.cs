@@ -1040,4 +1040,220 @@ public sealed class SessionWorkflowPostgresTests
         public string Compute(object payload) =>
             Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload))));
     }
+
+    [Fact]
+    public async Task Pc_session_pause_resume_excludes_paused_time_even_across_windows_reboot()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorId = Guid.NewGuid();
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlation = "slice2-pause-resume-" + token;
+        var idempotencyPrefix = "slice2-pause-resume-" + token + "-";
+        Guid? customerId = null;
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+
+        try
+        {
+            Guid sessionId;
+            await using (var db = CreateContext(connectionString))
+            {
+                var station = Station.Create(stationId, "PR-" + token[..12], "Pause/resume PostgreSQL PC", StationType.Pc);
+                var tariff = Tariff.CreateFixedHourly(
+                    tariffId, "PR-" + token[..12], "Pause/resume tariff",
+                    StationTypeContract.Pc, 60_000L, false, clock.UtcNow);
+                var deviceId = "pause-agent-" + token[..12];
+                station.BindAgent(deviceId);
+                db.Stations.Add(station);
+                db.Tariffs.Add(tariff);
+                db.AgentCredentials.Add(new AgentCredential
+                {
+                    DeviceId = deviceId,
+                    SecretHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("pause-agent-secret-" + token))),
+                    CreatedAtUtc = clock.UtcNow
+                });
+                db.AgentConnectionLeases.Add(new AgentConnectionLease
+                {
+                    DeviceId = deviceId,
+                    ConnectionId = "pause-connection-" + token[..12],
+                    LeaseToken = Guid.NewGuid().ToString("N"),
+                    LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5),
+                    UpdatedAtUtc = clock.UtcNow,
+                    LastHeartbeatAtUtc = clock.UtcNow
+                });
+                await db.SaveChangesAsync();
+
+                var service = CreateService(db, clock);
+                var actor = Actor(operatorId, correlation);
+                var started = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, idempotencyPrefix + "start", actor),
+                    CancellationToken.None);
+                Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
+                sessionId = started.Value.Id;
+                customerId = started.Value.CustomerId;
+
+                clock.Advance(TimeSpan.FromMinutes(20));
+                var pause = new PauseSessionCommand(sessionId, started.Value.Version, idempotencyPrefix + "pause", actor);
+                var paused = await service.PauseAsync(pause, CancellationToken.None);
+                Assert.True(paused.IsSuccess, paused.IsSuccess ? "" : paused.Error.Code);
+                Assert.Equal(SessionStatusContract.Paused, paused.Value.Status);
+                Assert.Equal(started.Value.Version + 1, paused.Value.Version);
+
+                // Replaying the same mutation must not add the segment twice.
+                var pauseReplay = await service.PauseAsync(pause, CancellationToken.None);
+                Assert.True(pauseReplay.IsSuccess);
+                Assert.Equal(paused.Value.Version, pauseReplay.Value.Version);
+                var changedPauseIntent = await service.PauseAsync(
+                    pause with { ExpectedVersion = started.Value.Version + 1 }, CancellationToken.None);
+                Assert.False(changedPauseIntent.IsSuccess);
+                Assert.Equal("idempotency.key_reused", changedPauseIntent.Error.Code);
+                Assert.Equal(1, await db.IdempotencyRecords.CountAsync(x => x.Key == idempotencyPrefix + "pause"));
+
+                var pausedRow = await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == sessionId);
+                Assert.Equal(TimeSpan.FromMinutes(20).Ticks, pausedRow.AccumulatedElapsedTicks);
+                Assert.Null(pausedRow.CurrentSegmentStartedMonotonicTimestamp);
+
+                // A paused Session continues to occupy the station and blocks a second start.
+                var leaseDuringPause = await db.AgentConnectionLeases.SingleAsync(x => x.DeviceId == deviceId);
+                leaseDuringPause.LastHeartbeatAtUtc = clock.UtcNow;
+                leaseDuringPause.LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5);
+                leaseDuringPause.UpdatedAtUtc = clock.UtcNow;
+                await db.SaveChangesAsync();
+                var secondStart = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, idempotencyPrefix + "start-during-pause", actor),
+                    CancellationToken.None);
+                Assert.False(secondStart.IsSuccess);
+                Assert.Equal("sessions.station_has_active_session", secondStart.Error.Code);
+                Assert.Equal(1, await db.Sessions.CountAsync(x => x.StationId == stationId));
+
+                // A long paused interval and Windows boot change are deliberately excluded.
+                clock.Advance(TimeSpan.FromMinutes(50));
+                clock.SimulateWindowsReboot();
+                var resume = await service.ResumeAsync(
+                    new ResumeSessionCommand(sessionId, paused.Value.Version, idempotencyPrefix + "resume", actor),
+                    CancellationToken.None);
+                Assert.True(resume.IsSuccess, resume.IsSuccess ? "" : resume.Error.Code);
+                Assert.Equal(SessionStatusContract.Active, resume.Value.Status);
+                Assert.Equal(paused.Value.Version + 1, resume.Value.Version);
+
+                var resumedRow = await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == sessionId);
+                Assert.Equal(TimeSpan.FromMinutes(20).Ticks, resumedRow.AccumulatedElapsedTicks);
+                Assert.NotEqual(resumedRow.StartedBootIdentifier, resumedRow.CurrentSegmentStartedBootIdentifier!.Value);
+                Assert.NotNull(resumedRow.CurrentSegmentStartedMonotonicTimestamp);
+
+                clock.Advance(TimeSpan.FromMinutes(10));
+                var ended = await service.EndAsync(
+                    new EndSessionCommand(sessionId, resume.Value.Version, idempotencyPrefix + "end", actor),
+                    CancellationToken.None);
+                Assert.True(ended.IsSuccess, ended.IsSuccess ? "" : ended.Error.Code);
+                Assert.Equal(InvoiceStatusContract.PendingPayment, ended.Value.Status);
+                Assert.Equal(TimeSpan.FromMinutes(30).Ticks, ended.Value.ElapsedTicks);
+                Assert.Equal(30_000L, ended.Value.AmountToman);
+
+                var finalRow = await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == sessionId);
+                Assert.Equal(SessionStatus.PendingSettlement, finalRow.Status);
+                Assert.Equal(TimeSpan.FromMinutes(30).Ticks, finalRow.AccumulatedElapsedTicks);
+                Assert.Equal(finalRow.ElapsedTicks, finalRow.AccumulatedElapsedTicks);
+                Assert.Null(finalRow.CurrentSegmentStartedMonotonicTimestamp);
+                Assert.Equal(3, await db.AuditEntries.CountAsync(x =>
+                    x.CorrelationId == correlation &&
+                    (x.Operation == "sessions.pause" || x.Operation == "sessions.resume" || x.Operation == "sessions.end")));
+            }
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, stationId, tariffId, customerId, correlation, idempotencyPrefix);
+        }
+    }
+
+    [Fact]
+    public async Task Pc_session_end_while_paused_invoices_only_accumulated_active_time_after_reboot()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var operatorId = Guid.NewGuid();
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var correlation = "slice2-paused-end-" + token;
+        var idempotencyPrefix = "slice2-paused-end-" + token + "-";
+        Guid? customerId = null;
+        var clock = new MutableClock(DateTimeOffset.UtcNow.AddHours(-1));
+
+        try
+        {
+            Guid sessionId;
+            await using (var db = CreateContext(connectionString))
+            {
+                var station = Station.Create(stationId, "PE-" + token[..12], "Paused-end PostgreSQL PC", StationType.Pc);
+                var tariff = Tariff.CreateFixedHourly(
+                    tariffId, "PE-" + token[..12], "Paused-end tariff",
+                    StationTypeContract.Pc, 60_000L, false, clock.UtcNow);
+                var deviceId = "paused-end-agent-" + token[..12];
+                station.BindAgent(deviceId);
+                db.Stations.Add(station);
+                db.Tariffs.Add(tariff);
+                db.AgentCredentials.Add(new AgentCredential
+                {
+                    DeviceId = deviceId,
+                    SecretHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("paused-end-secret-" + token))),
+                    CreatedAtUtc = clock.UtcNow
+                });
+                db.AgentConnectionLeases.Add(new AgentConnectionLease
+                {
+                    DeviceId = deviceId,
+                    ConnectionId = "paused-end-connection-" + token[..12],
+                    LeaseToken = Guid.NewGuid().ToString("N"),
+                    LeaseExpiresAtUtc = clock.UtcNow.AddMinutes(5),
+                    UpdatedAtUtc = clock.UtcNow,
+                    LastHeartbeatAtUtc = clock.UtcNow
+                });
+                await db.SaveChangesAsync();
+
+                var service = CreateService(db, clock);
+                var actor = Actor(operatorId, correlation);
+                var started = await service.StartAsync(
+                    new StartSessionCommand(stationId, tariffId, null, idempotencyPrefix + "start", actor),
+                    CancellationToken.None);
+                Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
+                sessionId = started.Value.Id;
+                customerId = started.Value.CustomerId;
+
+                clock.Advance(TimeSpan.FromMinutes(17));
+                var paused = await service.PauseAsync(
+                    new PauseSessionCommand(sessionId, started.Value.Version, idempotencyPrefix + "pause", actor),
+                    CancellationToken.None);
+                Assert.True(paused.IsSuccess, paused.IsSuccess ? "" : paused.Error.Code);
+                Assert.Equal(SessionStatusContract.Paused, paused.Value.Status);
+
+                // End while paused must not try to reconstruct paused time from clock or boot evidence.
+                clock.Advance(TimeSpan.FromHours(4));
+                clock.SimulateWindowsReboot();
+                var ended = await service.EndAsync(
+                    new EndSessionCommand(sessionId, paused.Value.Version, idempotencyPrefix + "end", actor),
+                    CancellationToken.None);
+
+                Assert.True(ended.IsSuccess, ended.IsSuccess ? "" : ended.Error.Code);
+                Assert.Equal(paused.Value.Version + 1, ended.Value.SessionVersion);
+                Assert.Equal(TimeSpan.FromMinutes(17).Ticks, ended.Value.ElapsedTicks);
+                Assert.Equal(17_000L, ended.Value.AmountToman);
+                Assert.Equal(InvoiceStatusContract.PendingPayment, ended.Value.Status);
+
+                var row = await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == sessionId);
+                Assert.Equal(SessionStatus.PendingSettlement, row.Status);
+                Assert.Equal(TimeSpan.FromMinutes(17).Ticks, row.AccumulatedElapsedTicks);
+                Assert.Equal(row.ElapsedTicks, row.AccumulatedElapsedTicks);
+                Assert.Null(row.CurrentSegmentStartedMonotonicTimestamp);
+                Assert.Single(await db.Invoices.Where(x => x.SessionId == sessionId).ToArrayAsync());
+            }
+        }
+        finally
+        {
+            await CleanupAsync(connectionString, stationId, tariffId, customerId, correlation, idempotencyPrefix);
+        }
+    }
 }
