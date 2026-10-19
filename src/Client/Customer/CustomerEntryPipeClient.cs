@@ -4,10 +4,11 @@ using System.IO.Pipes;
 using System.Text.Json;
 using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Runtime;
+using GameNet.CustomerClient.Features;
 
 namespace GameNet.CustomerClient;
 
-public sealed class CustomerEntryPipeClient
+public sealed class CustomerEntryPipeClient : ICustomerEntryGateway
 {
     private const int MaximumFrameBytes = 16 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
