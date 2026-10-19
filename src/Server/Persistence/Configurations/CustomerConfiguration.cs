@@ -26,6 +26,10 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.IsBlocked).HasDefaultValue(false).IsRequired().HasColumnName("is_blocked");
         b.Ignore(x => x.Status);
         b.Property(x => x.CreatedAtUtc).IsRequired().HasColumnName("created_at_utc");
+        b.Property(x => x.LoginUsername).HasMaxLength(40).HasColumnName("login_username");
+        b.Property(x => x.PasswordHash).HasMaxLength(256).HasColumnName("password_hash");
+        b.Property(x => x.PasswordFailedAttempts).HasDefaultValue(0).IsRequired().HasColumnName("password_failed_attempts");
+        b.Property(x => x.PasswordLockedUntilUtc).HasColumnName("password_locked_until_utc");
         b.Property(x => x.Version).IsConcurrencyToken().IsRequired().HasColumnName("version");
         b.HasIndex(x => x.Code).IsUnique().HasDatabaseName("ux_customers_code");
         b.HasIndex(x => x.LoginUsername).IsUnique().HasDatabaseName("ux_customers_login_username");
