@@ -85,6 +85,50 @@ public sealed class SessionTests
         Assert.Throws<ArgumentException>(() => session.MarkPaid(Guid.Empty, start.AddMinutes(1)));
     }
 
+    [Fact]
+    public void Customer_started_prepaid_session_never_uses_customer_id_as_operator()
+    {
+        var start = DateTimeOffset.Parse("2026-10-14T10:00:00Z");
+        var customerId = Guid.NewGuid();
+        var session = Session.Start(
+            Guid.NewGuid(), Guid.NewGuid(), customerId, Guid.NewGuid(),
+            "PC-STANDARD", "PC Standard", 60_000L, Guid.Empty, start,
+            StartedTimestamp, TimestampFrequency, StartedUptimeMilliseconds, BootIdentifier, customerId);
+
+        Assert.Equal(Guid.Empty, session.StartedByOperatorId);
+        Assert.Equal(customerId, session.StartedByCustomerId);
+
+        session.End(Guid.Empty, start.AddMinutes(60), TimeSpan.FromHours(1).Ticks, endedBySystem: true);
+        Assert.True(session.EndedBySystem);
+        Assert.Equal(Guid.Empty, session.EndedByOperatorId);
+
+        session.MarkPaid(Guid.Empty, start.AddMinutes(60), customerId);
+        Assert.Equal(customerId, session.PaidByCustomerId);
+        Assert.Equal(Guid.Empty, session.PaidByOperatorId);
+    }
+
+    [Fact]
+    public void Session_rejects_mixed_or_missing_actor_identity()
+    {
+        var start = DateTimeOffset.Parse("2026-10-14T10:00:00Z");
+        var args = new object[] { };
+        Assert.Throws<ArgumentException>(() => Session.Start(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "PC-STANDARD", "PC Standard", 60_000L, Guid.Empty, start,
+            StartedTimestamp, TimestampFrequency, StartedUptimeMilliseconds, BootIdentifier));
+        Assert.Throws<ArgumentException>(() => Session.Start(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "PC-STANDARD", "PC Standard", 60_000L, Guid.NewGuid(), start,
+            StartedTimestamp, TimestampFrequency, StartedUptimeMilliseconds, BootIdentifier, Guid.NewGuid()));
+
+        var session = NewSession(start);
+        Assert.Throws<ArgumentException>(() => session.End(Guid.NewGuid(), start.AddMinutes(1),
+            TimeSpan.FromMinutes(1).Ticks, endedBySystem: true));
+        Assert.Throws<ArgumentException>(() => session.End(Guid.Empty, start.AddMinutes(1),
+            TimeSpan.FromMinutes(1).Ticks));
+        Assert.Throws<ArgumentException>(() => session.MarkPaid(Guid.Empty, start.AddMinutes(1)));
+    }
+
     private static Session NewSession(DateTimeOffset start) => Session.Start(
         Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
         "PC-STANDARD", "PC Standard", 60_000L, Guid.NewGuid(), start,
