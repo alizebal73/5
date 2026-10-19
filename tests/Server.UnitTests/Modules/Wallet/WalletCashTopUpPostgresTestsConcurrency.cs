@@ -132,40 +132,10 @@ public sealed class WalletCashTopUpPostgresTestsConcurrency
         }
         finally
         {
-            await using var cleanup = CreateContext(connectionString!);
-            await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM audit_entries WHERE correlation_id LIKE {correlationPrefix + "%"}");
-            await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM idempotency_records WHERE scope = {"wallet.cash-top-up:" + operatorId.ToString("D")}");
-            // This is an opt-in disposable PostgreSQL test database. Production paths never disable these guards.
-            await cleanup.Database.ExecuteSqlRawAsync(
-                "ALTER TABLE wallet_ledger_entries DISABLE TRIGGER wallet_ledger_entries_append_only");
-            try
-            {
-                await cleanup.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE cash_receipts DISABLE TRIGGER cash_receipts_append_only");
-                try
-                {
-                    await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                        $"DELETE FROM wallet_ledger_entries WHERE customer_id = {customerId}");
-                    await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                        $"DELETE FROM wallet_accounts WHERE customer_id = {customerId}");
-                    await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                        $"DELETE FROM cash_receipts WHERE customer_id = {customerId}");
-                    await cleanup.Database.ExecuteSqlInterpolatedAsync(
-                        $"DELETE FROM customers WHERE id = {customerId}");
-                }
-                finally
-                {
-                    await cleanup.Database.ExecuteSqlRawAsync(
-                        "ALTER TABLE cash_receipts ENABLE TRIGGER cash_receipts_append_only");
-                }
-            }
-            finally
-            {
-                await cleanup.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE wallet_ledger_entries ENABLE TRIGGER wallet_ledger_entries_append_only");
-            }
+            // Keep the test's financial rows in this disposable PostgreSQL database.
+            // Cash receipts and Wallet ledger entries are deliberately append-only, so a
+            // test must not disable their guards or delete the evidence it just verified.
+            // Foundation creates and destroys this isolated database for the certification run.
         }
     }
 
