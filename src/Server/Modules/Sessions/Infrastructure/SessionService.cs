@@ -723,7 +723,7 @@ public sealed class SessionService(
         if (!actor.Permissions.Contains(Permissions.SessionsOperate))
             return Fail<IReadOnlyList<SessionResponse>>("sessions.forbidden", "Not allowed to read sessions.");
 
-        var query = db.Sessions.AsNoTracking().Where(x => x.Status == SessionStatus.Active);
+        var query = db.Sessions.AsNoTracking().Where(x => x.Status == SessionStatus.Active || x.Status == SessionStatus.Paused);
         if (stationId.HasValue)
             query = query.Where(x => x.StationId == stationId.Value);
 
