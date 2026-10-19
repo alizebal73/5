@@ -40,8 +40,10 @@ public interface IGameNetServerClient
         CancellationToken cancellationToken = default) =>
         StartSessionAsync(new StartSessionRequest(request.StationId, Guid.Empty, request.CustomerId),
             idempotencyKey, cancellationToken);
-    Task<SessionResponse> PauseSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
-    Task<SessionResponse> ResumeSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SessionResponse> PauseSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        Task.FromException<SessionResponse>(new NotSupportedException("Session pause is not supported by this client."));
+    Task<SessionResponse> ResumeSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        Task.FromException<SessionResponse>(new NotSupportedException("Session resume is not supported by this client."));
     Task<InvoicePreviewResponse> EndSessionAsync(Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(Guid id, ReconcileSessionTimingRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default);
