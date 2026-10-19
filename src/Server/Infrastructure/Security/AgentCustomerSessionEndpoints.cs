@@ -62,11 +62,12 @@ public static class AgentCustomerSessionEndpoints
                     "Customer login session could not be established.", StatusCodes.Status401Unauthorized, context);
 
             var actor = new SessionActorContext(
-                login.Value.CustomerId,
+                Guid.Empty,
                 correlationId,
                 "CustomerClient",
                 new HashSet<string>(StringComparer.Ordinal) { Permissions.SessionsOperate },
-                "Customer");
+                "Customer",
+                login.Value.CustomerId);
 
             var started = await sessions.StartPrepaidAsync(
                 new StartPrepaidSessionCommand(stationId.Value, login.Value.CustomerId, keyFromHeader, actor),
