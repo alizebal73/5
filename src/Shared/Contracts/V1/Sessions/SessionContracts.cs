@@ -37,7 +37,10 @@ public sealed record SessionResponse(
     SessionStatusContract Status,
     int Version,
     long? PrepaidReservedAmountToman = null,
-    long? PrepaidBudgetTicks = null);
+    long? PrepaidBudgetTicks = null,
+    Guid? StartedByCustomerId = null,
+    bool EndedBySystem = false,
+    Guid? PaidByCustomerId = null);
 
 public sealed record InvoicePreviewResponse(
     Guid InvoiceId,
