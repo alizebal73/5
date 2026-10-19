@@ -690,5 +690,8 @@ public sealed class SessionSettlement(
         new(session.Id, session.StationId, session.CustomerId, session.TariffId,
             session.TariffCodeSnapshot, session.TariffNameSnapshot, session.TariffHourlyRateTomanSnapshot,
             session.StartedByOperatorId, session.StartedAtUtc, session.EndedByOperatorId, session.EndedAtUtc,
-            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version);
+            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version,
+            StartedByCustomerId: session.StartedByCustomerId,
+            EndedBySystem: session.EndedBySystem,
+            PaidByCustomerId: session.PaidByCustomerId);
 }
