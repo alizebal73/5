@@ -90,8 +90,6 @@ app.MapAgentEnrollmentRoutes();
 app.MapIdentityEndpoints();
 app.MapOperatorManagementEndpoints();
 app.MapCustomerEndpoints();
-app.MapCustomerAuthenticationEndpoints();
-app.MapAgentCustomerSessionEndpoints();
 app.MapStationEndpoints();
 app.MapTariffEndpoints();
 app.MapSessionEndpoints();
