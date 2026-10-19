@@ -72,6 +72,15 @@ public sealed class SessionWorkflowViewModelTests
             Assert.Equal("100", viewModel.AmountToCreditText);
             Assert.Equal("100", viewModel.CashReceivedText);
 
+            // Another operator must not be able to bypass the unresolved physical-cash request.
+            var foreignOperatorViewModel = new WalletTopUpViewModel(
+                client, permission => permission == Permissions.WalletWrite, store);
+            foreignOperatorViewModel.SetCurrentOperatorId(Guid.NewGuid());
+            foreignOperatorViewModel.SelectedCustomer = customer;
+            Assert.False(foreignOperatorViewModel.CanEditInput);
+            Assert.False(foreignOperatorViewModel.TopUpCommand.CanExecute(null));
+            Assert.Contains("belongs to another operator", foreignOperatorViewModel.ErrorMessage, StringComparison.Ordinal);
+
             // Recreate the UI object to model closing and reopening the Desktop process.
             var resumed = new WalletTopUpViewModel(client, permission => permission == Permissions.WalletWrite, store);
             resumed.SetCurrentOperatorId(operatorId);

@@ -62,7 +62,12 @@ public sealed class WalletTopUpViewModel : IWalletTopUpPort
         set
         {
             if (!SetField(ref selectedCustomer, value)) return;
-            if (pendingIdempotencyKey is null)
+            if (pendingRecoveryStoreUnavailable)
+            {
+                // Keep the fail-closed explanation visible even while the parent view
+                // changes or refreshes the selected customer.
+            }
+            else if (pendingIdempotencyKey is null)
             {
                 ErrorMessage = string.Empty;
                 StatusMessage = string.Empty;
