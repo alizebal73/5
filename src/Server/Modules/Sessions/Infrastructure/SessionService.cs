@@ -815,5 +815,6 @@ public sealed class SessionSettlement(
             session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version,
             StartedByCustomerId: session.StartedByCustomerId,
             EndedBySystem: session.EndedBySystem,
-            PaidByCustomerId: session.PaidByCustomerId);
+            PaidByCustomerId: session.PaidByCustomerId,
+            AccumulatedElapsedTicks: session.AccumulatedElapsedTicks);
 }
