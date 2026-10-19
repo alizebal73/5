@@ -21,6 +21,9 @@ public sealed class Customer
     public bool IsBlocked { get; private set; }
     public CustomerStatus Status => IsBlocked ? CustomerStatus.Blocked : IsActive ? CustomerStatus.Active : CustomerStatus.Inactive;
     public DateTimeOffset CreatedAtUtc { get; private set; }
+    public string? PasswordHash { get; private set; }
+    public int PasswordFailedAttempts { get; private set; }
+    public DateTimeOffset? PasswordLockedUntilUtc { get; private set; }
     public int Version { get; private set; }
 
     public static Customer CreateWalkIn(Guid id, DateTimeOffset createdAtUtc)
@@ -68,6 +71,40 @@ public sealed class Customer
         IsActive = false;
         IsBlocked = false;
         Version = checked(Version + 1);
+    }
+
+    public void SetPasswordHash(string encodedHash)
+    {
+        if (Kind != CustomerKind.Registered)
+            throw new InvalidOperationException("CUSTOMER_WALKIN_PASSWORD_IS_NOT_CONFIGURABLE");
+        if (string.IsNullOrWhiteSpace(encodedHash) || encodedHash.Length > 256)
+            throw new ArgumentException("Encoded customer password hash is invalid.", nameof(encodedHash));
+        PasswordHash = encodedHash;
+        PasswordFailedAttempts = 0;
+        PasswordLockedUntilUtc = null;
+        Version = checked(Version + 1);
+    }
+
+    public bool IsPasswordLoginLocked(DateTimeOffset nowUtc) =>
+        PasswordLockedUntilUtc is DateTimeOffset lockedUntil && lockedUntil > nowUtc.ToUniversalTime();
+
+    public void RecordFailedPasswordAttempt(DateTimeOffset nowUtc)
+    {
+        nowUtc = nowUtc.ToUniversalTime();
+        if (IsPasswordLoginLocked(nowUtc)) return;
+        PasswordFailedAttempts = checked(PasswordFailedAttempts + 1);
+        if (PasswordFailedAttempts >= 5)
+        {
+            PasswordFailedAttempts = 0;
+            PasswordLockedUntilUtc = nowUtc.AddMinutes(10);
+        }
+    }
+
+    public void RecordSuccessfulPasswordLogin()
+    {
+        if (PasswordFailedAttempts == 0 && PasswordLockedUntilUtc is null) return;
+        PasswordFailedAttempts = 0;
+        PasswordLockedUntilUtc = null;
     }
 
     private static string NormalizeCode(string code)

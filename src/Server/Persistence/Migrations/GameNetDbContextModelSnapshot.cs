@@ -527,6 +527,9 @@ namespace GameNet.Server.Persistence.Migrations
                     b.Property<bool>("IsBlocked").HasDefaultValue(false).HasColumnType("boolean").HasColumnName("is_blocked");
                     b.Property<string>("Nickname").HasMaxLength(60).HasColumnType("character varying(60)").HasColumnName("nickname");
                     b.Property<string>("PhoneNumber").HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("phone_number");
+                    b.Property<string>("PasswordHash").HasMaxLength(256).HasColumnType("character varying(256)").HasColumnName("password_hash");
+                    b.Property<int>("PasswordFailedAttempts").HasDefaultValue(0).HasColumnType("integer").HasColumnName("password_failed_attempts");
+                    b.Property<DateTimeOffset?>("PasswordLockedUntilUtc").HasColumnType("timestamp with time zone").HasColumnName("password_locked_until_utc");
                     b.Property<bool>("IsActive").HasColumnType("boolean").HasColumnName("is_active");
                     b.Property<int>("Kind").HasColumnType("integer").HasColumnName("kind");
                     b.Property<int>("Version").IsConcurrencyToken().HasColumnType("integer").HasColumnName("version");
@@ -538,7 +541,21 @@ namespace GameNet.Server.Persistence.Migrations
                              t.HasCheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
                             t.HasCheckConstraint("ck_customers_registered_name", "(kind = 1) OR (display_name IS NOT NULL AND length(trim(display_name)) > 0)");
                             t.HasCheckConstraint("ck_customers_kind_range", "kind BETWEEN 1 AND 2");
+                            t.HasCheckConstraint("ck_customers_password_failed_attempts_range", "password_failed_attempts BETWEEN 0 AND 4");
                         });
+                });
+
+            modelBuilder.Entity("GameNet.Server.Modules.Customers.Domain.CustomerLoginSession", b =>
+                {
+                    b.Property<string>("Jti").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)").HasColumnName("jti");
+                    b.Property<Guid>("CustomerId").HasColumnType("uuid").HasColumnName("customer_id");
+                    b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("created_at_utc");
+                    b.Property<DateTimeOffset>("ExpiresAtUtc").HasColumnType("timestamp with time zone").HasColumnName("expires_at_utc");
+                    b.Property<DateTimeOffset?>("RevokedAtUtc").HasColumnType("timestamp with time zone").HasColumnName("revoked_at_utc");
+                    b.HasKey("Jti").HasName("pk_customer_login_sessions");
+                    b.HasIndex("CustomerId").HasDatabaseName("ix_customer_login_sessions_customer_id");
+                    b.HasIndex("ExpiresAtUtc").HasDatabaseName("ix_customer_login_sessions_expires_at_utc");
+                    b.ToTable("customer_login_sessions");
                 });
 
             modelBuilder.Entity("GameNet.Server.Modules.Tariffs.Domain.Tariff", b =>
@@ -808,6 +825,13 @@ namespace GameNet.Server.Persistence.Migrations
                     b.ToTable("stations", (string)null);
                 });
 
+
+            modelBuilder.Entity("GameNet.Server.Modules.Customers.Domain.CustomerLoginSession", b =>
+                {
+                    b.HasOne("GameNet.Server.Modules.Customers.Domain.Customer", null).WithMany()
+                        .HasForeignKey("CustomerId").OnDelete(DeleteBehavior.Restrict).IsRequired()
+                        .HasConstraintName("fk_customer_login_sessions_customers_customer_id");
+                });
 
             modelBuilder.Entity("GameNet.Server.Modules.Billing.Domain.CashReceipt", b =>
                 {

@@ -2,12 +2,14 @@ using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using GameNet.Server.Modules.Identity.Application;
+using GameNet.Server.Modules.Customers.Contracts;
 using GameNet.Shared.Primitives;
 using GameNet.Server.Infrastructure.Configuration;
 using GameNet.Shared.Contracts.V1.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading.RateLimiting;
 
 namespace GameNet.Server.Infrastructure.Security;
 
@@ -74,6 +76,25 @@ public static class AuthenticationRegistration
                             return;
                         }
 
+                        if (string.Equals(actorType, "Customer", StringComparison.Ordinal))
+                        {
+                            var customerIdText = principal?.FindFirst("customer_id")?.Value
+                                                 ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                                 ?? principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                            var customerJti = principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+                            if (!Guid.TryParse(customerIdText, out var customerId) || customerId == Guid.Empty ||
+                                string.IsNullOrWhiteSpace(customerJti))
+                            {
+                                context.Fail("AUTH_CUSTOMER_SESSION_MISSING");
+                                return;
+                            }
+
+                            var authority = services.GetRequiredService<ICustomerLoginAuthority>();
+                            if (!await authority.IsLoginUsableAsync(customerId, customerJti, context.HttpContext.RequestAborted))
+                                context.Fail("AUTH_CUSTOMER_SESSION_REVOKED");
+                            return;
+                        }
+
                         if (!string.Equals(actorType, "Operator", StringComparison.Ordinal))
                         {
                             context.Fail("AUTH_ACTOR_INVALID");
@@ -122,10 +143,23 @@ public static class AuthenticationRegistration
                 };
             });
 
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("customer-password-login", context => RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true
+                }));
+        });
+
         services.AddAuthorization(options =>
         {
             options.AddPolicy("Operator", policy =>
                 policy.RequireAuthenticatedUser().RequireClaim("actor_type", "Operator"));
+
+            options.AddPolicy("Customer", policy => policy.RequireAuthenticatedUser().RequireClaim("actor_type", "Customer"));
 
             options.AddPolicy("AgentTransport", policy =>
                 policy.RequireAuthenticatedUser()

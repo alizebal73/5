@@ -76,6 +76,9 @@ public static class ServiceRegistration
         services.AddScoped<StationService>();
         services.AddScoped<ICustomerSessionAccess, CustomerSessionAccess>();
         services.AddScoped<ICustomerManagementService, CustomerManagementService>();
+        services.AddScoped<ICustomerAuthenticationService, CustomerAuthenticationService>();
+        services.AddScoped<ICustomerLoginAuthority, CustomerLoginAuthority>();
+        services.AddSingleton<ICustomerPasswordHasher, CustomerPasswordHasher>();
         services.AddScoped<ICustomerWalletEligibility, CustomerWalletEligibilityService>();
         services.AddScoped<IStationSessionAccess, StationSessionAccess>();
         services.AddScoped<ITariffSessionAccess, TariffSessionAccess>();

@@ -29,6 +29,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
     public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
     public DbSet<Station> Stations => Set<Station>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerLoginSession> CustomerLoginSessions => Set<CustomerLoginSession>();
     public DbSet<Tariff> Tariffs => Set<Tariff>();
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -75,6 +76,7 @@ public sealed class GameNetDbContext(DbContextOptions<GameNetDbContext> options)
         modelBuilder.ApplyConfiguration(new AuthSessionConfiguration());
         modelBuilder.ApplyConfiguration(new StationConfiguration());
         modelBuilder.ApplyConfiguration(new CustomerConfiguration());
+        modelBuilder.ApplyConfiguration(new CustomerLoginSessionConfiguration());
         modelBuilder.ApplyConfiguration(new TariffConfiguration());
         modelBuilder.ApplyConfiguration(new SessionConfiguration());
         modelBuilder.ApplyConfiguration(new InvoiceConfiguration());
