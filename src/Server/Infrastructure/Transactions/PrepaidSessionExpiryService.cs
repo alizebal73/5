@@ -59,10 +59,11 @@ public sealed class PrepaidSessionExpiryService(
             // A stable per-Session/version key makes periodic retries safe after timeouts or restarts.
             var key = $"prepaid-expiry-{session.Id:N}-{session.Version}";
             var actor = new SessionActorContext(
-                session.StartedByOperatorId,
+                Guid.Empty,
                 $"prepaid-expiry:{session.Id:D}",
                 "PrepaidExpiryWorker",
-                new HashSet<string>(StringComparer.Ordinal) { Permissions.SessionsOperate });
+                new HashSet<string>(StringComparer.Ordinal) { Permissions.SessionsOperate },
+                "System");
             var result = await sessionService.EndAsync(
                 new EndSessionCommand(session.Id, session.Version, key, actor),
                 cancellationToken);
