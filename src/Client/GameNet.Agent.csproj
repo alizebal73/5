@@ -7,5 +7,5 @@
   <ItemGroup><ProjectReference Include="..\Shared\GameNet.Shared.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
-    <PackageReference Include="Microsoft.Extensions.Http" /></ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" /> <PackageReference Include="System.IO.Pipes.AccessControl" /></ItemGroup>
 </Project>
