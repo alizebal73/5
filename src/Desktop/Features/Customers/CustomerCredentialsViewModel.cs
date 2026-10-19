@@ -40,12 +40,15 @@ public sealed class CustomerCredentialsViewModel : INotifyPropertyChanged
         get => selectedCustomer;
         set
         {
-            if (selectedCustomer?.Id == value?.Id && selectedCustomer?.Version == value?.Version) return;
+            var identityChanged = selectedCustomer?.Id != value?.Id;
+            if (!identityChanged && selectedCustomer?.Version == value?.Version) return;
             selectedCustomer = value;
-            Username = string.Empty;
+            if (identityChanged)
+                Username = string.Empty;
             Password = string.Empty;
             ErrorMessage = string.Empty;
-            StatusMessage = string.Empty;
+            if (identityChanged)
+                StatusMessage = string.Empty;
             InputResetVersion++;
             OnPropertyChanged();
             RaiseCommand();
@@ -110,7 +113,7 @@ public sealed class CustomerCredentialsViewModel : INotifyPropertyChanged
                 "customers.credentials_invalid" => Text("نام کاربری یا رمز معتبر نیست؛ نام کاربری ۲ تا ۴۰ نویسه و رمز حداقل ۸ نویسه باشد.", "Username or password is invalid; use a 2-40 character username and a password of at least 8 characters."),
                 "customers.not_found" => Text("مشتری ثبت‌شده پیدا نشد.", "Registered customer was not found."),
                 "customers.version_conflict" => Text("اطلاعات مشتری تغییر کرده؛ تازه‌سازی کنید و دوباره بررسی کنید.", "Customer data changed. Refresh the customer before retrying."),
-                "customers.conflict" => Text("این نام کاربری برای مشتری دیگری ثبت شده است.", "That username is already assigned to another customer."),
+                "customers.login_username_exists" => Text("این نام کاربری برای مشتری دیگری ثبت شده است.", "That username is already assigned to another customer."),
                 _ => Text("ثبت مشخصات ورود انجام نشد؛ وضعیت مشتری را تازه‌سازی کنید.", "Could not save customer credentials. Refresh the customer state.")
             };
         }

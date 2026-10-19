@@ -88,7 +88,7 @@ public static class CustomerAuthenticationEndpoints
             "customers.not_found" => StatusCodes.Status404NotFound,
             "customer_auth.invalid_credentials" => StatusCodes.Status401Unauthorized,
             "customers.credentials_invalid" or "idempotency.required" => StatusCodes.Status400BadRequest,
-            "customers.version_conflict" or "idempotency.in_flight" or "idempotency.key_reused" or "idempotency.unavailable" => StatusCodes.Status409Conflict,
+            "customers.version_conflict" or "customers.login_username_exists" or "idempotency.in_flight" or "idempotency.key_reused" or "idempotency.unavailable" => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError
         };
         return Results.Json(new ApiFailure(new ApiError(error.Code, error.Message), CorrelationIdMiddleware.GetCurrent(context)), statusCode: status);

@@ -32,14 +32,15 @@ public sealed class CustomerAuthenticationService(
     {
         if (!command.Actor.Permissions.Contains(Permissions.CustomersCredentialsManage))
             return Fail<CustomerCredentialsSetResult>("customers.credentials_forbidden", "Not allowed to manage customer credentials.");
-        if (command.CustomerId == Guid.Empty || command.ExpectedVersion < 1 || string.IsNullOrWhiteSpace(command.Username) || !passwordHasher.IsValidPassword(command.Password))
+        var normalizedUsername = NormalizeUsername(command.Username);
+        if (command.CustomerId == Guid.Empty || command.ExpectedVersion < 1 || normalizedUsername is null || !passwordHasher.IsValidPassword(command.Password))
             return Fail<CustomerCredentialsSetResult>("customers.credentials_invalid", "Customer, username, version or password is invalid.");
         if (string.IsNullOrWhiteSpace(command.IdempotencyKey))
             return Fail<CustomerCredentialsSetResult>("idempotency.required", "An idempotency key is required.");
 
         var encodedHash = passwordHasher.HashPassword(command.Password);
         var key = command.IdempotencyKey.Trim();
-        var fingerprint = requestFingerprint.Compute(new { command.CustomerId, Username = command.Username, command.ExpectedVersion, Password = command.Password });
+        var fingerprint = requestFingerprint.Compute(new { command.CustomerId, Username = normalizedUsername, command.ExpectedVersion, Password = command.Password });
         try
         {
             return await mutationPipeline.ExecuteAsync(
@@ -57,7 +58,7 @@ public sealed class CustomerAuthenticationService(
                     var oldVersion = customer.Version;
                     var oldUsername = customer.LoginUsername;
                     var credentialsWereConfigured = customer.PasswordHash is not null;
-                    try { customer.SetCredentials(command.Username, encodedHash); }
+                    try { customer.SetCredentials(normalizedUsername, encodedHash); }
                     catch (ArgumentException ex) { return Fail<CustomerCredentialsSetResult>("customers.credentials_invalid", ex.Message); }
                     var now = clock.UtcNow;
                     await db.CustomerLoginSessions.Where(x => x.CustomerId == customer.Id && x.RevokedAtUtc == null)
@@ -73,7 +74,7 @@ public sealed class CustomerAuthenticationService(
         }
         catch (PersistenceConflictException)
         {
-            return Fail<CustomerCredentialsSetResult>("customers.version_conflict", "Customer data changed concurrently; refresh before retrying.");
+            return Fail<CustomerCredentialsSetResult>("customers.login_username_exists", "That username is already assigned to another customer.");
         }
         catch (DbUpdateConcurrencyException)
         {
