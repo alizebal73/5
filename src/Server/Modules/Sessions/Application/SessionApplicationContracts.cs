@@ -20,6 +20,8 @@ public sealed record SessionActorContext(
 public sealed record StartSessionCommand(Guid StationId, Guid TariffId, Guid? CustomerId, string IdempotencyKey, SessionActorContext Actor);
 public sealed record StartPrepaidSessionCommand(Guid StationId, Guid CustomerId, string IdempotencyKey, SessionActorContext Actor);
 public sealed record EndSessionCommand(Guid SessionId, int ExpectedVersion, string IdempotencyKey, SessionActorContext Actor);
+public sealed record PauseSessionCommand(Guid SessionId, int ExpectedVersion, string IdempotencyKey, SessionActorContext Actor);
+public sealed record ResumeSessionCommand(Guid SessionId, int ExpectedVersion, string IdempotencyKey, SessionActorContext Actor);
 public sealed record ReconcileSessionTimingCommand(Guid SessionId, int ExpectedSessionVersion, long ReconciledElapsedMinutes, string Reason, bool Confirmed, string IdempotencyKey, SessionActorContext Actor);
 
 public interface ISessionService
@@ -31,6 +33,8 @@ public interface ISessionService
             new GameNet.Shared.Primitives.Error("sessions.prepaid_not_supported",
                 "Prepaid Session start is not configured.")));
     Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> EndAsync(EndSessionCommand command, CancellationToken cancellationToken);
+    Task<GameNet.Shared.Primitives.Result<SessionResponse>> PauseAsync(PauseSessionCommand command, CancellationToken cancellationToken);
+    Task<GameNet.Shared.Primitives.Result<SessionResponse>> ResumeAsync(ResumeSessionCommand command, CancellationToken cancellationToken);
     Task<GameNet.Shared.Primitives.Result<InvoicePreviewResponse>> ReconcileTimingAsync(ReconcileSessionTimingCommand command, CancellationToken cancellationToken);
     Task<GameNet.Shared.Primitives.Result<IReadOnlyList<SessionResponse>>> ListActiveAsync(SessionActorContext actor, Guid? stationId, CancellationToken cancellationToken);
 }
