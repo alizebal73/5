@@ -25,6 +25,7 @@ using GameNet.Server.Modules.Billing.Contracts;
 using GameNet.Server.Modules.Billing.Application;
 using GameNet.Server.Modules.Billing.Infrastructure;
 using GameNet.Server.Modules.Wallet.Application;
+using GameNet.Server.Modules.Wallet.Contracts;
 using GameNet.Server.Modules.Wallet.Infrastructure;
 using GameNet.Server.Modules.Sessions.Contracts;
 using GameNet.Server.Modules.Sessions.Infrastructure;
@@ -90,6 +91,7 @@ public static class ServiceRegistration
         services.AddScoped<IBillingService>(provider => provider.GetRequiredService<BillingService>());
         services.AddScoped<ICashReceiptWriter>(provider => provider.GetRequiredService<BillingService>());
         services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IWalletSessionFunding, WalletSessionFunding>();
         services.AddScoped<ITariffService, GameNet.Server.Modules.Tariffs.Infrastructure.TariffService>();
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();

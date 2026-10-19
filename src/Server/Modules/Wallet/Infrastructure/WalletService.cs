@@ -42,7 +42,7 @@ public sealed class WalletService(
             .SingleOrDefaultAsync(x => x.CustomerId == customerId, cancellationToken);
         return Result<WalletBalanceResponse>.Success(account is null
             ? new WalletBalanceResponse(customerId, 0, 0, null)
-            : new WalletBalanceResponse(account.CustomerId, account.BalanceToman, account.Version, account.UpdatedAtUtc));
+            : new WalletBalanceResponse(account.CustomerId, account.BalanceToman, account.Version, account.UpdatedAtUtc, account.ReservedBalanceToman));
     }
 
     public async Task<Result<WalletCashTopUpResponse>> CashTopUpAsync(
@@ -138,6 +138,11 @@ public sealed class WalletService(
                 catch (OverflowException)
                 {
                     return Fail<WalletCashTopUpResponse>("wallet.balance_overflow", "The Wallet balance would exceed the supported range.");
+                }
+                catch (InvalidOperationException)
+                {
+                    return Fail<WalletCashTopUpResponse>("wallet.prepaid_reservation_active",
+                        "Wallet credit cannot be changed while a prepaid Session reservation is active.");
                 }
                 catch (ArgumentOutOfRangeException)
                 {

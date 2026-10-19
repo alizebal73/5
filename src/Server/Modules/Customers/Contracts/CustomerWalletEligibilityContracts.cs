@@ -10,4 +10,6 @@ public interface ICustomerWalletEligibility
     Task<Result<CustomerWalletSnapshot>> GetRegisteredCustomerAsync(Guid customerId, CancellationToken cancellationToken);
     Task<Result<CustomerWalletSnapshot>> LockActiveRegisteredCustomerForWalletTopUpAsync(
         Guid customerId, int expectedVersion, CancellationToken cancellationToken);
+    Task<Result<CustomerWalletSnapshot>> LockActiveRegisteredCustomerForSessionAsync(
+        Guid customerId, CancellationToken cancellationToken);
 }
