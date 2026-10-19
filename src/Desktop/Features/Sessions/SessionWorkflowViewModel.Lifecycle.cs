@@ -8,9 +8,6 @@ namespace GameNet.Desktop.Features.Sessions;
 
 public sealed partial class SessionWorkflowViewModel
 {
-    public ICommand PauseSessionCommand { get; }
-    public ICommand ResumeSessionCommand { get; }
-
     private void RaiseLifecycleCommands()
     {
         (PauseSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
