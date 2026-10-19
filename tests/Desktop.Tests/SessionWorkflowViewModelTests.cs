@@ -1167,9 +1167,10 @@ public sealed class SessionWorkflowViewModelTests
                 CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 3);
             var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
             var refreshedId = Guid.Empty;
+            var refreshed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var viewModel = new GameNet.Desktop.Features.Customers.CustomerCredentialsViewModel(
                 client, permission => permission == Permissions.CustomersCredentialsManage,
-                id => { refreshedId = id; return Task.CompletedTask; });
+                id => { refreshedId = id; refreshed.TrySetResult(true); return Task.CompletedTask; });
             viewModel.SelectedCustomer = customer;
             viewModel.Username = "player-01";
             viewModel.Password = "correct horse battery";
@@ -1195,6 +1196,7 @@ public sealed class SessionWorkflowViewModelTests
             client.CustomerCredentialsCompletion.SetResult(
                 new SetCustomerCredentialsResponse(customer.Id, "PLAYER-01", customer.Version + 1, DateTimeOffset.UtcNow));
             await saved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(string.Empty, viewModel.Password);
             Assert.Equal("PLAYER-01", viewModel.Username);
@@ -1334,7 +1336,7 @@ public sealed class SessionWorkflowViewModelTests
             CustomerCredentialsRequestReceived.TrySetResult(true);
             return CustomerCredentialsCompletion.Task;
         }
-        public Task<SetCustomerCredentialsResponse> SetCustomerCredentialsAsync(Guid id, SetCustomerCredentialsRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default)
         {
