@@ -45,29 +45,7 @@
                       DisplayMemberPath="Code"
                       SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
 
-            <TextBlock Text="{DynamicResource Customer.SelectForSession}" FontSize="12"/>
-            <TextBox Margin="0,3,0,4" Padding="5"
-                     Text="{Binding SessionCustomerSearchText, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="{DynamicResource Customer.SessionSearch}"/>
-            <Button Content="{DynamicResource Customer.SessionSearchButton}"
-                    Command="{Binding SearchSessionCustomersCommand}" Padding="7,4"
-                    HorizontalAlignment="Stretch" Margin="0,0,0,5"/>
-            <ComboBox Margin="0,2,0,5" Padding="5" MinWidth="0"
-                      ItemsSource="{Binding AvailableCustomers}"
-                      SelectedItem="{Binding SelectedCustomer, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate>
-                  <StackPanel>
-                    <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#667085"/>
-                  </StackPanel>
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <Button Content="{DynamicResource Customer.UseWalkIn}"
-                    Command="{Binding UseWalkInCustomerCommand}" Padding="7,4"
-                    Margin="0,0,0,4" HorizontalAlignment="Stretch"/>
-            <TextBlock Text="{DynamicResource Customer.WalkInHint}" FontSize="10"
+            <TextBlock Text="{DynamicResource Session.WalkInOnlyHint}" FontSize="10"
                        Foreground="#667085" TextWrapping="Wrap" Margin="0,0,0,7"/>
 
             <TextBlock Text="{DynamicResource Session.Tariff}" FontSize="12"/>

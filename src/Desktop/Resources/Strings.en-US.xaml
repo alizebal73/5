@@ -22,6 +22,13 @@
   <system:String x:Key="Identity.AccountDisabled">This account is disabled.</system:String>
   <system:String x:Key="Identity.ConnectionError">Could not connect to the Server. Check your network.</system:String>
   <system:String x:Key="Identity.UnexpectedError">Sign in failed. Check the Server status.</system:String>
+  <system:String x:Key="Station.CustomerLogin">Customer login</system:String>
+  <system:String x:Key="Customer.EntryDialogTitle">Enter customer on PC</system:String>
+  <system:String x:Key="Customer.EntryPrompt">Enter the Customer ID for PC {0}. This path uses prepaid Wallet credit.</system:String>
+  <system:String x:Key="Customer.EntryId">Customer ID / code</system:String>
+  <system:String x:Key="Customer.EntryConfirm">Confirm entry</system:String>
+  <system:String x:Key="Customer.EntryCancel">Cancel</system:String>
+  <system:String x:Key="Customer.EntryIdRequired">Customer ID is required.</system:String>
   <system:String x:Key="Station.Title">Stations</system:String>
   <system:String x:Key="Station.Subtitle">Agent online state comes from the Server lease and heartbeat.</system:String>
   <system:String x:Key="Station.Refresh">Refresh</system:String>
@@ -54,6 +61,7 @@
   <system:String x:Key="Session.Tariff">Hourly tariff</system:String>
   <system:String x:Key="Session.Start">Start Session</system:String>
   <system:String x:Key="Session.CustomerWalkIn">This slice creates a Walk-in customer and does not collect personal details.</system:String>
+  <system:String x:Key="Session.WalkInOnlyHint">Start without an ID is for Walk-in customers. For a registered customer, right-click the PC and choose Customer login.</system:String>
   <system:String x:Key="Session.ActiveTitle">Active Sessions</system:String>
   <system:String x:Key="Session.End">End and issue invoice</system:String>
   <system:String x:Key="Tariff.CreateTitle">Configure a PC tariff</system:String>
