@@ -41,9 +41,17 @@
                        FontWeight="SemiBold" Margin="0,0,0,8"/>
             <TextBlock Text="{DynamicResource Session.PcStation}" FontSize="12"/>
             <ComboBox Margin="0,3,0,7" Padding="5" MinWidth="0"
-                      ItemsSource="{Binding PcStations}"
-                      DisplayMemberPath="Code"
-                      SelectedItem="{Binding SelectedStation, Mode=TwoWay}"/>
+                      ItemsSource="{Binding StationChoices}"
+                      SelectedItem="{Binding SelectedStationChoice, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding TypeDisplayText}" FontSize="11" Foreground="#667085"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
 
             <TextBlock Text="{DynamicResource Session.WalkInOnlyHint}" FontSize="10"
                        Foreground="#667085" TextWrapping="Wrap" Margin="0,0,0,7"/>
@@ -139,6 +147,12 @@
             <Expander Header="{DynamicResource Tariff.CreateTitle}" Margin="0,6,0,0" IsExpanded="False">
               <StackPanel Margin="0,7,0,0">
                 <StackPanel Visibility="{Binding CanManageTariffs, Converter={StaticResource BooleanToVisibilityConverter}}">
+                  <TextBlock Text="{DynamicResource Tariff.StationType}" FontSize="12"/>
+                  <ComboBox Margin="0,3,0,7" Padding="5"
+                            ItemsSource="{Binding StationTypeOptions}"
+                            DisplayMemberPath="DisplayText"
+                            SelectedValuePath="Type"
+                            SelectedValue="{Binding TariffStationType, Mode=TwoWay}"/>
                   <TextBlock Text="{DynamicResource Tariff.Code}" FontSize="12"/>
                   <TextBox Margin="0,3,0,7" Padding="5"
                            Text="{Binding TariffCode, UpdateSourceTrigger=PropertyChanged}"/>
