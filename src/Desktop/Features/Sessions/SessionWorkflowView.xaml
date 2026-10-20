@@ -212,6 +212,29 @@
                     Command="{Binding ResumeSessionCommand}"/>
             <Button Margin="0,7,0,0" Padding="9,7" Content="{DynamicResource Session.End}"
                     Command="{Binding EndSessionCommand}"/>
+            <Expander Header="{DynamicResource Session.TransferTitle}" Margin="0,10,0,0">
+              <StackPanel Margin="0,7,0,0">
+                <TextBlock Text="{DynamicResource Session.TransferDestination}" FontSize="12"/>
+                <ComboBox Margin="0,3,0,7" Padding="5" ItemsSource="{Binding TransferDestinationChoices}"
+                          SelectedItem="{Binding SelectedTransferDestination, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel>
+                        <TextBlock Text="{Binding Code}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding TypeDisplayText}" FontSize="11" Foreground="#667085"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text="{DynamicResource Session.TransferReason}" FontSize="12"/>
+                <TextBox Margin="0,3,0,7" Padding="5"
+                         Text="{Binding SessionTransferReasonText, UpdateSourceTrigger=PropertyChanged}"/>
+                <CheckBox Content="{DynamicResource Session.ConfirmTransfer}"
+                          IsChecked="{Binding ConfirmSessionTransfer, Mode=TwoWay}" Margin="0,0,0,8"/>
+                <Button Padding="8,6" Content="{DynamicResource Session.TransferSubmit}"
+                        Command="{Binding TransferSessionCommand}"/>
+              </StackPanel>
+            </Expander>
 
             <Expander Header="{DynamicResource Session.TimingRecoveryTitle}" Margin="0,10,0,0"
                       IsExpanded="False"
