@@ -67,7 +67,7 @@ public sealed class CustomerEntryEndpointContractTests
         AssertRoutePolicies(customerLogout, "Customer");
 
         var operatorSessionStart = Assert.Single(routes, endpoint =>
-            endpoint.RoutePattern.RawText == "/api/v1/sessions");
+            string.Equals(endpoint.RoutePattern.RawText?.TrimEnd('/'), "/api/v1/sessions", StringComparison.Ordinal));
         AssertRoutePolicies(operatorSessionStart, "Operator", Permissions.SessionsOperate);
 
         // Both requirements are present: actor_type=Customer alone cannot satisfy the
