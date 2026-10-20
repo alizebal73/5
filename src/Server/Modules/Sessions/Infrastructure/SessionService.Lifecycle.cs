@@ -1,4 +1,6 @@
 using System.Text.Json;
+using GameNet.Server.Infrastructure.Audit;
+using GameNet.Server.Infrastructure.Transactions;
 using GameNet.Server.Modules.Sessions.Application;
 using GameNet.Server.Modules.Sessions.Domain;
 using GameNet.Server.Persistence;
