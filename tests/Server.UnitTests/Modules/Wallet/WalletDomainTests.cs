@@ -56,6 +56,58 @@ public sealed class WalletDomainTests
     }
 
     [Fact]
+    public void PrepaidReservation_moves_all_available_value_and_blocks_top_up_until_settlement()
+    {
+        var now = DateTimeOffset.Parse("2026-10-20T00:00:00Z");
+        var account = WalletAccount.Open(Guid.NewGuid(), now);
+        account.Credit(105_000, now);
+
+        var availableAfterReserve = account.ReserveAllAvailable(105_000, now);
+
+        Assert.Equal(0, availableAfterReserve);
+        Assert.Equal(0, account.BalanceToman);
+        Assert.Equal(105_000, account.ReservedBalanceToman);
+        Assert.Equal(2, account.Version);
+        Assert.Throws<InvalidOperationException>(() => account.Credit(1, now));
+        Assert.Throws<ArgumentOutOfRangeException>(() => account.ReserveAllAvailable(1, now));
+    }
+
+    [Fact]
+    public void PrepaidSettlement_charges_actual_amount_and_releases_unused_credit()
+    {
+        var now = DateTimeOffset.Parse("2026-10-20T00:00:00Z");
+        var account = WalletAccount.Open(Guid.NewGuid(), now);
+        account.Credit(105_000, now);
+        account.ReserveAllAvailable(105_000, now);
+
+        var settlement = account.SettlePrepaidReservation(105_000, 33_000, now);
+
+        Assert.Equal(0, settlement.ChargeBalanceAfterToman);
+        Assert.Equal(72_000, settlement.ChargeReservedBalanceAfterToman);
+        Assert.Equal(72_000, settlement.ReleaseAmountToman);
+        Assert.Equal(72_000, settlement.FinalBalanceToman);
+        Assert.Equal(0, settlement.FinalReservedBalanceToman);
+        Assert.Equal(4, settlement.FinalWalletVersion);
+        Assert.Equal(72_000, account.BalanceToman);
+        Assert.Equal(0, account.ReservedBalanceToman);
+        Assert.Throws<InvalidOperationException>(() => account.SettlePrepaidReservation(105_000, 33_000, now));
+    }
+
+    [Fact]
+    public void PrepaidSettlement_rejects_charge_above_reserved_credit_without_mutation()
+    {
+        var now = DateTimeOffset.Parse("2026-10-20T00:00:00Z");
+        var account = WalletAccount.Open(Guid.NewGuid(), now);
+        account.Credit(10_000, now);
+        account.ReserveAllAvailable(10_000, now);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => account.SettlePrepaidReservation(10_000, 10_001, now));
+        Assert.Equal(0, account.BalanceToman);
+        Assert.Equal(10_000, account.ReservedBalanceToman);
+        Assert.Equal(2, account.Version);
+    }
+
+    [Fact]
     public void Ledger_RejectsBalanceAfterBelowCredit()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => WalletLedgerEntry.RecordCashTopUp(

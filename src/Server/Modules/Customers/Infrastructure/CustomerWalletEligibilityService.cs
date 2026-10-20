@@ -44,6 +44,26 @@ public sealed class CustomerWalletEligibilityService(GameNetDbContext db) : ICus
         return Result<CustomerWalletSnapshot>.Success(new CustomerWalletSnapshot(customer.Id, customer.Code, customer.Version));
     }
 
+    public async Task<Result<CustomerWalletSnapshot>> LockActiveRegisteredCustomerForSessionAsync(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        if (customerId == Guid.Empty)
+            return Fail("customers.not_found", "Registered customer was not found.");
+
+        // Session start holds this row lock until the Wallet reservation and Session commit.
+        // This serializes competing starts and Wallet top-ups for the same registered customer.
+        var customer = await db.Customers
+            .FromSqlInterpolated($"SELECT * FROM customers WHERE id = {customerId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken);
+        if (customer is null || customer.Kind != CustomerKind.Registered)
+            return Fail("customers.not_found", "Registered customer was not found.");
+        if (!customer.IsActive || customer.IsBlocked)
+            return Fail("customers.inactive", "Only active, unblocked registered customers can start a prepaid Session.");
+
+        return Result<CustomerWalletSnapshot>.Success(
+            new CustomerWalletSnapshot(customer.Id, customer.Code, customer.Version));
+    }
+
     private static Result<CustomerWalletSnapshot> Fail(string code, string message) =>
         Result<CustomerWalletSnapshot>.Failure(new Error(code, message));
 }

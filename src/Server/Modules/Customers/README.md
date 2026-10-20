@@ -17,7 +17,7 @@ Own registered customer identity/code, profile, optional nickname and phone, act
 
 ## Incomplete by design
 
-Customer PIN/login, multi-device session policy, Wallet/debt/Gift balances, VIP plan/history, customer statements and full account-activity projections are not part of this slice. Do not duplicate financial/session state into the Customers table.
+Customer username/password login and the two approved customer entry paths are a separate capability slice; PIN and a third customer-entry mode are not authorized. Dashboard-side PC→customer-ID assignment and client-side username/password login must resolve to one server-authoritative CustomerLogin/Session ownership model. Client and Manager Dashboard are separate product/security surfaces; the UI never owns Session/wallet/time calculations. Owner-configurable client unlock/release permissions are a separate station-access-control use case (Issue #152), not customer login. Multi-device session policy, Wallet/debt/Gift balances, VIP plan/history, customer statements and full account-activity projections remain incomplete. Do not duplicate financial/session state into the Customers table.
 
 ## Implementation rules
 

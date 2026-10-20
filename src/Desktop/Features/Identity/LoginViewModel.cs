@@ -24,11 +24,11 @@ public sealed class LoginViewModel : INotifyPropertyChanged
     private bool passwordChangeSucceeded;
     private bool isBusy, isAuthenticated;
 
-    public LoginViewModel(IGameNetServerClient serverClient)
+    public LoginViewModel(IGameNetServerClient serverClient, ICustomerEntryPrompt? customerEntryPrompt = null)
     {
         this.serverClient = serverClient;
         StationBoard = new StationBoardViewModel(serverClient, HasPermission);
-        SessionWorkflow = new SessionWorkflowViewModel(serverClient, HasPermission);
+        SessionWorkflow = new SessionWorkflowViewModel(serverClient, HasPermission, customerEntryPrompt);
         SessionWorkflow.WalletTopUp.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(IWalletTopUpPort.IsBusy))

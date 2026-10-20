@@ -518,6 +518,7 @@ public sealed class StationBoardPermissionTests
         public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SetCustomerCredentialsResponse> SetCustomerCredentialsAsync(Guid id, SetCustomerCredentialsRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(
             StationTypeContract? stationType = null, CancellationToken cancellationToken = default) =>
@@ -534,6 +535,18 @@ public sealed class StationBoardPermissionTests
         public Task<SessionResponse> StartSessionAsync(
             StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<SessionResponse> PauseSessionAsync(
+            Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            Task.FromException<SessionResponse>(new InvalidOperationException("Pause is outside this permission-test fake."));
+
+        public Task<SessionResponse> ResumeSessionAsync(
+            Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            Task.FromException<SessionResponse>(new InvalidOperationException("Resume is outside this permission-test fake."));
+
+        public Task<SessionResponse> TransferSessionAsync(
+            Guid id, TransferSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            Task.FromException<SessionResponse>(new InvalidOperationException("Transfer is outside this permission-test fake."));
 
         public Task<InvoicePreviewResponse> EndSessionAsync(
             Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>

@@ -24,6 +24,7 @@ public interface IGameNetServerClient
     Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SetCustomerCredentialsResponse> SetCustomerCredentialsAsync(Guid id, SetCustomerCredentialsRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<StationResponse> CreateStationAsync(CreateStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<StationResponse> RenameStationAsync(Guid id, RenameStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<StationResponse> BindStationAgentAsync(Guid id, BindStationAgentRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
@@ -33,6 +34,15 @@ public interface IGameNetServerClient
     Task<TariffResponse> CreateTariffAsync(CreateTariffRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SessionResponse>> GetActiveSessionsAsync(Guid? stationId = null, CancellationToken cancellationToken = default);
     Task<SessionResponse> StartSessionAsync(StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SessionResponse> StartPrepaidSessionAsync(
+        StartPrepaidSessionRequest request,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default) =>
+        StartSessionAsync(new StartSessionRequest(request.StationId, Guid.Empty, request.CustomerId),
+            idempotencyKey, cancellationToken);
+    Task<SessionResponse> PauseSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SessionResponse> ResumeSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<SessionResponse> TransferSessionAsync(Guid id, TransferSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<InvoicePreviewResponse> EndSessionAsync(Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<InvoicePreviewResponse> ReconcileSessionTimingAsync(Guid id, ReconcileSessionTimingRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<InvoicePreviewResponse>> GetPendingInvoicesAsync(CancellationToken cancellationToken = default);

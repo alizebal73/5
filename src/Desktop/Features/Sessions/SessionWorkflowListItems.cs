@@ -1,7 +1,24 @@
+using System.Globalization;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Sessions;
+using GameNet.Shared.Contracts.V1.Stations;
 
 namespace GameNet.Desktop.Features.Sessions;
+
+/// <summary>
+/// Presentation-only station choice. The Server response remains authoritative; this type label
+/// only helps operators distinguish station types in the selector.
+/// </summary>
+public sealed record SessionStationOption(StationResponse Station, string TypeDisplayText)
+{
+    public Guid Id => Station.Id;
+    public string Code => Station.Code;
+}
+
+/// <summary>
+/// Localized option shown when configuring a tariff. The enum, not the label, is sent to Server.
+/// </summary>
+public sealed record SessionStationTypeOption(StationTypeContract Type, string DisplayText);
 
 /// <summary>
 /// Presentation-only rows for operator lists. These keep the server DTO as the source of
@@ -14,6 +31,10 @@ public sealed record ActiveSessionListItem(
 {
     public Guid Id => Session.Id;
     public string TariffNameSnapshot => Session.TariffNameSnapshot;
+    public string StatusDisplayText =>
+        Session.Status == SessionStatusContract.Paused
+            ? (CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? "متوقف" : "Paused")
+            : (CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? "در حال اجرا" : "Running");
 }
 
 /// <summary>

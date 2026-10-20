@@ -42,6 +42,7 @@ $requiredFiles = @(
     "scripts/verify-server-tls-certificate.ps1",
     "src/Server/Persistence/GameNetDbContextFactory.cs",
     "src/Client/GameNet.Agent.csproj",
+    "src/Client/Customer/GameNet.CustomerClient.csproj",
     "src/Client/Program.cs",
     "src/Client/appsettings.json",
     "src/Desktop/GameNet.Desktop.csproj",
@@ -119,8 +120,9 @@ $payloadRoot = Join-Path $buildRoot "payload"
 $serverOutput = Join-Path $payloadRoot "Server"
 $desktopOutput = Join-Path $payloadRoot "Desktop"
 $agentOutput = Join-Path $payloadRoot "Agent"
+$customerOutput = Join-Path $payloadRoot "Customer"
 $databaseOutput = Join-Path $payloadRoot "Database"
-New-Item -ItemType Directory -Force -Path $serverOutput,$desktopOutput,$agentOutput,$databaseOutput | Out-Null
+New-Item -ItemType Directory -Force -Path $serverOutput,$desktopOutput,$agentOutput,$customerOutput,$databaseOutput | Out-Null
 
 Push-Location $repoRoot
 try {
@@ -137,6 +139,7 @@ try {
     Invoke-Checked $dotnetPath (@("publish", "src/Server/GameNet.Server.csproj") + $publishCommon + @("--output", $serverOutput))
     Invoke-Checked $dotnetPath (@("publish", "src/Desktop/GameNet.Desktop.csproj") + $publishCommon + @("--output", $desktopOutput))
     Invoke-Checked $dotnetPath (@("publish", "src/Client/GameNet.Agent.csproj") + $publishCommon + @("--output", $agentOutput))
+    Invoke-Checked $dotnetPath (@("publish", "src/Client/Customer/GameNet.CustomerClient.csproj") + $publishCommon + @("--output", $customerOutput))
 }
 finally {
     Pop-Location
@@ -201,7 +204,8 @@ does not migrate automatically. Migration fails when connection/schema verificat
 $expectedOutputs = @(
     (Join-Path $serverOutput "GameNet.Server.exe"),
     (Join-Path $desktopOutput "GameNet.Manager.Desktop.exe"),
-    (Join-Path $agentOutput "GameNet.Agent.exe")
+    (Join-Path $agentOutput "GameNet.Agent.exe"),
+    (Join-Path $customerOutput "GameNet.CustomerClient.exe")
 )
 foreach ($path in $expectedOutputs) {
     Assert-File $path
@@ -266,6 +270,7 @@ $manifest = [ordered]@{
         [ordered]@{ name = "Server"; entryPoint = "Server/GameNet.Server.exe" },
         [ordered]@{ name = "Desktop"; entryPoint = "Desktop/GameNet.Manager.Desktop.exe" },
         [ordered]@{ name = "Agent"; entryPoint = "Agent/GameNet.Agent.exe" },
+        [ordered]@{ name = "CustomerClient"; entryPoint = "Customer/GameNet.CustomerClient.exe" },
         [ordered]@{ name = "DatabaseMigrations"; entryPoint = "Server/GameNet.Server.exe --migrate-only" }
     )
     installerReady = $false
@@ -286,6 +291,7 @@ $serverDesktopFiles = @($payloadFiles | Where-Object {
 })
 $agentPayloadFiles = @($payloadFiles | Where-Object {
     $_.path -like "Agent/*" -or
+    $_.path -like "Customer/*" -or
     $_.path -eq "PAYLOAD-NOT-SETUP.txt"
 })
 $serverDesktopManifest = [ordered]@{
@@ -311,7 +317,8 @@ $agentManifest = [ordered]@{
     source = $manifest.source
     build = $manifest.build
     components = @(
-        [ordered]@{ name = "Agent"; entryPoint = "Agent/GameNet.Agent.exe" }
+        [ordered]@{ name = "Agent"; entryPoint = "Agent/GameNet.Agent.exe" },
+        [ordered]@{ name = "CustomerClient"; entryPoint = "Customer/GameNet.CustomerClient.exe" }
     )
     installerReady = $false
     installerStatus = "Payload-only; not an installer and not certified for end-user installation."
@@ -336,6 +343,7 @@ Compress-Archive -Path @(
 ) -DestinationPath $serverDesktopZip -CompressionLevel Optimal
 Compress-Archive -Path @(
     $agentOutput,
+    $customerOutput,
     $agentManifestPath,
     $noticePath
 ) -DestinationPath $agentZip -CompressionLevel Optimal

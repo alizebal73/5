@@ -6,6 +6,7 @@ public static class Permissions
     public const string StationsOperate = "stations.operate";
     public const string CustomersRead = "customers.read";
     public const string CustomersWrite = "customers.write";
+    public const string CustomersCredentialsManage = "customers.credentials.manage";
     public const string SessionsOperate = "sessions.operate";
     public const string SessionsTimingRecover = "sessions.timing.recover";
     public const string BillingWrite = "billing.write";

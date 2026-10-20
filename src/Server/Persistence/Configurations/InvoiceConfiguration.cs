@@ -18,6 +18,8 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             table.HasCheckConstraint("ck_invoices_elapsed_positive", "elapsed_ticks IS NOT NULL AND elapsed_ticks > 0");
             table.HasCheckConstraint("ck_invoices_rate_positive", "tariff_hourly_rate_toman_snapshot > 0");
             table.HasCheckConstraint("ck_invoices_status_range", "status BETWEEN 1 AND 3");
+            table.HasCheckConstraint("ck_invoices_issuer_actor_shape", "((issued_by_system = TRUE AND issued_by_operator_id = '00000000-0000-0000-0000-000000000000') OR (issued_by_system = FALSE AND issued_by_operator_id <> '00000000-0000-0000-0000-000000000000'))");
+            table.HasCheckConstraint("ck_invoices_paid_actor_shape", "((status = 1 AND paid_by_customer_id IS NULL) OR (status IN (2, 3) AND ((paid_by_customer_id IS NULL AND paid_by_operator_id <> '00000000-0000-0000-0000-000000000000') OR (paid_by_customer_id IS NOT NULL AND paid_by_operator_id = '00000000-0000-0000-0000-000000000000'))))");
             table.HasCheckConstraint("ck_invoices_payment_state", "(status = 1 AND paid_at_utc IS NULL AND paid_by_operator_id IS NULL) OR (status IN (2, 3) AND paid_at_utc IS NOT NULL AND paid_by_operator_id IS NOT NULL)");
         });
         b.HasKey(x => x.Id).HasName("pk_invoices");
@@ -32,8 +34,10 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(x => x.ElapsedTicks).IsRequired().HasColumnName("elapsed_ticks");
         b.Property(x => x.AmountToman).IsRequired().HasColumnName("amount_toman");
         b.Property(x => x.IssuedByOperatorId).IsRequired().HasColumnName("issued_by_operator_id");
+        b.Property(x => x.IssuedBySystem).IsRequired().HasColumnName("issued_by_system");
         b.Property(x => x.IssuedAtUtc).IsRequired().HasColumnName("issued_at_utc");
         b.Property(x => x.PaidByOperatorId).HasColumnName("paid_by_operator_id");
+        b.Property(x => x.PaidByCustomerId).HasColumnName("paid_by_customer_id");
         b.Property(x => x.PaidAtUtc).HasColumnName("paid_at_utc");
         b.Property(x => x.Status).IsRequired().HasColumnName("status");
         b.HasIndex(x => x.SessionId).IsUnique().HasDatabaseName("ux_invoices_session_id");
@@ -41,10 +45,12 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.HasIndex(x => x.CustomerId).HasDatabaseName("ix_invoices_customer_id");
         b.HasIndex(x => x.TariffId).HasDatabaseName("ix_invoices_tariff_id");
         b.HasIndex(x => x.PaidAtUtc).HasDatabaseName("ix_invoices_paid_at_utc");
+        b.HasIndex(x => x.PaidByCustomerId).HasDatabaseName("ix_invoices_paid_by_customer_id");
 
         b.HasOne<Session>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_sessions_session_id");
         b.HasOne<Station>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_stations_station_id");
         b.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_customers_customer_id");
+        b.HasOne<Customer>().WithMany().HasForeignKey(x => x.PaidByCustomerId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_paid_by_customers_customer_id");
         b.HasOne<Tariff>().WithMany().HasForeignKey(x => x.TariffId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_invoices_tariffs_tariff_id");
     }
 }

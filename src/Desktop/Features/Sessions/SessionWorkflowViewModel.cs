@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
+using GameNet.Desktop.Features.Customers;
 using GameNet.Desktop.Features.Wallet;
 using GameNet.Shared.Contracts.V1.Billing;
 using GameNet.Shared.Contracts.V1.Security;
@@ -16,10 +17,14 @@ using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
-public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
+public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISessionLifecycleHost, ISessionTransferHost
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
+    private readonly PrepaidStationEntryCoordinator prepaidStationEntryCoordinator;
+    private readonly SessionLifecycleCoordinator lifecycleCoordinator;
+    private readonly SessionTransferCoordinator transferCoordinator;
+    private Guid? timingRecoveryRequiredSessionId;
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
@@ -35,43 +40,50 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     private bool isBusy;
     private int busyDepth;
 
-    public SessionWorkflowViewModel(IGameNetServerClient api, Func<string, bool> hasPermission)
+    public SessionWorkflowViewModel(
+        IGameNetServerClient api,
+        Func<string, bool> hasPermission,
+        ICustomerEntryPrompt? customerEntryPrompt = null)
     {
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
+        prepaidStationEntryCoordinator = new PrepaidStationEntryCoordinator(
+            api, customerEntryPrompt, BeginBusy, EndBusy,
+            message => ErrorMessage = message, SessionWorkflowErrorText.For,
+            OnPrepaidSessionStartedAsync);
+        CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
+        lifecycleCoordinator = new SessionLifecycleCoordinator(this);
+        lifecycleCoordinator.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
+        transferCoordinator = new SessionTransferCoordinator(this);
+        transferCoordinator.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
+        InitializeStationTypeOptions();
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
         CreateTariffCommand = new AsyncUiAction(CreateTariffAsync, () => !IsBusy && CanManageTariffs &&
+            Enum.IsDefined(TariffStationType) &&
             !string.IsNullOrWhiteSpace(TariffCode) && !string.IsNullOrWhiteSpace(TariffName) && TryParseToman(HourlyRateText, out var rate) && rate > 0);
         StartSessionCommand = new AsyncUiAction(StartSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedStation is { Type: StationTypeContract.Pc, Status: StationStatusContract.Available } &&
-            SelectedTariff is { IsActive: true, StationType: StationTypeContract.Pc } &&
+            SelectedStation is { Status: StationStatusContract.Available } station &&
+            station.Type is (StationTypeContract.Pc or StationTypeContract.Ps5 or StationTypeContract.Foosball) &&
+            SelectedTariff is { IsActive: true } tariff &&
+            tariff.StationType == station.Type &&
             (SelectedCustomer is null || SelectedCustomer.Status == GameNet.Shared.Contracts.V1.Customers.CustomerStatusContract.Active) &&
-            SelectedStation is not null &&
-            !ActiveSessions.Any(x => x.Session.StationId == SelectedStation.Id) &&
-            !PendingInvoices.Any(x => x.Invoice.StationId == SelectedStation.Id));
+            !ActiveSessions.Any(x => x.Session.StationId == station.Id) &&
+            !PendingInvoices.Any(x => x.Invoice.StationId == station.Id));
+        StartPrepaidSessionFromStationCommand = new AsyncParameterUiAction(
+            prepaidStationEntryCoordinator.StartAsync,
+            parameter => !IsBusy && CanOperateSessions && CanReadCustomers &&
+                prepaidStationEntryCoordinator.CanPrompt &&
+                parameter is StationResponse { Type: StationTypeContract.Pc, Status: StationStatusContract.Available });
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
-        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, () => !IsBusy && CanCheckout &&
-            !unresolvedCashCheckoutInvoiceId.HasValue &&
-            SelectedPendingInvoice?.Invoice.Status == InvoiceStatusContract.PendingPayment &&
-            TryParseToman(AmountReceivedText, out var received) &&
-            SelectedPendingInvoice is not null &&
-            received >= SelectedPendingInvoice.Invoice.AmountToman &&
-            ConfirmCashCheckout);
+            SelectedActiveSession?.Session.Status is SessionStatusContract.Active or SessionStatusContract.Paused);
+        CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, CanCheckoutCashNow);
         ReverseCashSaleCommand = new AsyncUiAction(ReverseCashSaleAsync, () => !IsBusy && CanReverseCashSale &&
             !unresolvedCashSaleReversalInvoiceId.HasValue &&
             SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } &&
             IsValidCashSaleReversalReason(CashSaleReversalReasonText) &&
             ConfirmCashSaleReversal);
-        CorrectCashTenderCommand = new AsyncUiAction(CorrectCashTenderAsync, () => !IsBusy && CanCorrectCashTender &&
-            unresolvedCashTenderCorrection is null &&
-            SelectedRecentCashCheckout is { Outcome.Status: InvoiceStatusContract.Paid, Outcome.PaymentId: not null } selected &&
-            TryParseToman(CorrectedCashReceivedText, out var correctedReceived) &&
-            correctedReceived >= selected.Outcome.AmountToman &&
-            correctedReceived != (selected.Outcome.EffectiveAmountReceivedToman ?? selected.Outcome.AmountReceivedToman) &&
-            IsValidCashTenderCorrectionReason(CashTenderCorrectionReasonText) &&
-            ConfirmCashTenderCorrection);
+        CorrectCashTenderCommand = new AsyncUiAction(CorrectCashTenderAsync, CanCorrectCashTenderNow);
         WalletTopUp = new WalletTopUpViewModel(api, hasPermission);
         InitializeCustomerCommands();
     }
@@ -86,10 +98,47 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; } = [];
     public ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; } = [];
 
+    public ICustomerCredentialsPort CustomerCredentials { get; }
     public ICommand RefreshCommand { get; }
     public ICommand CreateTariffCommand { get; }
     public ICommand StartSessionCommand { get; }
-    public ICommand EndSessionCommand { get; }
+    public ICommand StartPrepaidSessionFromStationCommand { get; }
+    public ICommand TransferSessionCommand => transferCoordinator.TransferSessionCommand;
+    public ObservableCollection<SessionStationOption> TransferDestinationChoices => transferCoordinator.TransferDestinationChoices;
+    public SessionStationOption? SelectedTransferDestination
+    {
+        get => transferCoordinator.SelectedTransferDestination;
+        set => transferCoordinator.SelectedTransferDestination = value;
+    }
+    public string SessionTransferReasonText
+    {
+        get => transferCoordinator.SessionTransferReasonText;
+        set => transferCoordinator.SessionTransferReasonText = value;
+    }
+    public bool ConfirmSessionTransfer
+    {
+        get => transferCoordinator.ConfirmSessionTransfer;
+        set => transferCoordinator.ConfirmSessionTransfer = value;
+    }
+    public ICommand PauseSessionCommand => lifecycleCoordinator.PauseSessionCommand;
+    public ICommand ResumeSessionCommand => lifecycleCoordinator.ResumeSessionCommand;
+    public ICommand ReconcileSessionTimingCommand => lifecycleCoordinator.ReconcileSessionTimingCommand;
+    public bool CanRecoverSessionTiming => lifecycleCoordinator.CanRecoverSessionTiming;
+    public string ReconciledElapsedMinutesText
+    {
+        get => lifecycleCoordinator.ReconciledElapsedMinutesText;
+        set => lifecycleCoordinator.ReconciledElapsedMinutesText = value;
+    }
+    public string TimingRecoveryReasonText
+    {
+        get => lifecycleCoordinator.TimingRecoveryReasonText;
+        set => lifecycleCoordinator.TimingRecoveryReasonText = value;
+    }
+    public bool ConfirmTimingRecovery
+    {
+        get => lifecycleCoordinator.ConfirmTimingRecovery;
+        set => lifecycleCoordinator.ConfirmTimingRecovery = value;
+    }
     public ICommand CheckoutCashCommand { get; }
 
     public bool CanManageTariffs => hasPermission(Permissions.SettingsWrite);
@@ -103,7 +152,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public StationResponse? SelectedStation
     {
         get => selectedStation;
-        set { if (SetField(ref selectedStation, value)) RaiseCommands(); }
+        set { if (SetField(ref selectedStation, value)) OnSelectedStationChanged(); }
     }
 
     public TariffResponse? SelectedTariff
@@ -120,6 +169,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             if (SetField(ref selectedActiveSession, value))
             {
                 OnPropertyChanged(nameof(CanRecoverSessionTiming));
+                transferCoordinator.OnSelectedActiveSessionChangedForTransfer();
                 RaiseCommands();
             }
         }
@@ -240,58 +290,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
                 return;
 
             ErrorMessage = string.Empty;
-            if (CanReadStations)
-            {
-                StationResponse[] stations;
-                try
-                {
-                    stations = (await api.GetStationsAsync())
-                        .Where(x => x.Type == StationTypeContract.Pc)
-                        .OrderBy(x => x.Code, StringComparer.Ordinal)
-                        .ToArray();
-                }
-                catch (Exception ex) when (!CanOperateSessions &&
-                    (ex is GameNetApiException || ex is HttpRequestException || ex is TaskCanceledException))
-                {
-                    // A station-code lookup enriches invoice rows; it must not block a cashier from loading invoices.
-                    stations = [];
-                    stationLabelsUnavailable = true;
-                }
-
-                stationLabels.Clear();
-                foreach (var station in stations)
-                    stationLabels[station.Id] = station.Code;
-
-                if (CanOperateSessions)
-                {
-                    Replace(PcStations, stations, SelectedStation?.Id, x => x.Id, out var currentStation);
-                    SelectedStation = currentStation;
-                }
-                else
-                {
-                    // Station labels may be visible to a cashier without granting Session operations.
-                    PcStations.Clear();
-                    SelectedStation = null;
-                }
-            }
-            else
-            {
-                stationLabels.Clear();
-                PcStations.Clear();
-                SelectedStation = null;
-            }
-
-            if (CanOperateSessions || CanManageTariffs)
-            {
-                var tariffs = await api.GetTariffsAsync(StationTypeContract.Pc);
-                Replace(Tariffs, tariffs, SelectedTariff?.Id, x => x.Id, out var currentTariff);
-                SelectedTariff = currentTariff;
-            }
-            else
-            {
-                Tariffs.Clear();
-                SelectedTariff = null;
-            }
+            stationLabelsUnavailable = await RefreshStationAndTariffChoicesAsync();
 
             if (CanOperateSessions)
             {
@@ -373,7 +372,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         }
         catch (GameNetApiException ex)
         {
-            ErrorMessage = ErrorText(ex.Code);
+            ErrorMessage = SessionWorkflowErrorText.For(ex.Code);
         }
         catch (HttpRequestException)
         {
@@ -412,6 +411,9 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     {
         stationLabels.Clear();
         PcStations.Clear();
+        ResetStationAndTariffChoices();
+        transferCoordinator.ResetSessionTransferState();
+        TariffStationType = StationTypeContract.Pc;
         Tariffs.Clear();
         ActiveSessions.Clear();
         PendingInvoices.Clear();
@@ -458,13 +460,13 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             return;
         }
 
-        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{rate}|{IsDefaultTariff}";
+        var fingerprint = $"{TariffCode.Trim()}|{TariffName.Trim()}|{(int)TariffStationType}|{rate}|{IsDefaultTariff}";
         var key = GetKey("tariff.create", fingerprint);
         BeginBusy();
         try
         {
             var created = await api.CreateTariffAsync(
-                new CreateTariffRequest(TariffCode, TariffName, StationTypeContract.Pc, rate, IsDefaultTariff),
+                new CreateTariffRequest(TariffCode, TariffName, TariffStationType, rate, IsDefaultTariff),
                 key);
             pendingKeys.Remove("tariff.create");
             await RefreshAsync();
@@ -472,7 +474,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             StatusMessage = Text($"تعرفهٔ {created.Code} با نرخ {FormatToman(created.HourlyRateToman)} ساخته شد.",
                 $"Tariff {created.Code} was created at {FormatToman(created.HourlyRateToman)}.");
         }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (GameNetApiException ex) { ErrorMessage = SessionWorkflowErrorText.For(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ ساخت تعرفه نامشخص است؛ تازه‌سازی کنید و از ارسال درخواست جدید خودداری کنید.", "Tariff creation result is unknown; refresh before issuing a new request."); }
         catch { ErrorMessage = Text("ساخت تعرفه انجام نشد.", "Tariff creation failed."); }
         finally { EndBusy(); }
@@ -501,12 +503,23 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
             StatusMessage = SessionStartedMessage(stationCode, customerCode);
         }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (GameNetApiException ex) { ErrorMessage = SessionWorkflowErrorText.For(ex.Code); }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ شروع Session نامشخص است؛ ابتدا تازه‌سازی کنید.", "Session start result is unknown; refresh to reconcile before retrying."); }
         catch { ErrorMessage = Text("شروع Session انجام نشد.", "Session start failed."); }
         finally { EndBusy(); }
     }
 
+    private async Task OnPrepaidSessionStartedAsync(
+        StationResponse station,
+        GameNet.Shared.Contracts.V1.Customers.CustomerResponse customer,
+        SessionResponse session)
+    {
+        await RefreshAsync();
+        SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == session.Id);
+        StatusMessage = Text(
+            $"مشتری {customer.Code} روی {station.Code} وارد شد؛ اعتبار رزروشده {FormatToman(session.PrepaidReservedAmountToman ?? 0)} تومان.",
+            $"Customer {customer.Code} started on {station.Code}; {FormatToman(session.PrepaidReservedAmountToman ?? 0)} Toman was reserved.");
+    }
     private string GetStationLabel(Guid stationId)
     {
         return stationLabels.TryGetValue(stationId, out var stationCode) &&
@@ -521,108 +534,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         return Text($"شروع: {localTime}", $"Started: {localTime}");
     }
 
-    private static string FormatDurationDisplayText(long elapsedTicks)
-    {
-        if (elapsedTicks <= 0)
-            return Text("مدت زمان در دسترس نیست", "Duration unavailable");
-
-        var duration = TimeSpan.FromTicks(elapsedTicks);
-        var totalHours = checked((long)duration.Days * 24 + duration.Hours);
-        var value = $"{totalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
-        return Text($"مدت: {value}", $"Duration: {value}");
-    }
-
-    private static string FormatAmountDisplayText(long amountToman) =>
-        Text($"{FormatToman(amountToman)} تومان", $"{FormatToman(amountToman)} Toman");
-
-    private string GetKey(string scope, string fingerprint)
-    {
-        if (pendingKeys.TryGetValue(scope, out var existing) &&
-            string.Equals(existing.Fingerprint, fingerprint, StringComparison.Ordinal))
-            return existing.Key;
-
-        var key = Guid.NewGuid().ToString("N");
-        pendingKeys[scope] = (fingerprint, key);
-        return key;
-    }
-
-    private static void Replace<T, TKey>(
-        ObservableCollection<T> collection,
-        IReadOnlyCollection<T> values,
-        TKey? previousKey,
-        Func<T, TKey> key,
-        out T? selected)
-        where TKey : struct
-        where T : class
-    {
-        collection.Clear();
-        foreach (var value in values)
-            collection.Add(value);
-
-        selected = previousKey.HasValue
-            ? values.FirstOrDefault(x => EqualityComparer<TKey>.Default.Equals(key(x), previousKey.Value))
-            : default;
-        selected ??= values.FirstOrDefault();
-    }
-
-    private static bool TryParseToman(string? text, out long value)
-    {
-        value = 0;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var builder = new System.Text.StringBuilder(text.Length);
-        foreach (var c in text.Trim())
-        {
-            if (c is '۰' or '٠') builder.Append('0');
-            else if (c is '۱' or '١') builder.Append('1');
-            else if (c is '۲' or '٢') builder.Append('2');
-            else if (c is '۳' or '٣') builder.Append('3');
-            else if (c is '۴' or '٤') builder.Append('4');
-            else if (c is '۵' or '٥') builder.Append('5');
-            else if (c is '۶' or '٦') builder.Append('6');
-            else if (c is '۷' or '٧') builder.Append('7');
-            else if (c is '۸' or '٨') builder.Append('8');
-            else if (c is '۹' or '٩') builder.Append('9');
-            else if (c is ',' or '٬' or ' ' or '\u00A0') continue;
-            else builder.Append(c);
-        }
-
-        return long.TryParse(builder.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out value);
-    }
-
     private static string FormatToman(long amount) =>
         amount.ToString("N0", CultureInfo.CurrentCulture);
-
-    private string ErrorText(string code) => code switch
-    {
-        "security.https_required" => Text("برای اتصال به سرور راه دور HTTPS لازم است.", "HTTPS is required for a remote Server."),
-        "tariffs.forbidden" or "sessions.forbidden" or "billing.forbidden" => Text("مجوز انجام این عملیات را ندارید.", "You do not have permission for this operation."),
-        "tariffs.code_exists" => Text("کد این تعرفه قبلاً ثبت شده است.", "This tariff code already exists."),
-        "sessions.station_unavailable" => Text("این ایستگاه آمادهٔ شروع Session نیست.", "This station is not available for a new Session."),
-        "sessions.agent_unavailable" => Text("Agent این PC متصل یا دارای اعتبار/heartbeat معتبر نیست؛ اتصال Agent را بررسی کنید. Session شروع نشد.", "This PC's Agent is not connected or has no active credential and fresh heartbeat/lease. Check the Agent connection; the Session was not started."),
-        "sessions.timing_recovery_required" or "sessions.invalid_clock" => Text("پیوستگی زمان جلسه قابل تأیید نیست؛ صورتحساب صادر نشد و بازیابی زمان لازم است.", "Session timing continuity could not be verified. No invoice was created; timing recovery is required."),
-        "sessions.timing_recovery_invalid" => Text("مدت، علت یا تأیید بازیابی زمان معتبر نیست.", "The recovery duration, reason, or confirmation is invalid."),
-        "sessions.timing_recovery_not_required" => Text("پیوستگی زمان معتبر است؛ از پایان عادی Session استفاده کنید.", "Timing continuity is valid; use the normal End Session command."),
-        "sessions.station_has_active_session" => Text("برای این PC یک Session فعال ثبت شده است.", "This PC already has an active Session."),
-        "sessions.station_pending_settlement" => Text("ابتدا صورتحساب Session قبلی را تسویه کنید.", "Pay the previous Session invoice before starting another Session on this PC."),
-        "sessions.customer_blocked" => Text("این مشتری مسدود است و نمی‌تواند Session جدیدی شروع کند.", "This customer is blocked and cannot start a new Session."),
-        "sessions.tariff_station_mismatch" => Text("این تعرفه برای PC نیست.", "This tariff is not for PCs."),
-        "sessions.tariff_not_found" => Text("تعرفهٔ فعال پیدا نشد.", "The active tariff was not found."),
-        "sessions.version_conflict" or "billing.session_version_conflict" => Text("اطلاعات تغییر کرده است؛ تازه‌سازی کنید.", "The data changed; refresh before trying again."),
-        "billing.cash_insufficient" => Text("وجه دریافتی کمتر از صورتحساب است.", "Cash received is less than the invoice amount."),
-        "billing.reversal_method_unsupported" => Text("این عملیات فقط برای پرداخت نقدی پشتیبانی می‌شود.", "This operation supports cash payments only."),
-        "billing.reversal_invalid" => Text("علت یا اطلاعات برگشت معتبر نیست.", "The reversal reason or request is invalid."),
-        "billing.reversal_confirmation_mismatch" => Text("صورتحساب، پرداخت یا مبلغ تأییدشده با اطلاعات سرور تطبیق ندارد.", "The confirmed invoice, payment, or amount does not match Server state."),
-        "billing.tender_correction_reversal_forbidden" => Text("پس از برگشت فروش، اصلاح سوابق وجه نقد مجاز نیست.", "Cash tender facts cannot be corrected after a sale reversal."),
-        "billing.tender_correction_version_conflict" or "billing.tender_correction_conflict" => Text("سوابق وجه نقد تغییر کرده‌اند؛ تازه‌سازی و بررسی دوباره لازم است.", "Cash tender facts changed; refresh and review the current values."),
-        "billing.tender_correction_confirmation_mismatch" => Text("پرداخت انتخاب‌شده با صورتحساب تطبیق ندارد.", "The selected payment does not match the invoice."),
-        "billing.tender_correction_invalid" or "billing.tender_correction_no_change" => Text("مبلغ یا علت اصلاح معتبر نیست، یا مقدار جدید با مقدار فعلی یکسان است.", "The corrected amount or reason is invalid, or the new amount matches the current value."),
-        "billing.invoice_not_pending" => Text("این صورتحساب در انتظار پرداخت نیست.", "This invoice is not awaiting payment."),
-        "idempotency.in_flight" => Text("این درخواست هنوز در حال پردازش است؛ کمی بعد وضعیت را تازه‌سازی کنید.", "This request is still processing; refresh its status before retrying."),
-        "idempotency.key_reused" => Text("کلید تکرار درخواست با اطلاعات متفاوت استفاده شده است.", "The idempotency key was reused with different request data."),
-        _ => Text("عملیات انجام نشد؛ پیام خطای پایدار ثبت شد. وضعیت را تازه‌سازی کنید.", "The operation failed. Refresh to reconcile the current state.")
-    };
 
     private static string Text(string fa, string en) =>
         CultureInfo.CurrentUICulture.Name.StartsWith("fa", StringComparison.OrdinalIgnoreCase) ? fa : en;
@@ -647,7 +560,10 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (RefreshCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CreateTariffCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        (StartPrepaidSessionFromStationCommand as AsyncParameterUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
+        lifecycleCoordinator.NotifyHostStateChanged();
+        transferCoordinator.NotifyHostStateChanged();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
@@ -664,6 +580,31 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(name);
         return true;
     }
+
+
+    IGameNetServerClient ISessionLifecycleHost.Api => api;
+    Guid? ISessionLifecycleHost.TimingRecoveryRequiredSessionId => timingRecoveryRequiredSessionId;
+    IReadOnlyCollection<ActiveSessionListItem> ISessionLifecycleHost.ActiveSessions => ActiveSessions;
+    IReadOnlyCollection<PendingInvoiceListItem> ISessionLifecycleHost.PendingInvoices => PendingInvoices;
+    bool ISessionLifecycleHost.HasPermission(string permission) => hasPermission(permission);
+    void ISessionLifecycleHost.BeginBusy() => BeginBusy();
+    void ISessionLifecycleHost.EndBusy() => EndBusy();
+    string ISessionLifecycleHost.GetKey(string scope, string fingerprint) => GetKey(scope, fingerprint);
+    void ISessionLifecycleHost.RemovePendingKey(string scope) => pendingKeys.Remove(scope);
+    string ISessionLifecycleHost.GetStationLabel(Guid stationId) => GetStationLabel(stationId);
+    bool ISessionLifecycleHost.TryParseToman(string? value, out long amount) => TryParseToman(value, out amount);
+    string ISessionLifecycleHost.FormatToman(long amount) => FormatToman(amount);
+    string ISessionLifecycleHost.ErrorMessage { set => ErrorMessage = value; }
+    string ISessionLifecycleHost.StatusMessage { set => StatusMessage = value; }
+
+    IGameNetServerClient ISessionTransferHost.Api => api;
+    Task ISessionTransferHost.RefreshAsync() => RefreshAsync();
+    string ISessionTransferHost.GetKey(string scope, string fingerprint) => GetKey(scope, fingerprint);
+    void ISessionTransferHost.RemovePendingKey(string scope) => pendingKeys.Remove(scope);
+    void ISessionTransferHost.BeginBusy() => BeginBusy();
+    void ISessionTransferHost.EndBusy() => EndBusy();
+    string ISessionTransferHost.ErrorMessage { set => ErrorMessage = value; }
+    string ISessionTransferHost.StatusMessage { set => StatusMessage = value; }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

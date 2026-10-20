@@ -61,6 +61,7 @@ public static class CustomerEndpoints
                 ? Results.Ok(new ApiEnvelope<CustomerResponse>(result.Value, CorrelationIdMiddleware.GetCurrent(context)))
                 : Failure(result.Error, context);
         }).RequireAuthorization(Permissions.CustomersWrite);
+        endpoints.MapCustomerAuthenticationEndpoints();
     }
 
     private static bool TryGetActor(HttpContext context, out CustomerActorContext actor)

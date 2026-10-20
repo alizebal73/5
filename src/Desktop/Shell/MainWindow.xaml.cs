@@ -3,6 +3,7 @@ using System.Windows;
 using GameNet.Desktop.Api;
 using GameNet.Desktop.Features.Identity;
 using GameNet.Desktop.Features.Stations;
+using GameNet.Desktop.Features.Sessions;
 
 namespace GameNet.Desktop.Shell;
 
@@ -13,7 +14,7 @@ public partial class MainWindow : Window
     public MainWindow(IGameNetServerClient serverClient)
     {
         InitializeComponent();
-        var viewModel = new LoginViewModel(serverClient);
+        var viewModel = new LoginViewModel(serverClient, new CustomerEntryPrompt());
         viewModel.PropertyChanged += ViewModelOnPropertyChanged;
         DataContext = viewModel;
 

@@ -125,7 +125,7 @@ public sealed partial class SessionWorkflowViewModel
         {
             await ReconcileCashCheckoutOutcomeAsync(invoice.InvoiceId);
         }
-        catch (GameNetApiException ex) { ErrorMessage = ErrorText(ex.Code); }
+        catch (GameNetApiException ex) { ErrorMessage = SessionWorkflowErrorText.For(ex.Code); }
         catch
         {
             // If the outcome of a financial command is unexpected, resolve durable Server state

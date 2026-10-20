@@ -1148,10 +1148,218 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task Customer_credentials_form_sends_separate_username_and_never_retains_password_after_success()
+    {
+        var oldCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var customer = new CustomerResponse(Guid.NewGuid(), "C-AUTH-01", "Customer Auth", null, null,
+                CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 3);
+            var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
+            var refreshedId = Guid.Empty;
+            var refreshed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var viewModel = new GameNet.Desktop.Features.Customers.CustomerCredentialsViewModel(
+                client, permission => permission == Permissions.CustomersCredentialsManage,
+                id => { refreshedId = id; refreshed.TrySetResult(true); return Task.CompletedTask; });
+            viewModel.SelectedCustomer = customer;
+            viewModel.Username = "player-01";
+            viewModel.Password = "correct horse battery";
+
+            var saved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(viewModel.StatusMessage) &&
+                    viewModel.StatusMessage.Contains("Credentials were saved", StringComparison.Ordinal))
+                    saved.TrySetResult(true);
+            };
+
+            Assert.True(viewModel.SetCredentialsCommand.CanExecute(null));
+            viewModel.SetCredentialsCommand.Execute(null);
+            await client.CustomerCredentialsRequestReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(customer.Id, client.LastCredentialsCustomerId);
+            Assert.NotNull(client.LastCredentialsRequest);
+            Assert.Equal("PLAYER-01", client.LastCredentialsRequest!.Username);
+            Assert.Equal("correct horse battery", client.LastCredentialsRequest.Password);
+            Assert.Equal(customer.Version, client.LastCredentialsRequest.ExpectedVersion);
+            Assert.False(string.IsNullOrWhiteSpace(client.LastCredentialsIdempotencyKey));
+
+            client.CustomerCredentialsCompletion.SetResult(
+                new SetCustomerCredentialsResponse(customer.Id, "PLAYER-01", customer.Version + 1, DateTimeOffset.UtcNow));
+            await saved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(string.Empty, viewModel.Password);
+            Assert.Equal("PLAYER-01", viewModel.Username);
+            Assert.Equal(customer.Id, refreshedId);
+        }
+        finally { CultureInfo.CurrentUICulture = oldCulture; }
+    }
+
+    [Fact]
+    public void Customer_credentials_form_requires_the_specific_management_permission()
+    {
+        var customer = new CustomerResponse(Guid.NewGuid(), "C-AUTH-02", "Customer Auth", null, null,
+            CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 1);
+        var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
+        var viewModel = new GameNet.Desktop.Features.Customers.CustomerCredentialsViewModel(
+            client, _ => false, _ => Task.CompletedTask);
+        viewModel.SelectedCustomer = customer;
+        viewModel.Username = "player-02";
+        viewModel.Password = "correct horse battery";
+        Assert.False(viewModel.CanManageCredentials);
+        Assert.False(viewModel.SetCredentialsCommand.CanExecute(null));
+    }
+
+
+    [Fact]
+    public async Task Pause_resume_workflow_uses_server_transitions_and_keeps_paused_sessions_endable()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var station = new StationResponse(
+                Guid.NewGuid(), "PC-PAUSE-01", "Pause/resume PC", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PC-PAUSE", "Pause/resume Tariff", StationTypeContract.Pc,
+                60_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var session = new SessionResponse(
+                Guid.NewGuid(), station.Id, Guid.NewGuid(), tariff.Id, tariff.Code, tariff.Name,
+                tariff.HourlyRateToman, Guid.NewGuid(), DateTimeOffset.UtcNow,
+                null, null, null, null, SessionStatusContract.Active, 1);
+            var client = new FakeGameNetServerClient([station], [tariff]);
+            client.ActiveSessions.Add(session);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedActiveSession = Assert.Single(viewModel.ActiveSessions);
+            Assert.True(viewModel.PauseSessionCommand.CanExecute(null));
+            Assert.False(viewModel.ResumeSessionCommand.CanExecute(null));
+
+            var pausedStatus = WaitForStatusAsync(
+                viewModel, message => message.Contains("Billing time paused", StringComparison.Ordinal));
+            viewModel.PauseSessionCommand.Execute(null);
+            Assert.Contains("Billing time paused", await pausedStatus);
+            Assert.Equal(session.Id, client.LastPauseSessionId);
+            Assert.Equal(1, client.LastPauseRequest?.ExpectedVersion);
+            Assert.Single(client.PauseSessionIdempotencyKeys);
+            Assert.Equal(SessionStatusContract.Paused, viewModel.SelectedActiveSession?.Session.Status);
+            Assert.False(viewModel.PauseSessionCommand.CanExecute(null));
+            Assert.True(viewModel.ResumeSessionCommand.CanExecute(null));
+            Assert.True(viewModel.EndSessionCommand.CanExecute(null));
+
+            var resumedStatus = WaitForStatusAsync(
+                viewModel, message => message.Contains("fresh monotonic timing segment", StringComparison.Ordinal));
+            viewModel.ResumeSessionCommand.Execute(null);
+            Assert.Contains("fresh monotonic timing segment", await resumedStatus);
+            Assert.Equal(session.Id, client.LastResumeSessionId);
+            Assert.Equal(2, client.LastResumeRequest?.ExpectedVersion);
+            Assert.Single(client.ResumeSessionIdempotencyKeys);
+            Assert.Equal(SessionStatusContract.Active, viewModel.SelectedActiveSession?.Session.Status);
+            Assert.Equal(3, viewModel.SelectedActiveSession?.Session.Version);
+            Assert.True(viewModel.PauseSessionCommand.CanExecute(null));
+            Assert.False(viewModel.ResumeSessionCommand.CanExecute(null));
+            Assert.True(viewModel.EndSessionCommand.CanExecute(null));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public async Task Transfer_workflow_filters_same_type_available_targets_and_recovers_lost_response()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var source = new StationResponse(
+                Guid.NewGuid(), "PS5-01", "Console one", StationTypeContract.Ps5,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var destination = new StationResponse(
+                Guid.NewGuid(), "PS5-02", "Console two", StationTypeContract.Ps5,
+                StationStatusContract.Available, 1, null, false, null, null, null);
+            var wrongType = new StationResponse(
+                Guid.NewGuid(), "PC-01", "Computer one", StationTypeContract.Pc,
+                StationStatusContract.Available, 1, "pc-agent", true, DateTimeOffset.UtcNow, "1.0", "Ready");
+            var unavailable = new StationResponse(
+                Guid.NewGuid(), "PS5-03", "Console three", StationTypeContract.Ps5,
+                StationStatusContract.Maintenance, 1, null, false, null, null, null);
+            var tariff = new TariffResponse(
+                Guid.NewGuid(), "PS5-HOURLY", "PS5 Standard", StationTypeContract.Ps5,
+                120_000L, true, true, DateTimeOffset.UtcNow, 1);
+            var session = new SessionResponse(
+                Guid.NewGuid(), source.Id, Guid.NewGuid(), tariff.Id,
+                tariff.Code, tariff.Name, tariff.HourlyRateToman, Guid.NewGuid(),
+                DateTimeOffset.UtcNow.AddMinutes(-15), null, null, null, null,
+                SessionStatusContract.Active, 5);
+            var client = new FakeGameNetServerClient([source, destination, wrongType, unavailable], [tariff])
+            {
+                LoseNextTransferResponseAfterCommit = true
+            };
+            client.ActiveSessions.Add(session);
+            var viewModel = new SessionWorkflowViewModel(
+                client, permission => permission is Permissions.StationsRead or Permissions.SessionsOperate);
+
+            await viewModel.RefreshAsync();
+            viewModel.SelectedActiveSession = viewModel.ActiveSessions.Single();
+
+            Assert.Single(viewModel.TransferDestinationChoices);
+            Assert.Equal(destination.Id, viewModel.TransferDestinationChoices[0].Id);
+            Assert.False(viewModel.TransferSessionCommand.CanExecute(null));
+
+            viewModel.SelectedTransferDestination = viewModel.TransferDestinationChoices[0];
+            viewModel.SessionTransferReasonText = "Customer requested a different console";
+            Assert.False(viewModel.TransferSessionCommand.CanExecute(null));
+            viewModel.ConfirmSessionTransfer = true;
+            Assert.True(viewModel.TransferSessionCommand.CanExecute(null));
+
+            var statusTask = WaitForStatusAsync(
+                viewModel,
+                message => message.Contains("Session assignment moved to station PS5-02", StringComparison.Ordinal));
+            viewModel.TransferSessionCommand.Execute(null);
+            Assert.Contains("Session assignment moved to station PS5-02", await statusTask.WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Equal(session.Id, client.LastTransferredSessionId);
+            Assert.NotNull(client.LastTransferRequest);
+            Assert.Equal(destination.Id, client.LastTransferRequest!.TargetStationId);
+            Assert.Equal(session.Version, client.LastTransferRequest.ExpectedVersion);
+            Assert.Equal("Customer requested a different console", client.LastTransferRequest.Reason);
+            Assert.True(client.LastTransferRequest.Confirmed);
+            Assert.Single(client.TransferIdempotencyKeys);
+            Assert.Equal(destination.Id, Assert.Single(client.ActiveSessions).StationId);
+            Assert.Equal(session.Version + 1, client.ActiveSessions[0].Version);
+            Assert.Empty(viewModel.ErrorMessage);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
     private sealed class FakeGameNetServerClient(
         IReadOnlyList<StationResponse> stations,
         IReadOnlyList<TariffResponse> tariffs) : IGameNetServerClient
     {
+        public TaskCompletionSource<bool> CustomerCredentialsRequestReceived { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<SetCustomerCredentialsResponse> CustomerCredentialsCompletion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Guid? LastCredentialsCustomerId { get; private set; }
+        public SetCustomerCredentialsRequest? LastCredentialsRequest { get; private set; }
+        public string? LastCredentialsIdempotencyKey { get; private set; }
+
         public TaskCompletionSource<bool> StartRequestReceived { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1159,6 +1367,10 @@ public sealed class SessionWorkflowViewModelTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public List<SessionResponse> ActiveSessions { get; } = [];
+        public bool LoseNextTransferResponseAfterCommit { get; set; }
+        public Guid? LastTransferredSessionId { get; private set; }
+        public TransferSessionRequest? LastTransferRequest { get; private set; }
+        public List<string> TransferIdempotencyKeys { get; } = [];
         public List<InvoicePreviewResponse> PendingInvoices { get; } = [];
         public List<string> CheckoutIdempotencyKeys { get; } = [];
         public List<string> CashSaleReversalIdempotencyKeys { get; } = [];
@@ -1179,6 +1391,12 @@ public sealed class SessionWorkflowViewModelTests
         public bool FailNextCashCheckoutOutcomeLookupWithNetworkError { get; set; }
         public StartSessionRequest? LastStartRequest { get; private set; }
         public string? LastStartIdempotencyKey { get; private set; }
+        public Guid? LastPauseSessionId { get; private set; }
+        public SessionLifecycleRequest? LastPauseRequest { get; private set; }
+        public List<string> PauseSessionIdempotencyKeys { get; } = [];
+        public Guid? LastResumeSessionId { get; private set; }
+        public SessionLifecycleRequest? LastResumeRequest { get; private set; }
+        public List<string> ResumeSessionIdempotencyKeys { get; } = [];
         public Guid? LastEndedSessionId { get; private set; }
         public EndSessionRequest? LastEndRequest { get; private set; }
         public string? LastEndIdempotencyKey { get; private set; }
@@ -1256,6 +1474,15 @@ public sealed class SessionWorkflowViewModelTests
         public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SetCustomerCredentialsResponse> SetCustomerCredentialsAsync(Guid id, SetCustomerCredentialsRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastCredentialsCustomerId = id;
+            LastCredentialsRequest = request;
+            LastCredentialsIdempotencyKey = idempotencyKey;
+            CustomerCredentialsRequestReceived.TrySetResult(true);
+            return CustomerCredentialsCompletion.Task;
+        }
+
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default)
         {
@@ -1288,6 +1515,61 @@ public sealed class SessionWorkflowViewModelTests
                 return Task.FromException<SessionResponse>(error);
             }
             return StartSessionCompletion.Task;
+        }
+
+        public Task<SessionResponse> PauseSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastPauseSessionId = id;
+            LastPauseRequest = request;
+            PauseSessionIdempotencyKeys.Add(idempotencyKey);
+            var current = ActiveSessions.Single(x => x.Id == id);
+            if (current.Version != request.ExpectedVersion || current.Status != SessionStatusContract.Active)
+                throw new InvalidOperationException("Unexpected pause state in test fake.");
+            var updated = current with { Status = SessionStatusContract.Paused, Version = checked(current.Version + 1), AccumulatedElapsedTicks = current.AccumulatedElapsedTicks + TimeSpan.FromMinutes(25).Ticks };
+            ActiveSessions[ActiveSessions.IndexOf(current)] = updated;
+            return Task.FromResult(updated);
+        }
+
+        public Task<SessionResponse> ResumeSessionAsync(Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastResumeSessionId = id;
+            LastResumeRequest = request;
+            ResumeSessionIdempotencyKeys.Add(idempotencyKey);
+            var current = ActiveSessions.Single(x => x.Id == id);
+            if (current.Version != request.ExpectedVersion || current.Status != SessionStatusContract.Paused)
+                throw new InvalidOperationException("Unexpected resume state in test fake.");
+            var updated = current with { Status = SessionStatusContract.Active, Version = checked(current.Version + 1) };
+            ActiveSessions[ActiveSessions.IndexOf(current)] = updated;
+            return Task.FromResult(updated);
+        }
+
+        public Task<SessionResponse> TransferSessionAsync(
+            Guid id,
+            TransferSessionRequest request,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            LastTransferredSessionId = id;
+            LastTransferRequest = request;
+            TransferIdempotencyKeys.Add(idempotencyKey);
+
+            var index = ActiveSessions.FindIndex(x => x.Id == id);
+            if (index < 0)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.not_found", 404));
+            var current = ActiveSessions[index];
+            if (current.Version != request.ExpectedVersion)
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.version_conflict", 409));
+            if (!request.Confirmed || string.IsNullOrWhiteSpace(request.Reason))
+                return Task.FromException<SessionResponse>(new GameNetApiException("sessions.transfer_invalid", 400));
+
+            var updated = current with { StationId = request.TargetStationId, Version = checked(current.Version + 1) };
+            ActiveSessions[index] = updated;
+            if (LoseNextTransferResponseAfterCommit)
+            {
+                LoseNextTransferResponseAfterCommit = false;
+                return Task.FromException<SessionResponse>(new HttpRequestException("Simulated lost transfer response after commit."));
+            }
+            return Task.FromResult(updated);
         }
 
         public Task<InvoicePreviewResponse> EndSessionAsync(Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default)

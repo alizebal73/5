@@ -11,6 +11,21 @@ namespace GameNet.Server.Modules.Tariffs.Infrastructure;
 /// </summary>
 public sealed class TariffSessionAccess(GameNetDbContext db) : ITariffSessionAccess
 {
+    public async Task<TariffSessionSnapshot?> FindDefaultActiveAsync(
+        StationTypeContract stationType,
+        CancellationToken cancellationToken)
+    {
+        var tariff = await db.Tariffs.AsNoTracking()
+            .Where(x => x.IsActive && x.IsDefault && x.StationType == stationType)
+            .OrderBy(x => x.Code)
+            .FirstOrDefaultAsync(cancellationToken);
+        return tariff is null
+            ? null
+            : new TariffSessionSnapshot(
+                tariff.Id, tariff.Code, tariff.Name,
+                (StationTypeContract)tariff.StationType, tariff.HourlyRateToman, tariff.Version);
+    }
+
     public async Task<TariffSessionSnapshot?> FindActiveAsync(
         Guid tariffId,
         CancellationToken cancellationToken)
