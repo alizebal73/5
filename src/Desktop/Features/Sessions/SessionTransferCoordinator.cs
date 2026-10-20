@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -83,6 +84,8 @@ private SessionStationOption? selectedTransferDestination;
 
     private void InitializeSessionTransferCommand() =>
         TransferSessionCommand = new AsyncUiAction(TransferSessionAsync, CanTransferSession);
+
+    public void NotifyHostStateChanged() => RaiseSessionTransferCommand();
 
     private void RaiseSessionTransferCommand() =>
         (TransferSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
