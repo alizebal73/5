@@ -87,6 +87,7 @@ public static class ServiceRegistration
         services.AddScoped<IBillingInvoiceWriter, BillingInvoiceWriter>();
         services.AddScoped<SessionPrepaidSettlementService>();
         services.AddScoped<SessionTimingRecoveryService>();
+        services.AddScoped<SessionTransferService>();
         services.AddScoped<ISessionSettlement, SessionSettlement>();
         services.AddScoped<ISessionCheckoutAccess, SessionCheckoutAccess>();
         services.AddScoped<ISessionService, GameNet.Server.Modules.Sessions.Infrastructure.SessionService>();
