@@ -536,6 +536,14 @@ public sealed class StationBoardPermissionTests
             StartSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<SessionResponse> PauseSessionAsync(
+            Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            Task.FromException<SessionResponse>(new InvalidOperationException("Pause is outside this permission-test fake."));
+
+        public Task<SessionResponse> ResumeSessionAsync(
+            Guid id, SessionLifecycleRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
+            Task.FromException<SessionResponse>(new InvalidOperationException("Resume is outside this permission-test fake."));
+
         public Task<InvoicePreviewResponse> EndSessionAsync(
             Guid id, EndSessionRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
