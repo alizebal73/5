@@ -116,15 +116,15 @@ public sealed class CustomerAuthenticationPostgresTests
         {
             await using (var seed = CreateContext(connectionString))
             {
-                var active = Customer.CreateRegistered(activeId, activeCode, "Active Test Customer", now);
-                active.SetCredentials(activeUsername, hasher.HashPassword(Password));
+                var activeCustomerSeed = Customer.CreateRegistered(activeId, activeCode, "Active Test Customer", now);
+                activeCustomerSeed.SetCredentials(activeUsername, hasher.HashPassword(Password));
                 var blocked = Customer.CreateRegistered(blockedId, blockedCode, "Blocked Test Customer", now);
                 blocked.SetCredentials(blockedUsername, hasher.HashPassword(Password));
                 blocked.SetStatus(CustomerStatus.Blocked);
                 var inactive = Customer.CreateRegistered(inactiveId, inactiveCode, "Inactive Test Customer", now);
                 inactive.SetCredentials(inactiveUsername, hasher.HashPassword(Password));
                 inactive.SetStatus(CustomerStatus.Inactive);
-                seed.Customers.AddRange(active, blocked, inactive);
+                seed.Customers.AddRange(activeCustomerSeed, blocked, inactive);
                 await seed.SaveChangesAsync();
             }
 
