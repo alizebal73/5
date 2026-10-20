@@ -149,7 +149,7 @@ public sealed class CustomerAuthenticationPostgresTests
 
             await using var verify = CreateContext(connectionString);
             var active = await verify.Customers.AsNoTracking().SingleAsync(x => x.Id == activeId);
-            Assert.Equal(5, active.PasswordFailedAttempts);
+            Assert.Equal(0, active.PasswordFailedAttempts); // Counter resets when the 10-minute lock is applied.
             Assert.True(active.IsPasswordLoginLocked(now));
             Assert.Equal(0, await verify.CustomerLoginSessions.CountAsync(
                 x => x.CustomerId == blockedId || x.CustomerId == inactiveId));
