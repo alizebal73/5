@@ -19,6 +19,8 @@ namespace GameNet.Desktop.Features.Sessions;
 public interface ISessionWorkflowPort : INotifyPropertyChanged
 {
     ObservableCollection<StationResponse> PcStations { get; }
+    ObservableCollection<SessionStationOption> StationChoices { get; }
+    ObservableCollection<SessionStationTypeOption> StationTypeOptions { get; }
     ObservableCollection<CustomerResponse> Customers { get; }
     ObservableCollection<CustomerResponse> AvailableCustomers { get; }
     ObservableCollection<TariffResponse> Tariffs { get; }
@@ -42,12 +44,16 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand StartSessionCommand { get; }
     ICommand StartPrepaidSessionFromStationCommand { get; }
     ICommand EndSessionCommand { get; }
+    ICommand PauseSessionCommand { get; }
+    ICommand ResumeSessionCommand { get; }
+    ICommand TransferSessionCommand { get; }
     ICommand ReconcileSessionTimingCommand { get; }
     ICommand CheckoutCashCommand { get; }
     ICommand ReverseCashSaleCommand { get; }
     ICommand CorrectCashTenderCommand { get; }
 
     bool CanManageTariffs { get; }
+    StationTypeContract TariffStationType { get; set; }
     bool CanReadCustomers { get; }
     bool CanWriteCustomers { get; }
     bool CanOperateSessions { get; }
@@ -74,6 +80,10 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     string CustomerStatusSummaryText { get; }
     TariffResponse? SelectedTariff { get; set; }
     ActiveSessionListItem? SelectedActiveSession { get; set; }
+    ObservableCollection<SessionStationOption> TransferDestinationChoices { get; }
+    SessionStationOption? SelectedTransferDestination { get; set; }
+    string SessionTransferReasonText { get; set; }
+    bool ConfirmSessionTransfer { get; set; }
     string ReconciledElapsedMinutesText { get; set; }
     string TimingRecoveryReasonText { get; set; }
     bool ConfirmTimingRecovery { get; set; }
