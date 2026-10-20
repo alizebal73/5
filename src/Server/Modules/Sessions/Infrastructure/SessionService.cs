@@ -34,10 +34,18 @@ public sealed partial class SessionService(
     IBillingInvoiceWriter invoices,
     IWalletSessionFunding walletFunding,
     IAuditWriter audit,
-    IGameClock clock) : ISessionService
+    IGameClock clock,
+    SessionPrepaidSettlementService? prepaidSettlementService = null,
+    SessionTimingRecoveryService? timingRecoveryService = null) : ISessionService
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Retention = TimeSpan.FromDays(1);
+    private readonly SessionPrepaidSettlementService _prepaidSettlementService =
+        prepaidSettlementService ?? new SessionPrepaidSettlementService(walletFunding, invoices, audit, clock);
+    private readonly SessionTimingRecoveryService _timingRecoveryService =
+        timingRecoveryService ?? new SessionTimingRecoveryService(
+            db, mutationPipeline, requestFingerprint, walletFunding, invoices, audit, clock,
+            prepaidSettlementService ?? new SessionPrepaidSettlementService(walletFunding, invoices, audit, clock));
 
     public Task<Result<SessionResponse>> StartAsync(
         StartSessionCommand command,
@@ -348,7 +356,7 @@ public sealed partial class SessionService(
                     if (!invoiceResult.IsSuccess)
                         return Fail<InvoicePreviewResponse>(invoiceResult.Error.Code, invoiceResult.Error.Message);
 
-                    return await CompletePrepaidSettlementAsync(
+                    return await _prepaidSettlementService.CompleteAsync(
                         session, invoiceResult.Value, command.Actor, endedAt, command.IdempotencyKey, token);
                 },
                 cancellationToken);
@@ -360,79 +368,10 @@ public sealed partial class SessionService(
     }
 
 
-    private async Task<Result<InvoicePreviewResponse>> CompletePrepaidSettlementAsync(
-        Session session,
-        InvoicePreviewResponse invoice,
-        SessionActorContext actor,
-        DateTimeOffset settledAtUtc,
-        string idempotencyKey,
-        CancellationToken cancellationToken)
-    {
-        var reservation = await walletFunding.FindActiveReservationAsync(session.Id, cancellationToken);
-        if (reservation is null)
-            return Result<InvoicePreviewResponse>.Success(invoice);
-        if (reservation.CustomerId != session.CustomerId ||
-            invoice.AmountToman > reservation.ReservedAmountToman)
-            return Fail<InvoicePreviewResponse>("sessions.prepaid_budget_exceeded",
-                "The Session charge exceeds its valid prepaid reservation; Session settlement was rolled back.");
-
-        var ledgerActorType = actor.ActorType;
-        var ledgerActorId = actor.ActorId;
-        var walletResult = await walletFunding.SettleSessionAsync(
-            session.CustomerId, session.Id, invoice.AmountToman, ledgerActorId, ledgerActorType,
-            actor.CorrelationId, actor.Source, idempotencyKey, cancellationToken);
-        if (!walletResult.IsSuccess)
-        {
-            var errorCode = walletResult.Error.Code == "wallet.prepaid_budget_exceeded"
-                ? "sessions.prepaid_budget_exceeded"
-                : walletResult.Error.Code;
-            return Fail<InvoicePreviewResponse>(errorCode, walletResult.Error.Message);
-        }
-
-        var invoicePaid = await invoices.MarkPrepaidPaidAsync(
-            invoice.InvoiceId, session.Version, session.CustomerId, settledAtUtc,
-            actor.CorrelationId, actor.Source, idempotencyKey, cancellationToken);
-        if (!invoicePaid.IsSuccess)
-            return Fail<InvoicePreviewResponse>(invoicePaid.Error.Code, invoicePaid.Error.Message);
-
-        var beforePaid = ToResponse(session);
-        try
-        {
-            session.MarkPaid(Guid.Empty, settledAtUtc, session.CustomerId);
-        }
-        catch (InvalidOperationException)
-        {
-            return Fail<InvoicePreviewResponse>("sessions.invalid_state",
-                "Prepaid Session could not enter its paid state; all financial changes were rolled back.");
-        }
-
-        audit.Append(new AuditRecord(
-            clock.UtcNow,
-            ledgerActorType,
-            ledgerActorId.ToString("D"),
-            "sessions.prepaid_settled",
-            "Session",
-            session.Id.ToString("D"),
-            null,
-            actor.CorrelationId,
-            actor.Source,
-            "Succeeded",
-            idempotencyKey,
-            JsonSerializer.Serialize(beforePaid),
-            JsonSerializer.Serialize(ToResponse(session))));
-
-        return Result<InvoicePreviewResponse>.Success(invoicePaid.Value with
-        {
-            SessionVersion = session.Version,
-            Status = InvoiceStatusContract.Paid,
-            PaidAtUtc = settledAtUtc
-        });
-    }
-
-    private static bool IsValidTimingRecoveryReason(string? reason) =>
-        !string.IsNullOrWhiteSpace(reason) &&
-        reason.Trim().Length is >= 3 and <= 256 &&
-        !reason.Any(char.IsControl);
+    public Task<Result<InvoicePreviewResponse>> ReconcileTimingAsync(
+        ReconcileSessionTimingCommand command,
+        CancellationToken cancellationToken) =>
+        _timingRecoveryService.ReconcileTimingAsync(command, cancellationToken);
 
     public async Task<Result<IReadOnlyList<SessionResponse>>> ListActiveAsync(
         SessionActorContext actor,
@@ -464,7 +403,7 @@ public sealed partial class SessionService(
         return Result<IReadOnlyList<SessionResponse>>.Success(responses);
     }
 
-    private static SessionResponse ToResponse(Session session) =>
+    internal static SessionResponse ToResponse(Session session) =>
         new(session.Id, session.StationId, session.CustomerId, session.TariffId,
             session.TariffCodeSnapshot, session.TariffNameSnapshot, session.TariffHourlyRateTomanSnapshot,
             session.StartedByOperatorId, session.StartedAtUtc, session.EndedByOperatorId, session.EndedAtUtc,
@@ -474,7 +413,7 @@ public sealed partial class SessionService(
             PaidByCustomerId: session.PaidByCustomerId,
             AccumulatedElapsedTicks: session.AccumulatedElapsedTicks);
 
-    private static Result<T> Fail<T>(string code, string message) =>
+    internal static Result<T> Fail<T>(string code, string message) =>
         Result<T>.Failure(new Error(code, message));
 }
 
