@@ -65,6 +65,11 @@
   <system:String x:Key="Session.ActiveTitle">Sessionهای فعال</system:String>
   <system:String x:Key="Session.Pause">توقف محاسبهٔ زمان</system:String>
   <system:String x:Key="Session.Resume">ادامهٔ بازی</system:String>
+  <system:String x:Key="Session.TransferTitle">تغییر تخصیص Session به ایستگاه دیگر</system:String>
+  <system:String x:Key="Session.TransferDestination">ایستگاه آماده و هم‌نوع</system:String>
+  <system:String x:Key="Session.TransferReason">دلیل انتقال (۵ تا ۳۰۰ نویسه)</system:String>
+  <system:String x:Key="Session.ConfirmTransfer">مقصد را بررسی کرده‌ام و تغییر تخصیص بدون تغییر تعرفه را تأیید می‌کنم. این عملیات قفل/بازکردن واقعی رایانه یا اجرای بازی را انجام نمی‌دهد.</system:String>
+  <system:String x:Key="Session.TransferSubmit">تغییر تخصیص Session</system:String>
   <system:String x:Key="Session.End">پایان و صدور صورتحساب</system:String>
   <system:String x:Key="Tariff.CreateTitle">تعریف تعرفهٔ PC</system:String>
   <system:String x:Key="Tariff.StationType">نوع ایستگاه</system:String>
