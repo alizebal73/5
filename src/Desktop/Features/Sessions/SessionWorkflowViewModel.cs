@@ -562,6 +562,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
 
     IGameNetServerClient ISessionLifecycleHost.Api => api;
     Guid? ISessionLifecycleHost.TimingRecoveryRequiredSessionId => timingRecoveryRequiredSessionId;
+    IReadOnlyCollection<ActiveSessionListItem> ISessionLifecycleHost.ActiveSessions => ActiveSessions;
     IReadOnlyCollection<PendingInvoiceListItem> ISessionLifecycleHost.PendingInvoices => PendingInvoices;
     bool ISessionLifecycleHost.HasPermission(string permission) => hasPermission(permission);
     void ISessionLifecycleHost.BeginBusy() => BeginBusy();
