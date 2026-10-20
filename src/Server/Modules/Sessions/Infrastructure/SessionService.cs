@@ -36,10 +36,13 @@ public sealed partial class SessionService(
     IAuditWriter audit,
     IGameClock clock,
     SessionPrepaidSettlementService? prepaidSettlementService = null,
-    SessionTimingRecoveryService? timingRecoveryService = null) : ISessionService
+    SessionTimingRecoveryService? timingRecoveryService = null,
+    SessionTransferService? sessionTransferService = null) : ISessionService
 {
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Retention = TimeSpan.FromDays(1);
+    private readonly SessionTransferService _sessionTransferService =
+        sessionTransferService ?? new SessionTransferService(db, mutationPipeline, requestFingerprint, stations, audit, clock);
     private readonly SessionPrepaidSettlementService _prepaidSettlementService =
         prepaidSettlementService ?? new SessionPrepaidSettlementService(walletFunding, invoices, audit, clock);
     private readonly SessionTimingRecoveryService _timingRecoveryService =
@@ -367,6 +370,11 @@ public sealed partial class SessionService(
         }
     }
 
+
+    public Task<Result<SessionResponse>> TransferAsync(
+        TransferSessionCommand command,
+        CancellationToken cancellationToken) =>
+        _sessionTransferService.TransferAsync(command, cancellationToken);
 
     public Task<Result<InvoicePreviewResponse>> ReconcileTimingAsync(
         ReconcileSessionTimingCommand command,
