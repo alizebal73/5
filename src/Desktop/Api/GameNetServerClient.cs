@@ -172,6 +172,11 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         SendMutationAsync<SessionLifecycleRequest, SessionResponse>(
             HttpMethod.Post, $"/api/v1/sessions/{id:D}/resume", body, idempotencyKey, cancellationToken);
 
+    public Task<SessionResponse> TransferSessionAsync(
+        Guid id, TransferSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<TransferSessionRequest, SessionResponse>(
+            HttpMethod.Post, $"/api/v1/sessions/{id:D}/transfer", body, idempotencyKey, cancellationToken);
+
     public Task<InvoicePreviewResponse> EndSessionAsync(
         Guid id, EndSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendMutationAsync<EndSessionRequest, InvoicePreviewResponse>(
