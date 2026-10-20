@@ -17,12 +17,13 @@ using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
-public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISessionLifecycleHost
+public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISessionLifecycleHost, ISessionTransferHost
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
     private readonly PrepaidStationEntryCoordinator prepaidStationEntryCoordinator;
     private readonly SessionLifecycleCoordinator lifecycleCoordinator;
+    private readonly SessionTransferCoordinator transferCoordinator;
     private Guid? timingRecoveryRequiredSessionId;
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
@@ -53,6 +54,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
         CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
         lifecycleCoordinator = new SessionLifecycleCoordinator(this);
         lifecycleCoordinator.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
+        transferCoordinator = new SessionTransferCoordinator(this);
+        transferCoordinator.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
         InitializeStationTypeOptions();
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
@@ -100,7 +103,23 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
     public ICommand CreateTariffCommand { get; }
     public ICommand StartSessionCommand { get; }
     public ICommand StartPrepaidSessionFromStationCommand { get; }
-    public ICommand EndSessionCommand { get; }
+    public ICommand TransferSessionCommand => transferCoordinator.TransferSessionCommand;
+    public ObservableCollection<SessionStationOption> TransferDestinationChoices => transferCoordinator.TransferDestinationChoices;
+    public SessionStationOption? SelectedTransferDestination
+    {
+        get => transferCoordinator.SelectedTransferDestination;
+        set => transferCoordinator.SelectedTransferDestination = value;
+    }
+    public string SessionTransferReasonText
+    {
+        get => transferCoordinator.SessionTransferReasonText;
+        set => transferCoordinator.SessionTransferReasonText = value;
+    }
+    public bool ConfirmSessionTransfer
+    {
+        get => transferCoordinator.ConfirmSessionTransfer;
+        set => transferCoordinator.ConfirmSessionTransfer = value;
+    }
     public ICommand PauseSessionCommand => lifecycleCoordinator.PauseSessionCommand;
     public ICommand ResumeSessionCommand => lifecycleCoordinator.ResumeSessionCommand;
     public ICommand ReconcileSessionTimingCommand => lifecycleCoordinator.ReconcileSessionTimingCommand;
@@ -150,6 +169,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
             if (SetField(ref selectedActiveSession, value))
             {
                 OnPropertyChanged(nameof(CanRecoverSessionTiming));
+                transferCoordinator.OnSelectedActiveSessionChangedForTransfer();
                 RaiseCommands();
             }
         }
@@ -392,6 +412,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
         stationLabels.Clear();
         PcStations.Clear();
         ResetStationAndTariffChoices();
+        transferCoordinator.ResetSessionTransferState();
         TariffStationType = StationTypeContract.Pc;
         Tariffs.Clear();
         ActiveSessions.Clear();
@@ -542,6 +563,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
         (StartPrepaidSessionFromStationCommand as AsyncParameterUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         lifecycleCoordinator.NotifyHostStateChanged();
+        transferCoordinator.NotifyHostStateChanged();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
@@ -574,6 +596,15 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISe
     string ISessionLifecycleHost.FormatToman(long amount) => FormatToman(amount);
     string ISessionLifecycleHost.ErrorMessage { set => ErrorMessage = value; }
     string ISessionLifecycleHost.StatusMessage { set => StatusMessage = value; }
+
+    IGameNetServerClient ISessionTransferHost.Api => api;
+    Task ISessionTransferHost.RefreshAsync() => RefreshAsync();
+    string ISessionTransferHost.GetKey(string scope, string fingerprint) => GetKey(scope, fingerprint);
+    void ISessionTransferHost.RemovePendingKey(string scope) => pendingKeys.Remove(scope);
+    void ISessionTransferHost.BeginBusy() => BeginBusy();
+    void ISessionTransferHost.EndBusy() => EndBusy();
+    string ISessionTransferHost.ErrorMessage { set => ErrorMessage = value; }
+    string ISessionTransferHost.StatusMessage { set => StatusMessage = value; }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
