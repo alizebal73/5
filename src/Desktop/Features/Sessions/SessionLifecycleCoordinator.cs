@@ -240,51 +240,6 @@ private async Task PauseSessionAsync()
         }
     }
 
-private string reconciledElapsedMinutesText = string.Empty;
-    private string timingRecoveryReasonText = string.Empty;
-    private bool confirmTimingRecovery;
-    private Guid? host.TimingRecoveryRequiredSessionId;
-    public bool CanRecoverSessionTiming =>
-        host.CanOperateSessions &&
-        host.HasPermission(GameNet.Shared.Contracts.V1.Security.Permissions.SessionsTimingRecover) &&
-        host.SelectedActiveSession?.Session.Id == host.TimingRecoveryRequiredSessionId;
-
-    public string ReconciledElapsedMinutesText
-    {
-        get => reconciledElapsedMinutesText;
-        set
-        {
-            if (SetField(ref reconciledElapsedMinutesText, value ?? string.Empty))
-            {
-                ConfirmTimingRecovery = false;
-                RaiseCommands();
-            }
-        }
-    }
-
-    public string TimingRecoveryReasonText
-    {
-        get => timingRecoveryReasonText;
-        set
-        {
-            if (SetField(ref timingRecoveryReasonText, value ?? string.Empty))
-            {
-                ConfirmTimingRecovery = false;
-                RaiseCommands();
-            }
-        }
-    }
-
-    public bool ConfirmTimingRecovery
-    {
-        get => confirmTimingRecovery;
-        set
-        {
-            if (SetField(ref confirmTimingRecovery, value))
-                RaiseCommands();
-        }
-    }
-
     private bool CanReconcileSessionTiming()
     {
         return !host.IsBusy &&
