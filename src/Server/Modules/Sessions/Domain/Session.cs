@@ -116,6 +116,26 @@ public sealed class Session
             startedMonotonicTimestamp, startedMonotonicFrequency, startedSystemUptimeMilliseconds, startedBootIdentifier);
     }
 
+    /// <summary>
+    /// Rebinds an unsettled Session to another station without changing tariff, customer,
+    /// lifecycle state or monotonic timing evidence. Compatibility and destination availability
+    /// are validated by the Server use case before this domain transition.
+    /// </summary>
+    public void TransferTo(Guid targetStationId, Guid transferredByOperatorId)
+    {
+        if (Status is not (SessionStatus.Active or SessionStatus.Paused))
+            throw new InvalidOperationException("SESSION_NOT_ACTIVE_OR_PAUSED");
+        if (targetStationId == Guid.Empty)
+            throw new ArgumentException("Target station id is required.", nameof(targetStationId));
+        if (targetStationId == StationId)
+            throw new InvalidOperationException("SESSION_TRANSFER_SAME_STATION");
+        if (transferredByOperatorId == Guid.Empty)
+            throw new ArgumentException("Operator id is required.", nameof(transferredByOperatorId));
+
+        StationId = targetStationId;
+        Version = checked(Version + 1);
+    }
+
     public void Pause(Guid pausedByOperatorId, long currentSegmentElapsedTicks)
     {
         if (Status != SessionStatus.Active)
