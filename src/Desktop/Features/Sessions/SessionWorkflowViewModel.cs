@@ -17,11 +17,13 @@ using GameNet.Shared.Contracts.V1.Wallet;
 
 namespace GameNet.Desktop.Features.Sessions;
 
-public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
+public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort, ISessionLifecycleHost
 {
     private readonly IGameNetServerClient api;
     private readonly Func<string, bool> hasPermission;
     private readonly PrepaidStationEntryCoordinator prepaidStationEntryCoordinator;
+    private readonly SessionLifecycleCoordinator lifecycleCoordinator;
+    private Guid? timingRecoveryRequiredSessionId;
     private readonly Dictionary<string, (string Fingerprint, string Key)> pendingKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<Guid, string> stationLabels = [];
     private StationResponse? selectedStation;
@@ -49,6 +51,8 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             message => ErrorMessage = message, SessionWorkflowErrorText.For,
             OnPrepaidSessionStartedAsync);
         CustomerCredentials = new CustomerCredentialsViewModel(api, hasPermission, RefreshManagedCustomerAfterCredentialsAsync);
+        lifecycleCoordinator = new SessionLifecycleCoordinator(this);
+        lifecycleCoordinator.PropertyChanged += (_, args) => OnPropertyChanged(args.PropertyName);
         InitializeStationTypeOptions();
 
         RefreshCommand = new AsyncUiAction(RefreshAsync, () => !IsBusy && CanUseWorkspace);
@@ -68,10 +72,6 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
             parameter => !IsBusy && CanOperateSessions && CanReadCustomers &&
                 prepaidStationEntryCoordinator.CanPrompt &&
                 parameter is StationResponse { Type: StationTypeContract.Pc, Status: StationStatusContract.Available });
-        PauseSessionCommand = new AsyncUiAction(PauseSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedActiveSession?.Session.Status == SessionStatusContract.Active);
-        ResumeSessionCommand = new AsyncUiAction(ResumeSessionAsync, () => !IsBusy && CanOperateSessions &&
-            SelectedActiveSession?.Session.Status == SessionStatusContract.Paused);
         EndSessionCommand = new AsyncUiAction(EndSessionAsync, () => !IsBusy && CanOperateSessions &&
             SelectedActiveSession?.Session.Status is SessionStatusContract.Active or SessionStatusContract.Paused);
         CheckoutCashCommand = new AsyncUiAction(CheckoutCashAsync, CanCheckoutCashNow);
@@ -101,8 +101,25 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
     public ICommand StartSessionCommand { get; }
     public ICommand StartPrepaidSessionFromStationCommand { get; }
     public ICommand EndSessionCommand { get; }
-    public ICommand PauseSessionCommand { get; }
-    public ICommand ResumeSessionCommand { get; }
+    public ICommand PauseSessionCommand => lifecycleCoordinator.PauseSessionCommand;
+    public ICommand ResumeSessionCommand => lifecycleCoordinator.ResumeSessionCommand;
+    public ICommand ReconcileSessionTimingCommand => lifecycleCoordinator.ReconcileSessionTimingCommand;
+    public bool CanRecoverSessionTiming => lifecycleCoordinator.CanRecoverSessionTiming;
+    public string ReconciledElapsedMinutesText
+    {
+        get => lifecycleCoordinator.ReconciledElapsedMinutesText;
+        set => lifecycleCoordinator.ReconciledElapsedMinutesText = value;
+    }
+    public string TimingRecoveryReasonText
+    {
+        get => lifecycleCoordinator.TimingRecoveryReasonText;
+        set => lifecycleCoordinator.TimingRecoveryReasonText = value;
+    }
+    public bool ConfirmTimingRecovery
+    {
+        get => lifecycleCoordinator.ConfirmTimingRecovery;
+        set => lifecycleCoordinator.ConfirmTimingRecovery = value;
+    }
     public ICommand CheckoutCashCommand { get; }
 
     public bool CanManageTariffs => hasPermission(Permissions.SettingsWrite);
@@ -524,7 +541,7 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         (StartSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (StartPrepaidSessionFromStationCommand as AsyncParameterUiAction)?.RaiseCanExecuteChanged();
         (EndSessionCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
-        RaiseLifecycleCommands();
+        lifecycleCoordinator.NotifyHostStateChanged();
         (CheckoutCashCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (ReverseCashSaleCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
         (CorrectCashTenderCommand as AsyncUiAction)?.RaiseCanExecuteChanged();
@@ -541,6 +558,21 @@ public sealed partial class SessionWorkflowViewModel : ISessionWorkflowPort
         OnPropertyChanged(name);
         return true;
     }
+
+
+    IGameNetServerClient ISessionLifecycleHost.Api => api;
+    Guid? ISessionLifecycleHost.TimingRecoveryRequiredSessionId => timingRecoveryRequiredSessionId;
+    IReadOnlyCollection<PendingInvoiceListItem> ISessionLifecycleHost.PendingInvoices => PendingInvoices;
+    bool ISessionLifecycleHost.HasPermission(string permission) => hasPermission(permission);
+    void ISessionLifecycleHost.BeginBusy() => BeginBusy();
+    void ISessionLifecycleHost.EndBusy() => EndBusy();
+    string ISessionLifecycleHost.GetKey(string scope, string fingerprint) => GetKey(scope, fingerprint);
+    void ISessionLifecycleHost.RemovePendingKey(string scope) => pendingKeys.Remove(scope);
+    string ISessionLifecycleHost.GetStationLabel(Guid stationId) => GetStationLabel(stationId);
+    bool ISessionLifecycleHost.TryParseToman(string? value, out long amount) => TryParseToman(value, out amount);
+    string ISessionLifecycleHost.FormatToman(long amount) => FormatToman(amount);
+    string ISessionLifecycleHost.ErrorMessage { set => ErrorMessage = value; }
+    string ISessionLifecycleHost.StatusMessage { set => StatusMessage = value; }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
