@@ -22,6 +22,13 @@
   <system:String x:Key="Identity.AccountDisabled">این حساب غیرفعال است.</system:String>
   <system:String x:Key="Identity.ConnectionError">ارتباط با سرور برقرار نشد. اتصال شبکه را بررسی کنید.</system:String>
   <system:String x:Key="Identity.UnexpectedError">ورود انجام نشد. وضعیت سرور را بررسی کنید.</system:String>
+  <system:String x:Key="Station.CustomerLogin">ورود مشتری</system:String>
+  <system:String x:Key="Customer.EntryDialogTitle">ورود مشتری به رایانه</system:String>
+  <system:String x:Key="Customer.EntryPrompt">شناسه مشتری برای رایانه {0} را وارد کنید؛ این کار با اعتبار کیف پول انجام می‌شود.</system:String>
+  <system:String x:Key="Customer.EntryId">شناسه / کد مشتری</system:String>
+  <system:String x:Key="Customer.EntryConfirm">تأیید ورود</system:String>
+  <system:String x:Key="Customer.EntryCancel">انصراف</system:String>
+  <system:String x:Key="Customer.EntryIdRequired">شناسه مشتری الزامی است.</system:String>
   <system:String x:Key="Station.Title">ایستگاه‌ها</system:String>
   <system:String x:Key="Station.Subtitle">وضعیت آنلاین Agent از lease و heartbeat سرور محاسبه می‌شود.</system:String>
   <system:String x:Key="Station.Refresh">تازه‌سازی</system:String>
@@ -54,6 +61,7 @@
   <system:String x:Key="Session.Tariff">تعرفهٔ ساعتی</system:String>
   <system:String x:Key="Session.Start">شروع Session</system:String>
   <system:String x:Key="Session.CustomerWalkIn">در این برش، مشتری گذری ساخته می‌شود؛ اطلاعات شخصی دریافت نمی‌کنیم.</system:String>
+  <system:String x:Key="Session.WalkInOnlyHint">شروع بدون شناسه برای مشتری گذری است. برای مشتری ثبت‌شده، روی رایانه راست‌کلیک و «ورود مشتری» را انتخاب کنید.</system:String>
   <system:String x:Key="Session.ActiveTitle">Sessionهای فعال</system:String>
   <system:String x:Key="Session.End">پایان و صدور صورتحساب</system:String>
   <system:String x:Key="Tariff.CreateTitle">تعریف تعرفهٔ PC</system:String>
@@ -105,6 +113,11 @@
   <system:String x:Key="Customer.Activate">فعال‌سازی</system:String>
   <system:String x:Key="Customer.Deactivate">غیرفعال‌سازی</system:String>
   <system:String x:Key="Customer.Block">مسدودسازی</system:String>
+  <system:String x:Key="Customer.CredentialsTitle">مشخصات ورود مشتری به کلاینت</system:String>
+  <system:String x:Key="Customer.LoginUsername">نام کاربری ورود (جدا از شناسهٔ مشتری)</system:String>
+  <system:String x:Key="Customer.LoginPassword">رمز عبور جدید</system:String>
+  <system:String x:Key="Customer.CredentialsHint">مشتری همین نام کاربری و رمز را در صفحهٔ قفل کلاینت وارد می‌کند. رمز فقط برای هش‌شدن به سرور ارسال می‌شود و در برنامهٔ اپراتور ذخیره نمی‌شود.</system:String>
+  <system:String x:Key="Customer.SaveCredentials">ذخیرهٔ مشخصات ورود</system:String>
   <system:String x:Key="Wallet.TopUpTitle">شارژ کیف پول</system:String>
   <system:String x:Key="Wallet.CreditAmount">مبلغی که به کیف پول اضافه می‌شود (تومان)</system:String>
   <system:String x:Key="Wallet.CashReceived">وجه نقدی که واقعاً دریافت شد (تومان)</system:String>

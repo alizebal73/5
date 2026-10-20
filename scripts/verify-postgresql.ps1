@@ -387,6 +387,23 @@ try {
         }
     }
 
+    $previousCustomerAuthIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_CUSTOMER_AUTH_POSTGRES_TESTS", "Process")
+    try {
+        $env:GAMENET_CUSTOMER_AUTH_POSTGRES_TESTS = "true"
+        & $dotnetPath "test" "tests/Server.UnitTests/GameNet.Server.UnitTests.csproj" "--configuration" "Release" "--no-restore" "--filter" "FullyQualifiedName~CustomerAuthenticationPostgresTests"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Customer password login, token revocation, lockout and account eligibility PostgreSQL verification failed."
+        }
+    }
+    finally {
+        if ($null -eq $previousCustomerAuthIntegrationFlag) {
+            Remove-Item Env:GAMENET_CUSTOMER_AUTH_POSTGRES_TESTS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GAMENET_CUSTOMER_AUTH_POSTGRES_TESTS = $previousCustomerAuthIntegrationFlag
+        }
+    }
+
     $previousWalletIntegrationFlag = [Environment]::GetEnvironmentVariable("GAMENET_WALLET_POSTGRES_TESTS", "Process")
     try {
         $env:GAMENET_WALLET_POSTGRES_TESTS = "true"

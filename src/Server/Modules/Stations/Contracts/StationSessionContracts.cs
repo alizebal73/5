@@ -16,4 +16,5 @@ public sealed record StationSessionAvailability(
 public interface IStationSessionAccess
 {
     Task<StationSessionAvailability?> FindForSessionStartAsync(Guid stationId, CancellationToken cancellationToken);
+    Task<Guid?> FindAssignedPcStationIdForAgentAsync(string deviceId, CancellationToken cancellationToken) => Task.FromResult<Guid?>(null);
 }

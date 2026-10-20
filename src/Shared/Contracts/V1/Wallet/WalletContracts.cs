@@ -4,7 +4,8 @@ public sealed record WalletBalanceResponse(
     Guid CustomerId,
     long BalanceToman,
     int WalletVersion,
-    DateTimeOffset? UpdatedAtUtc);
+    DateTimeOffset? UpdatedAtUtc,
+    long ReservedBalanceToman = 0);
 
 public sealed record WalletCashTopUpRequest(
     long AmountToCreditToman,

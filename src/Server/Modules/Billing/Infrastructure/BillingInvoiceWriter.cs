@@ -18,6 +18,54 @@ public sealed class BillingInvoiceWriter(
     IAuditWriter audit,
     IGameClock clock) : IBillingInvoiceWriter
 {
+    public async Task<Result<InvoicePreviewResponse>> MarkPrepaidPaidAsync(
+        Guid invoiceId,
+        int sessionVersion,
+        Guid paidByCustomerId,
+        DateTimeOffset paidAtUtc,
+        string correlationId,
+        string source,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is null)
+            return Result<InvoicePreviewResponse>.Failure(
+                new Error("billing.transaction_required", "Prepaid invoice settlement requires the active Session transaction."));
+
+        var invoice = db.Invoices.Local.SingleOrDefault(x => x.Id == invoiceId)
+            ?? await db.Invoices.SingleOrDefaultAsync(x => x.Id == invoiceId, cancellationToken);
+        if (invoice is null)
+            return Result<InvoicePreviewResponse>.Failure(
+                new Error("billing.invoice_not_found", "Invoice for prepaid Session was not found."));
+        if (invoice.Status != InvoiceStatus.PendingPayment)
+            return Result<InvoicePreviewResponse>.Failure(
+                new Error("billing.invoice_not_pending", "Prepaid invoice is not awaiting settlement."));
+
+        try { invoice.MarkPaid(Guid.Empty, paidAtUtc, paidByCustomerId); }
+        catch (InvalidOperationException)
+        {
+            return Result<InvoicePreviewResponse>.Failure(
+                new Error("billing.invoice_not_pending", "Prepaid invoice is not awaiting settlement."));
+        }
+        catch (ArgumentException)
+        {
+            return Result<InvoicePreviewResponse>.Failure(
+                new Error("billing.prepaid_actor_invalid", "Prepaid invoice actor is invalid."));
+        }
+
+        var response = new InvoicePreviewResponse(
+            invoice.Id, invoice.SessionId, sessionVersion, invoice.StationId, invoice.CustomerId,
+            invoice.TariffId, invoice.TariffCodeSnapshot, invoice.TariffNameSnapshot,
+            invoice.TariffHourlyRateTomanSnapshot, invoice.ElapsedTicks, invoice.AmountToman,
+            (InvoiceStatusContract)invoice.Status, invoice.IssuedAtUtc, invoice.PaidAtUtc);
+        audit.Append(new AuditRecord(
+            clock.UtcNow, "Customer", paidByCustomerId.ToString("D"),
+            "billing.prepaid_invoice_paid", "Invoice", invoice.Id.ToString("D"), null,
+            correlationId, source, "Succeeded", idempotencyKey,
+            AfterJson: JsonSerializer.Serialize(response)));
+        return Result<InvoicePreviewResponse>.Success(response);
+    }
+
     public async Task<Result<InvoicePreviewResponse>> CreatePendingAsync(
         CreatePendingInvoiceCommand command,
         CancellationToken cancellationToken)
@@ -55,7 +103,8 @@ public sealed class BillingInvoiceWriter(
                 charge.ElapsedTicks,
                 charge.AmountToman,
                 command.IssuedByOperatorId,
-                command.IssuedAtUtc);
+                command.IssuedAtUtc,
+                command.IssuedBySystem);
 
             await db.Invoices.AddAsync(invoice, cancellationToken);
             var response = new InvoicePreviewResponse(
@@ -76,7 +125,7 @@ public sealed class BillingInvoiceWriter(
 
             audit.Append(new AuditRecord(
                 clock.UtcNow,
-                "Operator",
+                command.IssuedBySystem ? "System" : "Operator",
                 command.IssuedByOperatorId.ToString("D"),
                 "billing.invoice_issued",
                 "Invoice",

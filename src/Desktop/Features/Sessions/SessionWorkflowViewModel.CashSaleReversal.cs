@@ -180,7 +180,7 @@ public sealed partial class SessionWorkflowViewModel
         }
         catch (GameNetApiException ex)
         {
-            ErrorMessage = ErrorText(ex.Code);
+            ErrorMessage = SessionWorkflowErrorText.For(ex.Code);
         }
         catch
         {

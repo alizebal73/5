@@ -9,6 +9,7 @@ using GameNet.Server.Modules.Sessions.Contracts;
 using GameNet.Server.Modules.Sessions.Domain;
 using GameNet.Server.Modules.Stations.Contracts;
 using GameNet.Server.Modules.Tariffs.Contracts;
+using GameNet.Server.Modules.Wallet.Contracts;
 using GameNet.Server.Persistence;
 using GameNet.Shared.Contracts.V1.Security;
 using GameNet.Shared.Contracts.V1.Sessions;
@@ -31,6 +32,7 @@ public sealed class SessionService(
     IStationSessionAccess stations,
     ITariffSessionAccess tariffs,
     IBillingInvoiceWriter invoices,
+    IWalletSessionFunding walletFunding,
     IAuditWriter audit,
     IGameClock clock) : ISessionService
 {
@@ -44,16 +46,39 @@ public sealed class SessionService(
         if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
             return Task.FromResult(Fail<SessionResponse>("sessions.forbidden", "Not allowed to start sessions."));
 
-        var payload = new { command.StationId, command.TariffId, command.CustomerId };
-        var scope = $"sessions.start:{command.Actor.OperatorId:D}";
+        // Any customer-bound PC Session is prepaid; null CustomerId remains the walk-in/cash path.
+        if (command.CustomerId is Guid customerId)
+            return StartPrepaidAsync(new StartPrepaidSessionCommand(
+                command.StationId, customerId, command.IdempotencyKey, command.Actor), cancellationToken);
 
-        return StartCoreAsync(command, scope, payload, cancellationToken);
+        var payload = new { command.StationId, command.TariffId, command.CustomerId, Prepaid = false };
+        var scope = $"sessions.start:{command.Actor.ActorType}:{command.Actor.ActorId:D}";
+        return StartCoreAsync(command, scope, payload, requirePrepaidWallet: false, cancellationToken);
+    }
+
+    public Task<Result<SessionResponse>> StartPrepaidAsync(
+        StartPrepaidSessionCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
+            return Task.FromResult(Fail<SessionResponse>("sessions.forbidden", "Not allowed to start sessions."));
+        if (command.StationId == Guid.Empty || command.CustomerId == Guid.Empty)
+            return Task.FromResult(Fail<SessionResponse>("sessions.prepaid_customer_required",
+                "A registered customer and target Station are required for a prepaid Session."));
+
+        // Tariff choice is a Server decision, not an amount/rate supplied by the UI or Client.
+        var internalCommand = new StartSessionCommand(
+            command.StationId, Guid.Empty, command.CustomerId, command.IdempotencyKey, command.Actor);
+        var payload = new { command.StationId, command.CustomerId, Prepaid = true };
+        var scope = $"sessions.prepaid-start:{command.Actor.ActorType}:{command.Actor.ActorId:D}";
+        return StartCoreAsync(internalCommand, scope, payload, requirePrepaidWallet: true, cancellationToken);
     }
 
     private async Task<Result<SessionResponse>> StartCoreAsync(
         StartSessionCommand command,
         string scope,
         object payload,
+        bool requirePrepaidWallet,
         CancellationToken cancellationToken)
     {
         try
@@ -75,9 +100,13 @@ public sealed class SessionService(
                             "sessions.agent_unavailable",
                             "PC Agent is unbound, offline, lacks an active credential, or has no fresh authoritative heartbeat/lease. Session was not started.");
 
-                    var tariff = await tariffs.FindActiveAsync(command.TariffId, token);
+                    var tariff = requirePrepaidWallet
+                        ? await tariffs.FindDefaultActiveAsync(StationTypeContract.Pc, token)
+                        : await tariffs.FindActiveAsync(command.TariffId, token);
                     if (tariff is null)
-                        return Fail<SessionResponse>("sessions.tariff_not_found", "Active tariff was not found.");
+                        return Fail<SessionResponse>(
+                            requirePrepaidWallet ? "sessions.default_pc_tariff_not_found" : "sessions.tariff_not_found",
+                            requirePrepaidWallet ? "No active default PC tariff is configured." : "Active tariff was not found.");
                     if (tariff.StationType != StationTypeContract.Pc)
                         return Fail<SessionResponse>("sessions.tariff_station_mismatch", "Tariff is not for PC stations.");
 
@@ -98,6 +127,9 @@ public sealed class SessionService(
                         return Fail<SessionResponse>("sessions.customer_not_found", "Active customer was not found.");
                     if (customer.IsBlocked)
                         return Fail<SessionResponse>("sessions.customer_blocked", "Blocked customers cannot start a Session.");
+                    if (requirePrepaidWallet && command.CustomerId is null)
+                        return Fail<SessionResponse>("sessions.prepaid_customer_required",
+                            "A registered customer is required for a prepaid Session.");
 
                     GameClockSnapshot startSnapshot;
                     try
@@ -112,27 +144,64 @@ public sealed class SessionService(
                             "Authoritative timing source is unavailable. The Session was not started.");
                     }
 
+                    var sessionId = Guid.NewGuid();
+                    WalletSessionReservation? reservation = null;
+                    long? prepaidBudgetTicks = null;
+                    if (requirePrepaidWallet)
+                    {
+                        var reservationActorType = command.Actor.ActorType is "Operator" or "Customer"
+                            ? command.Actor.ActorType
+                            : "Operator";
+                        var reserveResult = await walletFunding.ReserveForSessionAsync(
+                            customer.Id, sessionId, command.Actor.ActorId, reservationActorType,
+                            command.Actor.CorrelationId, command.Actor.Source, command.IdempotencyKey, token);
+                        if (!reserveResult.IsSuccess)
+                            return Fail<SessionResponse>(reserveResult.Error.Code, reserveResult.Error.Message);
+
+                        // The Customer row remains locked through commit. This check, after the
+                        // lock, prevents two PCs from acquiring active prepaid Sessions for one customer.
+                        var customerAlreadyPlaying = await db.Sessions.AnyAsync(
+                            x => x.CustomerId == customer.Id && x.Status == SessionStatus.Active, token);
+                        if (customerAlreadyPlaying)
+                            return Fail<SessionResponse>("sessions.customer_has_active_session",
+                                "This customer already has an active PC Session.");
+
+                        reservation = reserveResult.Value;
+                        prepaidBudgetTicks = PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                            reservation.ReservedAmountToman, tariff.HourlyRateToman);
+                        if (prepaidBudgetTicks <= 0)
+                            return Fail<SessionResponse>("wallet.insufficient_balance",
+                                "Available credit is too small to fund any Session time at this tariff.");
+                    }
+
                     var session = Session.Start(
-                        Guid.NewGuid(),
+                        sessionId,
                         station.Id,
                         customer.Id,
                         tariff.Id,
                         tariff.Code,
                         tariff.Name,
                         tariff.HourlyRateToman,
-                        command.Actor.OperatorId,
+                        command.Actor.ActorType == "Customer" ? Guid.Empty : command.Actor.OperatorId,
                         startSnapshot.UtcNow,
                         startSnapshot.Timestamp,
                         startSnapshot.TimestampFrequency,
                         startSnapshot.SystemUptimeMilliseconds,
-                        startSnapshot.BootIdentifier);
+                        startSnapshot.BootIdentifier,
+                        command.Actor.ActorType == "Customer" ? command.Actor.CustomerId : null);
                     await db.Sessions.AddAsync(session, token);
 
                     var response = ToResponse(session);
+                    if (reservation is not null)
+                        response = response with
+                        {
+                            PrepaidReservedAmountToman = reservation.ReservedAmountToman,
+                            PrepaidBudgetTicks = prepaidBudgetTicks
+                        };
                     audit.Append(new AuditRecord(
                         clock.UtcNow,
-                        "Operator",
-                        command.Actor.OperatorId.ToString("D"),
+                        command.Actor.ActorType,
+                        command.Actor.ActorId.ToString("D"),
                         "sessions.start",
                         "Session",
                         session.Id.ToString("D"),
@@ -146,7 +215,8 @@ public sealed class SessionService(
 
                     return Result<SessionResponse>.Success(response);
                 },
-                cancellationToken);
+                cancellationToken,
+                requirePrepaidWallet ? System.Data.IsolationLevel.ReadCommitted : System.Data.IsolationLevel.Serializable);
         }
         catch (PersistenceConflictException)
         {
@@ -161,7 +231,7 @@ public sealed class SessionService(
         if (!command.Actor.Permissions.Contains(Permissions.SessionsOperate))
             return Fail<InvoicePreviewResponse>("sessions.forbidden", "Not allowed to end sessions.");
 
-        var scope = $"sessions.end:{command.Actor.OperatorId:D}";
+        var scope = $"sessions.end:{command.Actor.ActorType}:{command.Actor.ActorId:D}";
         try
         {
             return await mutationPipeline.ExecuteAsync(
@@ -208,11 +278,24 @@ public sealed class SessionService(
                             "Monotonic time continuity could not be verified. No invoice was created; timing recovery is required.");
                     }
 
+                    var activeReservation = await walletFunding.FindActiveReservationAsync(session.Id, token);
+                    if (activeReservation is not null)
+                    {
+                        var maximumElapsed = PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                            activeReservation.ReservedAmountToman, session.TariffHourlyRateTomanSnapshot);
+                        // Never allow the financial calculation to exceed the money reserved.
+                        // The expiry worker makes this a normal automatic stop; this clamp is
+                        // the safe reconciliation path if an operator ends just after the deadline.
+                        elapsedTicks = Math.Min(elapsedTicks, maximumElapsed);
+                    }
+
                     var endedAt = endSnapshot.UtcNow;
                     var before = ToResponse(session);
                     try
                     {
-                        session.End(command.Actor.OperatorId, endedAt, elapsedTicks);
+                        session.End(
+                            command.Actor.OperatorId, endedAt, elapsedTicks,
+                            endedBySystem: command.Actor.ActorType == "System");
                     }
                     catch (InvalidOperationException)
                     {
@@ -225,8 +308,8 @@ public sealed class SessionService(
 
                     audit.Append(new AuditRecord(
                         clock.UtcNow,
-                        "Operator",
-                        command.Actor.OperatorId.ToString("D"),
+                        command.Actor.ActorType,
+                        command.Actor.ActorId.ToString("D"),
                         "sessions.end",
                         "Session",
                         session.Id.ToString("D"),
@@ -250,18 +333,18 @@ public sealed class SessionService(
                             session.TariffHourlyRateTomanSnapshot,
                             session.ElapsedTicks!.Value,
                             session.Version,
-                            command.Actor.OperatorId,
+                            command.Actor.ActorType == "System" ? Guid.Empty : command.Actor.OperatorId,
                             endedAt,
                             command.Actor.CorrelationId,
                             command.Actor.Source,
-                            command.IdempotencyKey),
+                            command.IdempotencyKey,
+                            command.Actor.ActorType == "System"),
                         token);
                     if (!invoiceResult.IsSuccess)
                         return Fail<InvoicePreviewResponse>(invoiceResult.Error.Code, invoiceResult.Error.Message);
 
-
-
-                    return invoiceResult;
+                    return await CompletePrepaidSettlementAsync(
+                        session, invoiceResult.Value, command.Actor, endedAt, command.IdempotencyKey, token);
                 },
                 cancellationToken);
         }
@@ -341,6 +424,18 @@ public sealed class SessionService(
                         // audited manual reconciliation; it never permits an automatic estimate.
                     }
 
+                    var activeReservation = await walletFunding.FindActiveReservationAsync(session.Id, token);
+                    if (activeReservation is not null)
+                    {
+                        elapsedTicks = Math.Min(
+                            elapsedTicks,
+                            PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                                activeReservation.ReservedAmountToman, session.TariffHourlyRateTomanSnapshot));
+                        if (elapsedTicks <= 0)
+                            return Fail<InvoicePreviewResponse>("wallet.insufficient_balance",
+                                "The prepaid Wallet reservation does not cover a billable Session duration.");
+                    }
+
                     DateTimeOffset reconciledAtUtc;
                     try
                     {
@@ -357,7 +452,9 @@ public sealed class SessionService(
                     var before = ToResponse(session);
                     try
                     {
-                        session.End(command.Actor.OperatorId, reconciledAtUtc, elapsedTicks);
+                        session.End(
+                            command.Actor.OperatorId, reconciledAtUtc, elapsedTicks,
+                            endedBySystem: command.Actor.ActorType == "System");
                     }
                     catch (InvalidOperationException)
                     {
@@ -402,16 +499,18 @@ public sealed class SessionService(
                             session.TariffHourlyRateTomanSnapshot,
                             session.ElapsedTicks!.Value,
                             session.Version,
-                            command.Actor.OperatorId,
+                            command.Actor.ActorType == "System" ? Guid.Empty : command.Actor.OperatorId,
                             reconciledAtUtc,
                             command.Actor.CorrelationId,
                             command.Actor.Source,
-                            command.IdempotencyKey),
+                            command.IdempotencyKey,
+                            command.Actor.ActorType == "System"),
                         token);
                     if (!invoiceResult.IsSuccess)
                         return Fail<InvoicePreviewResponse>(invoiceResult.Error.Code, invoiceResult.Error.Message);
 
-                    return invoiceResult;
+                    return await CompletePrepaidSettlementAsync(
+                        session, invoiceResult.Value, command.Actor, reconciledAtUtc, command.IdempotencyKey, token);
                 },
                 cancellationToken);
         }
@@ -419,6 +518,75 @@ public sealed class SessionService(
         {
             return Fail<InvoicePreviewResponse>("sessions.version_conflict", "Session changed concurrently; refresh before reconciling timing.");
         }
+    }
+
+    private async Task<Result<InvoicePreviewResponse>> CompletePrepaidSettlementAsync(
+        Session session,
+        InvoicePreviewResponse invoice,
+        SessionActorContext actor,
+        DateTimeOffset settledAtUtc,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var reservation = await walletFunding.FindActiveReservationAsync(session.Id, cancellationToken);
+        if (reservation is null)
+            return Result<InvoicePreviewResponse>.Success(invoice);
+        if (reservation.CustomerId != session.CustomerId ||
+            invoice.AmountToman > reservation.ReservedAmountToman)
+            return Fail<InvoicePreviewResponse>("sessions.prepaid_budget_exceeded",
+                "The Session charge exceeds its valid prepaid reservation; Session settlement was rolled back.");
+
+        var ledgerActorType = actor.ActorType;
+        var ledgerActorId = actor.ActorId;
+        var walletResult = await walletFunding.SettleSessionAsync(
+            session.CustomerId, session.Id, invoice.AmountToman, ledgerActorId, ledgerActorType,
+            actor.CorrelationId, actor.Source, idempotencyKey, cancellationToken);
+        if (!walletResult.IsSuccess)
+        {
+            var errorCode = walletResult.Error.Code == "wallet.prepaid_budget_exceeded"
+                ? "sessions.prepaid_budget_exceeded"
+                : walletResult.Error.Code;
+            return Fail<InvoicePreviewResponse>(errorCode, walletResult.Error.Message);
+        }
+
+        var invoicePaid = await invoices.MarkPrepaidPaidAsync(
+            invoice.InvoiceId, session.Version, session.CustomerId, settledAtUtc,
+            actor.CorrelationId, actor.Source, idempotencyKey, cancellationToken);
+        if (!invoicePaid.IsSuccess)
+            return Fail<InvoicePreviewResponse>(invoicePaid.Error.Code, invoicePaid.Error.Message);
+
+        var beforePaid = ToResponse(session);
+        try
+        {
+            session.MarkPaid(Guid.Empty, settledAtUtc, session.CustomerId);
+        }
+        catch (InvalidOperationException)
+        {
+            return Fail<InvoicePreviewResponse>("sessions.invalid_state",
+                "Prepaid Session could not enter its paid state; all financial changes were rolled back.");
+        }
+
+        audit.Append(new AuditRecord(
+            clock.UtcNow,
+            ledgerActorType,
+            ledgerActorId.ToString("D"),
+            "sessions.prepaid_settled",
+            "Session",
+            session.Id.ToString("D"),
+            null,
+            actor.CorrelationId,
+            actor.Source,
+            "Succeeded",
+            idempotencyKey,
+            JsonSerializer.Serialize(beforePaid),
+            JsonSerializer.Serialize(ToResponse(session))));
+
+        return Result<InvoicePreviewResponse>.Success(invoicePaid.Value with
+        {
+            SessionVersion = session.Version,
+            Status = InvoiceStatusContract.Paid,
+            PaidAtUtc = settledAtUtc
+        });
     }
 
     private static bool IsValidTimingRecoveryReason(string? reason) =>
@@ -439,14 +607,31 @@ public sealed class SessionService(
             query = query.Where(x => x.StationId == stationId.Value);
 
         var rows = await query.OrderBy(x => x.StartedAtUtc).ToArrayAsync(cancellationToken);
-        return Result<IReadOnlyList<SessionResponse>>.Success(rows.Select(ToResponse).ToArray());
+        var responses = new List<SessionResponse>(rows.Length);
+        foreach (var row in rows)
+        {
+            var response = ToResponse(row);
+            var reservation = await walletFunding.FindActiveReservationAsync(row.Id, cancellationToken);
+            if (reservation is not null)
+                response = response with
+                {
+                    PrepaidReservedAmountToman = reservation.ReservedAmountToman,
+                    PrepaidBudgetTicks = PrepaidSessionBudget.CalculateMaximumElapsedTicks(
+                        reservation.ReservedAmountToman, row.TariffHourlyRateTomanSnapshot)
+                };
+            responses.Add(response);
+        }
+        return Result<IReadOnlyList<SessionResponse>>.Success(responses);
     }
 
     private static SessionResponse ToResponse(Session session) =>
         new(session.Id, session.StationId, session.CustomerId, session.TariffId,
             session.TariffCodeSnapshot, session.TariffNameSnapshot, session.TariffHourlyRateTomanSnapshot,
             session.StartedByOperatorId, session.StartedAtUtc, session.EndedByOperatorId, session.EndedAtUtc,
-            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version);
+            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version,
+            StartedByCustomerId: session.StartedByCustomerId,
+            EndedBySystem: session.EndedBySystem,
+            PaidByCustomerId: session.PaidByCustomerId);
 
     private static Result<T> Fail<T>(string code, string message) =>
         Result<T>.Failure(new Error(code, message));
@@ -505,5 +690,8 @@ public sealed class SessionSettlement(
         new(session.Id, session.StationId, session.CustomerId, session.TariffId,
             session.TariffCodeSnapshot, session.TariffNameSnapshot, session.TariffHourlyRateTomanSnapshot,
             session.StartedByOperatorId, session.StartedAtUtc, session.EndedByOperatorId, session.EndedAtUtc,
-            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version);
+            session.PaidByOperatorId, session.PaidAtUtc, (SessionStatusContract)session.Status, session.Version,
+            StartedByCustomerId: session.StartedByCustomerId,
+            EndedBySystem: session.EndedBySystem,
+            PaidByCustomerId: session.PaidByCustomerId);
 }

@@ -31,7 +31,7 @@ public sealed partial class SessionWorkflowViewModel
             var issuedInvoiceItem = new PendingInvoiceListItem(
                 invoice,
                 GetStationLabel(invoice.StationId),
-                FormatDurationDisplayText(invoice.ElapsedTicks),
+                SessionWorkflowFormatting.FormatDurationDisplayText(invoice.ElapsedTicks),
                 FormatAmountDisplayText(invoice.AmountToman));
             var existingInvoice = PendingInvoices.FirstOrDefault(x => x.Invoice.InvoiceId == invoice.InvoiceId);
             if (existingInvoice is null)
@@ -74,7 +74,7 @@ public sealed partial class SessionWorkflowViewModel
                 OnPropertyChanged(nameof(CanRecoverSessionTiming));
                 RaiseCommands();
             }
-            ErrorMessage = ErrorText(ex.Code);
+            ErrorMessage = SessionWorkflowErrorText.For(ex.Code);
         }
         catch (HttpRequestException) { ErrorMessage = Text("نتیجهٔ پایان Session نامشخص است؛ تازه‌سازی کنید تا صورتحساب ثبت‌شده پیدا شود.", "Session end result is unknown; refresh to find any issued invoice.");
         }

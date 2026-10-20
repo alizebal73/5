@@ -100,6 +100,9 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
     public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendMutationAsync<SetCustomerStatusRequest, CustomerResponse>(HttpMethod.Put, $"/api/v1/customers/{id:D}/status", body, idempotencyKey, cancellationToken);
 
+    public Task<SetCustomerCredentialsResponse> SetCustomerCredentialsAsync(Guid id, SetCustomerCredentialsRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<SetCustomerCredentialsRequest, SetCustomerCredentialsResponse>(HttpMethod.Post, $"/api/v1/customers/{id:D}/credentials", body, idempotencyKey, cancellationToken);
+
     public Task<StationResponse> CreateStationAsync(CreateStationRequest request, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendStationMutationAsync(HttpMethod.Post, "/api/v1/stations", request, idempotencyKey, cancellationToken);
 
@@ -153,6 +156,11 @@ public sealed class GameNetServerClient(HttpClient httpClient) : IGameNetServerC
         StartSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
         SendMutationAsync<StartSessionRequest, SessionResponse>(
             HttpMethod.Post, "/api/v1/sessions", body, idempotencyKey, cancellationToken);
+
+    public Task<SessionResponse> StartPrepaidSessionAsync(
+        StartPrepaidSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        SendMutationAsync<StartPrepaidSessionRequest, SessionResponse>(
+            HttpMethod.Post, "/api/v1/sessions/prepaid", body, idempotencyKey, cancellationToken);
 
     public Task<InvoicePreviewResponse> EndSessionAsync(
         Guid id, EndSessionRequest body, string idempotencyKey, CancellationToken cancellationToken = default) =>

@@ -62,6 +62,8 @@ builder.Services.AddSingleton<IAgentEnrollmentTokenStore, AgentEnrollmentTokenSt
 builder.Services.AddSingleton<IAgentEnrollmentBootstrapper, AgentEnrollmentBootstrapper>();
 builder.Services.AddSingleton<IAgentAccessTokenProvider, AgentAccessTokenProvider>();
 builder.Services.AddSingleton<IAgentTransport, SignalRAgentTransport>();
+builder.Services.AddSingleton<IAgentCustomerSessionGateway, AgentCustomerSessionGateway>();
+builder.Services.AddHostedService<CustomerEntryPipeWorker>();
 builder.Services.AddHostedService<AgentWorker>();
 
 await builder.Build().RunAsync();

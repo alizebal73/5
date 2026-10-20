@@ -12,6 +12,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         {
             table.HasCheckConstraint("ck_customers_code_length", "char_length(code) BETWEEN 2 AND 40");
             table.HasCheckConstraint("ck_customers_kind_range", "kind BETWEEN 1 AND 2");
+            table.HasCheckConstraint("ck_customers_password_failed_attempts_range", "password_failed_attempts BETWEEN 0 AND 4");
             table.HasCheckConstraint("ck_customers_registered_name", "(kind = 1) OR (display_name IS NOT NULL AND length(trim(display_name)) > 0)");
         });
         b.HasKey(x => x.Id).HasName("pk_customers");
@@ -25,8 +26,13 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.IsBlocked).HasDefaultValue(false).IsRequired().HasColumnName("is_blocked");
         b.Ignore(x => x.Status);
         b.Property(x => x.CreatedAtUtc).IsRequired().HasColumnName("created_at_utc");
+        b.Property(x => x.LoginUsername).HasMaxLength(40).HasColumnName("login_username");
+        b.Property(x => x.PasswordHash).HasMaxLength(256).HasColumnName("password_hash");
+        b.Property(x => x.PasswordFailedAttempts).HasDefaultValue(0).IsRequired().HasColumnName("password_failed_attempts");
+        b.Property(x => x.PasswordLockedUntilUtc).HasColumnName("password_locked_until_utc");
         b.Property(x => x.Version).IsConcurrencyToken().IsRequired().HasColumnName("version");
         b.HasIndex(x => x.Code).IsUnique().HasDatabaseName("ux_customers_code");
+        b.HasIndex(x => x.LoginUsername).IsUnique().HasDatabaseName("ux_customers_login_username");
         b.HasIndex(x => new { x.Kind, x.IsActive }).HasDatabaseName("ix_customers_kind_active");
     }
 }

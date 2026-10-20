@@ -63,6 +63,20 @@
               <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding StationBoard.HasNoFilteredStations}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
             </TextBlock>
             <ListBox ItemsSource="{Binding StationBoard.VisibleStations}" SelectedItem="{Binding StationBoard.SelectedStation, Mode=TwoWay}" BorderThickness="0" Background="Transparent">
+              <ListBox.ItemContainerStyle>
+                <Style TargetType="{x:Type ListBoxItem}">
+                  <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"/>
+                  <Setter Property="ContextMenu">
+                    <Setter.Value>
+                      <ContextMenu>
+                        <MenuItem Header="{DynamicResource Station.CustomerLogin}"
+                                  Command="{Binding PlacementTarget.Tag.SessionWorkflow.StartPrepaidSessionFromStationCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext.Station, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"/>
+                      </ContextMenu>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </ListBox.ItemContainerStyle>
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <Border Padding="9" Margin="0,0,0,6" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6">

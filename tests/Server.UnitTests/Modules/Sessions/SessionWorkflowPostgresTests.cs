@@ -12,6 +12,9 @@ using GameNet.Server.Modules.Customers.Domain;
 using GameNet.Server.Modules.Customers.Infrastructure;
 using GameNet.Server.Modules.Stations.Infrastructure;
 using GameNet.Server.Modules.Tariffs.Infrastructure;
+using GameNet.Server.Modules.Wallet.Application;
+using GameNet.Server.Modules.Wallet.Domain;
+using GameNet.Server.Modules.Wallet.Infrastructure;
 using GameNet.Server.Modules.Sessions.Infrastructure;
 using GameNet.Server.Modules.Sessions.Application;
 using GameNet.Server.Modules.Sessions.Domain;
@@ -467,6 +470,127 @@ public sealed class SessionWorkflowPostgresTests
     }
 
     [Fact]
+    public async Task Prepaid_session_reservation_charge_release_and_replays_reconcile_in_postgres()
+    {
+        if (!IsExplicitlyEnabled()) return;
+
+        var connectionString = GetConnectionString();
+        var token = Guid.NewGuid().ToString("N");
+        var stationId = Guid.NewGuid();
+        var tariffId = Guid.NewGuid();
+        var operatorId = Guid.NewGuid();
+        var correlation = "slice1-prepaid-pg-" + token;
+        var idempotencyPrefix = "slice1-prepaid-pg-" + token + "-";
+        var customer = Customer.CreateRegistered(
+            Guid.NewGuid(), "PRE-" + token[..12], "Prepaid PostgreSQL customer", DateTimeOffset.UtcNow);
+        Guid? customerId = customer.Id;
+        var clock = new MutableClock(DateTimeOffset.UtcNow);
+
+        try
+        {
+            await using var db = CreateContext(connectionString);
+            var station = Station.Create(stationId, "PRE-" + token[..12], "Prepaid PostgreSQL PC", StationType.Pc);
+            var tariff = Tariff.CreateFixedHourly(
+                tariffId, "PRE-" + token[..12], "Prepaid default tariff",
+                StationTypeContract.Pc, 60_000L, true, clock.UtcNow);
+            db.Stations.Add(station);
+            db.Tariffs.Add(tariff);
+            db.Customers.Add(customer);
+            await db.SaveChangesAsync();
+            await BindActiveAgentAsync(db, station, clock, token);
+
+            var audit = new EfAuditWriter(db);
+            var billing = CreateBillingService(db, clock);
+            var wallet = new WalletService(
+                db,
+                new CustomerWalletEligibilityService(db),
+                new CommandMutationPipeline(new EfTransactionCoordinator(db), new EfIdempotencyStore(db, clock)),
+                new TestRequestFingerprint(),
+                billing,
+                audit,
+                clock);
+            var walletActor = new WalletActorContext(
+                operatorId, correlation, "PrepaidPostgreSQLTest",
+                new HashSet<string>([Permissions.WalletWrite], StringComparer.Ordinal));
+            var topUp = await wallet.CashTopUpAsync(
+                new CashTopUpWalletCommand(
+                    customer.Id, 60_000L, 60_000L, customer.Version,
+                    idempotencyPrefix + "top-up", walletActor),
+                CancellationToken.None);
+            Assert.True(topUp.IsSuccess, topUp.IsSuccess ? "" : topUp.Error.Code);
+            Assert.Equal(60_000L, topUp.Value.BalanceAfterToman);
+
+            var service = CreateService(db, clock);
+            var actor = Actor(operatorId, correlation);
+            var startCommand = new StartPrepaidSessionCommand(
+                stationId, customer.Id, idempotencyPrefix + "start", actor);
+            var started = await service.StartPrepaidAsync(startCommand, CancellationToken.None);
+            Assert.True(started.IsSuccess, started.IsSuccess ? "" : started.Error.Code);
+            Assert.Equal(SessionStatusContract.Active, started.Value.Status);
+            Assert.Equal(60_000L, started.Value.PrepaidReservedAmountToman);
+            Assert.Equal(TimeSpan.TicksPerHour, started.Value.PrepaidBudgetTicks);
+
+            var startReplay = await service.StartPrepaidAsync(startCommand, CancellationToken.None);
+            Assert.True(startReplay.IsSuccess, startReplay.IsSuccess ? "" : startReplay.Error.Code);
+            Assert.Equal(started.Value.Id, startReplay.Value.Id);
+
+            var walletDuringSession = await db.WalletAccounts.AsNoTracking()
+                .SingleAsync(x => x.CustomerId == customer.Id);
+            Assert.Equal(0L, walletDuringSession.BalanceToman);
+            Assert.Equal(60_000L, walletDuringSession.ReservedBalanceToman);
+            Assert.Equal(1, await db.WalletLedgerEntries.CountAsync(
+                x => x.SessionId == started.Value.Id && x.EntryType == WalletLedgerEntryType.SessionReserve));
+
+            clock.Advance(TimeSpan.FromMinutes(30));
+            var endCommand = new EndSessionCommand(
+                started.Value.Id, started.Value.Version, idempotencyPrefix + "end", actor);
+            var ended = await service.EndAsync(endCommand, CancellationToken.None);
+            Assert.True(ended.IsSuccess, ended.IsSuccess ? "" : ended.Error.Code);
+            Assert.Equal(InvoiceStatusContract.Paid, ended.Value.Status);
+            Assert.Equal(30_000L, ended.Value.AmountToman);
+
+            var endReplay = await service.EndAsync(endCommand, CancellationToken.None);
+            Assert.True(endReplay.IsSuccess, endReplay.IsSuccess ? "" : endReplay.Error.Code);
+            Assert.Equal(ended.Value.InvoiceId, endReplay.Value.InvoiceId);
+            Assert.Equal(InvoiceStatusContract.Paid, endReplay.Value.Status);
+
+            db.ChangeTracker.Clear();
+            var finalWallet = await db.WalletAccounts.AsNoTracking()
+                .SingleAsync(x => x.CustomerId == customer.Id);
+            var finalSession = await db.Sessions.AsNoTracking().SingleAsync(x => x.Id == started.Value.Id);
+            var finalInvoice = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == ended.Value.InvoiceId);
+            var walletLedger = await db.WalletLedgerEntries.AsNoTracking()
+                .Where(x => x.SessionId == started.Value.Id)
+                .OrderBy(x => x.WalletVersionAfter)
+                .ToArrayAsync();
+
+            Assert.Equal(30_000L, finalWallet.BalanceToman);
+            Assert.Equal(0L, finalWallet.ReservedBalanceToman);
+            Assert.Equal(SessionStatus.Paid, finalSession.Status);
+            Assert.Equal(InvoiceStatus.Paid, finalInvoice.Status);
+            Assert.Equal(3, walletLedger.Length);
+            Assert.Equal(new[]
+            {
+                WalletLedgerEntryType.SessionReserve,
+                WalletLedgerEntryType.SessionCharge,
+                WalletLedgerEntryType.SessionRelease
+            }, walletLedger.Select(x => x.EntryType).ToArray());
+            Assert.Equal(new long[] { 60_000L, 30_000L, 30_000L },
+                walletLedger.Select(x => x.AmountToman).ToArray());
+            Assert.Equal(1, await db.Invoices.CountAsync(x => x.SessionId == started.Value.Id));
+            Assert.Equal(1, await db.AuditEntries.CountAsync(
+                x => x.CorrelationId == correlation && x.Operation == "wallet.session_reserve"));
+            Assert.Equal(1, await db.AuditEntries.CountAsync(
+                x => x.CorrelationId == correlation && x.Operation == "wallet.session_settle"));
+        }
+        finally
+        {
+            await CleanupAsync(
+                connectionString, stationId, tariffId, customerId, correlation, idempotencyPrefix);
+        }
+    }
+
+    [Fact]
     public async Task Concurrent_starts_cannot_create_two_active_sessions_for_one_pc()
     {
         if (!IsExplicitlyEnabled()) return;
@@ -798,6 +922,7 @@ public sealed class SessionWorkflowPostgresTests
             new StationSessionAccess(db, clock),
             new TariffSessionAccess(db),
             new BillingInvoiceWriter(db, audit, clock),
+            new WalletSessionFunding(db, new CustomerWalletEligibilityService(db), audit, clock),
             audit,
             clock);
     }
@@ -833,6 +958,17 @@ public sealed class SessionWorkflowPostgresTests
         string idempotencyPrefix)
     {
         await using var db = CreateContext(connectionString);
+
+        // Wallet ledger rows are intentionally append-only at the database layer. When this
+        // test has emitted immutable wallet movements, keep its uniquely identified financial
+        // aggregate (Session, Customer, Wallet, Invoice and Audit) intact in the disposable
+        // per-run database instead of trying to DELETE the evidence during fixture cleanup.
+        // The Foundation job discards this database after the suite; other tests use unique IDs.
+        if (customerId.HasValue &&
+            await db.WalletLedgerEntries.AsNoTracking()
+                .AnyAsync(x => x.CustomerId == customerId.Value))
+            return;
+
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM audit_entries WHERE correlation_id = {correlation}");
         await db.Database.ExecuteSqlInterpolatedAsync(
@@ -845,6 +981,15 @@ public sealed class SessionWorkflowPostgresTests
             $"DELETE FROM payments WHERE invoice_id IN (SELECT id FROM invoices WHERE station_id = {stationId})");
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM invoices WHERE station_id = {stationId}");
+        if (customerId.HasValue)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM wallet_ledger_entries WHERE customer_id = {customerId.Value}");
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM wallet_accounts WHERE customer_id = {customerId.Value}");
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"DELETE FROM cash_receipts WHERE customer_id = {customerId.Value}");
+        }
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM sessions WHERE station_id = {stationId}");
         if (customerId.HasValue)

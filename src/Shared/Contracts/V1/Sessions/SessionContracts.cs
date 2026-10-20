@@ -15,6 +15,7 @@ public enum InvoiceStatusContract
 }
 
 public sealed record StartSessionRequest(Guid StationId, Guid TariffId, Guid? CustomerId);
+public sealed record StartPrepaidSessionRequest(Guid StationId, Guid CustomerId);
 public sealed record EndSessionRequest(int ExpectedVersion);
 public sealed record ReconcileSessionTimingRequest(int ExpectedSessionVersion, long ReconciledElapsedMinutes, string Reason, bool Confirmed);
 public sealed record CashCheckoutRequest(long AmountReceivedToman, int ExpectedSessionVersion);
@@ -34,7 +35,12 @@ public sealed record SessionResponse(
     Guid? PaidByOperatorId,
     DateTimeOffset? PaidAtUtc,
     SessionStatusContract Status,
-    int Version);
+    int Version,
+    long? PrepaidReservedAmountToman = null,
+    long? PrepaidBudgetTicks = null,
+    Guid? StartedByCustomerId = null,
+    bool EndedBySystem = false,
+    Guid? PaidByCustomerId = null);
 
 public sealed record InvoicePreviewResponse(
     Guid InvoiceId,

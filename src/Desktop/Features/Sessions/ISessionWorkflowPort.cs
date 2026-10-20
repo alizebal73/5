@@ -7,6 +7,7 @@ using GameNet.Shared.Contracts.V1.Customers;
 using GameNet.Shared.Contracts.V1.Stations;
 using GameNet.Shared.Contracts.V1.Tariffs;
 using GameNet.Desktop.Features.Wallet;
+using GameNet.Desktop.Features.Customers;
 
 namespace GameNet.Desktop.Features.Sessions;
 
@@ -25,6 +26,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ObservableCollection<PendingInvoiceListItem> PendingInvoices { get; }
     ObservableCollection<CashCheckoutOutcomeListItem> RecentCashCheckouts { get; }
     IWalletTopUpPort WalletTopUp { get; }
+    ICustomerCredentialsPort CustomerCredentials { get; }
 
     ICommand RefreshCommand { get; }
     ICommand SearchCustomersCommand { get; }
@@ -38,6 +40,7 @@ public interface ISessionWorkflowPort : INotifyPropertyChanged
     ICommand BlockCustomerCommand { get; }
     ICommand CreateTariffCommand { get; }
     ICommand StartSessionCommand { get; }
+    ICommand StartPrepaidSessionFromStationCommand { get; }
     ICommand EndSessionCommand { get; }
     ICommand ReconcileSessionTimingCommand { get; }
     ICommand CheckoutCashCommand { get; }

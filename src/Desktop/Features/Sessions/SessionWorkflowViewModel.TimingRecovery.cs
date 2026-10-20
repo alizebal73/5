@@ -123,7 +123,7 @@ public sealed partial class SessionWorkflowViewModel
         }
         catch (GameNetApiException ex)
         {
-            ErrorMessage = ErrorText(ex.Code);
+            ErrorMessage = SessionWorkflowErrorText.For(ex.Code);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {

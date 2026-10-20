@@ -106,6 +106,9 @@ public static class AgentCredentialRoutes
                     return WriteCredentialFailure(context, ex);
                 }
             }).AllowAnonymous();
+
+        // Keep all /api/v1/agent routes registered from this transport composition point.
+        app.MapAgentCustomerSessionEndpoints();
     }
 
     private static IResult WriteCredentialFailure(HttpContext context, AgentCredentialException exception) =>

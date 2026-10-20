@@ -63,20 +63,23 @@ try {
     $serverOutput = Join-Path $payloadRoot "Server"
     $agentOutput = Join-Path $payloadRoot "Agent"
     $desktopOutput = Join-Path $payloadRoot "Desktop"
+    $customerOutput = Join-Path $payloadRoot "Customer"
     $launcherOutput = Join-Path $payloadRoot "Launcher"
     $toolsOutput = Join-Path $payloadRoot "Tools"
     $powerShellOutput = Join-Path $payloadRoot "Setup\PowerShell"
-    New-Item -ItemType Directory -Force -Path $serverOutput, $agentOutput, $desktopOutput, $launcherOutput, $toolsOutput, $powerShellOutput | Out-Null
+    New-Item -ItemType Directory -Force -Path $serverOutput, $agentOutput, $desktopOutput, $customerOutput, $launcherOutput, $toolsOutput, $powerShellOutput | Out-Null
 
     Invoke-CheckedDotNet @("publish", "src/Server/GameNet.Server.csproj", "--configuration", "Release", "--runtime", "win-x64", "--self-contained", "true", "--no-restore", "-p:PublishSingleFile=false", "--output", $serverOutput)
     Invoke-CheckedDotNet @("publish", "src/Client/GameNet.Agent.csproj", "--configuration", "Release", "--runtime", "win-x64", "--self-contained", "true", "--no-restore", "-p:PublishSingleFile=false", "--output", $agentOutput)
     Invoke-CheckedDotNet @("publish", "src/Desktop/GameNet.Desktop.csproj", "--configuration", "Release", "--runtime", "win-x64", "--self-contained", "true", "--no-restore", "-p:PublishSingleFile=false", "--output", $desktopOutput)
+    Invoke-CheckedDotNet @("publish", "src/Client/Customer/GameNet.CustomerClient.csproj", "--configuration", "Release", "--runtime", "win-x64", "--self-contained", "true", "--no-restore", "-p:PublishSingleFile=false", "--output", $customerOutput)
     Invoke-CheckedDotNet @("publish", "tools/TestLauncher/GameNet5.TestLauncher.csproj", "--configuration", "Release", "--runtime", "win-x64", "--self-contained", "true", "--no-restore", "-p:PublishSingleFile=false", "--output", $launcherOutput)
 
     foreach ($component in @(
         @{ path = $serverOutput; file = "GameNet.Server.exe" },
         @{ path = $agentOutput; file = "GameNet.Agent.exe" },
         @{ path = $desktopOutput; file = "GameNet.Manager.Desktop.exe" },
+        @{ path = $customerOutput; file = "GameNet.CustomerClient.exe" },
         @{ path = $launcherOutput; file = "GameNet5.TestLauncher.exe" }
     )) {
         $required = Join-Path $component.path $component.file

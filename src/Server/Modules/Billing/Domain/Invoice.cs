@@ -16,7 +16,8 @@ public sealed class Invoice
         long elapsedTicks,
         long amountToman,
         Guid issuedByOperatorId,
-        DateTimeOffset issuedAtUtc)
+        DateTimeOffset issuedAtUtc,
+        bool issuedBySystem)
     {
         Id = id;
         SessionId = sessionId;
@@ -29,6 +30,7 @@ public sealed class Invoice
         ElapsedTicks = elapsedTicks;
         AmountToman = amountToman;
         IssuedByOperatorId = issuedByOperatorId;
+        IssuedBySystem = issuedBySystem;
         IssuedAtUtc = issuedAtUtc.ToUniversalTime();
         Status = InvoiceStatus.PendingPayment;
     }
@@ -44,8 +46,10 @@ public sealed class Invoice
     public long ElapsedTicks { get; private set; }
     public long AmountToman { get; private set; }
     public Guid IssuedByOperatorId { get; private set; }
+    public bool IssuedBySystem { get; private set; }
     public DateTimeOffset IssuedAtUtc { get; private set; }
     public Guid? PaidByOperatorId { get; private set; }
+    public Guid? PaidByCustomerId { get; private set; }
     public DateTimeOffset? PaidAtUtc { get; private set; }
     public InvoiceStatus Status { get; private set; }
 
@@ -61,30 +65,40 @@ public sealed class Invoice
         long elapsedTicks,
         long amountToman,
         Guid issuedByOperatorId,
-        DateTimeOffset issuedAtUtc)
+        DateTimeOffset issuedAtUtc,
+        bool issuedBySystem = false)
     {
         if (id == Guid.Empty) throw new ArgumentException("Invoice id is required.", nameof(id));
         if (sessionId == Guid.Empty) throw new ArgumentException("Session id is required.", nameof(sessionId));
         if (stationId == Guid.Empty) throw new ArgumentException("Station id is required.", nameof(stationId));
         if (customerId == Guid.Empty) throw new ArgumentException("Customer id is required.", nameof(customerId));
         if (tariffId == Guid.Empty) throw new ArgumentException("Tariff id is required.", nameof(tariffId));
-        if (issuedByOperatorId == Guid.Empty) throw new ArgumentException("Operator id is required.", nameof(issuedByOperatorId));
+        if (issuedBySystem ? issuedByOperatorId != Guid.Empty : issuedByOperatorId == Guid.Empty)
+            throw new ArgumentException("Invoice issuer must be either an Operator or the System.", nameof(issuedByOperatorId));
         if (tariffHourlyRateTomanSnapshot <= 0) throw new ArgumentOutOfRangeException(nameof(tariffHourlyRateTomanSnapshot));
         if (elapsedTicks <= 0) throw new ArgumentOutOfRangeException(nameof(elapsedTicks));
         if (amountToman <= 0) throw new ArgumentOutOfRangeException(nameof(amountToman));
 
         return new Invoice(id, sessionId, stationId, customerId, tariffId, tariffCodeSnapshot,
-            tariffNameSnapshot, tariffHourlyRateTomanSnapshot, elapsedTicks, amountToman, issuedByOperatorId, issuedAtUtc);
+            tariffNameSnapshot, tariffHourlyRateTomanSnapshot, elapsedTicks, amountToman, issuedByOperatorId, issuedAtUtc, issuedBySystem);
     }
 
-    public void MarkPaid(Guid paidByOperatorId, DateTimeOffset paidAtUtc)
+    public void MarkPaid(Guid paidByOperatorId, DateTimeOffset paidAtUtc, Guid? paidByCustomerId = null)
     {
         if (Status != InvoiceStatus.PendingPayment)
             throw new InvalidOperationException("INVOICE_NOT_PENDING_PAYMENT");
-        if (paidByOperatorId == Guid.Empty)
-            throw new ArgumentException("Operator id is required.", nameof(paidByOperatorId));
+        if (paidByCustomerId is Guid customerPayerId)
+        {
+            if (customerPayerId == Guid.Empty || paidByOperatorId != Guid.Empty)
+                throw new ArgumentException("A Wallet-funded invoice must identify the Customer payer and no Operator payer.");
+        }
+        else if (paidByOperatorId == Guid.Empty)
+        {
+            throw new ArgumentException("Operator id is required unless the invoice is paid from Customer Wallet credit.", nameof(paidByOperatorId));
+        }
 
         PaidByOperatorId = paidByOperatorId;
+        PaidByCustomerId = paidByCustomerId;
         PaidAtUtc = paidAtUtc.ToUniversalTime();
         Status = InvoiceStatus.Paid;
     }
@@ -93,7 +107,7 @@ public sealed class Invoice
     {
         if (Status != InvoiceStatus.Paid)
             throw new InvalidOperationException("INVOICE_NOT_PAID_FOR_REVERSAL");
-        if (PaidAtUtc is null || PaidByOperatorId is null)
+        if (PaidAtUtc is null || PaidByOperatorId is null || PaidByOperatorId == Guid.Empty || PaidByCustomerId is not null)
             throw new InvalidOperationException("INVOICE_PAID_FACTS_MISSING");
 
         // Only the lifecycle projection changes; original paid facts and invoice amount remain immutable.

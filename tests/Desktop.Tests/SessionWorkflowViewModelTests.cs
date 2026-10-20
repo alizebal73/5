@@ -1148,10 +1148,82 @@ public sealed class SessionWorkflowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task Customer_credentials_form_sends_separate_username_and_never_retains_password_after_success()
+    {
+        var oldCulture = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var customer = new CustomerResponse(Guid.NewGuid(), "C-AUTH-01", "Customer Auth", null, null,
+                CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 3);
+            var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
+            var refreshedId = Guid.Empty;
+            var refreshed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var viewModel = new GameNet.Desktop.Features.Customers.CustomerCredentialsViewModel(
+                client, permission => permission == Permissions.CustomersCredentialsManage,
+                id => { refreshedId = id; refreshed.TrySetResult(true); return Task.CompletedTask; });
+            viewModel.SelectedCustomer = customer;
+            viewModel.Username = "player-01";
+            viewModel.Password = "correct horse battery";
+
+            var saved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(viewModel.StatusMessage) &&
+                    viewModel.StatusMessage.Contains("Credentials were saved", StringComparison.Ordinal))
+                    saved.TrySetResult(true);
+            };
+
+            Assert.True(viewModel.SetCredentialsCommand.CanExecute(null));
+            viewModel.SetCredentialsCommand.Execute(null);
+            await client.CustomerCredentialsRequestReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(customer.Id, client.LastCredentialsCustomerId);
+            Assert.NotNull(client.LastCredentialsRequest);
+            Assert.Equal("PLAYER-01", client.LastCredentialsRequest!.Username);
+            Assert.Equal("correct horse battery", client.LastCredentialsRequest.Password);
+            Assert.Equal(customer.Version, client.LastCredentialsRequest.ExpectedVersion);
+            Assert.False(string.IsNullOrWhiteSpace(client.LastCredentialsIdempotencyKey));
+
+            client.CustomerCredentialsCompletion.SetResult(
+                new SetCustomerCredentialsResponse(customer.Id, "PLAYER-01", customer.Version + 1, DateTimeOffset.UtcNow));
+            await saved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(string.Empty, viewModel.Password);
+            Assert.Equal("PLAYER-01", viewModel.Username);
+            Assert.Equal(customer.Id, refreshedId);
+        }
+        finally { CultureInfo.CurrentUICulture = oldCulture; }
+    }
+
+    [Fact]
+    public void Customer_credentials_form_requires_the_specific_management_permission()
+    {
+        var customer = new CustomerResponse(Guid.NewGuid(), "C-AUTH-02", "Customer Auth", null, null,
+            CustomerKindContract.Registered, CustomerStatusContract.Active, DateTimeOffset.UtcNow, 1);
+        var client = new FakeGameNetServerClient(Array.Empty<StationResponse>(), Array.Empty<TariffResponse>());
+        var viewModel = new GameNet.Desktop.Features.Customers.CustomerCredentialsViewModel(
+            client, _ => false, _ => Task.CompletedTask);
+        viewModel.SelectedCustomer = customer;
+        viewModel.Username = "player-02";
+        viewModel.Password = "correct horse battery";
+        Assert.False(viewModel.CanManageCredentials);
+        Assert.False(viewModel.SetCredentialsCommand.CanExecute(null));
+    }
+
     private sealed class FakeGameNetServerClient(
         IReadOnlyList<StationResponse> stations,
         IReadOnlyList<TariffResponse> tariffs) : IGameNetServerClient
     {
+        public TaskCompletionSource<bool> CustomerCredentialsRequestReceived { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<SetCustomerCredentialsResponse> CustomerCredentialsCompletion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Guid? LastCredentialsCustomerId { get; private set; }
+        public SetCustomerCredentialsRequest? LastCredentialsRequest { get; private set; }
+        public string? LastCredentialsIdempotencyKey { get; private set; }
+
         public TaskCompletionSource<bool> StartRequestReceived { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1256,6 +1328,15 @@ public sealed class SessionWorkflowViewModelTests
         public Task<CustomerResponse> CreateCustomerAsync(CreateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> UpdateCustomerProfileAsync(Guid id, UpdateCustomerRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CustomerResponse> SetCustomerStatusAsync(Guid id, SetCustomerStatusRequest request, string idempotencyKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<SetCustomerCredentialsResponse> SetCustomerCredentialsAsync(Guid id, SetCustomerCredentialsRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        {
+            LastCredentialsCustomerId = id;
+            LastCredentialsRequest = request;
+            LastCredentialsIdempotencyKey = idempotencyKey;
+            CustomerCredentialsRequestReceived.TrySetResult(true);
+            return CustomerCredentialsCompletion.Task;
+        }
+
 
         public Task<IReadOnlyList<TariffResponse>> GetTariffsAsync(StationTypeContract? stationType = null, CancellationToken cancellationToken = default)
         {

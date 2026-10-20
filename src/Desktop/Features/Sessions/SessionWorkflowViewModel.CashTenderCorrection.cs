@@ -199,7 +199,7 @@ public sealed partial class SessionWorkflowViewModel
         catch (GameNetApiException ex)
         {
             unresolvedCashTenderCorrection = null;
-            ErrorMessage = ErrorText(ex.Code);
+            ErrorMessage = SessionWorkflowErrorText.For(ex.Code);
         }
         catch
         {
