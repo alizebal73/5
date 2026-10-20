@@ -19,8 +19,9 @@ internal interface ISessionLifecycleHost
     IGameNetServerClient Api { get; }
     bool CanOperateSessions { get; }
     bool IsBusy { get; }
-    ActiveSessionListItem? SelectedActiveSession { get; }
+    ActiveSessionListItem? SelectedActiveSession { get; set; }
     Guid? TimingRecoveryRequiredSessionId { get; }
+    IReadOnlyCollection<ActiveSessionListItem> ActiveSessions { get; }
     IReadOnlyCollection<PendingInvoiceListItem> PendingInvoices { get; }
     PendingInvoiceListItem? SelectedPendingInvoice { get; set; }
     bool HasPermission(string permission);
@@ -154,7 +155,7 @@ private async Task PauseSessionAsync()
                 session.Id, new SessionLifecycleRequest(session.Version), key);
             host.RemovePendingKey("session.pause");
             await host.RefreshAsync();
-            host.SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == paused.Id);
+            host.SelectedActiveSession = host.ActiveSessions.FirstOrDefault(x => x.Session.Id == paused.Id);
             host.StatusMessage = Text(
                 $"زمان صورتحساب PC {host.GetStationLabel(session.StationId)} متوقف شد. مدت توقف محاسبه نمی‌شود.",
                 $"Billing time paused for PC {host.GetStationLabel(session.StationId)}. Paused time is not billed.");
@@ -199,7 +200,7 @@ private async Task PauseSessionAsync()
                 session.Id, new SessionLifecycleRequest(session.Version), key);
             host.RemovePendingKey("session.resume");
             await host.RefreshAsync();
-            host.SelectedActiveSession = ActiveSessions.FirstOrDefault(x => x.Session.Id == resumed.Id);
+            host.SelectedActiveSession = host.ActiveSessions.FirstOrDefault(x => x.Session.Id == resumed.Id);
             host.StatusMessage = Text(
                 $"بازی PC {host.GetStationLabel(session.StationId)} ادامه یافت؛ زمان‌سنجی از نقطهٔ جدید شروع شد.",
                 $"Play resumed on PC {host.GetStationLabel(session.StationId)}; a fresh monotonic timing segment has started.");
