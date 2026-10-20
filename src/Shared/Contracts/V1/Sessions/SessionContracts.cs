@@ -19,6 +19,7 @@ public sealed record StartSessionRequest(Guid StationId, Guid TariffId, Guid? Cu
 public sealed record StartPrepaidSessionRequest(Guid StationId, Guid CustomerId);
 public sealed record EndSessionRequest(int ExpectedVersion);
 public sealed record SessionLifecycleRequest(int ExpectedVersion);
+public sealed record TransferSessionRequest(Guid TargetStationId, int ExpectedVersion, string Reason, bool Confirmed);
 public sealed record ReconcileSessionTimingRequest(int ExpectedSessionVersion, long ReconciledElapsedMinutes, string Reason, bool Confirmed);
 public sealed record CashCheckoutRequest(long AmountReceivedToman, int ExpectedSessionVersion);
 
