@@ -36,7 +36,7 @@ namespace GameNet.Server.UnitTests.Modules.Sessions;
 /// and points these tests only at its disposable PostgreSQL database.
 /// </summary>
 [Collection("Session workflow PostgreSQL serial")]
-public sealed class SessionWorkflowPostgresTests
+public sealed partial class SessionWorkflowPostgresTests
 {
     [Fact]
     public async Task Pc_session_replay_end_invoice_and_cash_checkout_are_atomic()
