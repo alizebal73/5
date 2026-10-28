@@ -317,25 +317,41 @@ def server_list_label(index: int, ip: str) -> str:
         ui_text = ui_text.replace(marker, stop_methods + marker, 1)
         ui.write_text(ui_text, encoding="utf-8")
 
-    # Closing the app with the window X must also stop a running host process.
+    # Replace the app close handler so the window X also shuts down a running host.
     ui_text = ui.read_text(encoding="utf-8")
-    close_marker = "        self.closing=True\n"
-    close_replacement = '''        if self.host_state != "stopped":
+    close_start = ui_text.find("    def close(self):")
+    close_end = ui_text.find("\ndef main():", close_start)
+    if close_start < 0 or close_end < 0:
+        raise RuntimeError("Cannot locate close/main boundary to make launcher shutdown safe.")
+    new_close = '''    def close(self):
+        if self.copying and not messagebox.askyesno(
+            APP_NAME, "کپی در حال انجام است؛ برنامه بسته شود؟", parent=self.root
+        ):
+            return
+        if self.host_state != "stopped" and not messagebox.askyesno(
+            APP_NAME, "با بستن برنامه، سرور و بازی میزبان هم بسته می‌شوند. ادامه؟",
+            parent=self.root,
+        ):
+            return
+        if self.host_state != "stopped":
             stopped, error = self._stop_host_process()
             if not stopped:
                 messagebox.showerror(
                     APP_NAME,
-                    "سرور کاملاً بسته نشد؛ برنامه باز می‌ماند تا مشکل را بررسی کنی.\\n" + error,
+                    "سرور کاملاً بسته نشد؛ برنامه باز می‌ماند تا مشکل را بررسی کنی.\\\\n" + error,
                     parent=self.root,
                 )
                 return
-        self.closing=True
+        self.closing = True
+        if self.copying:
+            self.copy_cancel.set()
+        self.discovery.stop()
+        self.save()
+        self.root.destroy()
+
 '''
-    if close_marker in ui_text:
-        ui_text = ui_text.replace(close_marker, close_replacement, 1)
-        ui.write_text(ui_text, encoding="utf-8")
-    elif 'if self.host_state != "stopped":' not in ui_text or "_stop_host_process()" not in ui_text:
-        raise RuntimeError("Cannot attach server shutdown to the app close handler.")
+    ui_text = ui_text[:close_start] + new_close + ui_text[close_end + 1:]
+    ui.write_text(ui_text, encoding="utf-8")
 
     # v0.5.2 version metadata and user-facing instructions.
     replace_once(core, 'APP_VERSION = "0.5.1-beta"', 'APP_VERSION = "0.5.2-beta"', 'APP_VERSION = "0.5.2-beta"')
