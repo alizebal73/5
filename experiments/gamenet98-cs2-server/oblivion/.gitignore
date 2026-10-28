@@ -1,0 +1,105 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.eggs/
+
+# ── PyInstaller build artefacts ───────────────────────────────────────────────
+dist/
+build/
+*.spec
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+
+# ── User config (may contain passwords / personal paths) ─────────────────────
+gamenet98_cs2_config.json
+# v0.10.2 match history + v0.10.0 plugin manifest — local state, not source
+oblivion_matches.json
+oblivion_plugins.json
+# v0.16.1 / v0.16.3 — persisted teams + templates (runtime state)
+oblivion_teams.json
+oblivion_templates.json
+# v0.11.3 — persisted veto session (runtime state, survives Ctrl+Q)
+oblivion_veto_active.json
+# v0.16.0 auto-snapshots of gamenet98_cs2_config.json — dev-mode writes them to project root
+backups/
+# v0.15.1 registry catalog cache (24h TTL, fetched at runtime)
+registry_cache.json
+# v0.16.5 WebView2 bootstrapper — downloaded artefact, not source.
+# tools/fetch_webview2.ps1 re-downloads on demand before each installer build.
+MicrosoftEdgeWebview2Setup.exe
+# Raw screenshot intake + intermediate redaction work-folder.
+# Public-facing prepared shots live in docs/screenshots/ instead.
+screenshots/
+# v0.11.0 — operator may stash a Discord bot token / webhook URL locally
+# before pasting into the SPA.  Keep secrets out of git regardless of name.
+bot_token.txt
+*_token.txt
+*_secret.txt
+.env
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+build_log.txt
+build_log.prev.txt
+build_log_*.txt
+
+# ── Downloaded third-party installers (Process Lasso etc.) ───────────────────
+downloads/
+
+# ── Claude Code session data ──────────────────────────────────────────────────
+.claude/
+
+# ── Local marketing assets — demos, mockups, draft posts (never publish) ────
+Marketing/
+
+# ── Private working docs (kept on disk, not in public repo) ──────────────────
+# Internal financial planning + revenue projections (pricing strategy is
+# not something every user needs to read on a tournament-tool repo).
+PLAN.md
+MONETIZATION.md
+# Post-mortems contain operator-side detail (timing, location, who was
+# online) that isn't useful in a public repo.
+RETROSPECTIVE_*.md
+# Internal working docs — not direct instructional guides for users.
+# Kept on the maintainer's disk; not redistributed.
+INGEST.md
+BIBLE.md
+AUDIT.md
+TONIGHT.md
+FRIDAY_SMOKE.md
+MOBILE_CHECK.md
+# Planning / vision / strategy docs — not direct instructional guides.
+# Kept on the maintainer's disk; not redistributed.
+ROADMAP.md
+TODO.md
+PLATFORM.md
+
+# ── Nested clone (not a submodule) ────────────────────────────────────────────
+GameNet98CS2Server/
+
+# Plugin release ZIPs downloaded by the install helper
+.plugin-downloads/
+
+# .NET build artifacts for bundled plugin source (keep the .cs/.csproj, not bin/obj)
+_plugins_src/**/bin/
+_plugins_src/**/obj/
+
+# Debug symbols for bundled third-party plugin binaries (PDBs are build output,
+# not redistributable artefacts; 44 MB cs2fixes.pdb was accidentally tracked once).
+*.pdb

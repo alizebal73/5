@@ -1,0 +1,18 @@
+flask>=3.0.0
+# Pinned explicitly because main.py imports `werkzeug.serving.make_server`
+# directly (since v0.9.2) rather than going through Flask's app.run().  Flask
+# pulls werkzeug in transitively, but pinning here keeps the build stable if
+# Flask ever swaps its server backend.
+werkzeug>=3.0.0
+pywebview>=5.0
+keyring>=25.0.0
+# Pure-Python QR generator (no Pillow / no native deps).  Used by the veto
+# captain-link share cards (v0.10.0 Day 4) to render SVG QR codes for the
+# captain join URLs.  ~70 KB pure Python; PyInstaller picks it up automatically.
+segno>=1.6.0
+# Discord bot (v0.11.0).  Maintains a gateway connection to Discord so the
+# tool can DM captain links + read voice-channel members + post live veto
+# embeds.  Runs in a dedicated background asyncio loop alongside Flask.
+# Optional at runtime — if no bot token is configured the module imports
+# but doesn't connect.
+discord.py>=2.3.0
