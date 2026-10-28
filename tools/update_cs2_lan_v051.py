@@ -334,7 +334,7 @@ def server_list_label(index: int, ip: str) -> str:
     if close_marker in ui_text:
         ui_text = ui_text.replace(close_marker, close_replacement, 1)
         ui.write_text(ui_text, encoding="utf-8")
-    elif "if self.host_state != \\"stopped\\":" not in ui_text or "_stop_host_process()" not in ui_text:
+    elif 'if self.host_state != "stopped":' not in ui_text or "_stop_host_process()" not in ui_text:
         raise RuntimeError("Cannot attach server shutdown to the app close handler.")
 
     # v0.5.2 version metadata and user-facing instructions.
