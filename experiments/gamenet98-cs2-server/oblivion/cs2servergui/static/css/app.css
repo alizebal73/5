@@ -3978,3 +3978,14 @@ body.compact #content        { padding: 14px 16px; }
 /* GameNet 98 adaptation: keep the UI usable on an isolated LAN. */
 body { font-family: Tahoma, Arial, sans-serif; }
 .login-brand-name { letter-spacing: .04em; }
+
+
+/* GameNet 98 first-pass simplified operator view. */
+.nav-item[data-page="plugins"],
+.nav-item[data-page="veto"],
+.nav-item[data-page="history"],
+.nav-item[data-page="readiness"],
+.nav-item[data-page="logs"],
+.nav-item[data-page="appearance"] { display: none !important; }
+.settings-strip, #reach-card, #hdr-help-btn, #hdr-cmd-trigger { display: none !important; }
+.login-brand-name { font-family: Tahoma, Arial, sans-serif; }

@@ -131,7 +131,7 @@ def _select_flask_port(configured: int) -> int | None:
     chosen = _pick_free_port(configured + 1, count=3)
     if chosen is None:
         print(f"[!] No free port in {configured}–{configured + 3}. "
-              f"Close whatever's on {configured} or change flask_port in oblivion_config.json.")
+              f"Close whatever's on {configured} or change flask_port in gamenet98_cs2_config.json.")
         return None
     print(f"[startup] Flask will bind to fallback port {chosen} instead of {configured}")
     _config.FLASK_PORT = chosen

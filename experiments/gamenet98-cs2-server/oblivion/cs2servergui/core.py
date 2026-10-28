@@ -591,14 +591,14 @@ class AppCore:
         self.startup_token: str = ""
 
         # Server config (persisted)
-        self.hostname:             str  = "CS2 Dedicated Server"
+        self.hostname:             str  = "GameNet 98 - CS2 LAN"
         self.sv_password:          str  = ""
         self.gslt_token:           str  = ""   # Steam Game Server Login Token
         self.tickrate_128:         bool = False
         self.auto_start:           bool = False
         self.auto_restart_on_crash: bool = False
         self.bot_difficulty:       str  = "Normal"
-        self.max_players_override: str  = ""
+        self.max_players_override: str  = "5"
         self.presets:              dict[str, dict] = {}
         # v0.10.1 — online-primary veto support
         # public_share_url: when set, captain link cards build the Public
@@ -838,7 +838,7 @@ class AppCore:
             self.steam_password = stored_pw  # legacy plaintext or empty
 
         # ── Server settings ────────────────────────────────────────────────
-        self.hostname              = cfg.get("hostname", "CS2 Dedicated Server")
+        self.hostname              = cfg.get("hostname", "GameNet 98 - CS2 LAN")
         self.sv_password           = cfg.get("sv_password", "")
         self.gslt_token            = cfg.get("gslt_token", "")
         self.tickrate_128          = bool(cfg.get("tickrate_128", False))
@@ -846,7 +846,7 @@ class AppCore:
         self.auto_restart_on_crash = bool(cfg.get("auto_restart_on_crash", False))
         self.bot_difficulty        = cfg.get("bot_difficulty", "Normal")
         self.bots_enabled          = bool(cfg.get("bots_enabled", False))
-        self.max_players_override  = cfg.get("max_players_override", "")
+        self.max_players_override  = cfg.get("max_players_override", "5")
         self.presets               = cfg.get("presets", {})
         # v0.10.1 — online-primary veto support (see __init__ for prose)
         self.public_share_url            = cfg.get("public_share_url", "")
@@ -1031,7 +1031,7 @@ class AppCore:
         return os.path.join(os.path.dirname(_CONFIG_FILE), "backups")
 
     def backup_config(self, reason: str = "manual") -> dict:
-        """Snapshot gamenet98_cs2_config.json to backups/oblivion_config_<ts>_<reason>.json.
+        """Snapshot gamenet98_cs2_config.json to backups/gamenet98_config_<ts>_<reason>.json.
         Returns {filename, path, bytes, reason}.  Quiet no-op when the live
         config file doesn't exist yet (e.g. first run).
         """
@@ -1042,7 +1042,7 @@ class AppCore:
         safe_reason = "".join(c if c.isalnum() or c in "-_" else "-"
                               for c in (reason or "manual"))[:40] or "manual"
         ts = time.strftime("%Y%m%d_%H%M%S")
-        out_name = f"oblivion_config_{ts}_{safe_reason}.json"
+        out_name = f"gamenet98_config_{ts}_{safe_reason}.json"
         out_dir = self._backups_dir()
         try:
             os.makedirs(out_dir, exist_ok=True)
@@ -1058,7 +1058,7 @@ class AppCore:
         try:
             entries = []
             for n in os.listdir(out_dir):
-                if not n.startswith("oblivion_config_") or not n.endswith(".json"):
+                if not n.startswith("gamenet98_config_") or not n.endswith(".json"):
                     continue
                 p = os.path.join(out_dir, n)
                 try:
@@ -1087,15 +1087,15 @@ class AppCore:
         if not os.path.isdir(out_dir):
             return out
         for n in os.listdir(out_dir):
-            if not n.startswith("oblivion_config_") or not n.endswith(".json"):
+            if not n.startswith("gamenet98_config_") or not n.endswith(".json"):
                 continue
             p = os.path.join(out_dir, n)
             try:
                 st = os.stat(p)
             except OSError:
                 continue
-            # Parse: oblivion_config_<ts>_<reason>.json
-            stem = n[len("oblivion_config_"):-len(".json")]
+            # Parse: gamenet98_config_<ts>_<reason>.json
+            stem = n[len("gamenet98_config_"):-len(".json")]
             parts = stem.split("_", 2)    # ts_date, ts_time, reason
             reason = parts[2] if len(parts) >= 3 else ""
             out.append({
@@ -1494,7 +1494,7 @@ class AppCore:
             "+game_mode",     s["game_mode"],
             "-maxplayers",    maxp,
             "+rcon_password", self.rcon_password,
-            "+hostname",      self.hostname or "CS2 Dedicated Server",
+            "+hostname",      self.hostname or "GameNet 98 - CS2 LAN",
         ]
         if self.sv_password:
             cmd += ["+sv_password", self.sv_password]

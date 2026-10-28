@@ -69,7 +69,7 @@ DEPOTDL_RELEASE_URL = (
 APP_VERSION      = "0.1.0"
 
 # ── Plugin registry (v0.15 slice 2) ────────────────────────────────────────────
-# Where the community plugin catalog lives.  Repo: OblivionPluginRegistry.
+# Where the community plugin catalog lives.  Repo: GameNet98PluginRegistry.
 # Pointed at GitHub raw so the app reads the file directly without a build step.
 # If the URL changes (rename, move to another mirror), bump this and ship —
 # the app will fall back to its last cached catalog while operators upgrade.
@@ -79,7 +79,7 @@ APP_VERSION      = "0.1.0"
 # section is empty rather than showing a network error.
 OBLIVION_REGISTRY_URL = (
     "https://raw.githubusercontent.com/oblivion-systems/"
-    "OblivionPluginRegistry/main/catalog.json"
+    "GameNet98PluginRegistry/main/catalog.json"
 )
 # Catalog cache lives next to gamenet98_cs2_config.json so it persists across
 # app restarts and survives in-place upgrades.  TTL = 24 h — refreshed

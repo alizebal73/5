@@ -11,14 +11,14 @@
 
 #define MyAppName      "GameNet 98 CS2 LAN Server"
 #define MyAppVersion   "1.1.0-alpha1"
-#define MyAppPublisher "Oblivion"
+#define MyAppPublisher "GameNet 98"
 #define MyAppURL       "https://github.com/alizebal73/5/tree/tools/gamenet98-cs2-server/experiments/gamenet98-cs2-server/oblivion"
 #define MyAppExeName   "GameNet98CS2Server.exe"
 
 [Setup]
 ; Unique GUID — do not change after first release or existing installs lose their
 ; Add/Remove Programs entry and won't be cleanly updated.
-AppId={{3D7A1F2E-9B4C-4D6E-A8F0-12C3E5D7B9A1}
+AppId={{5A42F901-1C70-4D3D-A17A-98C245B0A622}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}

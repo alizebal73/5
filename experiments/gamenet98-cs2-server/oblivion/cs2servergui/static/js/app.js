@@ -349,7 +349,7 @@ window.addEventListener('hashchange', () => {
 function _notify(title, body) {
   if (!appSettings.notifications) return;
   if (Notification.permission !== 'granted') return;
-  new Notification(title, { body, icon: '/static/images/emblem.png' });
+  new Notification(title, { body, icon: '/static/images/gamenet98.svg' });
 }
 
 function applyState(s) {
@@ -817,9 +817,9 @@ function renderStatusState() {
 
   const stateText = el('sp-state');
   if (stateText) stateText.textContent =
-      cls === 'online'  ? 'Running'
-    : cls === 'booting' ? 'Booting…'
-    :                     'Offline';
+      cls === 'online'  ? 'فعال'
+    : cls === 'booting' ? 'در حال راه‌اندازی…'
+    :                     'خاموش';
 
   const setMeta = (id, val, accent = false) => {
     const e = el(id);
@@ -869,7 +869,7 @@ function renderStatusState() {
   if (matchPanel) {
     if (!isOnline) {
       matchPanel.className = 'match-panel empty';
-      matchPanel.innerHTML = 'Server is offline — start the server to see live match data.';
+      matchPanel.innerHTML = 'سرور خاموش است؛ برای دیدن وضعیت بازی، ابتدا سرور را شروع کن.';
     } else {
       // Rebuild if previously in empty state
       if (matchPanel.classList.contains('empty')) {
@@ -1201,7 +1201,7 @@ async function _renderGettingStartedCard(mountNode) {
     // Session-scoped (not permanent) — operator who refreshes the app
     // gets the card back, so it's easy to recover from an accidental
     // dismiss.  Permanent hide would need a Config toggle.
-    sessionStorage.setItem('oblivion-getting-started-dismissed', '1');
+    sessionStorage.setItem('gamenet98-getting-started-dismissed', '1');
     card.remove();
   });
 
@@ -1221,7 +1221,7 @@ function buildStatusPage() {
   // checklist with action buttons that navigate to the right tab.  Card
   // auto-hides once all three checks pass.  Operator can dismiss for
   // the session via the X button (sessionStorage flag).
-  if (!sessionStorage.getItem('oblivion-getting-started-dismissed')) {
+  if (!sessionStorage.getItem('gamenet98-getting-started-dismissed')) {
     const gsContainer = h('div');
     gsContainer.id = 'getting-started-mount';
     root.appendChild(gsContainer);
@@ -1234,22 +1234,22 @@ function buildStatusPage() {
   sp.innerHTML = `
     <div class="sp-pulse-wrap">
       <span class="sp-pulse"></span>
-      <span class="sp-state" id="sp-state">Offline</span>
+      <span class="sp-state" id="sp-state">خاموش</span>
     </div>
     <div class="sp-meta">
-      <div class="sp-m"><div class="k">Uptime</div><div class="v" id="sp-uptime">—</div></div>
-      <div class="sp-m"><div class="k">Players</div><div class="v" id="sp-players">—</div></div>
-      <div class="sp-m"><div class="k">Tick</div><div class="v" id="sp-tick">—</div></div>
+      <div class="sp-m"><div class="k" >مدت اجرا</div><div class="v" id="sp-uptime">—</div></div>
+      <div class="sp-m"><div class="k" >بازیکنان</div><div class="v" id="sp-players">—</div></div>
+      <div class="sp-m"><div class="k" >تیک</div><div class="v" id="sp-tick">—</div></div>
     </div>
     <div class="sp-controls admin-only">
       <button class="btn btn-green" id="sp-start-btn">
-        ${icon('<polygon points="5 3 19 12 5 21 5 3"/>')} Start
+        ${icon('<polygon points="5 3 19 12 5 21 5 3"/>')} شروع سرور
       </button>
       <button class="btn" id="sp-restart-btn" title="Quick restart — same map &amp; mode">
-        ${icon('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.25"/>')} Restart
+        ${icon('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.25"/>')} راه‌اندازی مجدد
       </button>
       <button class="btn btn-red" id="sp-stop-btn">
-        ${icon('<rect x="5" y="5" width="14" height="14"/>')} Stop
+        ${icon('<rect x="5" y="5" width="14" height="14"/>')} توقف کامل
       </button>
     </div>
   `;
@@ -1298,15 +1298,15 @@ function buildStatusPage() {
   mapCard.id = 'map-mode-card';
   mapCard.style.marginBottom = '14px';
   mapCard.innerHTML = `
-    <div class="card-title">Map &amp; Mode</div>
+    <div class="card-title">نقشه و حالت بازی</div>
     <div class="grid-2">
       <div class="field">
-        <label>Game Mode</label>
+        <label>حالت بازی</label>
         <select class="select" id="mode-select"></select>
         <div id="mode-hint" class="mode-hint hidden"></div>
       </div>
       <div class="field">
-        <label>Map</label>
+        <label>نقشه</label>
         <select class="select" id="map-select"></select>
       </div>
     </div>
@@ -7414,7 +7414,7 @@ function showSetupWizard(status) {
           <span class="lb-bracket lb-tr"></span>
           <span class="lb-bracket lb-bl"></span>
           <span class="lb-bracket lb-br"></span>
-          <img src="/static/images/emblem.png" class="setup-emblem" alt="Oblivion">
+          <img src="/static/images/gamenet98.svg" class="setup-emblem" alt="Oblivion">
         </div>
         <div class="setup-brand">OBLIVION</div>
         <div class="setup-sub">SERVER · TOOL — FIRST-TIME SETUP</div>

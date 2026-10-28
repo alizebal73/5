@@ -1,36 +1,30 @@
 """
-Unit tests for cs2servergui/veto.py — the v0.10.0 VetoSession state machine.
+Isolated test battery for v0.9.2's risky changes.
 
-Covers (all behaviour, not just construction):
- - Legal state transitions: idle → roster → teams → voting → links → veto → finale → complete
- - Illegal transitions rejected with InvalidVetoTransition
- - Roster validation: exactly 10 players, unique names
- - distribute_teams: 5-5 split, reshuffle clears votes
- - Vote counting + tie-revote semantics (single-side and both-side ties)
- - Token issue: single-use, reuse rejected, idempotent for the same caller
- - Token revoke: issues a fresh value, drops state back to `links` if in `veto`
- - Sequence generators: BO1/BO3/BO5 produce the expected ban/pick template
- - perform_step: enforces turn order + legal-move set; identifies decider correctly
- - MatchZy config generation includes the expected fields
- - reset() returns to idle from any state
+Exercises BEHAVIOR (not just construction) of:
+ 1. RCON multi-packet sentinel logic — mock socket, verify concat works
+ 2. execute_retry exception widening
+ 3. server_broadcast `;` / CRLF / backtick / length-cap strip
+ 4. log_save filename uniqueness under hammer
+ 5. Event.wait crash-backoff cancellation semantics
+ 6. _lan_ip cache TTL behaviour
+ 7. _STEAMID_RE length cap
+ 8. save_config atomicity under concurrent reads
+ 9. _lifecycle_lock RLock reentrancy
+10. _netutils sanity against live netstat
 
-Two ways to run (same dual mode as test_v092.py):
-    python tests/test_veto.py        # standalone — exit code 0/1 + [+]/[X] per case
-    pytest tests/test_veto.py        # one pytest case per behaviour
+Two ways to run:
+    python tests/test_v092.py        # standalone script (prints + exit code)
+    pytest tests/test_v092.py        # one pytest case per behaviour
 """
-import os, sys, tempfile, secrets
+import sys, os, tempfile, time, threading, json, struct, secrets
 
-# Make project root importable when run as `pytest tests/test_veto.py`
+# Isolate config writes (per MEMORY.md — AppCore().save_config() writes to the
+# real oblivion_config.json otherwise).  This MUST run before importing config.
+os.environ['APPDATA'] = tempfile.mkdtemp(prefix='oblivion_test_')
+
+# Make the project root importable when run as `pytest tests/test_v092.py`
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# Isolate config writes (per MEMORY.md) before any import touches config
-os.environ.setdefault('APPDATA', tempfile.mkdtemp(prefix='oblivion_veto_test_'))
-
-from cs2servergui import veto as V
-from cs2servergui.veto import (
-    VetoSession, RosterPlayer,
-    InvalidVetoTransition, VetoStageError, VetoError,
-)
-from cs2servergui.config import ACTIVE_DUTY_POOL
 
 results = []
 def t(name, fn):
@@ -41,1189 +35,596 @@ def t(name, fn):
         results.append((False, name, f'EXC: {type(e).__name__}: {e}'))
 
 
-# ─── Fixtures ─────────────────────────────────────────────────────────────
-def _ten_players(prefix: str = 'p') -> list[RosterPlayer]:
-    return [RosterPlayer(name=f'{prefix}{i}', steam_id=f'STEAM_{i}') for i in range(10)]
-
-
-class _DeterministicRNG:
-    """Wraps secrets.SystemRandom but with a fixed seed-equivalent shuffle.
-    For tests we override .shuffle to do nothing — preserves input order so
-    team A = first 5 in roster order, team B = last 5."""
-    def shuffle(self, seq):  # noqa: D401
-        return None
-
-
-def _make_to(state: str) -> VetoSession:
-    """Build a session pre-advanced to `state` for test isolation."""
-    s = V.create_session(mode='BO3')
-    if state == 'roster':
-        return s
-    V.set_roster(s, 'A', 'B', _ten_players())
-    if state == 'teams':
-        V.distribute_teams(s, rng=_DeterministicRNG())
-        return s
-    V.distribute_teams(s, rng=_DeterministicRNG())
-    V.start_voting(s)
-    if state == 'voting':
-        return s
-    # Force unanimous votes for player 0 on both teams
-    for voter in range(5):
-        V.cast_vote(s, 'A', voter, 0)
-        V.cast_vote(s, 'B', voter, 0)
-    V.resolve_captains(s)
-    if state == 'links':
-        return s
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='captainA')
-    V.claim_captain(s, tokens['B'], caller_id='captainB')
-    if state == 'veto':
-        return s
-    # Run a full BO3 (6 steps) so we land in finale.
-    # Pool order is ACTIVE_DUTY_POOL — bans/picks chosen so the decider is
-    # unambiguous (the only map left after the bans).
-    pool = list(s.map_pool)
-    # B-B-P-P-B-B sequence: ban[0]A, ban[1]B, pick[2]A, pick[3]B, ban[4]A, ban[5]B
-    V.perform_step(s, 'A', pool[0])   # ban
-    V.perform_step(s, 'B', pool[1])   # ban
-    V.perform_step(s, 'A', pool[2])   # pick
-    V.perform_step(s, 'B', pool[3])   # pick
-    V.perform_step(s, 'A', pool[4])   # ban
-    V.perform_step(s, 'B', pool[5])   # ban
-    # last surviving map = pool[6] = decider
-    if state == 'finale':
-        return s
-    V.build_matchzy_config(s)
-    V.complete(s)
-    return s
-
-
-# ═══ Construction + create_session ═══════════════════════════════════════
-def t_create_default():
-    s = V.create_session()
-    return (s.state == 'roster' and s.mode == 'BO3'
-            and s.map_pool == list(ACTIVE_DUTY_POOL)), \
-           f'state={s.state} mode={s.mode} pool_len={len(s.map_pool)}'
-t('create_session: defaults to BO3 + active-duty pool, state=roster', t_create_default)
-
-
-def t_create_bad_mode():
-    try:
-        V.create_session(mode='BO7')
-        return False, 'should have raised'
-    except VetoError as e:
-        return True, str(e)
-t('create_session: invalid mode raises VetoError', t_create_bad_mode)
-
-
-def t_create_pool_wrong_size():
-    try:
-        V.create_session(map_pool=['de_dust2'])
-        return False, 'should have raised'
-    except VetoError:
-        return True, ''
-t('create_session: pool != 7 entries raises VetoError', t_create_pool_wrong_size)
-
-
-def t_create_pool_duplicates():
-    try:
-        V.create_session(map_pool=['de_dust2'] * 7)
-        return False, 'should have raised'
-    except VetoError:
-        return True, ''
-t('create_session: pool with duplicates raises VetoError', t_create_pool_duplicates)
-
-
-def t_create_pool_override():
-    pool = ['de_dust2', 'de_mirage', 'de_inferno', 'de_ancient',
-            'de_anubis', 'de_nuke', 'wp_workshop_123']
-    s = V.create_session(map_pool=pool)
-    return s.map_pool == pool, f'pool={s.map_pool}'
-t('create_session: custom 7-entry pool accepted (per-veto override)', t_create_pool_override)
-
-
-# ═══ Roster ═══════════════════════════════════════════════════════════════
-def t_roster_legal():
-    s = _make_to('roster')
-    players = _ten_players()
-    V.set_roster(s, 'Alpha', 'Bravo', players)
-    return (s.team_a_name == 'Alpha' and s.team_b_name == 'Bravo'
-            and len(s.roster) == 10), f'A={s.team_a_name} B={s.team_b_name} n={len(s.roster)}'
-t('set_roster: 10 valid players accepted', t_roster_legal)
-
-
-def t_roster_nine_rejected():
-    s = _make_to('roster')
-    try:
-        V.set_roster(s, 'A', 'B', _ten_players()[:9])
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('set_roster: 9 players rejected', t_roster_nine_rejected)
-
-
-def t_roster_duplicate_names():
-    s = _make_to('roster')
-    players = _ten_players()
-    players[5] = RosterPlayer(name='p0', steam_id='STEAM_X')   # dup of [0]
-    try:
-        V.set_roster(s, 'A', 'B', players)
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('set_roster: duplicate names rejected', t_roster_duplicate_names)
-
-
-def t_roster_wrong_state():
-    s = _make_to('teams')
-    try:
-        V.set_roster(s, 'A', 'B', _ten_players())
-        return False, 'should have raised'
-    except InvalidVetoTransition:
-        return True, ''
-t('set_roster: not in roster state rejected', t_roster_wrong_state)
-
-
-def t_roster_duplicate_steamid_rejected():
-    """v0.11.17 A1 — set_roster refuses two players with the same non-empty
-    SteamID.  Pre-A1, the duplicate would silently overwrite the first
-    player in MatchZy's team config (dict keyed by steam_id), producing a
-    9-and-5 team split that MatchZy refuses to load."""
-    s = _make_to('roster')
-    players = _ten_players()
-    # _ten_players gives each a unique STEAM_<i>; force two duplicates.
-    players[3] = RosterPlayer(name='p3', steam_id='76561198000000005')
-    players[7] = RosterPlayer(name='p7', steam_id='76561198000000005')
-    try:
-        V.set_roster(s, 'A', 'B', players)
-        return False, 'should have raised'
-    except VetoStageError as e:
-        # Error message should name the duplicated ID so the operator can fix it
-        msg = str(e)
-        return ('76561198000000005' in msg and 'Duplicate' in msg), \
-               f'msg={msg!r}'
-t('set_roster: duplicate non-empty SteamID rejected (v0.11.17 A1)',
-  t_roster_duplicate_steamid_rejected)
-
-
-def t_roster_multiple_empty_steamids_ok():
-    """v0.11.17 A1 — multiple EMPTY steam_ids are NOT considered duplicates.
-    Operator may onboard a roster with some players' IDs filled in and
-    others to-be-confirmed; the duplicate check only fires on non-empty
-    IDs that collide."""
-    s = _make_to('roster')
-    players = _ten_players()
-    # Blank out two players' steam_ids — should still validate.
-    players[1] = RosterPlayer(name='p1', steam_id='')
-    players[4] = RosterPlayer(name='p4', steam_id='')
-    try:
-        V.set_roster(s, 'A', 'B', players)
-        return s.team_a_name == 'A' and len(s.roster) == 10, ''
-    except Exception as e:
-        return False, f'unexpectedly raised: {e}'
-t('set_roster: multiple empty SteamIDs are allowed (v0.11.17 A1)',
-  t_roster_multiple_empty_steamids_ok)
-
-
-def t_rematch_clears_live_embed_msg_id():
-    """v0.11.17 A2 — rematch() must clear live_embed_msg_id so the bot posts
-    a FRESH embed for the new series.  Pre-A2 the bot would edit the prior
-    series's "MATCH LOCKED IN" embed, showing yesterday's result in
-    today's veto channel."""
-    s = _make_to('complete')
-    s.live_embed_msg_id = '12345678901234567890'   # simulate prior embed
-    V.rematch(s)
-    return s.live_embed_msg_id == '', \
-           f'live_embed_msg_id should be cleared, got {s.live_embed_msg_id!r}'
-t('rematch: clears live_embed_msg_id so new series gets fresh embed (v0.11.17 A2)',
-  t_rematch_clears_live_embed_msg_id)
-
-
-# ═══ distribute_teams ═════════════════════════════════════════════════════
-def t_distribute_5_5():
-    s = _make_to('roster')
-    V.set_roster(s, 'A', 'B', _ten_players())   # populate before distribute
-    V.distribute_teams(s, rng=_DeterministicRNG())
-    return (s.state == 'teams' and len(s.team_a) == 5 and len(s.team_b) == 5), \
-           f'A={len(s.team_a)} B={len(s.team_b)}'
-t('distribute_teams: 5-5 split, state=teams', t_distribute_5_5)
-
-
-def t_reshuffle_clears_votes():
-    s = _make_to('voting')
-    V.cast_vote(s, 'A', 0, 1)
-    V.cast_vote(s, 'B', 0, 1)
-    # Reshuffle requires being in `teams`; voting → teams is NOT in our
-    # transition table, so reshuffling once you've voted requires going
-    # back via the operator path.  Test the documented flow:
-    #   voting → reset → roster → distribute → teams.
-    V.reset(s)
-    V.create_session()  # just to confirm clean state — not assigning here
-    return (s.state == 'idle' and not s.votes_a and not s.votes_b), \
-           f'state={s.state}'
-t('reset from voting clears votes + returns to idle', t_reshuffle_clears_votes)
-
-
-def t_distribute_from_teams_is_reshuffle():
-    s = _make_to('teams')
-    a_before = [p.name for p in s.team_a]
-    # Force a non-trivial shuffle this time
-    V.distribute_teams(s, rng=secrets.SystemRandom())
-    return s.state == 'teams' and len(s.team_a) == 5, f'state={s.state}'
-t('distribute_teams while in teams = reshuffle (state stays teams)', t_distribute_from_teams_is_reshuffle)
-
-
-# ═══ Voting + captain election ════════════════════════════════════════════
-def t_voting_unanimous():
-    s = _make_to('voting')
-    for v in range(5):
-        V.cast_vote(s, 'A', v, 2)
-        V.cast_vote(s, 'B', v, 3)
-    outcome = V.resolve_captains(s)
-    return (outcome == 'elected' and s.state == 'links'
-            and s.captain_a_idx == 2 and s.captain_b_idx == 3), \
-           f'outcome={outcome} state={s.state} capA={s.captain_a_idx} capB={s.captain_b_idx}'
-t('vote: unanimous → both elected → links state', t_voting_unanimous)
-
-
-def t_voting_tie_team_a():
-    s = _make_to('voting')
-    # Team A: 2 votes for idx 0, 2 votes for idx 1, 1 for idx 2 → tie 0/1
-    V.cast_vote(s, 'A', 0, 0)
-    V.cast_vote(s, 'A', 1, 0)
-    V.cast_vote(s, 'A', 2, 1)
-    V.cast_vote(s, 'A', 3, 1)
-    V.cast_vote(s, 'A', 4, 2)
-    # Team B: all 4 votes for idx 0
-    for v in range(5):
-        V.cast_vote(s, 'B', v, 0)
-    outcome = V.resolve_captains(s)
-    return (outcome == 'revote_a' and s.state == 'voting'
-            and not s.votes_a and len(s.votes_b) == 5
-            and s.revote_count == 1), \
-           f'outcome={outcome} state={s.state} a={len(s.votes_a)} b={len(s.votes_b)}'
-t('vote: A tied, B clean → revote_a, A votes cleared, B kept', t_voting_tie_team_a)
-
-
-def t_voting_tie_both():
-    s = _make_to('voting')
-    for v in range(5):
-        V.cast_vote(s, 'A', v, v % 2)
-        V.cast_vote(s, 'B', v, v % 2)
-    # Both teams have a 3-2 split between idx 0 and idx 1 — that's NOT a tie
-    # (idx 0 wins 3-2). Force a real tie: even split impossible with 5 voters,
-    # so use 2-2-1 instead.
-    s.votes_a = {0: 0, 1: 0, 2: 1, 3: 1, 4: 2}
-    s.votes_b = {0: 0, 1: 0, 2: 1, 3: 1, 4: 2}
-    outcome = V.resolve_captains(s)
-    return (outcome == 'revote_both' and not s.votes_a and not s.votes_b
-            and s.revote_count == 1), \
-           f'outcome={outcome} a={len(s.votes_a)} b={len(s.votes_b)} revotes={s.revote_count}'
-t('vote: both teams tied → revote_both, all votes cleared', t_voting_tie_both)
-
-
-def t_vote_change_overwrites():
-    s = _make_to('voting')
-    V.cast_vote(s, 'A', 0, 1)
-    V.cast_vote(s, 'A', 0, 2)   # change of mind
-    return s.votes_a[0] == 2, f'votes_a[0]={s.votes_a[0]}'
-t('cast_vote: re-cast overwrites previous vote', t_vote_change_overwrites)
-
-
-def t_vote_bad_indices():
-    s = _make_to('voting')
-    failed = 0
-    for bad in [(-1, 0), (5, 0), (0, -1), (0, 5)]:
-        try:
-            V.cast_vote(s, 'A', *bad)
-        except VetoStageError:
-            failed += 1
-    return failed == 4, f'rejected={failed}/4'
-t('cast_vote: indices outside 0..4 rejected', t_vote_bad_indices)
-
-
-def t_resolve_incomplete():
-    s = _make_to('voting')
-    V.cast_vote(s, 'A', 0, 0)   # only 1 vote, not 10
-    try:
-        V.resolve_captains(s)
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('resolve_captains: refuses if votes incomplete', t_resolve_incomplete)
-
-
-# ═══ Tokens ═══════════════════════════════════════════════════════════════
-def t_tokens_issued():
-    s = _make_to('links')
-    tokens = V.issue_tokens(s)
-    return (set(tokens.keys()) == {'A', 'B'}
-            and len(tokens['A']) > 30 and len(tokens['B']) > 30
-            and tokens['A'] != tokens['B']
-            and not s.tokens['A'].used and not s.tokens['B'].used), \
-           f"tokens={list(tokens.keys())}"
-t('issue_tokens: mints two distinct unused tokens', t_tokens_issued)
-
-
-def t_claim_advances_state():
-    s = _make_to('links')
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='alice')
-    in_links = s.state == 'links'   # not yet — only one claimed
-    V.claim_captain(s, tokens['B'], caller_id='bob')
-    return (in_links and s.state == 'veto' and len(s.sequence) == 6), \
-           f'after_A_in_links={in_links} after_B_state={s.state} seq_len={len(s.sequence)}'
-t('claim_captain: state → veto only when BOTH tokens claimed', t_claim_advances_state)
-
-
-def t_claim_reuse_rejected():
-    s = _make_to('links')
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='alice')
-    try:
-        V.claim_captain(s, tokens['A'], caller_id='mallory')
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('claim_captain: token reuse by different caller rejected', t_claim_reuse_rejected)
-
-
-def t_claim_idempotent_same_caller():
-    s = _make_to('links')
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='alice')
-    # Same alice re-opens link in another tab → should be accepted, return 'A'
-    team = V.claim_captain(s, tokens['A'], caller_id='alice')
-    return team == 'A', f'team={team}'
-t('claim_captain: re-claim by same caller is idempotent', t_claim_idempotent_same_caller)
-
-
-def t_claim_unknown_token():
-    s = _make_to('links')
-    V.issue_tokens(s)
-    try:
-        V.claim_captain(s, 'definitely-not-a-real-token', caller_id='alice')
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('claim_captain: unknown token rejected', t_claim_unknown_token)
-
-
-def t_revoke_token():
-    s = _make_to('veto')   # both captains already claimed
-    old = s.tokens['A'].value
-    new = V.revoke_token(s, 'A')
-    return (new != old and not s.tokens['A'].used
-            and s.state == 'links'   # dropped back from veto
-            and s.tokens['B'].used), \
-           f'state={s.state} new!=old={new!=old} A_used={s.tokens["A"].used}'
-t('revoke_token: from veto re-issues fresh token + drops back to links', t_revoke_token)
-
-
-# ═══ Veto sequence + perform_step ═════════════════════════════════════════
-def t_sequence_bo3():
-    s = _make_to('veto')
-    return ([(x.kind, x.team) for x in s.sequence] == [
-        ('BAN','A'), ('BAN','B'),
-        ('PICK','A'), ('PICK','B'),
-        ('BAN','A'), ('BAN','B'),
-    ]), f'seq={[(x.kind,x.team) for x in s.sequence]}'
-t('sequence: BO3 = ban-ban-pick-pick-ban-ban', t_sequence_bo3)
-
-
-def t_sequence_bo1():
-    s = V.create_session(mode='BO1')
-    V.set_roster(s, 'A', 'B', _ten_players())
-    V.distribute_teams(s, rng=_DeterministicRNG())
-    V.start_voting(s)
-    for v in range(5):
-        V.cast_vote(s, 'A', v, 0); V.cast_vote(s, 'B', v, 0)
-    V.resolve_captains(s)
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], 'a'); V.claim_captain(s, tokens['B'], 'b')
-    return ([(x.kind, x.team) for x in s.sequence] == [
-        ('BAN','A'), ('BAN','B'), ('BAN','A'),
-        ('BAN','B'), ('BAN','A'), ('BAN','B'),
-    ]), f'seq={[(x.kind,x.team) for x in s.sequence]}'
-t('sequence: BO1 = 6 bans', t_sequence_bo1)
-
-
-def t_perform_wrong_team():
-    s = _make_to('veto')
-    # Step 0 is team A's BAN — team B trying to act on it should fail
-    try:
-        V.perform_step(s, 'B', s.map_pool[0])
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('perform_step: wrong team rejected', t_perform_wrong_team)
-
-
-def t_perform_banned_map():
-    s = _make_to('veto')
-    pool = list(s.map_pool)
-    V.perform_step(s, 'A', pool[0])   # A bans pool[0]
-    try:
-        V.perform_step(s, 'B', pool[0])   # B tries to act on banned map
-        return False, 'should have raised'
-    except VetoStageError:
-        return True, ''
-t('perform_step: previously-banned map rejected', t_perform_banned_map)
-
-
-def t_decider_correct():
-    s = _make_to('finale')
-    # After _make_to('finale') ran: bans were pool[0,1,4,5]; picks were pool[2,3]
-    # Decider should be pool[6] (the unbanned, unpicked remainder)
-    pool = list(ACTIVE_DUTY_POOL)
-    return (s.decider == pool[6]
-            and s.final_maps == [pool[2], pool[3], pool[6]]
-            and s.state == 'finale'), \
-           f'decider={s.decider} finals={s.final_maps} state={s.state}'
-t('decider: correctly identified as the last unbanned map', t_decider_correct)
-
-
-# ═══ MatchZy config generation ════════════════════════════════════════════
-def t_matchzy_config_shape():
-    s = _make_to('finale')
-    cfg = V.build_matchzy_config(s)
-    keys = set(cfg.keys())
-    expected = {'matchid', 'num_maps', 'maplist', 'players_per_team',
-                'team1', 'team2', 'cvars', '_oblivion_meta'}
-    return (expected.issubset(keys)
-            and cfg['num_maps'] == 3
-            and cfg['players_per_team'] == 5
-            and len(cfg['maplist']) == 3
-            and cfg['team1']['name'] == s.team_a_name
-            and len(cfg['team1']['players']) == 5
-            and cfg['_oblivion_meta']['decider'] == s.decider
-            and len(cfg['_oblivion_meta']['vetoes']) == 6), \
-           f'keys={sorted(keys)[:5]} num_maps={cfg["num_maps"]}'
-t('build_matchzy_config: contains expected fields + correct counts', t_matchzy_config_shape)
-
-
-def t_matchzy_config_wrong_state():
-    s = _make_to('roster')
-    try:
-        V.build_matchzy_config(s)
-        return False, 'should have raised'
-    except InvalidVetoTransition:
-        return True, ''
-t('build_matchzy_config: rejects non-finale/complete state', t_matchzy_config_wrong_state)
-
-
-# ═══ Reset ════════════════════════════════════════════════════════════════
-def t_reset_from_veto():
-    s = _make_to('veto')
-    V.reset(s)
-    return (s.state == 'idle' and not s.roster and not s.team_a
-            and not s.sequence and not s.tokens), \
-           f'state={s.state}'
-t('reset: from veto → idle with all state cleared', t_reset_from_veto)
-
-
-def t_reset_from_finale():
-    s = _make_to('finale')
-    V.reset(s)
-    return s.state == 'idle' and not s.final_maps, f'state={s.state}'
-t('reset: from finale → idle', t_reset_from_finale)
-
-
-def t_reset_from_idle_ok():
-    s = V.VetoSession()
-    V.reset(s)   # should be a no-op, not an error
-    return s.state == 'idle', f'state={s.state}'
-t('reset: from idle is a no-op (legal)', t_reset_from_idle_ok)
-
-
-# ═══ Day 7 — Edge cases the earlier batches didn't cover ═════════════════
-# These hunt the corners that bit us in past releases: input boundaries,
-# state-transition completeness, threading reentrancy, and the "what if
-# the operator does X mid-flow" shapes.
-
-def t_sequence_bo5_length():
-    """BO5 = ban-ban-pick-pick-pick-pick + decider = 6 steps + 5 final maps
-    (4 picks + 1 decider).  The Day 1 unit tests verified BO1 + BO3 but
-    not BO5 — close that gap before tagging."""
-    s = V.create_session(mode='BO5')
-    V.set_roster(s, 'A', 'B', _ten_players())
-    V.distribute_teams(s, rng=_DeterministicRNG())
-    V.start_voting(s)
-    for voter in range(5):
-        V.cast_vote(s, 'A', voter, 0); V.cast_vote(s, 'B', voter, 0)
-    V.resolve_captains(s)
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='ca')
-    V.claim_captain(s, tokens['B'], caller_id='cb')
-    kinds = [st.kind for st in s.sequence]
-    # BO5: 2 bans, 4 picks, 0 more bans (the leftover is the decider).
-    expected_kinds = ['BAN','BAN','PICK','PICK','PICK','PICK']
-    return (s.mode == 'BO5'
-            and len(s.sequence) == 6
-            and kinds == expected_kinds), \
-           f'mode={s.mode} kinds={kinds} len={len(s.sequence)}'
-t('sequence: BO5 = ban-ban-pick-pick-pick-pick (6 steps, 5 final maps)', t_sequence_bo5_length)
-
-
-def t_sequence_bo5_final_count():
-    """End-to-end BO5: walk the 6 steps and verify final_maps = 5 maps
-    with the decider as the last unbanned one."""
-    s = V.create_session(mode='BO5')
-    V.set_roster(s, 'A', 'B', _ten_players())
-    V.distribute_teams(s, rng=_DeterministicRNG())
-    V.start_voting(s)
-    for voter in range(5):
-        V.cast_vote(s, 'A', voter, 0); V.cast_vote(s, 'B', voter, 0)
-    V.resolve_captains(s)
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='ca')
-    V.claim_captain(s, tokens['B'], caller_id='cb')
-    pool = list(s.map_pool)
-    # BO5 sequence: ban A, ban B, pick A, pick B, pick A, pick B → decider
-    V.perform_step(s, 'A', pool[0])
-    V.perform_step(s, 'B', pool[1])
-    V.perform_step(s, 'A', pool[2])
-    V.perform_step(s, 'B', pool[3])
-    V.perform_step(s, 'A', pool[4])
-    V.perform_step(s, 'B', pool[5])
-    # Decider should be the only unbanned + unpicked map = pool[6]
-    return (s.state == 'finale'
-            and len(s.final_maps) == 5
-            and s.decider == pool[6]
-            and s.final_maps[-1] == pool[6]), \
-           f'state={s.state} final_maps={s.final_maps} decider={s.decider}'
-t('sequence: BO5 full walk → 5 final maps, decider = last unbanned', t_sequence_bo5_final_count)
-
-
-def t_matchzy_config_excludes_steamidless_players():
-    """A player with empty steam_id must be omitted from MatchZy's
-    {steamid: name} team dict (MatchZy can't address them).  Mixed
-    rosters (some have IDs, some don't) should still produce a usable
-    config — just with fewer than 5 addressable players per team."""
-    s = V.create_session(mode='BO3')
-    # 8 with IDs, 2 without — distribution will end up 5-5 but one of the
-    # two ID-less ones must land in each team for the test to bite.  We
-    # control distribution via deterministic shuffle so first-5/last-5.
-    roster = [
-        RosterPlayer(name=f'p{i}', steam_id=(f'STEAM_{i}' if i < 4 else ''))
-        for i in range(5)
-    ] + [
-        RosterPlayer(name=f'q{i}', steam_id=(f'STEAM_q{i}' if i < 4 else ''))
-        for i in range(5)
+# ════════════════════════════════════════════════════════════════════
+# Helpers
+# ════════════════════════════════════════════════════════════════════
+class MockSocket:
+    """Stand-in for socket.socket(SOCK_STREAM) — replays canned recv bytes."""
+    def __init__(self, recv_packets):
+        # recv_packets is a list of byte chunks; recv() drains them in order
+        self.buffer = b''.join(recv_packets)
+        self.sent = b''
+    def settimeout(self, _): pass
+    def connect(self, _): pass
+    def sendall(self, data): self.sent += data
+    def recv(self, n):
+        if not self.buffer: return b''
+        out, self.buffer = self.buffer[:n], self.buffer[n:]
+        return out
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+
+
+def make_pkt(pkt_id, pkt_type, body_bytes):
+    """Build a Source RCON packet matching rcon.py:_pack format."""
+    data = body_bytes + b'\x00\x00'
+    return struct.pack('<iii', 8 + len(data), pkt_id, pkt_type) + data
+
+
+# ════════════════════════════════════════════════════════════════════
+# 1) RCON multi-packet sentinel
+# ════════════════════════════════════════════════════════════════════
+print('=== RCON multi-packet sentinel ===')
+from cs2servergui.rcon import RCONClient
+
+
+def t_rcon_multipacket():
+    """Server sends 3 fragments for the real command, then sentinel — all concat."""
+    # IDs: aid=1 (auth), cid=2 (cmd), sid=3 (sentinel) per rcon.py:_next_id
+    packets = [
+        make_pkt(1, 2, b''),               # auth ack
+        make_pkt(2, 0, b'frag1-'),         # cmd response part 1
+        make_pkt(2, 0, b'frag2-'),         # cmd response part 2
+        make_pkt(2, 0, b'frag3-end'),      # cmd response part 3
+        make_pkt(3, 0, b''),               # sentinel terminator
     ]
-    V.set_roster(s, 'A', 'B', roster)
-    V.distribute_teams(s, rng=_DeterministicRNG())
-    # Drive to finale
-    V.start_voting(s)
-    for voter in range(5):
-        V.cast_vote(s, 'A', voter, 0); V.cast_vote(s, 'B', voter, 0)
-    V.resolve_captains(s)
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='ca')
-    V.claim_captain(s, tokens['B'], caller_id='cb')
-    pool = list(s.map_pool)
-    for cap, m in zip(['A','B','A','B','A','B'], pool[:6]):
-        V.perform_step(s, cap, m)
-    cfg = V.build_matchzy_config(s)
-    # Each team had 5 players, 4 with IDs + 1 without.  MatchZy dict
-    # should contain only the 4 with IDs — empty string is not a key.
-    return (len(cfg['team1']['players']) == 4
-            and len(cfg['team2']['players']) == 4
-            and '' not in cfg['team1']['players']
-            and '' not in cfg['team2']['players']), \
-           f"team1={cfg['team1']['players']} team2={cfg['team2']['players']}"
-t('build_matchzy_config: players without steam_id excluded from team dict', t_matchzy_config_excludes_steamidless_players)
-
-
-def t_matchzy_config_matchid_format():
-    """matchid must be a non-empty string starting with our tool prefix
-    so MatchZy logs + the operator can grep their CS2 console for it."""
-    s = _make_to('finale')
-    cfg = V.build_matchzy_config(s)
-    mid = cfg['matchid']
-    return (isinstance(mid, str)
-            and mid.startswith('oblivion-veto-')
-            and len(mid) > len('oblivion-veto-')), \
-           f'matchid={mid!r}'
-t('build_matchzy_config: matchid uses `oblivion-veto-<ts>` format', t_matchzy_config_matchid_format)
-
-
-def t_matchzy_cvars_defaults_when_no_override():
-    """v0.11.0 polish: with no override dict, cvars contain the
-    conservative defaults (warmup pausetimer 0 + min ready 2)."""
-    s = _make_to('finale')
-    cfg = V.build_matchzy_config(s)
-    cv = cfg.get('cvars', {})
-    return (cv.get('mp_warmup_pausetimer') == '0'
-            and cv.get('matchzy_minimum_ready_required') == '2'), f'cvars={cv}'
-t('build_matchzy_config: default cvars present when no overrides', t_matchzy_cvars_defaults_when_no_override)
-
-
-def t_matchzy_cvars_override_wins():
-    """v0.11.0 polish: operator override wins on conflict + adds new keys."""
-    s = _make_to('finale')
-    cfg = V.build_matchzy_config(s, cvar_overrides={
-        'mp_warmup_pausetimer':    '5',      # override default
-        'matchzy_knife_enabled':   '1',      # new
-    })
-    cv = cfg['cvars']
-    return (cv['mp_warmup_pausetimer'] == '5'
-            and cv['matchzy_knife_enabled'] == '1'
-            and cv['matchzy_minimum_ready_required'] == '2'  # untouched default still there
-           ), f'cvars={cv}'
-t('build_matchzy_config: operator cvar override wins on conflict', t_matchzy_cvars_override_wins)
-
-
-def t_matchzy_cvars_blank_suppresses_default():
-    """v0.11.0 polish: blank-string value actively REMOVES a default
-    so the operator can suppress something they don't want sent."""
-    s = _make_to('finale')
-    cfg = V.build_matchzy_config(s, cvar_overrides={
-        'mp_warmup_pausetimer': '',   # suppress
-    })
-    cv = cfg['cvars']
-    return ('mp_warmup_pausetimer' not in cv
-            and cv['matchzy_minimum_ready_required'] == '2'
-           ), f'cvars={cv}'
-t('build_matchzy_config: blank-value cvar suppresses the default', t_matchzy_cvars_blank_suppresses_default)
-
-
-def t_matchzy_cvars_ignores_blank_keys():
-    """v0.11.0 polish: blank/whitespace keys are dropped silently (an
-    abandoned editor row in the SPA shouldn't crash the finale)."""
-    s = _make_to('finale')
-    cfg = V.build_matchzy_config(s, cvar_overrides={
-        '':       'foo',
-        '   ':    'bar',
-        'real':   'value',
-    })
-    cv = cfg['cvars']
-    return ('' not in cv and '   ' not in cv and cv.get('real') == 'value'), f'cvars={cv}'
-t('build_matchzy_config: blank cvar keys are dropped silently', t_matchzy_cvars_ignores_blank_keys)
-
-
-def t_spectator_token_idempotent_then_rotate():
-    """v0.11.0 polish: issue → same call returns same token; rotate
-    mints a different one + bumps updated_at."""
-    s = _make_to('finale')
-    t1 = V.issue_spectator_token(s)
-    t2 = V.issue_spectator_token(s)
-    t3 = V.rotate_spectator_token(s)
-    return (t1 == t2 and t1 != t3 and len(t1) >= 20), f't1={t1!r} t2={t2!r} t3={t3!r}'
-t('spectator: issue idempotent + rotate mints fresh token', t_spectator_token_idempotent_then_rotate)
-
-
-def t_spectator_snapshot_strips_pii():
-    """v0.11.0 polish: build_spectator_snapshot masks SteamIDs (no full
-    17-digit value), omits Discord IDs (no 'discord_id' key anywhere),
-    and excludes captain tokens (no 'tokens' key at all)."""
-    s = _make_to('finale')
-    # Plant a Discord ID + a real-shape SteamID in team_a[0] so we can
-    # check they don't survive into the snapshot.
-    s.team_a[0].discord_id = '123456789012345678'
-    s.team_a[0].steam_id   = '76561198000000001'
-    snap = V.build_spectator_snapshot(s)
-    blob = repr(snap)
-    return ('123456789012345678' not in blob       # discord id gone
-            and '76561198000000001' not in blob    # full steam id gone
-            and 'tokens' not in snap               # captain tokens absent
-            and 'matchzy_config' not in snap       # admin payload absent
-            and 'discord_id' not in blob           # field name itself absent
-           ), f'snapshot keys={list(snap.keys())}'
-t('spectator: snapshot strips discord/steam/tokens PII', t_spectator_snapshot_strips_pii)
-
-
-def t_serialize_deserialize_roundtrip_basic():
-    """v0.11.3 — serialize/deserialize round-trip preserves every
-    significant field on a fresh session at every state we can
-    construct in-test."""
-    s = _make_to('finale')
-    s.live_embed_msg_id = 'msg_12345'
-    s.spectator_token = 'spec_xyz'
-    blob = V.serialize_session(s)
-    s2 = V.deserialize_session(blob)
-    return (
-        s2.state == s.state
-        and s2.mode == s.mode
-        and s2.team_a_name == s.team_a_name
-        and s2.team_b_name == s.team_b_name
-        and len(s2.team_a) == len(s.team_a)
-        and s2.team_a[0].name == s.team_a[0].name
-        and s2.team_a[0].steam_id == s.team_a[0].steam_id
-        and s2.captain_a_idx == s.captain_a_idx
-        and s2.captain_b_idx == s.captain_b_idx
-        and s2.final_maps == s.final_maps
-        and s2.decider == s.decider
-        and s2.live_embed_msg_id == 'msg_12345'
-        and s2.spectator_token == 'spec_xyz'
-    ), f'fields drifted on round-trip'
-t('serialize/deserialize: basic round-trip preserves all fields', t_serialize_deserialize_roundtrip_basic)
-
-
-def t_serialize_preserves_tokens_with_claim_state():
-    """v0.11.3 — captain tokens (including claimed_by, used flags) survive
-    JSON round-trip.  This is the load-bearing case: an app restart
-    mid-session must NOT log captains out by losing their claim binding."""
-    s = _make_to('links')
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='cap_a_phone')
-    V.claim_captain(s, tokens['B'], caller_id='cap_b_laptop')
-    # State has now advanced to 'veto'; tokens are claimed by callers.
-    blob = V.serialize_session(s)
-    # Force through JSON to catch any non-JSONable types.
-    import json
-    s2 = V.deserialize_session(json.loads(json.dumps(blob)))
-    return (
-        s2.state == 'veto'
-        and s2.tokens['A'].used is True
-        and s2.tokens['A'].claimed_by == 'cap_a_phone'
-        and s2.tokens['B'].used is True
-        and s2.tokens['B'].claimed_by == 'cap_b_laptop'
-        and s2.tokens['A'].value == s.tokens['A'].value
-    ), f"tokens={ {t: {'used': v.used, 'claimed_by': v.claimed_by} for t, v in s2.tokens.items()} }"
-t('serialize/deserialize: token claim state survives round-trip', t_serialize_preserves_tokens_with_claim_state)
-
-
-def t_serialize_preserves_partial_veto_sequence():
-    """v0.11.3 — when an app dies mid-veto (e.g. after 2 of 6 ban/picks),
-    serialize must capture the partial sequence + current_step so the
-    resumed session knows whose turn is next."""
-    s = _make_to('links')
-    tokens = V.issue_tokens(s)
-    V.claim_captain(s, tokens['A'], caller_id='a')
-    V.claim_captain(s, tokens['B'], caller_id='b')
-    # We're in 'veto' state now.  Perform 2 steps.
-    V.perform_step(s, 'A', s.map_pool[0])
-    V.perform_step(s, 'B', s.map_pool[1])
-    blob = V.serialize_session(s)
-    import json
-    s2 = V.deserialize_session(json.loads(json.dumps(blob)))
-    return (
-        s2.state == 'veto'
-        and s2.current_step == 2
-        and s2.sequence[0].map_id == s.sequence[0].map_id
-        and s2.sequence[1].map_id == s.sequence[1].map_id
-    ), f'partial sequence not preserved: step={s2.current_step}'
-t('serialize/deserialize: partial veto sequence survives round-trip', t_serialize_preserves_partial_veto_sequence)
-
-
-def t_deserialize_tolerates_unknown_fields():
-    """v0.11.3 — deserialization is defensive: an old persistence file
-    from before a new field was added doesn't crash the load.  Unknown
-    fields ignored; missing fields default sensibly."""
-    blob = {
-        'state':         'roster',
-        'mode':          'BO3',
-        'team_a_name':   'TestA',
-        'team_b_name':   'TestB',
-        'roster':        [],
-        'unknown_future_field': 'whatever',
-    }
+    mock = MockSocket(packets)
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    import socket as _s
+    orig = _s.socket
+    _s.socket = lambda *a, **kw: mock
     try:
-        s = V.deserialize_session(blob)
-    except Exception as exc:
-        return False, f'crashed on unknown field: {exc}'
-    return (
-        s.state == 'roster'
-        and s.mode == 'BO3'
-        and s.team_a_name == 'TestA'
-    ), f'state={s.state}'
-t('deserialize: tolerates unknown / missing fields without crashing', t_deserialize_tolerates_unknown_fields)
+        result = r.execute('status')
+    finally:
+        _s.socket = orig
+    expected = 'frag1-frag2-frag3-end'
+    return (result == expected), f'got: {result!r}  want: {expected!r}'
+t('RCON: multi-packet (3 fragments) concatenates correctly', t_rcon_multipacket)
 
 
-def t_spectator_token_cleared_by_reset():
-    """v0.11.0 polish: reset() invalidates any outstanding spectator
-    link.  Operator running a rematch should start the next session
-    with a clean slate."""
-    s = _make_to('finale')
-    V.issue_spectator_token(s)
-    assert s.spectator_token
-    V.reset(s)
-    return (s.spectator_token == ''), f'token={s.spectator_token!r}'
-t('spectator: reset() clears spectator_token', t_spectator_token_cleared_by_reset)
+def t_rcon_single_packet():
+    """Single-packet response — sentinel terminates after one fragment."""
+    packets = [
+        make_pkt(1, 2, b''),
+        make_pkt(2, 0, b'short'),
+        make_pkt(3, 0, b''),
+    ]
+    mock = MockSocket(packets)
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    import socket as _s
+    orig = _s.socket; _s.socket = lambda *a, **kw: mock
+    try:
+        result = r.execute('status')
+    finally:
+        _s.socket = orig
+    return (result == 'short'), f'got: {result!r}'
+t('RCON: short (single-packet) response works with sentinel', t_rcon_single_packet)
 
 
-def t_revoke_before_issue_mints_one_anyway():
-    """Documented behaviour: `revoke_token` doesn't gate on
-    has-token-already — it just mints a fresh one for the given team.
-    Calling it before issue_tokens() lands a token in session.tokens['A']
-    but leaves 'B' empty.  This is acceptable (operators shouldn't get
-    there naturally — the SPA only exposes Revoke after Issue), but
-    documenting it locks the contract."""
-    s = _make_to('links')
-    new_token = V.revoke_token(s, 'A')
-    return (isinstance(new_token, str) and len(new_token) > 20
-            and 'A' in s.tokens
-            and 'B' not in s.tokens), \
-           f'tokens={dict(s.tokens)}'
-t('revoke_token: pre-issue revoke mints a fresh token (documented behaviour)', t_revoke_before_issue_mints_one_anyway)
+def t_rcon_csgo_junk_packet():
+    """CS:GO sends a junk type-0 packet before the type-2 auth response."""
+    packets = [
+        make_pkt(0, 0, b''),               # junk type-0
+        make_pkt(1, 2, b''),               # actual auth ack
+        make_pkt(2, 0, b'hello'),
+        make_pkt(3, 0, b''),
+    ]
+    mock = MockSocket(packets)
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    import socket as _s
+    orig = _s.socket; _s.socket = lambda *a, **kw: mock
+    try:
+        result = r.execute('status')
+    finally:
+        _s.socket = orig
+    return (result == 'hello'), f'got: {result!r}'
+t('RCON: tolerates CS:GO-style junk type-0 packet before auth', t_rcon_csgo_junk_packet)
 
 
-def t_revoke_other_team_unaffected():
-    """Revoking A's token must leave B's token untouched.  The earlier
-    revoke test verified A's new value but didn't assert B was preserved."""
-    s = _make_to('veto')
-    original_b = s.tokens['B'].value
-    V.revoke_token(s, 'A')
-    return s.tokens['B'].value == original_b, \
-           f'B value changed: orig={original_b!r} now={s.tokens["B"].value!r}'
-t('revoke_token: other team\'s token is unaffected', t_revoke_other_team_unaffected)
-
-
-def t_revoke_unknown_team_rejected():
-    s = _make_to('veto')
-    for bad in ('C', 'a', '', 'AB', 'team_a'):
+def t_rcon_auth_fail():
+    """pkt_id == -1 on auth → ConnectionError."""
+    packets = [make_pkt(-1, 2, b'')]
+    mock = MockSocket(packets)
+    r = RCONClient('127.0.0.1', 27015, 'wrong')
+    import socket as _s
+    orig = _s.socket; _s.socket = lambda *a, **kw: mock
+    try:
         try:
-            V.revoke_token(s, bad)
-            return False, f'should have rejected team={bad!r}'
-        except VetoError:
-            pass
-    return True, ''
-t('revoke_token: unknown team values rejected', t_revoke_unknown_team_rejected)
+            r.execute('status')
+            return False, 'no exception raised'
+        except ConnectionError as e:
+            return ('auth failed' in str(e).lower()), str(e)
+    finally:
+        _s.socket = orig
+t('RCON: auth-fail (-1 id) raises ConnectionError', t_rcon_auth_fail)
 
 
-def t_issue_tokens_idempotent_on_recall():
-    """v0.11.2 fix: calling issue_tokens a second time from `links` must
-    return the SAME tokens, not rotate them.
-
-    Previous (buggy) behaviour: any SPA refresh / re-tap of the operator's
-    "Generate captain links" button silently rotated both tokens.  The
-    captain who already opened their link kept working (their claim binds
-    the token to them), but the OTHER captain's shared URL was now dead
-    with no warning — operator only finds out when the second captain
-    reports "your link doesn't work."
-
-    Pattern mirrors v0.11.1's `issue_spectator_token` / `rotate_spectator_token`
-    split: idempotent issue, separate explicit rotate (here: revoke_token
-    per team, which also leaves the other captain's link alive)."""
-    s = _make_to('links')
-    first = V.issue_tokens(s)
-    second = V.issue_tokens(s)
-    return (first['A'] == second['A']
-            and first['B'] == second['B']
-            and s.tokens['A'].value == first['A']
-            and s.tokens['B'].value == first['B']), \
-           f'first={first} second={second}'
-t('issue_tokens: idempotent on recall (v0.11.2 fix — no silent URL invalidation)', t_issue_tokens_idempotent_on_recall)
+# ════════════════════════════════════════════════════════════════════
+# 2) execute_retry exception widening
+# ════════════════════════════════════════════════════════════════════
+print('=== execute_retry exception widening ===')
 
 
-def t_issue_tokens_idempotent_after_one_claimed():
-    """v0.11.2 fix edge case: if captain A already CLAIMED their token
-    but B hasn't yet, re-calling issue_tokens must NOT rotate A's value
-    (that would log captain A out of the session mid-flow).  Return the
-    existing dict unchanged — operator uses revoke_token('B') to mint a
-    fresh B token without disturbing A."""
-    s = _make_to('links')
-    first = V.issue_tokens(s)
-    V.claim_captain(s, first['A'], caller_id='cap_A_phone')
-    # Session is still in `links` because B hasn't claimed yet.
-    assert s.state == 'links'
-    second = V.issue_tokens(s)
-    return (first['A'] == second['A']
-            and first['B'] == second['B']
-            and s.tokens['A'].used is True
-            and s.tokens['A'].claimed_by == 'cap_A_phone'), \
-           f'first={first} second={second} A.used={s.tokens["A"].used}'
-t('issue_tokens: idempotent even after one captain claimed (no mid-flow logout)', t_issue_tokens_idempotent_after_one_claimed)
+def t_retry_OSError():
+    """OSError (WinError 10054 family) is retried."""
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    calls = [0]
+    def fake_execute(cmd):
+        calls[0] += 1
+        if calls[0] == 1: raise OSError('[WinError 10054]')
+        return 'ok'
+    r.execute = fake_execute
+    out = r.execute_retry('status', retries=3, delay=0.01)
+    return (out == 'ok' and calls[0] == 2), f'calls={calls[0]} out={out!r}'
+t('execute_retry: catches OSError (WinError 10054) → retries', t_retry_OSError)
 
 
-def t_revoke_token_per_team_still_rotates():
-    """v0.11.2 fix: idempotent issue_tokens does NOT change the per-team
-    rotate path.  revoke_token('A') still mints a fresh A token and
-    leaves B untouched — operator's escape hatch when one captain's link
-    leaks but the other is fine."""
-    s = _make_to('links')
-    first = V.issue_tokens(s)
-    new_a = V.revoke_token(s, 'A')
-    return (new_a != first['A']
-            and s.tokens['A'].value == new_a
-            and s.tokens['B'].value == first['B']     # B untouched
-           ), f"first_A={first['A'][:8]} new_a={new_a[:8]} B={s.tokens['B'].value[:8]}"
-t('revoke_token: per-team rotation still works alongside idempotent issue', t_revoke_token_per_team_still_rotates)
+def t_retry_ConnectionReset():
+    """ConnectionResetError is a subclass of OSError and retried."""
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    calls = [0]
+    def fake_execute(cmd):
+        calls[0] += 1
+        if calls[0] < 2: raise ConnectionResetError('peer closed')
+        return 'ok'
+    r.execute = fake_execute
+    out = r.execute_retry('status', retries=3, delay=0.01)
+    return (out == 'ok' and calls[0] == 2), f'calls={calls[0]} out={out!r}'
+t('execute_retry: catches ConnectionResetError → retries', t_retry_ConnectionReset)
 
 
-def t_perform_step_after_finale_rejected():
-    """Once we're at `finale`, perform_step must reject — there's no
-    8th step to play.  Defends against a stale captain SPA clicking on
-    the board after the operator already hit Hand-to-MatchZy."""
-    s = _make_to('finale')
+def t_retry_auth_no_retry():
+    """Auth-failed is NOT retried (would never succeed)."""
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    calls = [0]
+    def fake_execute(cmd):
+        calls[0] += 1
+        raise ConnectionError('auth failed - wrong password')
+    r.execute = fake_execute
     try:
-        V.perform_step(s, 'A', s.map_pool[6])
+        r.execute_retry('status', retries=3, delay=0.01)
         return False, 'should have raised'
-    except VetoError:
-        return True, ''
-t('perform_step: rejected after finale state reached', t_perform_step_after_finale_rejected)
+    except ConnectionError:
+        return (calls[0] == 1), f'calls={calls[0]} (must be 1, not 3)'
+t('execute_retry: does NOT retry on auth-failed', t_retry_auth_no_retry)
 
 
-def t_complete_only_from_finale():
-    """complete() is legal only from `finale` — verifies the gate on
-    every other state, including the dangerous `veto` → `complete` skip."""
-    for state in ('roster', 'teams', 'voting', 'links', 'veto'):
-        s = _make_to(state)
-        try:
-            V.complete(s)
-            return False, f'should have raised from state={state}'
-        except InvalidVetoTransition:
-            pass
-    return True, ''
-t('complete: rejected from every non-finale state', t_complete_only_from_finale)
+def t_retry_timeout():
+    """TimeoutError is retried."""
+    r = RCONClient('127.0.0.1', 27015, 'pw')
+    calls = [0]
+    def fake_execute(cmd):
+        calls[0] += 1
+        if calls[0] < 2: raise TimeoutError('slow boot')
+        return 'ok'
+    r.execute = fake_execute
+    out = r.execute_retry('status', retries=3, delay=0.01)
+    return (out == 'ok' and calls[0] == 2), f'calls={calls[0]} out={out!r}'
+t('execute_retry: catches TimeoutError → retries', t_retry_timeout)
 
 
-def t_roster_long_names_accepted():
-    """Names up to ~64 chars (well over 32) — the model accepts them;
-    callers (HTTP layer / SPA UI) enforce display caps.  This locks the
-    contract: the state machine doesn't impose a hard length limit.
-    State stays `roster` after set_roster (distribute_teams advances)."""
-    s = V.create_session(mode='BO3')
-    long_name = 'A' * 60  # plausibly long Steam display name with prefix
-    players = [RosterPlayer(name=f'{long_name}_{i}', steam_id=f'S{i}') for i in range(10)]
+# ════════════════════════════════════════════════════════════════════
+# 3) Broadcast `;` / CRLF / length-cap strip
+# ════════════════════════════════════════════════════════════════════
+print('=== Broadcast injection strip ===')
+
+
+def t_broadcast_strip():
+    """Simulate the web.py:server_broadcast strip pipeline."""
+    BROADCAST_MAX_LEN = 200
+    cases = [
+        ('hello;sv_password pwn',        'hello,sv_password pwn'),
+        ('test\rcommand',                'test command'),
+        ('test\nlinebreak',              'test linebreak'),
+        ('back`tick test',               "back'tick test"),
+        ('A' * 250,                      'A' * 200),
+        ('multi;;;semis',                'multi,,,semis'),
+        ('mix\r\n;`combo',               "mix  ,'combo"),
+    ]
+    fails = []
+    for raw, expected in cases:
+        msg = (raw.replace('\r', ' ')
+                  .replace('\n', ' ')
+                  .replace(';',  ',')
+                  .replace('`',  "'"))
+        if len(msg) > BROADCAST_MAX_LEN: msg = msg[:BROADCAST_MAX_LEN]
+        if msg != expected:
+            fails.append(f'{raw[:30]!r} → {msg[:30]!r} (want {expected[:30]!r})')
+    return (not fails), ('; '.join(fails) if fails else f'{len(cases)} cases OK')
+t('Broadcast: ;, CRLF, backtick, length cap, multi-semi, combo', t_broadcast_strip)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 4) log_save filename uniqueness
+# ════════════════════════════════════════════════════════════════════
+print('=== log_save filename uniqueness ===')
+
+
+def t_log_save_uniqueness():
+    """100 filenames generated in the same second → all unique."""
+    names = set()
+    for _ in range(100):
+        fname = time.strftime('oblivion_log_%Y%m%d_%H%M%S_') + secrets.token_hex(3) + '.txt'
+        names.add(fname)
+    return (len(names) == 100), f'unique: {len(names)}/100'
+t('log_save: 100 same-second filenames all unique (6-hex suffix)', t_log_save_uniqueness)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 5) Event.wait cancellation semantics
+# ════════════════════════════════════════════════════════════════════
+print('=== Event.wait crash-backoff cancellation ===')
+
+
+def t_event_wait_cancel_during_sleep():
+    """Mid-sleep set() wakes the waiter within 0.5 s."""
+    ev = threading.Event()
+    result = {'woke_at': None, 'was_set': None}
+    def waiter():
+        start = time.monotonic()
+        result['was_set'] = ev.wait(timeout=5)
+        result['woke_at'] = time.monotonic() - start
+    th = threading.Thread(target=waiter); th.start()
+    time.sleep(0.1)
+    ev.set()
+    th.join(timeout=2)
+    return (result['was_set'] is True and result['woke_at'] < 0.5), \
+           f'was_set={result["was_set"]} woke_at={result["woke_at"]:.3f}'
+t('Event.wait: cancels within 0.5 s of set() during sleep', t_event_wait_cancel_during_sleep)
+
+
+def t_event_wait_timeout_when_not_set():
+    """No set() → returns False after the timeout."""
+    ev = threading.Event()
+    start = time.monotonic()
+    was_set = ev.wait(timeout=0.3)
+    elapsed = time.monotonic() - start
+    return (was_set is False and 0.28 < elapsed < 0.6), \
+           f'was_set={was_set} elapsed={elapsed:.3f}'
+t('Event.wait: returns False after timeout when not set', t_event_wait_timeout_when_not_set)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 6) _lan_ip cache TTL
+# ════════════════════════════════════════════════════════════════════
+print('=== _lan_ip cache TTL ===')
+from cs2servergui import config as _cfg
+
+
+def t_lan_ip_cache_hit():
+    """Within TTL → cache returned; force_refresh → bypassed."""
+    _cfg._lan_ip(force_refresh=True)            # seed
+    _cfg._LAN_IP_CACHE['ts']    = time.monotonic()
+    _cfg._LAN_IP_CACHE['value'] = '10.99.99.99'
+    cached = _cfg._lan_ip()                     # cache hit
+    fresh  = _cfg._lan_ip(force_refresh=True)   # bypass
+    _cfg._lan_ip(force_refresh=True)            # restore cache
+    return (cached == '10.99.99.99' and fresh != '10.99.99.99'), \
+           f'cached={cached!r} fresh={fresh!r}'
+t('_lan_ip: cache hit returns sentinel, force_refresh bypasses', t_lan_ip_cache_hit)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 7) Input validation caps
+# ════════════════════════════════════════════════════════════════════
+print('=== Input validation caps ===')
+from cs2servergui.web import _STEAMID_RE, _NAME_MAX_LEN, _BROADCAST_MAX_LEN
+
+
+def t_steamid_cap():
+    return (bool(_STEAMID_RE.match('STEAM_1:0:12345'))
+            and not _STEAMID_RE.match('A' * 65)), \
+           f'valid OK; 65-char rejected'
+t('_STEAMID_RE: accepts valid, rejects 65-char input', t_steamid_cap)
+
+
+def t_constants_set():
+    return (_NAME_MAX_LEN == 64 and _BROADCAST_MAX_LEN == 200), \
+           f'name={_NAME_MAX_LEN} broadcast={_BROADCAST_MAX_LEN}'
+t('_NAME_MAX_LEN == 64 and _BROADCAST_MAX_LEN == 200', t_constants_set)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 8) save_config atomicity under concurrent reads
+# ════════════════════════════════════════════════════════════════════
+print('=== save_config atomicity ===')
+from cs2servergui.core import AppCore
+
+
+def t_save_config_atomic():
+    """While 50 writers hammer, parallel readers never see invalid JSON."""
+    ac = AppCore()
+    ac.save_config()   # seed
+    errors = []
+    stop = threading.Event()
+    def reader():
+        while not stop.is_set():
+            try:
+                with open(_cfg._CONFIG_FILE, encoding='utf-8') as f:
+                    json.load(f)
+            except json.JSONDecodeError as e:
+                errors.append(repr(e))
+            except FileNotFoundError:
+                pass
+            except Exception:
+                pass
+    threads = [threading.Thread(target=reader, daemon=True) for _ in range(3)]
+    for th in threads: th.start()
+    for _ in range(50):
+        ac.save_config()
+    stop.set()
+    for th in threads: th.join(timeout=2)
+    return (not errors), f'JSON errors: {len(errors)}'
+t('save_config: atomic — readers never see partial/invalid JSON', t_save_config_atomic)
+
+
+def t_save_config_no_tmp_leftover():
+    """The .tmp file is always cleaned up after the swap."""
+    ac = AppCore()
+    for _ in range(20): ac.save_config()
+    return (not os.path.isfile(_cfg._CONFIG_FILE + '.tmp')), 'no .tmp leftover'
+t('save_config: no .tmp file leftover after 20 saves', t_save_config_no_tmp_leftover)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 9) _lifecycle_lock RLock reentrancy
+# ════════════════════════════════════════════════════════════════════
+print('=== _lifecycle_lock reentrancy ===')
+
+
+def t_rlock_reentrant():
+    """RLock allows re-entry from the same thread without deadlock."""
+    ac = AppCore()
+    with ac._lifecycle_lock:
+        with ac._lifecycle_lock:
+            with ac._lifecycle_lock:
+                pass
+    return True, 'no deadlock'
+t('_lifecycle_lock: RLock — 3-level reentry OK', t_rlock_reentrant)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 10) _netutils sanity
+# ════════════════════════════════════════════════════════════════════
+print('=== _netutils against live netstat ===')
+from cs2servergui import _netutils as nu
+
+
+def t_netutils_no_crash():
+    """listeners_on_port returns a list even for an empty port."""
+    listeners = nu.listeners_on_port(22)
+    return isinstance(listeners, list), f'type={type(listeners).__name__}'
+t('listeners_on_port: returns list for likely-empty port', t_netutils_no_crash)
+
+
+def t_holder_consistency():
+    """holder_of_port returns same as first entry of listeners_on_port."""
+    listeners = nu.listeners_on_port(27015)
+    holder    = nu.holder_of_port(27015)
+    if not listeners:
+        return (holder is None), f'no listeners → holder should be None ({holder!r})'
+    return (holder == (listeners[0][1], listeners[0][2])), \
+           f'holder={holder} listeners[0]={listeners[0]}'
+t('holder_of_port: matches first listeners_on_port entry', t_holder_consistency)
+
+
+# ════════════════════════════════════════════════════════════════════
+# Flask test-client smoke for new routes
+# ════════════════════════════════════════════════════════════════════
+print('=== Flask test client: new routes ===')
+
+
+def t_log_save_local_only():
+    """/api/log/save returns 403 (or 401) for non-loopback requests."""
+    from cs2servergui.web import create_flask
+    ac = AppCore()
+    ac.admin_pin = '0000'
+    app = create_flask(ac)
+    client = app.test_client()
+    # No auth at all → 401
+    r = client.post('/api/log/save')
+    return r.status_code in (401, 403), f'status={r.status_code}'
+t('/api/log/save: unauthenticated → 401/403', t_log_save_local_only)
+
+
+def t_workshop_download_409_when_busy():
+    """/api/workshop/download returns 409 when _active_dl_proc is not None."""
+    from cs2servergui.web import create_flask
+    import io
+    ac = AppCore()
+    ac.admin_pin = '0000'
+    ac.steam_username = 'u'
+    ac.steam_password = 'p'
+    # Simulate busy state
+    class DummyProc: pass
+    ac._active_dl_proc = DummyProc()
+    app = create_flask(ac)
+    client = app.test_client()
+    # Authenticate first
+    client.post('/api/auth/login', json={'pin': '0000'})
+    r = client.post('/api/workshop/download', json={'id': '12345'})
+    return (r.status_code == 409), f'status={r.status_code} body={r.get_data(as_text=True)[:80]!r}'
+t('/api/workshop/download: 409 when _active_dl_proc busy', t_workshop_download_409_when_busy)
+
+
+# ════════════════════════════════════════════════════════════════════
+# v0.10.2 — Pre-flight error surfacing + state shape additions
+# ════════════════════════════════════════════════════════════════════
+
+def t_server_start_returns_422_with_preflight_errors():
+    """When _preflight_checks fails, POST /api/server/start returns 422
+    with a `preflight_errors` list — not 200 OK with silent log-only.
+
+    We bypass the route's `is_installed` early-bail by patching the
+    property to True, AND we steer _preflight_checks to fail by pointing
+    _config.CS2_PATH at a non-existent file (the test machine may have
+    a real CS2 install so we can't rely on the default path being absent).
+    Both patches are restored in `finally` to keep this test hermetic."""
+    from cs2servergui.web import create_flask
+    from cs2servergui import config as _cfg
+    original_is_installed = AppCore.is_installed
+    original_cs2_path     = _cfg.CS2_PATH
+    AppCore.is_installed  = property(lambda self: True)
+    _cfg.CS2_PATH         = '/nope/this/path/does/not/exist/cs2.exe'
     try:
-        V.set_roster(s, 'Team Alpha', 'Team Bravo', players)
-        return (s.state == 'roster'
-                and len(s.roster) == 10
-                and all(len(p.name) >= 60 for p in s.roster)), f'state={s.state}'
-    except VetoError as e:
-        return False, f'unexpectedly rejected: {e}'
-t('set_roster: long names (60 chars) accepted — no model-level cap', t_roster_long_names_accepted)
+        ac = AppCore()
+        ac.admin_pin = '0000'
+        ac.server_dir = '/tmp/fake-server-dir'
+        app = create_flask(ac)
+        client = app.test_client()
+        client.post('/api/auth/login', json={'pin': '0000'})
+        r = client.post('/api/server/start', json={'map': 'de_dust2', 'mode': 'Competitive'})
+        body = r.get_json() or {}
+        return (r.status_code == 422
+                and 'preflight_errors' in body
+                and isinstance(body['preflight_errors'], list)
+                and len(body['preflight_errors']) >= 1), \
+               f'status={r.status_code} body_keys={list(body.keys())}'
+    finally:
+        AppCore.is_installed = original_is_installed
+        _cfg.CS2_PATH        = original_cs2_path
+t('/api/server/start: returns 422 with preflight_errors when preflight fails', t_server_start_returns_422_with_preflight_errors)
 
 
-def t_roster_whitespace_name_rejected():
-    """A whitespace-only name shouldn't count as filled.  Either the
-    state machine rejects it, or distribute_teams later refuses — both
-    are defensible.  We assert it's caught somewhere before voting."""
-    s = V.create_session(mode='BO3')
-    players = [RosterPlayer(name=' ', steam_id='S1')] + \
-              [RosterPlayer(name=f'p{i}', steam_id=f'S{i}') for i in range(9)]
+def t_api_state_includes_boot_error_field():
+    """/api/state must include `boot_error` (string, empty by default).
+    SPA reads this to render the v0.10.2 dismissable banner when a Start
+    is refused at preflight."""
+    from cs2servergui.web import create_flask
+    ac = AppCore()
+    ac.admin_pin = '0000'
+    app = create_flask(ac)
+    client = app.test_client()
+    client.post('/api/auth/login', json={'pin': '0000'})
+    snap = client.get('/api/state').get_json() or {}
+    return ('boot_error' in snap
+            and isinstance(snap['boot_error'], str)
+            and snap['boot_error'] == ''), f'snap_keys={sorted(snap.keys())[:8]}...'
+t('/api/state: includes boot_error field (empty by default)', t_api_state_includes_boot_error_field)
+
+
+def t_api_state_includes_captain_team_field():
+    """/api/state must include `captain_team` so the SPA's captain finale
+    view knows which team's ready flag to toggle.  Empty string for
+    non-captain sessions (the admin in this test)."""
+    from cs2servergui.web import create_flask
+    ac = AppCore()
+    ac.admin_pin = '0000'
+    app = create_flask(ac)
+    client = app.test_client()
+    client.post('/api/auth/login', json={'pin': '0000'})
+    snap = client.get('/api/state').get_json() or {}
+    return ('captain_team' in snap and snap['captain_team'] == ''), f'snap={snap}'
+t('/api/state: includes captain_team field (empty for admin)', t_api_state_includes_captain_team_field)
+
+
+def t_capabilities_admin_has_server_control():
+    """v0.10.2: /api/capabilities returns {role, is_local, can: [...]}.
+    Admin session (via PIN, not auto-auth) is REMOTE in test_client so
+    is_local will be False — the admin set without local-only tags is
+    what's expected here.  Local-only superset is in its own test."""
+    from cs2servergui.web import create_flask
+    ac = AppCore()
+    ac.admin_pin = '0000'
+    app = create_flask(ac)
+    client = app.test_client()
+    client.post('/api/auth/login', json={'pin': '0000'})
+    r = client.get('/api/capabilities')
+    body = r.get_json() or {}
+    if r.status_code != 200:
+        return False, f'status={r.status_code}'
+    if body.get('role') != 'admin':
+        return False, f'expected role=admin, got {body.get("role")}'
+    cans = set(body.get('can', []))
+    must_have = {'server.start', 'server.stop', 'server.broadcast',
+                 'players.kick', 'players.ban', 'config.write', 'veto.admin'}
+    missing = must_have - cans
+    if missing:
+        return False, f'admin missing tags: {missing}'
+    # Remote admin must NOT see the local-only tags
+    forbidden = {'rcon', 'steam.login', 'server.install', 'log.save'}
+    leaked = forbidden & cans
+    return (not leaked), f'remote admin leaked local-only: {leaked}'
+t('/api/capabilities: remote admin has server.control but not local-only', t_capabilities_admin_has_server_control)
+
+
+def t_capabilities_guest_is_restricted():
+    """A guest-PIN session should NOT include any of the local-only tags.
+    Verifies the renderer-side disable-with-tooltip pattern has the right
+    source of truth."""
+    from cs2servergui.web import create_flask
+    ac = AppCore()
+    ac.admin_pin = '0000'
+    ac.guest_pin = '9999'
+    app = create_flask(ac)
+    client = app.test_client()
+    # Login as guest (PIN '9999')
+    client.post('/api/auth/login', json={'pin': '9999'})
+    # Test client sessions are NOT is_local — but they're also not really
+    # "remote" in the sense of having a different IP from the server.  The
+    # auth route classifies test_client as remote because remote_addr is set.
+    r = client.get('/api/capabilities')
+    body = r.get_json() or {}
+    if r.status_code != 200:
+        return False, f'status={r.status_code} body={body}'
+    cans = set(body.get('can', []))
+    forbidden = {'rcon', 'steam.login', 'server.install',
+                 'server.start', 'server.stop', 'players.kick'}
+    leaked = forbidden & cans
+    return (not leaked and 'workshop.download' in cans), \
+           f'role={body.get("role")} leaked={leaked} cans={sorted(cans)}'
+t('/api/capabilities: guest session excludes admin + local-only tags', t_capabilities_guest_is_restricted)
+
+
+def t_stop_server_clears_last_start_error():
+    """stop_server() must clear the stale last_start_error so a successful
+    next-Start doesn't show a leftover banner from a failure two attempts ago."""
+    ac = AppCore()
+    ac.last_start_error = "Port 27015 is held by a non-CS2 process"
+    ac.running = True
+    # stop_server clears lots of state under _lifecycle_lock
     try:
-        V.set_roster(s, 'A', 'B', players)
-        # If we got here, set_roster accepted whitespace names.  Document
-        # the actual behaviour so future contributors know what to expect.
-        # (Our impl accepts; HTTP layer's filled-count check rejects.)
-        return s.state == 'teams', f'state={s.state}'
-    except VetoError:
-        return True, 'rejected at set_roster (also fine)'
-t('set_roster: whitespace name handled (accepted-by-model OR rejected)', t_roster_whitespace_name_rejected)
+        ac.stop_server()
+    except Exception:
+        pass    # may complain about no proc; we just care about the field
+    return ac.last_start_error == '', f'last_start_error={ac.last_start_error!r}'
+t('stop_server: clears last_start_error', t_stop_server_clears_last_start_error)
 
 
-def t_perform_step_wrong_kind_no_match():
-    """Whether we BAN or PICK is determined by sequence position, not
-    by the caller.  perform_step() takes (team, map_id) only — there's
-    no way for a captain to demand "I want to PICK now."  This locks
-    the API surface so a future refactor doesn't accidentally expose
-    a kind parameter that captains could spoof."""
-    import inspect
-    sig = inspect.signature(V.perform_step)
-    params = list(sig.parameters.keys())
-    return params == ['session', 'team', 'map_id'], f'params={params}'
-t('perform_step: signature is (session, team, map_id) — kind is server-derived', t_perform_step_wrong_kind_no_match)
-
-
-def t_state_transitions_reachable_from_idle():
-    """Smoke: walk the full state graph and assert every state is
-    reachable in turn.  Defends against a refactor that drops a
-    transition from _LEGAL_TRANSITIONS.  `idle` is the starting state
-    so a fresh VetoSession is the canonical idle observation."""
-    reached = [('idle', V.VetoSession().state)]
-    for state in ('roster','teams','voting','links','veto','finale','complete'):
-        s = _make_to(state)
-        reached.append((state, s.state))
-    return all(actual == expected for expected, actual in reached), f'reached={reached}'
-t('state graph: every state idle→complete reachable via the helpers', t_state_transitions_reachable_from_idle)
-
-
-def t_set_ready_only_in_finale():
-    """set_ready raises InvalidVetoTransition outside finale state.
-    Defends against a stale captain SPA tab toggling Ready during a
-    fresh session's roster/voting/veto stages."""
-    for state in ('roster', 'teams', 'voting', 'links', 'veto', 'complete'):
-        s = _make_to(state)
-        try:
-            V.set_ready(s, 'A', True)
-            return False, f'should have raised from state={state}'
-        except (InvalidVetoTransition, VetoStageError):
-            pass
-    return True, ''
-t('set_ready: legal only in finale state', t_set_ready_only_in_finale)
-
-
-def t_set_ready_toggles():
-    """set_ready can mark ready=True, then un-ready with ready=False."""
-    s = _make_to('finale')
-    V.set_ready(s, 'A', True)
-    if not s.ready_a or s.ready_b:
-        return False, f'after A ready: a={s.ready_a} b={s.ready_b}'
-    V.set_ready(s, 'B', True)
-    if not (s.ready_a and s.ready_b):
-        return False, 'B ready should not have cleared A'
-    V.set_ready(s, 'A', False)
-    return (s.ready_a is False and s.ready_b is True), \
-           f'after A un-ready: a={s.ready_a} b={s.ready_b}'
-t('set_ready: toggles independently per team', t_set_ready_toggles)
-
-
-def t_both_captains_ready_predicate():
-    s = _make_to('finale')
-    if V.both_captains_ready(s):
-        return False, 'fresh finale should NOT have both ready'
-    V.set_ready(s, 'A', True)
-    if V.both_captains_ready(s):
-        return False, 'only A ready - both_captains_ready should be False'
-    V.set_ready(s, 'B', True)
-    return V.both_captains_ready(s), 'both set to True'
-t('both_captains_ready: True only when both flags set', t_both_captains_ready_predicate)
-
-
-def t_set_ready_unknown_team_rejected():
-    s = _make_to('finale')
-    for bad in ('C', 'a', '', 'AB', 'team_a'):
-        try:
-            V.set_ready(s, bad, True)
-            return False, f'should have rejected team={bad!r}'
-        except VetoStageError:
-            pass
-    return True, ''
-t('set_ready: unknown team values rejected', t_set_ready_unknown_team_rejected)
-
-
-def t_reset_clears_ready_flags():
-    """Both ready flags must clear on reset so a fresh session starts
-    with both captains un-ready (not inheriting from the prior match)."""
-    s = _make_to('finale')
-    V.set_ready(s, 'A', True)
-    V.set_ready(s, 'B', True)
-    V.reset(s)
-    return (s.ready_a is False and s.ready_b is False), \
-           f'after reset: a={s.ready_a} b={s.ready_b}'
-t('reset: clears both ready flags', t_reset_clears_ready_flags)
-
-
-def t_session_has_live_embed_msg_id():
-    """v0.11.0 Layer 1C: VetoSession carries live_embed_msg_id so the
-    embed-refresh helper can EDIT the same message across veto steps
-    instead of spamming a new message per step."""
-    s = V.VetoSession()
-    if s.live_embed_msg_id != '':
-        return False, f'default not empty: {s.live_embed_msg_id!r}'
-    s.live_embed_msg_id = '1234567890'
-    return s.live_embed_msg_id == '1234567890', f'set failed: {s.live_embed_msg_id}'
-t('VetoSession: live_embed_msg_id field defaults empty, accepts a value', t_session_has_live_embed_msg_id)
-
-
-def t_reset_clears_live_embed_msg_id():
-    s = _make_to('finale')
-    s.live_embed_msg_id = '9876543210'
-    V.reset(s)
-    return s.live_embed_msg_id == '', f'after reset: {s.live_embed_msg_id!r}'
-t('reset: clears live_embed_msg_id', t_reset_clears_live_embed_msg_id)
-
-
-def t_roster_player_has_discord_id_field():
-    """v0.11.0: RosterPlayer dataclass gains optional `discord_id` field
-    used by Layer 1A auto-DM.  Backward-compatible default ''."""
-    p = V.RosterPlayer(name='Alice')
-    if p.discord_id != '':
-        return False, f'default not empty: {p.discord_id!r}'
-    p2 = V.RosterPlayer(name='Bob', steam_id='STEAM_0:1:42', discord_id='123456789012345678')
-    return (p2.discord_id == '123456789012345678'
-            and p2.steam_id == 'STEAM_0:1:42'
-            and p2.name == 'Bob'), f'p2={p2}'
-t('RosterPlayer: discord_id field defaults empty, accepts a value', t_roster_player_has_discord_id_field)
-
-
-def t_rematch_preserves_teams_and_captains():
-    """v0.10.2: rematch from complete-state must keep team rosters +
-    names + captains but clear veto state."""
-    s = _make_to('complete')
-    teamA_before = list(s.team_a)
-    teamB_before = list(s.team_b)
-    capA_before  = s.captain_a_idx
-    capB_before  = s.captain_b_idx
-    nameA = s.team_a_name
-    nameB = s.team_b_name
-    V.rematch(s)
-    return (s.state == 'links'
-            and s.team_a == teamA_before
-            and s.team_b == teamB_before
-            and s.captain_a_idx == capA_before
-            and s.captain_b_idx == capB_before
-            and s.team_a_name == nameA
-            and s.team_b_name == nameB
-            and not s.tokens
-            and not s.sequence
-            and not s.final_maps
-            and s.ready_a is False
-            and s.ready_b is False), \
-           f'state={s.state} ta={len(s.team_a)} tb={len(s.team_b)} caps={s.captain_a_idx},{s.captain_b_idx} tokens={len(s.tokens)}'
-t('rematch: preserves teams + captains + names; clears veto state', t_rematch_preserves_teams_and_captains)
-
-
-def t_rematch_legal_only_from_complete():
-    """Rematch is a special complete→links jump.  Not legal from any
-    other state — operator must finish the current series first.
-    `idle` is a fresh VetoSession (no helper branch in _make_to)."""
-    for state in ('idle', 'roster', 'teams', 'voting', 'links', 'veto', 'finale'):
-        s = V.VetoSession() if state == 'idle' else _make_to(state)
-        try:
-            V.rematch(s)
-            return False, f'should have raised from state={state}'
-        except InvalidVetoTransition:
-            pass
-    return True, ''
-t('rematch: rejected from every non-complete state', t_rematch_legal_only_from_complete)
-
-
-def t_rematch_can_change_mode():
-    """Rematch accepts an optional `mode` switch (e.g. complete a BO3,
-    then rematch as BO1 if time's running short)."""
-    s = _make_to('complete')
-    assert s.mode == 'BO3'
-    V.rematch(s, mode='BO1')
-    return s.mode == 'BO1', f'mode={s.mode}'
-t('rematch: optional mode switch (BO3 → BO1)', t_rematch_can_change_mode)
-
-
-def t_archive_to_history_captures_fields():
-    """v0.10.2: archive_to_history serialises a finished session into a
-    dict the operator can read out of oblivion_matches.json later."""
-    s = _make_to('finale')
-    V.build_matchzy_config(s)
-    snap = V.archive_to_history(s)
-    needs = {'matchid', 'created_at', 'mode', 'team_a', 'team_b',
-             'captain_a', 'captain_b', 'final_maps', 'decider', 'sequence'}
-    return (needs.issubset(snap.keys())
-            and snap['mode'] == 'BO3'
-            and snap['decider'] == s.decider
-            and len(snap['final_maps']) == 3
-            and len(snap['sequence']) == 6), \
-           f'keys={sorted(snap.keys())}'
-t('archive_to_history: captures matchid + teams + maplist + sequence', t_archive_to_history_captures_fields)
-
-
-def t_reset_from_complete():
-    """A finished session must accept reset() so the operator can
-    start a fresh BO without restarting the app."""
-    s = _make_to('complete')
-    V.reset(s)
-    return s.state == 'idle' and not s.tokens and not s.final_maps, \
-           f'state={s.state} tokens={list(s.tokens)} maps={s.final_maps}'
-t('reset: from complete → idle (operator starts a new session)', t_reset_from_complete)
-
-
-# ═══ Auto-generated pytest cases ══════════════════════════════════════════
-def _slug(name):
-    out = ''.join(c if c.isalnum() else '_' for c in name).strip('_').lower()
-    while '__' in out: out = out.replace('__', '_')
-    return 'test_' + out
-
-
+# ════════════════════════════════════════════════════════════════════
+# Pytest entry points — one test function per battery case
+# ════════════════════════════════════════════════════════════════════
+# Generate `def test_*` functions at import time from the results list so
+# pytest reports each behaviour as its own pass/fail line.  The script-style
+# results-list pattern is kept because it's easier to read + extend than
+# 22 separate function definitions.
 def _make_pytest_case(_ok, _detail):
     def _case():
         assert _ok, _detail
     return _case
 
 
+def _slug(name):
+    """Turn a human-readable test name into a valid Python identifier."""
+    out = ''.join(c if c.isalnum() else '_' for c in name).strip('_').lower()
+    # Collapse runs of underscores
+    while '__' in out: out = out.replace('__', '_')
+    return 'test_' + out
+
+
 for _ok, _name, _detail in results:
     _slug_name = _slug(_name)
+    # Disambiguate collisions by appending an index
     _i = 1
     while _slug_name in globals():
         _i += 1
@@ -1231,7 +632,9 @@ for _ok, _name, _detail in results:
     globals()[_slug_name] = _make_pytest_case(_ok, _detail)
 
 
-# ═══ Standalone-script entry point ════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════
+# Standalone-script entry point — `python tests/test_v092.py`
+# ════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     print()
     print('=' * 70)
