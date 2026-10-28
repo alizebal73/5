@@ -53,7 +53,7 @@ def patch_source(src: Path) -> None:
 
     replace_once(core, 'APP_VERSION = "0.5.2-beta"', 'APP_VERSION = "0.5.3-beta"', "core version")
     replace_once(core,
-        '    """Write a listen-server config next to the selected CS2 copy\\'s cfg folder."""',
+        '    """Write a listen-server config next to the selected CS2 copy\'s cfg folder."""',
         '    """Write server settings for a dedicated CS2 server process."""',
         "host config docstring")
     replace_once(core, '    game_type, game_mode = MODES[mode]\n', '', "remove startup modes from cfg")
