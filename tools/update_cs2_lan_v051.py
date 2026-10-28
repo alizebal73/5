@@ -201,7 +201,7 @@ def server_list_label(index: int, ip: str) -> str:
         self.assertNotIn("de_dust2", label)
 
 '''
-    replace_once(tests, '    def test_argument_builders(self):\n', new_tests + '    def test_argument_builders(self):\n', 'def test_server_picker_label_shows_ordinal and only IP')
+    replace_once(tests, '    def test_argument_builders(self):\n', new_tests + '    def test_argument_builders(self):\n', 'def test_server_picker_label_shows_ordinal_and_only_ip')
 
 
     # v0.5.1: make the server-picker window's close button actually close it.
