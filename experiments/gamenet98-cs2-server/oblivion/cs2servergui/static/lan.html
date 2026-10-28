@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GameNet 98 | یافتن سرور</title>
+<style>
+:root{color-scheme:dark;--bg:#101018;--panel:#191925;--border:#303047;--accent:#8b5cf6;--text:#f5f3ff;--sub:#a5a5bd}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#201a38 0,#101018 55%);font-family:Tahoma,Arial,sans-serif;color:var(--text);min-height:100vh}
+main{max-width:920px;margin:0 auto;padding:32px 18px}
+header{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+.logo{width:54px;height:54px;border-radius:15px;background:#171725;border:1px solid var(--border);display:grid;place-items:center;color:#c4b5fd;font-size:26px;font-weight:bold}
+h1{font-size:25px;margin:0 0 8px}.muted{color:var(--sub);font-size:13px;line-height:1.9}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+button,.connect{border:1px solid #7c3aed;background:var(--accent);color:white;border-radius:10px;padding:12px 16px;font:inherit;text-decoration:none;cursor:pointer;font-size:14px}
+button:disabled{opacity:.6;cursor:wait}.secondary{background:transparent;border-color:var(--border);color:var(--text)}
+#message{padding:12px 14px;border-radius:10px;background:#1a1a29;border:1px solid var(--border);margin-bottom:14px;color:var(--sub);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.server{background:linear-gradient(160deg,#1d1d2d,#171721);border:1px solid var(--border);border-radius:15px;padding:18px;min-width:0}
+.top{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}.server h2{font-size:17px;margin:0 0 12px;overflow-wrap:anywhere}
+.pill{font-size:11px;border-radius:99px;padding:5px 9px;background:#213a30;color:#86efac;white-space:nowrap}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.meta div{background:#11111b;border:1px solid #28283c;border-radius:9px;padding:10px}.label{color:var(--sub);font-size:11px;margin-bottom:6px}.value{font-size:14px;direction:ltr;text-align:right}
+.actions{display:flex;gap:8px}.actions>*{flex:1;text-align:center}
+.empty{border:1px dashed var(--border);border-radius:15px;padding:30px;text-align:center;color:var(--sub);line-height:2}
+footer{margin-top:25px;color:#77778f;font-size:11px;line-height:1.9}
+@media(max-width:480px){main{padding:22px 12px}h1{font-size:21px}.toolbar{align-items:stretch}button{width:100%}}
+</style>
+</head>
+<body>
+<main>
+<header><div class="logo">G</div><div><h1>GameNet 98</h1><div class="muted">یافتن سرورهای CS2 در شبکهٔ گیم‌نت</div></div></header>
+<div class="toolbar"><div><strong>سرورهای قابل اتصال</strong><div class="muted">فقط سرورهای پاسخ‌گو در شبکهٔ محلی نمایش داده می‌شوند.</div></div><button id="scan">جست‌وجوی دوباره</button></div>
+<div id="message">در حال جست‌وجوی سرورهای شبکه...</div>
+<div id="servers" class="grid"></div>
+<footer>اتصال از طریق Steam و پروتکل رسمی بازی انجام می‌شود. ورود و احراز هویت Steam، در صورت درخواست خود بازی، همچنان لازم است.</footer>
+</main>
+<script>
+const message=document.getElementById('message'),list=document.getElementById('servers'),button=document.getElementById('scan');
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function scan(force=true){
+ button.disabled=true;button.textContent='در حال جست‌وجو...';message.textContent='در حال بررسی سرورهای محلی...';list.innerHTML='';
+ try{
+  const r=await fetch('/api/lan/servers'+(force?'?refresh=1':''),{cache:'no-store'});
+  if(!r.ok)throw new Error('پاسخ سرور: '+r.status);
+  const data=await r.json(),servers=data.servers||[];
+  if(!servers.length){message.textContent='سروری پیدا نشد. مطمئن شو سرور CS2 روشن است و فایروال اجازهٔ ارتباط UDP را می‌دهد.';return;}
+  message.textContent=servers.length+' سرور پیدا شد.';
+  for(const s of servers){
+   const card=document.createElement('article');card.className='server';
+   const addr=String(s.address||'');const safeAddr=esc(addr);const safeName=esc(s.name||'CS2 LAN Server');
+   card.innerHTML='<div class="top"><h2>'+safeName+'</h2><span class="pill">فعال</span></div>'+
+    '<div class="meta"><div><div class="label">نقشه</div><div class="value">'+esc(s.map||'—')+'</div></div>'+
+    '<div><div class="label">بازیکنان</div><div class="value">'+esc(s.players)+' / '+esc(s.max_players)+'</div></div>'+
+    '<div style="grid-column:1/-1"><div class="label">IP و پورت</div><div class="value">'+safeAddr+'</div></div></div>'+
+    '<div class="actions"><a class="connect" href="steam://connect/'+safeAddr+'">اتصال به بازی</a>'+
+    '<button class="secondary copy" type="button">کپی آدرس</button></div>';
+   card.querySelector('.copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(addr);message.textContent='آدرس '+addr+' کپی شد.';}catch(_){message.textContent='آدرس سرور: '+addr;}});
+   list.appendChild(card);
+  }
+ }catch(e){message.textContent='خطا در جست‌وجو: '+e.message;}
+ finally{button.disabled=false;button.textContent='جست‌وجوی دوباره';}
+}
+button.addEventListener('click',()=>scan(true));scan(false);setInterval(()=>scan(false),15000);
+</script>
+</body></html>
