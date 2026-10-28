@@ -1215,6 +1215,24 @@ function buildStatusPage() {
   const s = state.server;
   const root = el('content');
 
+  // GameNet 98 operator shortcuts: host a session or open the read-only LAN finder.
+  const quickActions = h('section', 'gn98-quick-actions');
+  quickActions.innerHTML = `
+    <button class="gn98-action gn98-action-primary" id="gn98-create-server" type="button">
+      <span class="gn98-action-icon">＋</span><span><strong>ساخت سرور</strong><small>انتخاب نقشه و شروع سرور اختصاصی</small></span>
+    </button>
+    <button class="gn98-action" id="gn98-find-server" type="button">
+      <span class="gn98-action-icon">⌕</span><span><strong>یافتن سرور</strong><small>نمایش سرورهای فعال شبکهٔ گیم‌نت</small></span>
+    </button>`;
+  root.appendChild(quickActions);
+  el('gn98-create-server').addEventListener('click', () => {
+    const target = el('map-mode-card') || el('server-panel');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  el('gn98-find-server').addEventListener('click', () => {
+    window.open(window.location.origin + '/lan', '_blank', 'noopener');
+  });
+
   // ── Getting Started card (v0.16.5 / task #157 — item D) ─────────────────
   // First-time friend lands on this page after the wizard.  If CS2 isn't
   // installed yet, or the plugin runtime is missing, surface a 3-step

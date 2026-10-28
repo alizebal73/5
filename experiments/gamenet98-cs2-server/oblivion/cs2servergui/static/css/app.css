@@ -3989,3 +3989,14 @@ body { font-family: Tahoma, Arial, sans-serif; }
 .nav-item[data-page="appearance"] { display: none !important; }
 .settings-strip, #reach-card, #hdr-help-btn, #hdr-cmd-trigger { display: none !important; }
 .login-brand-name { font-family: Tahoma, Arial, sans-serif; }
+
+
+/* GameNet 98 primary tasks: clear host/finder shortcuts at top of the page. */
+.gn98-quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:0 0 18px; }
+.gn98-action { display:flex; align-items:center; gap:14px; min-width:0; padding:18px 20px; text-align:right; color:var(--text-1); background:linear-gradient(145deg,var(--bg-2),var(--bg-1)); border:1px solid var(--line-1); border-radius:14px; cursor:pointer; transition:transform .15s ease,border-color .15s ease,background .15s ease; font:inherit; }
+.gn98-action:hover { transform:translateY(-2px); border-color:var(--accent); }
+.gn98-action-primary { border-color:var(--accent); background:linear-gradient(145deg,var(--accent-lo),var(--bg-1)); }
+.gn98-action-icon { display:grid; place-items:center; flex:none; width:46px; height:46px; border-radius:12px; background:var(--accent-lo); color:var(--accent-h); font-size:30px; line-height:1; }
+.gn98-action strong { display:block; font-size:16px; margin-bottom:6px; }
+.gn98-action small { display:block; color:var(--text-3); font-size:12px; line-height:1.7; font-weight:400; }
+@media(max-width:680px) { .gn98-quick-actions { grid-template-columns:1fr; gap:9px; } .gn98-action { padding:14px; } }

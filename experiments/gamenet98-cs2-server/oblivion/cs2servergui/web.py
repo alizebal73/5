@@ -750,6 +750,19 @@ def create_flask(core: AppCore) -> Flask:
 
     # ── SPA shell ──────────────────────────────────────────────────────────────
 
+    # Public, read-only LAN finder page. It exposes no server-control actions.
+    @app.route("/lan")
+    def lan_finder():
+        return send_file(os.path.join(os.path.dirname(__file__), "static", "lan.html"))
+
+    @app.route("/api/lan/servers")
+    def lan_servers():
+        # Read-only LAN discovery; scan_servers restricts remote callers to the
+        # local subnet, and finding a server never grants manager permissions.
+        from .lan_discovery import scan_servers
+        return jsonify({"servers": scan_servers(request.remote_addr,
+                                                force=request.args.get("refresh") == "1")})
+
     @app.route("/")
     def index():
         session = _current_session()

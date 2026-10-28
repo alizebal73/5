@@ -31,12 +31,15 @@ def _network() -> ipaddress.IPv4Network | None:
     try:
         if configured:
             net = ipaddress.ip_network(configured, strict=False)
-            return net if isinstance(net, ipaddress.IPv4Network) else None
+            if not isinstance(net, ipaddress.IPv4Network) or net.num_addresses > 1024:
+                return None
+            return net
         ip = _config._lan_ip(force_refresh=True)
         addr = ipaddress.ip_address(ip)
         if not isinstance(addr, ipaddress.IPv4Address) or addr.is_loopback or addr.is_unspecified:
             return None
-        return ipaddress.ip_network(f"{addr}/24", strict=False)
+        net = ipaddress.ip_network(f"{addr}/24", strict=False)
+        return net if net.num_addresses <= 1024 else None
     except (ValueError, OSError):
         return None
 
@@ -99,13 +102,12 @@ def scan_servers(client_ip: str | None = None, force: bool = False) -> list[dict
     network = _network()
     if network is None:
         return []
-    try:
-        client = ipaddress.ip_address(client_ip or "")
-        if not isinstance(client, ipaddress.IPv4Address) or client not in network:
-            return []
-    except ValueError:
-        # Local desktop requests use loopback, which is safe to permit.
-        if client_ip not in ("127.0.0.1", "::1"):
+    if client_ip not in ("127.0.0.1", "::1"):
+        try:
+            client = ipaddress.ip_address(client_ip or "")
+            if not isinstance(client, ipaddress.IPv4Address) or client not in network:
+                return []
+        except ValueError:
             return []
     now = time.monotonic()
     with _cache_lock:
