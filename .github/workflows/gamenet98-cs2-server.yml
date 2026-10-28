@@ -1,0 +1,38 @@
+name: GameNet 98 CS2 source checks
+
+on:
+  push:
+    branches:
+      - tools/gamenet98-cs2-server
+    paths:
+      - "experiments/gamenet98-cs2-server/oblivion/**"
+      - ".github/workflows/gamenet98-cs2-server.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-check:
+    name: Python syntax and LAN discovery tests
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: experiments/gamenet98-cs2-server/oblivion
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Python syntax
+        run: python -m compileall -q .
+      - name: Install test runner
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Test LAN discovery packet parsing and range safety
+        run: |
+          $env:PYTHONPATH = (Get-Location).Path
+          python -m pytest tests/test_lan_discovery.py -q
