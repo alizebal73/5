@@ -73,7 +73,7 @@ def patch_source(src: Path) -> None:
     mode: str = "Casual",
     host_ip: str = "127.0.0.1",
 ) -> list[str]:
-    """Launch a real CS2 dedicated server, not the regular playable client."""
+# Launch a real CS2 dedicated server, not the regular playable client.
     checked_port = validate_port(str(port))
     checked_ip = validate_ipv4(host_ip)
     if map_name not in MAPS:
