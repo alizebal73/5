@@ -1,11 +1,12 @@
-name: Build GameNet 98 CS2 LAN v0.5 Setup
+name: Build GameNet 98 CS2 LAN v0.5.1 Setup
 
 on:
   workflow_dispatch:
   push:
     paths:
       - 'tools/GameNet98-CS2-LAN-source-v040.part*.txt'
-      - 'tools/update_cs2_lan_v050.py'
+      - 'tools/update_cs2_lan_v051.py'
+      - 'tools/update_cs2_lan_v051.py'
       - '.github/workflows/cs2-lan-launcher-build.yml'
 
 permissions:
@@ -62,12 +63,12 @@ jobs:
           if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'v0.4 source application missing from archive.' }
           "SOURCE_DIR=$sourceDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Apply v0.5 UX update and refresh source archive
+      - name: Apply v0.5.1 finder-close fix and refresh source archive
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           python "$env:GITHUB_WORKSPACE/tools/update_cs2_lan_v050.py" --source-dir "$env:SOURCE_DIR" --repo-root "$env:GITHUB_WORKSPACE"
-          if ($LASTEXITCODE -ne 0) { throw 'v0.5 source update failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'v0.5.1 source update failed.' }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           $changes = git status --porcelain -- tools/GameNet98-CS2-LAN-source-v040.part*.txt
@@ -87,12 +88,12 @@ jobs:
           git add -- tools/GameNet98-CS2-LAN-source-v040.part*.txt
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "Update bundled CS2 LAN source to v0.5.0 [skip ci]"
+            git commit -m "Update bundled CS2 LAN source to v0.5.1 [skip ci]"
             if ($LASTEXITCODE -ne 0) { throw 'Could not commit updated source bundle.' }
             git push origin "HEAD:$env:GITHUB_REF_NAME"
             if ($LASTEXITCODE -ne 0) { throw 'Could not push updated source bundle.' }
           } else {
-            Write-Host 'Source bundle already matches v0.5; no commit needed.'
+            Write-Host 'Source bundle already matches v0.5.1; no commit needed.'
           }
 
       - name: Make path-alias test Windows-safe
@@ -150,17 +151,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $out = "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v050"
+          $out = "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v051"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item "$env:SOURCE_DIR/dist/GameNet98-LAN-Offline.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/dist/installer/GameNet98-CS2-LAN-Setup.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/README_FA.md", "$env:SOURCE_DIR/README.md" "$out/"
-          Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v050-Windows-x64.zip" -Force
+          Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v051-Windows-x64.zip" -Force
 
-      - name: Upload v0.5 test package
+      - name: Upload v0.5.1 test package
         uses: actions/upload-artifact@v4
         with:
-          name: GameNet98-CS2-LAN-v050-Windows-x64
+          name: GameNet98-CS2-LAN-v051-Windows-x64
           path: |
             out/GameNet98-CS2-LAN-v050-Windows-x64.zip
             out/GameNet98-CS2-LAN-v050/GameNet98-CS2-LAN-Setup.exe
