@@ -156,6 +156,7 @@ jobs:
           Copy-Item "$env:SOURCE_DIR/dist/installer/GameNet98-CS2-LAN-Setup.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/README_FA.md", "$env:SOURCE_DIR/README.md" "$out/"
           Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v052-Windows-x64.zip" -Force
+          Compress-Archive -Path "$env:SOURCE_DIR/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v052-source.zip" -Force
 
       - name: Upload v0.5.2 test package
         uses: actions/upload-artifact@v4
@@ -165,5 +166,6 @@ jobs:
             out/GameNet98-CS2-LAN-v052-Windows-x64.zip
             out/GameNet98-CS2-LAN-v052/GameNet98-CS2-LAN-Setup.exe
             out/GameNet98-CS2-LAN-v052/GameNet98-LAN-Offline.exe
+            out/GameNet98-CS2-LAN-v052-source.zip
           if-no-files-found: error
           retention-days: 30
