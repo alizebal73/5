@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Reassemble and verify v0.4 source archive
+      - name: Reassemble and verify source archive
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -143,12 +143,12 @@ jobs:
           Copy-Item "$env:SOURCE_DIR/README_FA.md", "$env:SOURCE_DIR/README.md" "$out/"
           Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v050-Windows-x64.zip" -Force
 
-      - name: Upload v0.4 test package
+      - name: Upload v0.5 test package
         uses: actions/upload-artifact@v4
         with:
           name: GameNet98-CS2-LAN-v050-Windows-x64
           path: |
-            out/GameNet98-CS2-LAN-v040-Windows-x64.zip
+            out/GameNet98-CS2-LAN-v050-Windows-x64.zip
             out/GameNet98-CS2-LAN-v050/GameNet98-CS2-LAN-Setup.exe
             out/GameNet98-CS2-LAN-v050/GameNet98-LAN-Offline.exe
           if-no-files-found: error
