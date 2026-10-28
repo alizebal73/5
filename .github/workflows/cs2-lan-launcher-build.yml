@@ -61,6 +61,18 @@ jobs:
           if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'v0.4 source application missing from archive.' }
           "SOURCE_DIR=$sourceDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Make path-alias test Windows-safe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $testFile = Join-Path "$env:SOURCE_DIR" 'tests\test_core.py'
+          $testText = [System.IO.File]::ReadAllText($testFile)
+          $old = 'self.assertEqual(game_install_root(source_exe), source_root)'
+          $new = 'self.assertTrue(game_install_root(source_exe).samefile(source_root))'
+          if (!$testText.Contains($old)) { throw 'Expected path assertion not found; do not continue with an unpatched test.' }
+          $testText = $testText.Replace($old, $new)
+          [System.IO.File]::WriteAllText($testFile, $testText, [System.Text.UTF8Encoding]::new($false))
+
       - name: Syntax check
         shell: pwsh
         run: |
