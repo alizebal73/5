@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'tools/GameNet98-CS2-LAN-source.ready'
+      - 'tools/GameNet98-CS2-LAN-source.zip'
 
 permissions:
   contents: read
@@ -19,26 +19,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Reassemble source bundle
+      - name: Extract source package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $parts = @(
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part1.txt",
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part2.txt",
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part3.txt",
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part4.txt"
-          )
-          $encoded = [System.Text.StringBuilder]::new()
-          foreach ($part in $parts) {
-            if (!(Test-Path $part)) { throw "Missing source part: $part" }
-            [void]$encoded.Append(([System.IO.File]::ReadAllText($part)).Trim())
-          }
-          $zipPath = "$env:RUNNER_TEMP/GameNet98-CS2-LAN-source.zip"
-          [System.IO.File]::WriteAllBytes($zipPath, [Convert]::FromBase64String($encoded.ToString()))
-          Expand-Archive -LiteralPath $zipPath -DestinationPath "$env:RUNNER_TEMP/GameNet98-src" -Force
+          Expand-Archive -LiteralPath "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.zip" -DestinationPath "$env:RUNNER_TEMP/GameNet98-src" -Force
           $sourceDir = Join-Path "$env:RUNNER_TEMP/GameNet98-src" 'GameNet98-CS2-LAN'
-          if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'Source application was not found in archive.' }
+          if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'Source application was not found in the archive.' }
           "SOURCE_DIR=$sourceDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Syntax check
         shell: pwsh
