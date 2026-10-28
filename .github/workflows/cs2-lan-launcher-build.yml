@@ -1,10 +1,17 @@
-name: Build GameNet 98 Offline CS2 LAN Launcher
+name: Build GameNet 98 CS2 LAN v0.4 Setup
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'tools/GameNet98-CS2-LAN-source.ready'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part01.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part02.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part03.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part04-s*.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part05.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part06.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part07.txt'
+      - 'tools/GameNet98-CS2-LAN-source-v040.part08.txt'
       - '.github/workflows/cs2-lan-launcher-build.yml'
 
 permissions:
@@ -22,26 +29,37 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Reassemble and extract source archive
+      - name: Reassemble exact v0.4 source archive
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $parts = @(
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part1.txt",
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part2.txt",
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part3.txt",
-            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source.part4.txt"
+          $partPaths = @(
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part01.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part02.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part03.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s01.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s02.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s03.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s04.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s05.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s06.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s07.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part04-s08.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part05.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part06.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part07.txt",
+            "$env:GITHUB_WORKSPACE/tools/GameNet98-CS2-LAN-source-v040.part08.txt"
           )
           $encoded = [System.Text.StringBuilder]::new()
-          foreach ($part in $parts) {
+          foreach ($part in $partPaths) {
             if (!(Test-Path $part)) { throw "Missing source part: $part" }
             [void]$encoded.Append(([System.IO.File]::ReadAllText($part)).Trim())
           }
-          $zipPath = "$env:RUNNER_TEMP/GameNet98-CS2-LAN-source.zip"
+          $zipPath = "$env:RUNNER_TEMP/GameNet98-CS2-LAN-v040-source.zip"
           [System.IO.File]::WriteAllBytes($zipPath, [Convert]::FromBase64String($encoded.ToString()))
-          Expand-Archive -LiteralPath $zipPath -DestinationPath "$env:RUNNER_TEMP/GameNet98-src" -Force
-          $sourceDir = Join-Path "$env:RUNNER_TEMP/GameNet98-src" 'GameNet98-CS2-LAN'
-          if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'Source application was not found in the archive.' }
+          Expand-Archive -LiteralPath $zipPath -DestinationPath "$env:RUNNER_TEMP/GameNet98-v040-src" -Force
+          $sourceDir = Join-Path "$env:RUNNER_TEMP/GameNet98-v040-src" 'GameNet98-CS2-LAN'
+          if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'v0.4 source application missing from archive.' }
           "SOURCE_DIR=$sourceDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Syntax check
@@ -56,13 +74,13 @@ jobs:
           python -m unittest discover -s tests -v
           Pop-Location
 
-      - name: Build standalone Windows GUI application
+      - name: Build standalone Windows application
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           python -m pip install --upgrade pyinstaller
           Push-Location "$env:SOURCE_DIR"
-          python -m PyInstaller --clean --noconfirm --onefile --windowed --name GameNet98-LAN-Offline gamenet98_lan.pyw
+          python -m PyInstaller --clean --noconfirm --onefile --windowed --icon GameNet98.ico --name GameNet98-LAN-Offline gamenet98_lan.pyw
           Pop-Location
           if (!(Test-Path "$env:SOURCE_DIR/dist/GameNet98-LAN-Offline.exe")) { throw 'Application EXE was not created.' }
 
@@ -73,7 +91,7 @@ jobs:
           choco install innosetup --yes --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
 
-      - name: Build Windows Setup installer
+      - name: Build Setup installer
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -81,26 +99,26 @@ jobs:
           if (!(Test-Path $compiler)) { throw "Inno Setup compiler not found at $compiler" }
           & $compiler "$env:SOURCE_DIR/GameNet98-CS2-LAN-Offline.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
-          if (!(Test-Path "$env:SOURCE_DIR/dist/installer/GameNet98-CS2-LAN-Setup.exe")) { throw 'Setup installer was not created.' }
+          if (!(Test-Path "$env:SOURCE_DIR/dist/installer/GameNet98-CS2-LAN-Setup.exe")) { throw 'Setup installer missing.' }
 
-      - name: Package test downloads
+      - name: Package installer and portable app
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $out = "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-Offline"
+          $out = "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v040"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item "$env:SOURCE_DIR/dist/GameNet98-LAN-Offline.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/dist/installer/GameNet98-CS2-LAN-Setup.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/README_FA.md", "$env:SOURCE_DIR/README.md" "$out/"
-          Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-Offline-Windows-x64.zip" -Force
+          Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v040-Windows-x64.zip" -Force
 
-      - name: Upload Windows installer and app
+      - name: Upload v0.4 test package
         uses: actions/upload-artifact@v4
         with:
-          name: GameNet98-CS2-LAN-Offline-Windows-x64
+          name: GameNet98-CS2-LAN-v040-Windows-x64
           path: |
-            out/GameNet98-CS2-LAN-Offline-Windows-x64.zip
-            out/GameNet98-CS2-LAN-Offline/GameNet98-CS2-LAN-Setup.exe
-            out/GameNet98-CS2-LAN-Offline/GameNet98-LAN-Offline.exe
+            out/GameNet98-CS2-LAN-v040-Windows-x64.zip
+            out/GameNet98-CS2-LAN-v040/GameNet98-CS2-LAN-Setup.exe
+            out/GameNet98-CS2-LAN-v040/GameNet98-LAN-Offline.exe
           if-no-files-found: error
           retention-days: 30
