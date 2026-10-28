@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upgrade the archived GameNet 98 CS2 LAN source to v0.5.0 and refresh repo chunks."""
+"""Upgrade the archived GameNet 98 CS2 LAN source to v0.5.2 and refresh repo chunks."""
 from __future__ import annotations
 import argparse
 import base64
@@ -227,11 +227,127 @@ def server_list_label(index: int, ip: str) -> str:
     replace_once(iss_path, '#define MyAppVersion "0.5.0"', '#define MyAppVersion "0.5.1"', '#define MyAppVersion "0.5.1"')
     replace_once(fa, 'نسخهٔ آزمایشی ۰.۵.۰ — رابط ساده با دو کار اصلی: «ساخت سرور» و «یافتن سرور».', 'نسخهٔ آزمایشی ۰.۵.۱ — اصلاح بسته‌شدن پنجرهٔ یافتن سرور.', 'نسخهٔ آزمایشی ۰.۵.۱')
 
+    # v0.5.2: add a real stop action for the host game and LAN discovery responder.
+    ui_text = ui.read_text(encoding="utf-8")
+    if "def stop_host(self):" not in ui_text:
+        start = ui_text.find("    def host_page(self):")
+        end = ui_text.find("    def probe_worker", start)
+        if start < 0 or end < 0:
+            raise RuntimeError("Cannot locate host_page/probe_worker for the server stop patch.")
+        block = ui_text[start:end]
+        lines = block.splitlines(keepends=True)
+        button_index = next(
+            (i for i, line in enumerate(lines)
+             if "self.btn" in line and "بازگشت" in line and "self.home" in line),
+            None,
+        )
+        if button_index is None:
+            raise RuntimeError("Cannot locate host-page Back button for the server stop patch.")
+        indent = lines[button_index][:len(lines[button_index]) - len(lines[button_index].lstrip())]
+        lines[button_index:button_index + 1] = [
+            indent + 'actions=tk.Frame(c,bg=PANEL); actions.pack(fill="x",pady=(12,0))\n',
+            indent + 'self.btn(actions,"بستن کامل سرور",self.stop_host,False,True).pack(side="right")\n',
+            indent + 'self.btn(actions,"بازگشت",self.home,False,True).pack(side="left")\n',
+        ]
+        ui_text = ui_text[:start] + "".join(lines) + ui_text[end:]
+        stop_methods = '''    def _stop_host_process(self):
+        """Stop LAN discovery and terminate the game process launched for hosting."""
+        failures = []
+        try:
+            responder = getattr(self, "discovery", None)
+            if responder is not None:
+                responder.stop()
+        except Exception as exc:
+            failures.append(f"معرفی سرور در شبکه: {exc}")
+
+        process = getattr(self, "process", None)
+        if process is not None:
+            try:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=3)
+            except Exception as exc:
+                failures.append(f"بستن فرایند بازی میزبان: {exc}")
+
+        if failures:
+            return False, "؛ ".join(failures)
+
+        self.host_state = "stopped"
+        self.host_started = 0.0
+        self.status.set("سرور متوقف شد.")
+        status_widget = getattr(self, "host_status", None)
+        if status_widget is not None:
+            try:
+                if status_widget.winfo_exists():
+                    status_widget.configure(
+                        text="سرور کاملاً متوقف شد؛ دیگر در شبکه معرفی نمی‌شود.",
+                        fg=MUTED,
+                    )
+            except tk.TclError:
+                pass
+        return True, ""
+
+    def stop_host(self):
+        """Ask before stopping the hosted game and removing it from LAN discovery."""
+        if not messagebox.askyesno(
+            APP_NAME,
+            "سرور فعلی و بازی میزبان کاملاً بسته شوند؟",
+            parent=self.root,
+        ):
+            return
+        stopped, error = self._stop_host_process()
+        if not stopped:
+            self.host_state = "unknown"
+            messagebox.showerror(
+                APP_NAME,
+                "بستن کامل سرور موفق نشد. معرفی شبکه متوقف شد، اما ممکن است بازی هنوز باز باشد.\\n" + error,
+                parent=self.root,
+            )
+            return
+        messagebox.showinfo(APP_NAME, "سرور و بازی میزبان کاملاً بسته شدند.", parent=self.root)
+
+'''
+        marker = "    def probe_worker"
+        if marker not in ui_text:
+            raise RuntimeError("Cannot insert stop-host methods.")
+        ui_text = ui_text.replace(marker, stop_methods + marker, 1)
+        ui.write_text(ui_text, encoding="utf-8")
+
+    # Closing the app with the window X must also stop a running host process.
+    ui_text = ui.read_text(encoding="utf-8")
+    close_marker = "        self.closing=True\n"
+    close_replacement = '''        if self.host_state != "stopped":
+            stopped, error = self._stop_host_process()
+            if not stopped:
+                messagebox.showerror(
+                    APP_NAME,
+                    "سرور کاملاً بسته نشد؛ برنامه باز می‌ماند تا مشکل را بررسی کنی.\\n" + error,
+                    parent=self.root,
+                )
+                return
+        self.closing=True
+'''
+    if close_marker in ui_text:
+        ui_text = ui_text.replace(close_marker, close_replacement, 1)
+        ui.write_text(ui_text, encoding="utf-8")
+    elif "if self.host_state != \\"stopped\\":" not in ui_text or "_stop_host_process()" not in ui_text:
+        raise RuntimeError("Cannot attach server shutdown to the app close handler.")
+
+    # v0.5.2 version metadata and user-facing instructions.
+    replace_once(core, 'APP_VERSION = "0.5.1-beta"', 'APP_VERSION = "0.5.2-beta"', 'APP_VERSION = "0.5.2-beta"')
+    replace_once(iss_path, '#define MyAppVersion "0.5.1"', '#define MyAppVersion "0.5.2"', '#define MyAppVersion "0.5.2"')
+    replace_once(fa, 'نسخهٔ آزمایشی ۰.۵.۱ — اصلاح بسته‌شدن پنجرهٔ یافتن سرور.', 'نسخهٔ آزمایشی ۰.۵.۲ — افزودن دکمهٔ بستن کامل سرور.', 'نسخهٔ آزمایشی ۰.۵.۲')
+
     ui_test = src / "tests" / "test_ui.py"
     ui_test.write_text('''import importlib.machinery
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 APP_PATH = Path(__file__).resolve().parents[1] / "gamenet98_lan.pyw"
 LOADER = importlib.machinery.SourceFileLoader("gamenet98_lan_ui", str(APP_PATH))
@@ -244,6 +360,10 @@ class FakeWindow:
     def __init__(self, exists=True):
         self.exists = exists
         self.destroyed = False
+        self.config = {}
+
+    def configure(self, **kwargs):
+        self.config.update(kwargs)
 
     def winfo_exists(self):
         return self.exists
@@ -281,13 +401,90 @@ class FinderCloseTests(unittest.TestCase):
         self.assertIsNone(app.server_status)
 
 
+class FakeProcess:
+    def __init__(self):
+        self.returncode = None
+        self.terminated = False
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = -15
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+
+class FakeDiscovery:
+    def __init__(self):
+        self.stopped = False
+
+    def stop(self):
+        self.stopped = True
+
+
+class FakeVar:
+    def __init__(self):
+        self.value = None
+
+    def set(self, value):
+        self.value = value
+
+
+class HostStopTests(unittest.TestCase):
+    def make_app(self):
+        app = UI.App.__new__(UI.App)
+        app.host_state = "ready"
+        app.host_started = 10.0
+        app.root = object()
+        app.process = FakeProcess()
+        app.discovery = FakeDiscovery()
+        app.host_status = FakeWindow()
+        app.status = FakeVar()
+        return app
+
+    def test_stop_host_terminates_game_and_discovery(self):
+        app = self.make_app()
+        with patch.object(UI.messagebox, "askyesno", return_value=True), \\
+             patch.object(UI.messagebox, "showinfo") as showinfo, \\
+             patch.object(UI.messagebox, "showerror") as showerror:
+            app.stop_host()
+        self.assertTrue(app.process.terminated)
+        self.assertTrue(app.discovery.stopped)
+        self.assertEqual(app.host_state, "stopped")
+        self.assertEqual(app.host_started, 0.0)
+        self.assertEqual(app.status.value, "سرور متوقف شد.")
+        self.assertIn("سرور کاملاً متوقف شد", app.host_status.config["text"])
+        showinfo.assert_called_once()
+        showerror.assert_not_called()
+
+    def test_stop_host_cancel_leaves_host_running(self):
+        app = self.make_app()
+        with patch.object(UI.messagebox, "askyesno", return_value=False), \\
+             patch.object(UI.messagebox, "showinfo") as showinfo, \\
+             patch.object(UI.messagebox, "showerror") as showerror:
+            app.stop_host()
+        self.assertFalse(app.process.terminated)
+        self.assertFalse(app.discovery.stopped)
+        self.assertEqual(app.host_state, "ready")
+        showinfo.assert_not_called()
+        showerror.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
 ''', encoding="utf-8")
 
 
 def repack_and_split(src: Path, repo_root: Path) -> None:
-    zip_path = repo_root / "tools" / "GameNet98-CS2-LAN-source-v051.zip"
+    zip_path = repo_root / "tools" / "GameNet98-CS2-LAN-source-v052.zip"
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for file in sorted(src.rglob("*")):
@@ -311,7 +508,7 @@ def repack_and_split(src: Path, repo_root: Path) -> None:
     check = base64.b64decode("".join((repo_root / "tools" / name).read_text(encoding="ascii").strip() for name in PART_NAMES))
     if check != zip_path.read_bytes():
         raise RuntimeError("Source archive verification failed after chunking.")
-    print(f"Updated v0.5.1 source ZIP: {zip_path.stat().st_size} bytes; base64 {len(encoded)} chars.")
+    print(f"Updated v0.5.2 source ZIP: {zip_path.stat().st_size} bytes; base64 {len(encoded)} chars.")
 
 
 def main() -> None:
@@ -323,7 +520,7 @@ def main() -> None:
         raise SystemExit(f"Expected source directory not found: {args.source_dir}")
     patch_source(args.source_dir)
     repack_and_split(args.source_dir, args.repo_root)
-    print("GameNet 98 CS2 LAN source is at v0.5.1.")
+    print("GameNet 98 CS2 LAN source is at v0.5.2.")
 
 
 if __name__ == "__main__":
