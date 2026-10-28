@@ -6,7 +6,6 @@ on:
     paths:
       - 'tools/GameNet98-CS2-LAN-source-v040.part*.txt'
       - 'tools/update_cs2_lan_v051.py'
-      - 'tools/update_cs2_lan_v051.py'
       - '.github/workflows/cs2-lan-launcher-build.yml'
 
 permissions:
@@ -67,7 +66,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          python "$env:GITHUB_WORKSPACE/tools/update_cs2_lan_v050.py" --source-dir "$env:SOURCE_DIR" --repo-root "$env:GITHUB_WORKSPACE"
+          python "$env:GITHUB_WORKSPACE/tools/update_cs2_lan_v051.py" --source-dir "$env:SOURCE_DIR" --repo-root "$env:GITHUB_WORKSPACE"
           if ($LASTEXITCODE -ne 0) { throw 'v0.5.1 source update failed.' }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -163,8 +162,8 @@ jobs:
         with:
           name: GameNet98-CS2-LAN-v051-Windows-x64
           path: |
-            out/GameNet98-CS2-LAN-v050-Windows-x64.zip
-            out/GameNet98-CS2-LAN-v050/GameNet98-CS2-LAN-Setup.exe
-            out/GameNet98-CS2-LAN-v050/GameNet98-LAN-Offline.exe
+            out/GameNet98-CS2-LAN-v051-Windows-x64.zip
+            out/GameNet98-CS2-LAN-v051/GameNet98-CS2-LAN-Setup.exe
+            out/GameNet98-CS2-LAN-v051/GameNet98-LAN-Offline.exe
           if-no-files-found: error
           retention-days: 30
