@@ -1,14 +1,15 @@
-name: Build GameNet 98 CS2 LAN v0.4 Setup
+name: Build GameNet 98 CS2 LAN v0.5 Setup
 
 on:
   workflow_dispatch:
   push:
     paths:
       - 'tools/GameNet98-CS2-LAN-source-v040.part*.txt'
+      - 'tools/update_cs2_lan_v050.py'
       - '.github/workflows/cs2-lan-launcher-build.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test-and-build:
@@ -53,13 +54,32 @@ jobs:
             if (!(Test-Path $part)) { throw "Missing source part: $part" }
             [void]$encoded.Append(([System.IO.File]::ReadAllText($part)).Trim())
           }
-          $zipPath = "$env:RUNNER_TEMP/GameNet98-CS2-LAN-v040-source.zip"
+          $zipPath = "$env:RUNNER_TEMP/GameNet98-CS2-LAN-v050-source.zip"
           [System.IO.File]::WriteAllBytes($zipPath, [Convert]::FromBase64String($encoded.ToString()))
           Write-Host "Reassembled archive size: $((Get-Item -LiteralPath $zipPath).Length) bytes"
-          Expand-Archive -LiteralPath $zipPath -DestinationPath "$env:RUNNER_TEMP/GameNet98-v040-src" -Force
+          Expand-Archive -LiteralPath $zipPath -DestinationPath "$env:RUNNER_TEMP/GameNet98-v050-src" -Force
           $sourceDir = Join-Path "$env:RUNNER_TEMP/GameNet98-v040-src" 'GameNet98-CS2-LAN'
           if (!(Test-Path (Join-Path $sourceDir 'gamenet98_lan.pyw'))) { throw 'v0.4 source application missing from archive.' }
           "SOURCE_DIR=$sourceDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Apply v0.5 UX update and refresh source archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python "$env:GITHUB_WORKSPACE/tools/update_cs2_lan_v050.py" --source-dir "$env:SOURCE_DIR" --repo-root "$env:GITHUB_WORKSPACE"
+          if ($LASTEXITCODE -ne 0) { throw 'v0.5 source update failed.' }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- tools/GameNet98-CS2-LAN-source-v040.part*.txt
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Update bundled CS2 LAN source to v0.5.0 [skip ci]"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not commit updated source bundle.' }
+            git push origin "HEAD:$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not push updated source bundle.' }
+          } else {
+            Write-Host 'Source bundle already matches v0.5; no commit needed.'
+          }
 
       - name: Make path-alias test Windows-safe
         shell: pwsh
@@ -116,20 +136,20 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $out = "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v040"
+          $out = "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v050"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item "$env:SOURCE_DIR/dist/GameNet98-LAN-Offline.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/dist/installer/GameNet98-CS2-LAN-Setup.exe" "$out/"
           Copy-Item "$env:SOURCE_DIR/README_FA.md", "$env:SOURCE_DIR/README.md" "$out/"
-          Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v040-Windows-x64.zip" -Force
+          Compress-Archive -Path "$out/*" -DestinationPath "$env:GITHUB_WORKSPACE/out/GameNet98-CS2-LAN-v050-Windows-x64.zip" -Force
 
       - name: Upload v0.4 test package
         uses: actions/upload-artifact@v4
         with:
-          name: GameNet98-CS2-LAN-v040-Windows-x64
+          name: GameNet98-CS2-LAN-v050-Windows-x64
           path: |
             out/GameNet98-CS2-LAN-v040-Windows-x64.zip
-            out/GameNet98-CS2-LAN-v040/GameNet98-CS2-LAN-Setup.exe
-            out/GameNet98-CS2-LAN-v040/GameNet98-LAN-Offline.exe
+            out/GameNet98-CS2-LAN-v050/GameNet98-CS2-LAN-Setup.exe
+            out/GameNet98-CS2-LAN-v050/GameNet98-LAN-Offline.exe
           if-no-files-found: error
           retention-days: 30
