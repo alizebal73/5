@@ -45,6 +45,7 @@ def patch_source(src: Path) -> None:
     core = src / "gamenet98_core.py"
     ui = src / "gamenet98_lan.pyw"
     tests = src / "tests" / "test_core.py"
+    iss_path = src / "GameNet98-CS2-LAN-Offline.iss"
 
     replace_once(core, 'APP_VERSION = "0.4.0-beta"', 'APP_VERSION = "0.5.0-beta"', 'APP_VERSION = "0.5.0-beta"||APP_VERSION = "0.5.1-beta"')
     core_insert = '''def sort_discovered_servers(servers: list[dict]) -> list[dict]:
