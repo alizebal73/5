@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'tools/GameNet98-CS2-LAN-source.part*.txt'
       - 'tools/GameNet98-CS2-LAN-source.ready'
       - '.github/workflows/cs2-lan-launcher-build.yml'
 
