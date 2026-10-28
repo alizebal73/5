@@ -24,15 +24,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Find an existing Python installation
+        run: |
+          $ErrorActionPreference = "Stop"
+          $candidates = @()
+          if ($env:RUNNER_TOOL_CACHE) {
+            $cache = Join-Path $env:RUNNER_TOOL_CACHE "Python"
+            if (Test-Path $cache) {
+              $candidates += Get-ChildItem -Path $cache -Filter python.exe -Recurse -File -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending | ForEach-Object { $_.FullName }
+            }
+          }
+          foreach ($candidatePath in @("C:\Python312\python.exe", "C:\Program Files\Python312\python.exe", "C:\Python311\python.exe")) {
+            if (Test-Path $candidatePath) { $candidates += $candidatePath }
+          }
+          $command = Get-Command python.exe -ErrorAction SilentlyContinue
+          if ($command) { $candidates += $command.Source }
+          $selected = $null
+          foreach ($candidate in ($candidates | Select-Object -Unique)) {
+            try {
+              & $candidate --version
+              if ($LASTEXITCODE -eq 0) { $selected = $candidate; break }
+            } catch { }
+          }
+          if (-not $selected) { throw "No usable Python installation was found on the self-hosted runner." }
+          "GAMENET98_PYTHON=$selected" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Check Python syntax
-        run: python -m compileall -q .
+        run: '& "$env:GAMENET98_PYTHON" -m compileall -q .'
       - name: Install test runner
-        run: python -m pip install --disable-pip-version-check pytest
+        run: '& "$env:GAMENET98_PYTHON" -m pip install --disable-pip-version-check --user pytest'
       - name: Test LAN discovery packet parsing and range safety
         run: |
           $env:PYTHONPATH = (Get-Location).Path
-          python -m pytest tests/test_lan_discovery.py -q
+          & "$env:GAMENET98_PYTHON" -m pytest tests/test_lan_discovery.py -q
