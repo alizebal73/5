@@ -1226,7 +1226,7 @@ function buildStatusPage() {
     </button>`;
   root.appendChild(quickActions);
   el('gn98-create-server').addEventListener('click', () => {
-    const target = el('map-mode-card') || el('server-panel');
+    const target = el('server-panel') || el('map-mode-card');
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
   el('gn98-find-server').addEventListener('click', () => {
