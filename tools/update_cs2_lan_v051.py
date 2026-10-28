@@ -47,6 +47,12 @@ def patch_source(src: Path) -> None:
     tests = src / "tests" / "test_core.py"
     iss_path = src / "GameNet98-CS2-LAN-Offline.iss"
 
+    # Source chunks may already contain the latest version after a successful CI build.
+    # Do not try to re-apply the v0.5.0 patch to an already-updated archive.
+    if 'APP_VERSION = "0.5.2-beta"' in core.read_text(encoding="utf-8"):
+        print("Source archive is already at v0.5.2; preserving it as-is.")
+        return
+
     replace_once(core, 'APP_VERSION = "0.4.0-beta"', 'APP_VERSION = "0.5.0-beta"', 'APP_VERSION = "0.5.0-beta"||APP_VERSION = "0.5.1-beta"')
     core_insert = '''def sort_discovered_servers(servers: list[dict]) -> list[dict]:
     """Sort discovered LAN hosts by numeric IPv4 address, then game port.
